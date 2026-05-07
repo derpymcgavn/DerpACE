@@ -43,3 +43,20 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
+### Random Dye (Enigmatic Dye)
+* Added `RandomDye` world object class (`WCID 420420420`) that applies a random palette to the target item
+* Works on **armor, clothing, weapons (melee/missile), casters, and shields** — any item with a `ClothingBase` property
+* Plays the crafting (`ClapHands`) animation before applying, matching the behavior of normal dyes
+* Refreshes the item's appearance for all nearby players after dyeing (`GameMessageUpdateObject` / `GameMessageObjDescEvent` for equipped items)
+* Consumes exactly 1 from the stack on use
+* Switches the player out of combat mode if needed before animating
+* Database `TargetType` should be set to `33031` (MeleeWeapon | Armor | Clothing | MissileWeapon | Caster)
+
+### Foci Improvements
+* Foci (Enchantment 15268, Artifice 15269, Verdancy 15270, Strife 15271, Shadow 43173) now default to **15 item slots** instead of 0
+* Foci only accept **scarabs** (all tiers: lead, iron, copper, silver, gold, pyreal) and **prismatic tapers** (regular WCID 20631 and PEA variant WCID 20963)
+* Attempting to place any other item into a foci displays the message: *"Only scarabs and prismatic tapers can be placed in a focus."*
+
+### Loot Generation Additions
+* Added **Lyceum Hood** (`ace44977_lyceumhood`, WCID 44977) to the leather armor loot table (`ArmorWcids.LeatherWcids`) at 2% chance
+* Added **Fletcher's Cap** (`hatfletcher`, WCID 9624) to the leather armor loot table (`ArmorWcids.LeatherWcids`) at 2% chance
