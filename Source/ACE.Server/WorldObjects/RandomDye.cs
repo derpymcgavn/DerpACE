@@ -1,0 +1,107 @@
+using System;
+using System.Linq;
+
+using ACE.DatLoader;
+using ACE.DatLoader.FileTypes;
+using ACE.Entity;
+using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
+using ACE.Entity.Models;
+using ACE.Server.Entity.Actions;
+using ACE.Server.Network.GameMessages.Messages;
+
+namespace ACE.Server.WorldObjects
+{
+    public class RandomDye : CraftTool
+    {
+        private static readonly Random _random = new Random();
+        private const uint RANDOM_DYE_WCID = 420420420;
+
+        public RandomDye(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
+        {
+        }
+
+        public RandomDye(Biota biota) : base(biota)
+        {
+        }
+
+        public override void HandleActionUseOnTarget(Player player, WorldObject target)
+        {
+            if (WeenieClassId != RANDOM_DYE_WCID)
+            {
+                base.HandleActionUseOnTarget(player, target);
+                return;
+            }
+
+            if (target is Player)
+            {
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat("You cannot dye that.", ChatMessageType.Tell));
+                player.SendUseDoneEvent();
+                return;
+            }
+
+            var clothingBaseId = target.GetProperty(PropertyDataId.ClothingBase);
+            if (clothingBaseId == null || clothingBaseId == 0)
+            {
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat("This item cannot be dyed.", ChatMessageType.Tell));
+                player.SendUseDoneEvent();
+                return;
+            }
+
+            var animTime = 0.0f;
+
+            var actionChain = new ActionChain();
+
+            if (player.CombatMode != CombatMode.NonCombat)
+            {
+                var stanceTime = player.SetCombatMode(CombatMode.NonCombat);
+                actionChain.AddDelaySeconds(stanceTime);
+                animTime += stanceTime;
+            }
+
+            animTime += player.EnqueueMotion(actionChain, MotionCommand.ClapHands);
+
+            actionChain.AddAction(player, () =>
+            {
+                try
+                {
+                    var clothingTable = DatManager.PortalDat.ReadFromDat<ClothingTable>(clothingBaseId.Value);
+                    if (clothingTable?.ClothingSubPalEffects == null || clothingTable.ClothingSubPalEffects.Count == 0)
+                    {
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat("This item has no available palettes.", ChatMessageType.Tell));
+                        player.SendUseDoneEvent();
+                        return;
+                    }
+
+                    var validPalettes = clothingTable.ClothingSubPalEffects.Keys.ToList();
+                    var randomPalette = (int)validPalettes[_random.Next(validPalettes.Count)];
+                    var randomShade = _random.NextDouble();
+
+                    var icon = clothingTable.GetIcon((uint)randomPalette);
+                    target.SetProperty(PropertyDataId.Icon, icon);
+                    target.SetProperty(PropertyInt.PaletteTemplate, randomPalette);
+                    target.SetProperty(PropertyFloat.Shade, randomShade);
+
+                    player.EnqueueBroadcast(new GameMessageUpdateObject(target));
+
+                    if (target.CurrentWieldedLocation != null)
+                        player.EnqueueBroadcast(new GameMessageObjDescEvent(player));
+
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You apply the dye to the {target.Name}.", ChatMessageType.Tell));
+                    player.TryConsumeFromInventoryWithNetworking(this, 1);
+                }
+                catch (Exception ex)
+                {
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat("An error occurred while applying the dye.", ChatMessageType.Tell));
+                    Console.WriteLine($"RandomDye error: {ex}");
+                }
+
+                player.SendUseDoneEvent();
+            });
+
+            actionChain.EnqueueChain();
+
+            player.NextUseTime = DateTime.UtcNow.AddSeconds(animTime);
+        }
+    }
+}

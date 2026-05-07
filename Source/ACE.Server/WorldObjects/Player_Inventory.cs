@@ -957,6 +957,22 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
+            if (Player.FociWCIDs.ContainsValue(container.WeenieClassId))
+            {
+                var isScarab = SpellComponent.SpellComponentWCIDs.TryGetValue(item.WeenieClassId, out var compId) &&
+                    SpellComponent.SpellComponentsTable.SpellComponents.TryGetValue(compId, out var compBase) &&
+                    compBase.Type == (uint)SpellComponentsTable.Type.Scarab;
+
+                var isPrismaticTaper = item.WeenieClassId == 20631 || item.WeenieClassId == 20963;
+
+                if (!isScarab && !isPrismaticTaper)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat("Only scarabs and prismatic tapers can be placed in a focus.", ChatMessageType.Broadcast));
+                    Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, itemGuid));
+                    return false;
+                }
+            }
+
             return true;
         }
 

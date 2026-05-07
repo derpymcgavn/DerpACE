@@ -253,6 +253,17 @@ namespace ACE.Server.WorldObjects
             if (Placement == null)
                 Placement = ACE.Entity.Enum.Placement.Resting;
 
+            // Ensure all foci behave like side-slot containers even if DB flags are missing.
+            if (IsFoci)
+            {
+                if (!RequiresPackSlot)
+                    RequiresPackSlot = true;
+                if (ItemCapacity == null || ItemCapacity == 0)
+                    ItemCapacity = 15;
+                if (IsLocked)
+                    IsLocked = false;
+            }
+
             if (MotionTableId != 0)
                 CurrentMotionState = new Motion(MotionStance.Invalid);
         }
@@ -450,13 +461,15 @@ namespace ACE.Server.WorldObjects
         public bool RequestedLocationBroadcast { get; set; }
 
         ////// Logical Game Data
+        public bool IsFoci => WeenieClassId == 15268 || WeenieClassId == 15269 || WeenieClassId == 15270 || WeenieClassId == 15271 || WeenieClassId == 43173;
+
         public ContainerType ContainerType
         {
             get
             {
                 if (WeenieType == WeenieType.Container)
                     return ContainerType.Container;
-                else if (RequiresPackSlot)
+                else if (RequiresPackSlot || IsFoci)
                     return ContainerType.Foci;
                 else
                     return ContainerType.NonContainer;

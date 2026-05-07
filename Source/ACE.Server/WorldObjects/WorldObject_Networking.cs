@@ -844,10 +844,10 @@ namespace ACE.Server.WorldObjects
 
         private void UpdateObjectDescriptionFlags()
         {
-            if (WeenieType == WeenieType.Container || WeenieType == WeenieType.Corpse || WeenieType == WeenieType.Chest
+            if (IsFoci || WeenieType == WeenieType.Container || WeenieType == WeenieType.Corpse || WeenieType == WeenieType.Chest
                 || WeenieType == WeenieType.Hook || WeenieType == WeenieType.Storage)
             {
-                var openable = !IsLocked;
+                var openable = IsFoci || !IsLocked;
 
                 if (WeenieType == WeenieType.Chest && !openable && PropertyManager.GetBool("fix_chest_missing_inventory_window").Item)
                     openable = true;

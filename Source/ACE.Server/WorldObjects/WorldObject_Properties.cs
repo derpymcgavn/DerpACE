@@ -2053,7 +2053,7 @@ namespace ACE.Server.WorldObjects
             set { if (!value.HasValue) RemoveProperty(PropertyFloat.CheckpointTimestamp); else SetProperty(PropertyFloat.CheckpointTimestamp, value.Value); }
         }
 
-        public bool UseBackpackSlot => WeenieType == WeenieType.Container || RequiresPackSlot;
+        public bool UseBackpackSlot => WeenieType == WeenieType.Container || RequiresPackSlot || IsFoci;
 
         public int? PlacementPosition
         {

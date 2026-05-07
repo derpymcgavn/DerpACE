@@ -102,6 +102,8 @@ namespace ACE.Server.WorldObjects
                 ephemeralPropertyInts = new Dictionary<PropertyInt, int?>();
         }
 
+            private static readonly System.Collections.Generic.HashSet<uint> _fociWCIDs = new System.Collections.Generic.HashSet<uint> { 15268, 15269, 15270, 15271, 43173 };
+
         private void SetEphemeralValues(bool fromBiota)
         {
             ephemeralPropertyInts.TryAdd(PropertyInt.EncumbranceVal, EncumbranceVal ?? 0); // Containers are init at 0 burden or their initial value from database. As inventory/equipment is added the burden will be increased
@@ -115,6 +117,15 @@ namespace ACE.Server.WorldObjects
 
             if (!ContainerCapacity.HasValue)
                 ContainerCapacity = 0;
+
+            // Force foci to have RequiresBackpackSlot and 15 item slots regardless of DB values
+            if (_fociWCIDs.Contains(WeenieClassId))
+            {
+                if (!RequiresPackSlot)
+                    RequiresPackSlot = true;
+                if (ItemCapacity == null || ItemCapacity == 0)
+                    ItemCapacity = 15;
+            }
 
             if (!UseRadius.HasValue)
                 UseRadius = 0.5f;

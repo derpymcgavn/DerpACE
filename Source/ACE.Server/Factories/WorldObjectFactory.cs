@@ -29,6 +29,10 @@ namespace ACE.Server.Factories
             if (weenie == null)
                 return null;
 
+            // Foci must be real Container instances for pack slots + put-in-container actions.
+            if (weenie.WeenieClassId == 15268 || weenie.WeenieClassId == 15269 || weenie.WeenieClassId == 15270 || weenie.WeenieClassId == 15271 || weenie.WeenieClassId == 43173)
+                return new Container(weenie, guid);
+
             var objWeenieType = weenie.WeenieType;
 
             switch (objWeenieType)
@@ -135,6 +139,8 @@ namespace ACE.Server.Factories
                 case WeenieType.AttributeTransferDevice:
                     return new AttributeTransferDevice(weenie, guid);
                 case WeenieType.CraftTool:
+                    if (weenie.WeenieClassId == 420420420)
+                        return new RandomDye(weenie, guid);
                     return new CraftTool(weenie, guid);
                 case WeenieType.LightSource:
                     return new LightSource(weenie, guid);
@@ -149,6 +155,10 @@ namespace ACE.Server.Factories
         /// </summary>
         public static WorldObject CreateWorldObject(ACE.Entity.Models.Biota biota)
         {
+            // Foci must be real Container instances for pack slots + put-in-container actions.
+            if (biota.WeenieClassId == 15268 || biota.WeenieClassId == 15269 || biota.WeenieClassId == 15270 || biota.WeenieClassId == 15271 || biota.WeenieClassId == 43173)
+                return new Container(biota);
+
             switch (biota.WeenieType)
             {
                 case WeenieType.Undef:
@@ -250,6 +260,8 @@ namespace ACE.Server.Factories
                 case WeenieType.AttributeTransferDevice:
                     return new AttributeTransferDevice(biota);
                 case WeenieType.CraftTool:
+                    if (biota.WeenieClassId == 420420420)
+                        return new RandomDye(biota);
                     return new CraftTool(biota);
                 case WeenieType.LightSource:
                     return new LightSource(biota);
