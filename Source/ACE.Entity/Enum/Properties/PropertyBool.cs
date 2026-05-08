@@ -185,5 +185,6 @@ namespace ACE.Entity.Enum.Properties
         IsDefendersShield                = 9011,
         IsArchmagiCaster                 = 9012,
         IsThievesDagger                  = 9013,
+        IsSentinelSpear                  = 9014,
     }
 }

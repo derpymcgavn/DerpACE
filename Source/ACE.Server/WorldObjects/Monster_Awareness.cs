@@ -306,9 +306,9 @@ namespace ACE.Server.WorldObjects
             var invRatioSum = (float)(targetDistances.Count - 1);
 
             // Defender's shield: expand the roll range for each shield-bearer so they attract more attention
-            const float defenderBonus = 0.5f;
+            var defenderBonus = ACE.Server.Managers.DerpACEConfig.DefenderAggroBonus;
             // Thief's Dagger: shrink the roll range for each dagger-bearer so they attract less attention
-            const float thiefPenalty = 0.4f;
+            var thiefPenalty = ACE.Server.Managers.DerpACEConfig.ThievesDaggerAggroPenalty;
             foreach (var td in targetDistances)
             {
                 var p = td.Target as Player;
@@ -341,7 +341,12 @@ namespace ACE.Server.WorldObjects
                 invRatio += weight;
 
                 if (rng < invRatio)
+                {
+                    var winner = targetDistance.Target as Player;
+                    if (winner?.GetEquippedShield()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield) == true)
+                        winner.SendMessage($"{Name} is drawn to your Defender's Shield!", ACE.Entity.Enum.ChatMessageType.CombatSelf);
                     return targetDistance.Target;
+                }
             }
             // precision error?
             Console.WriteLine($"{Name}.SelectWeightedDistance: couldn't find target: {string.Join(",", targetDistances.Select(i => i.Distance))}");

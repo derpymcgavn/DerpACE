@@ -103,11 +103,13 @@ namespace ACE.Server.Factories
 
             wo.LongDesc = GetLongDesc(wo);
 
-            // Defender's shield: 5% chance on any T6+ shield drop
-            if (wo.IsShield && profile.Tier >= 6 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.05f)
+            // Defender's shield: configurable chance on any T6+ shield drop (see @lootconfig)
+            if (wo.IsShield && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
             {
                 wo.Name = "Defender's " + wo.Name;
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield, true);
+                wo.IconOverlayId = 0x06002878;
+                wo.UiEffects = ACE.Entity.Enum.UiEffects.Fire;
                 wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge — enemies are more likely to target its bearer.";
             }
         }

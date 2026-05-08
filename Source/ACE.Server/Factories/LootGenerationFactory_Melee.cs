@@ -100,11 +100,11 @@ namespace ACE.Server.Factories
             // long description
             wo.LongDesc = GetLongDesc(wo);
 
-            // Thief's Dagger: 5% chance on any T6+ dagger — requires Specialized Sneak Attack to wield.
+            // Thief's Dagger: configurable chance on any T6+ dagger (see @lootconfig)
             // Equipping grants 50% translucency, -aggro weight, and +10% sneak attack damage.
             if ((roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS)
-                && profile.Tier >= 6
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.05f)
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ThievesDaggerMinTier
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerDropChance)
             {
                 wo.Name = wo.Name + " of the Thief";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
@@ -116,6 +116,19 @@ namespace ACE.Server.Factories
                 wo.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
 
                 wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis dagger was honed in shadow — while equipped, you appear translucent and monsters are less likely to notice you. Sneak attacks have a 10% chance to proc an additional 10% bonus damage.";
+            }
+
+            // Sentinel's Spear: configurable chance on any T6+ spear (see @lootconfig)
+            if ((roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear)
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.SentinelSpearMinTier
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.SentinelSpearDropChance)
+            {
+                wo.Name = wo.Name + " of the Sentinel";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);
+                wo.IconOverlayId = 0x06002699;
+                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostStamina;
+
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis spear hums with a guardian's resolve — each strike has a 10% chance to drain 10% of the target's stamina, returning a quarter of it to the wielder.";
             }
         }
 

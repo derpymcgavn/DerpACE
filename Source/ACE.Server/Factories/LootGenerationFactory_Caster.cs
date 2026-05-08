@@ -116,7 +116,7 @@ namespace ACE.Server.Factories
             // The actual proc is driven at runtime by TryProcArchmagi in Player_Magic.cs —
             // it only fires when the player casts a spell whose element matches the caster,
             // and never on ring, wall, volley, or blast AoE spells.
-            if (isMagical && profile.Tier >= 6 && wo.SpellDID.HasValue && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.05f)
+            if (isMagical && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && wo.SpellDID.HasValue && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)
             {
                 var isLifeCaster = wo.W_DamageType == DamageType.Health;
 
@@ -141,6 +141,8 @@ namespace ACE.Server.Factories
 
                     wo.Name = wo.Name + " of the Archmagi";
                     wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster, true);
+                    wo.IconOverlayId = 0x06002860;
+                    wo.UiEffects = ACE.Entity.Enum.UiEffects.Frost;
                     wo.ProcSpell = (uint)archagiSpellLevels[procIdx]; // stored for appraisal display; fired by TryProcArchmagi
                     wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory — when you cast a matching spell, it has a 10% chance to echo {procDesc}.";
                 }

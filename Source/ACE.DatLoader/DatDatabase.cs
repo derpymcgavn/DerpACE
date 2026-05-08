@@ -13,6 +13,12 @@ namespace ACE.DatLoader
     {
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
+        /// <summary>
+        /// Optional post-load hook for ClothingTable entries. Set this from ACE.Server to merge JSON overrides
+        /// without adding JSON dependencies to ACE.DatLoader. Called before the result is placed in FileCache.
+        /// </summary>
+        public static Func<uint, ClothingTable, ClothingTable> ClothingTableMergeHook;
+
         private const uint DAT_HEADER_OFFSET = 0x140;
 
         public string FilePath { get; }
@@ -76,6 +82,14 @@ namespace ACE.DatLoader
                 using (var memoryStream = new MemoryStream(datReader.Buffer))
                 using (var reader = new BinaryReader(memoryStream))
                     obj.Unpack(reader);
+            }
+
+            // Apply custom clothing override (e.g. JSON overrides from CustomClothingManager)
+            if (obj is ClothingTable ct && ClothingTableMergeHook != null)
+            {
+                var merged = ClothingTableMergeHook(fileId, ct);
+                if (merged != null && merged is T mergedT)
+                    obj = mergedT;
             }
 
             // Store this object in the FileCache

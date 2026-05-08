@@ -238,6 +238,9 @@ namespace ACE.Server
             log.Info("Initializing DatManager...");
             DatManager.Initialize(ConfigManager.Config.Server.DatFilesDirectory, true);
 
+            log.Info("Initializing CustomClothingManager...");
+            CustomClothingManager.Initialize();
+
             if (ConfigManager.Config.DDD.EnableDATPatching)
             {
                 log.Info("Initializing DDDManager...");

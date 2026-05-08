@@ -75,6 +75,7 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ### Defender's Shield
 * **5% of all shield loot drops** receive the "Defender's" prefix (e.g. *Defender's Kite Shield*)
 * The item stores `PropertyBool.IsDefendersShield = true` on the world object
+* **Icon overlay:** `0x06002878`
 * Long description reads: *"This shield resonates with a protective challenge — enemies are more likely to target its bearer."*
 * Monsters using **Random targeting** (the most common tactic) give the Defender's shield wearer **+0.5 weight** in `SelectWeightedDistance`, making them roughly 50% more likely to be targeted than an equal-distance player
 * Effect is live — unequipping the shield removes the taunt immediately
@@ -102,7 +103,8 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 ### Archmagi Caster
 * **5% of T7–T8 caster loot drops** receive the "Archmagi" suffix (e.g. *Orb of the Archmagi*)
 * The item stores `PropertyBool.IsArchmagiCaster = true` on the world object
-* On each successful spell cast, `TryProcArchmagi` fires with a **10% proc chance**:
+* **Icon overlay:** `0x06002860`
+* On each successful spell cast, `TryProcArchmagi` fires with a **6% proc chance**:
   * Rolls a random level of the same spell school/family and casts it for free on the same target
   * Life casters proc a random `HealSelf` level; other casters proc a random level of the weapon's `SpellDID` family
 * Proc is handled in `Player_Magic.cs` after `HandleCastSpell` succeeds
@@ -111,7 +113,7 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 * **5% of T6+ dagger loot drops** (Dagger and DaggerMultiStrike types) are converted to a Thief's Dagger (e.g. *Obsidian Kris of the Thief*)
 * The item stores `PropertyBool.IsThievesDagger = true` on the world object
 * **Wield requirement:** Specialized Sneak Attack skill
-* **Icon underlay:** Acid rending icon (`0x06003355`)
+* **Icon underlay:** `0x060065FC`
 * **Long description:** notes the stealth, aggro reduction, and sneak attack proc
 
 #### Stealth Effect (equip/unequip)
@@ -126,9 +128,21 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 * Applied both to the global `invRatioSum` and per-target weight, making Thief's Dagger wielders roughly 40% less likely to be the primary attack target
 
 #### Sneak Attack Bonus (proc)
-* On each sneak attack hit with a Thief's Dagger equipped, there is a **10% proc chance** to deal an additional **+10% damage**
+* On each sneak attack hit with a Thief's Dagger equipped, there is a **6% proc chance** to deal an additional **+10% damage**
 * When the proc fires, the player sees: `+N [Thief's Dagger]` in the combat chat channel (after the standard hit notification)
 * Long description reads: *"Sneak attacks have a 10% chance to proc an additional 10% bonus damage."*
+
+### Sentinel's Spears
+* **5% of T6+ spear loot drops** (Spear and TwoHandedSpear types) are converted to a Sentinel's Spear (e.g. *Obsidian Spear of the Sentinel*)
+* The item stores `PropertyBool.IsSentinelSpear = true` on the world object
+* **Icon overlay:** `0x06002699`
+* **Long description:** notes the stamina drain and return proc
+
+#### Stamina Drain (proc)
+* On each hit with a Sentinel's Spear, there is a **6% proc chance** to drain **10% of the target's current stamina**
+* **125% of the drained stamina is returned to the wielder**
+* Plays `HealthDownYellow` on the target and `HealthUpYellow` on the player when the proc fires
+* When the proc fires, the player sees: `-N stamina [TargetName] +N [Sentinel's Spear]` in the combat chat channel
 
 ### Wacky Loot Event
 * A lightweight server-side event flag system (`ServerEvents` static class) that requires no database entries

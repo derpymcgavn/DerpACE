@@ -8,7 +8,7 @@ namespace ACE.DatLoader.Entity
         /// <summary>
         /// Icon portal.dat 0x06000000
         /// </summary>
-        public uint Icon { get; private set; }
+        public uint Icon { get; set; }
         public List<CloSubPalette> CloSubPalettes { get; } = new List<CloSubPalette>();
 
         public void Unpack(BinaryReader reader)

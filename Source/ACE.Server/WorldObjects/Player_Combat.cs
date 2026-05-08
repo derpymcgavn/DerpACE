@@ -133,16 +133,36 @@ namespace ACE.Server.WorldObjects
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
 
-            // Thief's Dagger: 10% chance to proc a +10% bonus on sneak attacks
+            // Thief's Dagger: configurable proc chance / bonus on sneak attacks (see @lootconfig)
             uint thievesDaggerBonus = 0;
             if (damageEvent.HasDamage
                 && damageEvent.SneakAttackMod > 1.0f
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance)
             {
-                var bonus = damageEvent.Damage * 0.10f;
+                var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;
                 damageEvent.Damage += bonus;
                 thievesDaggerBonus = (uint)Math.Round(bonus);
+            }
+
+            // Sentinel's Spear: configurable proc/drain/return (see @lootconfig)
+            uint sentinelStaminaDrained = 0;
+            uint sentinelStaminaReturned = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear) == true
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.SentinelSpearProcChance
+                && target.Stamina.Current > 0)
+            {
+                var drain = (int)Math.Round(target.Stamina.Current * ACE.Server.Managers.DerpACEConfig.SentinelSpearDrainPct);
+                if (drain < 1) drain = 1;
+                var actualDrain = (uint)-target.UpdateVitalDelta(target.Stamina, -drain);
+                sentinelStaminaDrained = actualDrain;
+                var restore = (int)Math.Round(actualDrain * ACE.Server.Managers.DerpACEConfig.SentinelSpearReturnMult);
+                if (restore >= 1)
+                {
+                    UpdateVitalDelta(Stamina, restore);
+                    sentinelStaminaReturned = (uint)restore;
+                }
             }
 
             if (damageEvent.HasDamage)
@@ -179,6 +199,16 @@ namespace ACE.Server.WorldObjects
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
                         $"+{thievesDaggerBonus} [Thief's Dagger]",
                         ChatMessageType.CombatSelf));
+
+                // Sentinel's Spear: show stamina drain/return when proc fired
+                if (sentinelStaminaDrained > 0)
+                {
+                    target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
+                    ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpYellow);
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"-{sentinelStaminaDrained} stamina [{target.Name}] +{sentinelStaminaReturned} [Sentinel's Spear]",
+                        ChatMessageType.CombatSelf));
+                }
 
                 // splatter effects
                 if (targetPlayer == null)

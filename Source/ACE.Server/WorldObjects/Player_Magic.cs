@@ -1211,7 +1211,7 @@ namespace ACE.Server.WorldObjects
                 if (spell.School != MagicSchool.LifeMagic || !spell.IsHarmful)
                     return;
 
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.10f)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance)
                     return;
 
                 var healSpell = new ACE.Server.Entity.Spell(caster.ProcSpell.Value);
@@ -1228,7 +1228,7 @@ namespace ACE.Server.WorldObjects
                 if (targetCreature == null || targetCreature == this)
                     return;
 
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.10f)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance)
                     return;
 
                 var echoSpell = new ACE.Server.Entity.Spell(caster.ProcSpell.Value);
