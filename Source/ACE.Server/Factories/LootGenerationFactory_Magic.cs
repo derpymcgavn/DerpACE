@@ -17,6 +17,11 @@ namespace ACE.Server.Factories
 
             wo.UiEffects = UiEffects.Magical;
 
+            if (wo.W_DamageType == DamageType.Nether)
+                wo.UiEffects |= UiEffects.Nether;
+            else if (wo.W_DamageType == DamageType.Health)
+                wo.UiEffects |= UiEffects.BoostHealth;
+
             var maxBaseMana = GetMaxBaseMana(wo);
 
             wo.ManaRate = CalculateManaRate(maxBaseMana);

@@ -7,6 +7,8 @@ using ACE.Common.Extensions;
 using ACE.Database.Models.World;
 using ACE.Entity.Enum;
 using ACE.Server.Factories;
+using ACE.Server.Entity.Actions;
+using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.WorldObjects
 {
@@ -185,11 +187,67 @@ namespace ACE.Server.WorldObjects
         public virtual void OnWield(Creature creature)
         {
             EmoteManager.OnWield(creature);
+
+            // Thief's Dagger: enter stealth.
+            // Translucency is set synchronously so that if the tracking system recreates the
+            // player during the particle delay it already carries the correct 0.5f value.
+            // GameMessageUpdateObject / CreateObject to self causes teleport-re-init or duplicates,
+            // so we only update others (sendSelf=false). Self gets particle + chat confirmation.
+            if (GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
+            {
+                var player = creature as Player;
+                creature.Translucency = 0.5f;   // set immediately so all future CreateObject packets include it
+
+                var chain = new ActionChain();
+                // 1. play black particle, then delete others' stale copy
+                chain.AddAction(creature, () =>
+                {
+                    creature.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownBlack);
+                    creature.EnqueueBroadcast(false, new GameMessageDeleteObject(creature));
+                });
+                chain.AddDelaySeconds(0.5);
+                // 2. recreate for others — translucency=0.5f is already set on the object
+                chain.AddAction(creature, () =>
+                {
+                    creature.EnqueueBroadcast(false, new GameMessageCreateObject(creature));
+                    player?.SendMessage("You slip into the shadows.", ACE.Entity.Enum.ChatMessageType.Magic);
+                });
+                chain.EnqueueChain();
+            }
         }
 
         public virtual void OnUnWield(Creature creature)
         {
             EmoteManager.OnUnwield(creature);
+
+            // Thief's Dagger: only exit stealth when the last Thief's Dagger is removed
+            if (GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
+            {
+                var stillHasThievesDagger = creature.EquippedObjects.Values
+                    .Any(w => w.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true);
+
+                if (!stillHasThievesDagger)
+                {
+                    var player = creature as Player;
+                    creature.Translucency = null;   // clear immediately so tracking-system recreates are opaque
+
+                    var chain = new ActionChain();
+                    // 1. delete others' translucent copy
+                    chain.AddAction(creature, () =>
+                    {
+                        creature.EnqueueBroadcast(false, new GameMessageDeleteObject(creature));
+                    });
+                    chain.AddDelaySeconds(0.3);
+                    // 2. recreate for others at full opacity
+                    chain.AddAction(creature, () =>
+                    {
+                        creature.EnqueueBroadcast(false, new GameMessageCreateObject(creature));
+                        creature.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.UnHide);
+                        player?.SendMessage("You step out of the shadows.", ACE.Entity.Enum.ChatMessageType.Magic);
+                    });
+                    chain.EnqueueChain();
+                }
+            }
         }
     }
 }

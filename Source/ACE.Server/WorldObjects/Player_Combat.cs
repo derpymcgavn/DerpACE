@@ -133,6 +133,18 @@ namespace ACE.Server.WorldObjects
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
 
+            // Thief's Dagger: 10% chance to proc a +10% bonus on sneak attacks
+            uint thievesDaggerBonus = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.SneakAttackMod > 1.0f
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            {
+                var bonus = damageEvent.Damage * 0.10f;
+                damageEvent.Damage += bonus;
+                thievesDaggerBonus = (uint)Math.Round(bonus);
+            }
+
             if (damageEvent.HasDamage)
             {
                 OnDamageTarget(target, damageEvent.CombatType, damageEvent.IsCritical);
@@ -161,6 +173,12 @@ namespace ACE.Server.WorldObjects
 
                 if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                     Session.Network.EnqueueSend(new GameEventAttackerNotification(Session, target.Name, damageEvent.DamageType, (float)intDamage / target.Health.MaxValue, intDamage, damageEvent.IsCritical, damageEvent.AttackConditions));
+
+                // Thief's Dagger: show bonus when the 10% proc fired
+                if (thievesDaggerBonus > 0)
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"+{thievesDaggerBonus} [Thief's Dagger]",
+                        ChatMessageType.CombatSelf));
 
                 // splatter effects
                 if (targetPlayer == null)

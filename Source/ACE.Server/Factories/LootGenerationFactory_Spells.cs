@@ -413,6 +413,9 @@ namespace ACE.Server.Factories
             if (wo.W_DamageType == DamageType.Nether)
                 return SpellId.CantripVoidMagicAptitude1;
 
+            if (wo.W_DamageType == DamageType.Health)
+                return SpellId.CANTRIPLIFEMAGICAPTITUDE1;
+
             if (wo.W_DamageType != DamageType.Undef)
                 return SpellId.CANTRIPWARMAGICAPTITUDE1;
 
@@ -444,6 +447,10 @@ namespace ACE.Server.Factories
             else if (roll.Wcid == Enum.WeenieClassName.orb)
             {
                 return 4;
+            }
+            else if (roll.IsCaster && wo.W_DamageType == DamageType.Health)
+            {
+                return 21;
             }
             else if (roll.IsCaster && wo.W_DamageType != DamageType.Nether)
             {

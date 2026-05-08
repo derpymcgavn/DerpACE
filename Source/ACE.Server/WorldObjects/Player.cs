@@ -46,6 +46,8 @@ namespace ACE.Server.WorldObjects
 
         public bool LastContact = true;
 
+        public bool IsAdminFlying;
+
         public bool IsJumping
         {
             get

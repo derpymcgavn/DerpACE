@@ -47,10 +47,18 @@ namespace ACE.Server.Factories.Tables
             ( SpellId.CurseDestructionOther1, 0.05f ),
         };
 
+        private static ChanceTable<SpellId> lifeSpells = new ChanceTable<SpellId>()
+        {
+            ( SpellId.HealthBolt1,  0.34f ),
+            ( SpellId.StaminaBolt1, 0.33f ),
+            ( SpellId.ManaBolt1,    0.33f ),
+        };
+
         public static SpellId Roll(WorldObject wo)
         {
             var table = IsOrb(wo) ? orbSpells :
-                wo.W_DamageType == DamageType.Nether ? netherSpells : wandStaffSpells;
+                wo.W_DamageType == DamageType.Nether ? netherSpells :
+                wo.W_DamageType == DamageType.Health ? lifeSpells : wandStaffSpells;
 
             return table.Roll();
         }
@@ -83,6 +91,9 @@ namespace ACE.Server.Factories.Tables
             { SpellId.LightningBolt1,                   "Lightning Bolt" },
             { SpellId.ForceBolt1,                       "Force Bolt" },
             { SpellId.WhirlingBlade1,                   "Blades" },
+            { SpellId.HealthBolt1,                      "Life Bolt" },
+            { SpellId.StaminaBolt1,                     "Stamina Bolt" },
+            { SpellId.ManaBolt1,                        "Mana Bolt" },
             { SpellId.RegenerationOther1,               "Regeneration" },
             { SpellId.RegenerationSelf1,                "Regeneration" },
             { SpellId.ManaRenewalOther1,                "Mana Renewal" },

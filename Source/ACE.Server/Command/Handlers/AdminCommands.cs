@@ -4790,5 +4790,120 @@ namespace ACE.Server.Command.Handlers
             }
             LootSwap.UpdateTables(folder);
         }
+
+        [CommandHandler("fly", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Toggles admin flight mode (no gravity, no fall damage).",
+            "[ on | off ]")]
+        public static void HandleFly(Session session, params string[] parameters)
+        {
+            var player = session.Player;
+
+            bool enable;
+            if (parameters.Length > 0 && parameters[0].Equals("off", StringComparison.OrdinalIgnoreCase))
+                enable = false;
+            else if (parameters.Length > 0 && parameters[0].Equals("on", StringComparison.OrdinalIgnoreCase))
+                enable = true;
+            else
+                enable = !player.IsAdminFlying;
+
+            player.IsAdminFlying = enable;
+            player.GravityStatus = !enable;
+            player.EnqueueBroadcastPhysicsState();
+
+            var msg = enable ? "Admin flight enabled. Gravity disabled, fall damage suppressed." : "Admin flight disabled. Gravity restored.";
+            session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.Broadcast));
+        }
+
+        [CommandHandler("up", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Teleports you upward by the specified distance (default 10).",
+            "[ distance ]")]
+        public static void HandleUp(Session session, params string[] parameters)
+        {
+            float dist = 10f;
+            if (parameters.Length > 0 && float.TryParse(parameters[0], out float parsed))
+                dist = parsed;
+
+            var newPos = new Position(session.Player.Location);
+            newPos.PositionZ += dist;
+            session.Player.Teleport(newPos);
+        }
+
+        [CommandHandler("down", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Teleports you downward by the specified distance (default 10).",
+            "[ distance ]")]
+        public static void HandleDown(Session session, params string[] parameters)
+        {
+            float dist = 10f;
+            if (parameters.Length > 0 && float.TryParse(parameters[0], out float parsed))
+                dist = parsed;
+
+            var newPos = new Position(session.Player.Location);
+            newPos.PositionZ -= dist;
+            session.Player.Teleport(newPos);
+        }
+
+        private static Position MoveHorizontal(Position loc, float dist, float headingOffsetDeg)
+        {
+            float qw = loc.RotationW;
+            float qz = loc.RotationZ;
+
+            double heading = Math.Atan2(2 * qw * qz, 1 - 2 * qz * qz)
+                             + headingOffsetDeg * Math.PI / 180.0;
+
+            var dx = -Convert.ToSingle(Math.Sin(heading) * dist);
+            var dy =  Convert.ToSingle(Math.Cos(heading) * dist);
+
+            return new Position(loc.LandblockId.Raw,
+                loc.PositionX + dx, loc.PositionY + dy, loc.PositionZ,
+                0f, 0f, qz, qw);
+        }
+
+        [CommandHandler("forward", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Teleports you forward by the specified distance (default 10).",
+            "[ distance ]")]
+        public static void HandleForward(Session session, params string[] parameters)
+        {
+            float dist = 10f;
+            if (parameters.Length > 0 && float.TryParse(parameters[0], out float parsed))
+                dist = parsed;
+
+            session.Player.Teleport(MoveHorizontal(session.Player.Location, dist, 0f));
+        }
+
+        [CommandHandler("backward", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Teleports you backward by the specified distance (default 10).",
+            "[ distance ]")]
+        public static void HandleBackward(Session session, params string[] parameters)
+        {
+            float dist = 10f;
+            if (parameters.Length > 0 && float.TryParse(parameters[0], out float parsed))
+                dist = parsed;
+
+            session.Player.Teleport(MoveHorizontal(session.Player.Location, dist, 180f));
+        }
+
+        [CommandHandler("left", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Teleports you left by the specified distance (default 10).",
+            "[ distance ]")]
+        public static void HandleLeft(Session session, params string[] parameters)
+        {
+            float dist = 10f;
+            if (parameters.Length > 0 && float.TryParse(parameters[0], out float parsed))
+                dist = parsed;
+
+            session.Player.Teleport(MoveHorizontal(session.Player.Location, dist, 90f));
+        }
+
+        [CommandHandler("right", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0,
+            "Teleports you right by the specified distance (default 10).",
+            "[ distance ]")]
+        public static void HandleRight(Session session, params string[] parameters)
+        {
+            float dist = 10f;
+            if (parameters.Length > 0 && float.TryParse(parameters[0], out float parsed))
+                dist = parsed;
+
+            session.Player.Teleport(MoveHorizontal(session.Player.Location, dist, -90f));
+        }
     }
 }

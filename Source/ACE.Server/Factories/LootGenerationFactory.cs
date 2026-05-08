@@ -368,6 +368,27 @@ namespace ACE.Server.Factories
 
                     // other mundane items (mana stones, food/drink, healing kits, lockpicks, and spell components/peas) don't get mutated
             }
+
+            // Wacky Loot event: randomise the visual scale of weapons and shields
+            if (ServerEvents.WackyLoot && wo != null)
+            {
+                bool isWeapon = treasureRoll.ItemType == TreasureItemType.Weapon || treasureRoll.ItemType == TreasureItemType.Caster;
+                bool isShield = wo.IsShield;
+                if (isWeapon || isShield)
+                {
+                    wo.ObjScale = (float)Math.Round(ThreadSafeRandom.Next(0.25f, 3.25f), 2);
+
+                    // The client prepends MaterialType as a word before wo.Name.
+                    // To put [Whack] first we bake the material name into wo.Name ourselves
+                    // and clear MaterialType so the client won't double-prepend it.
+                    var materialPrefix = wo.MaterialType > 0
+                        ? wo.MaterialType.ToString() + " "
+                        : "";
+                    wo.MaterialType = 0;
+                    wo.Name = "[Whack] " + materialPrefix + wo.Name;
+                }
+            }
+
             return wo;
         }
 

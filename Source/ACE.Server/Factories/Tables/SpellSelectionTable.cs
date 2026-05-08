@@ -400,6 +400,20 @@ namespace ACE.Server.Factories.Tables
             ( SpellId.LifeMagicMasterySelf1,           0.01f ),
         };
 
+        // life caster
+        private static ChanceTable<SpellId> spellSelectionGroup21 = new ChanceTable<SpellId>()
+        {
+            ( SpellId.LifeMagicMasterySelf1,           0.25f ),
+            ( SpellId.FocusSelf1,                      0.15f ),
+            ( SpellId.ManaMasterySelf1,                0.10f ),
+            ( SpellId.ArcaneEnlightenmentSelf1,        0.10f ),
+            ( SpellId.WillpowerSelf1,                  0.10f ),
+            ( SpellId.CreatureEnchantmentMasterySelf1, 0.09f ),
+            ( SpellId.ItemEnchantmentMasterySelf1,     0.09f ),
+            ( SpellId.SneakAttackMasterySelf1,         0.06f ),
+            ( SpellId.WarMagicMasterySelf1,            0.06f ),
+        };
+
         /// <summary>
         /// Key is (PropertyInt.TsysMutationData >> 24) - 1
         /// </summary>
@@ -425,6 +439,7 @@ namespace ACE.Server.Factories.Tables
             spellSelectionGroup18,
             spellSelectionGroup19,
             spellSelectionGroup20,
+            spellSelectionGroup21,
         };
 
         /// <summary>

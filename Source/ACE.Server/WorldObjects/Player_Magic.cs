@@ -1114,6 +1114,9 @@ namespace ACE.Server.WorldObjects
 
                     HandleCastSpell(spell, target, itemCaster, caster, isWeaponSpell);
 
+                    // Archmagi echo: fires on element-matched single-target spells only
+                    TryProcArchmagi(target, spell, caster);
+
                     if (!spell.IsProjectile)
                     {
                         if (spell.IsHarmful)
@@ -1176,6 +1179,62 @@ namespace ACE.Server.WorldObjects
             spellChain.EnqueueChain();
 
             return true;
+        }
+
+        /// <summary>
+        /// Archmagi proc: when the player casts a spell whose element matches the wielded Archmagi caster,
+        /// there is a 10% chance to echo the caster's stored lower-level proc spell.
+        /// Ring, Wall, Blast, and Volley AoE spells are excluded.
+        /// Life casters echo a self-heal instead when casting harmful life spells.
+        /// </summary>
+        private void TryProcArchmagi(WorldObject target, Spell spell, WorldObject caster)
+        {
+            if (caster == null || caster.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true)
+                return;
+
+            if (!caster.ProcSpell.HasValue)
+                return;
+
+            // exclude ring, wall, blast, volley (AoE spell types)
+            var projType = SpellProjectile.GetProjectileSpellType(spell.Id);
+            if (projType == ProjectileSpellType.Ring ||
+                projType == ProjectileSpellType.Wall ||
+                projType == ProjectileSpellType.Blast ||
+                projType == ProjectileSpellType.Volley)
+                return;
+
+            var isLifeCaster = caster.W_DamageType == DamageType.Health;
+
+            if (isLifeCaster)
+            {
+                // trigger on harmful life spells; echo a heal onto self
+                if (spell.School != MagicSchool.LifeMagic || !spell.IsHarmful)
+                    return;
+
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.10f)
+                    return;
+
+                var healSpell = new ACE.Server.Entity.Spell(caster.ProcSpell.Value);
+                if (!healSpell.NotFound)
+                    TryCastSpell(healSpell, this, caster, caster, true, true);
+            }
+            else
+            {
+                // trigger when the cast spell's element matches the caster's element
+                if (spell.DamageType != caster.W_DamageType)
+                    return;
+
+                var targetCreature = target as Creature;
+                if (targetCreature == null || targetCreature == this)
+                    return;
+
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.10f)
+                    return;
+
+                var echoSpell = new ACE.Server.Entity.Spell(caster.ProcSpell.Value);
+                if (!echoSpell.NotFound)
+                    TryCastSpell(echoSpell, target, caster, caster, true, true);
+            }
         }
 
         public void TryBurnComponents(Spell spell)

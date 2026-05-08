@@ -303,7 +303,23 @@ namespace ACE.Server.WorldObjects
             var distSum = targetDistances.Select(i => i.Distance).Sum();
 
             // get the sum of the inverted ratios
-            var invRatioSum = targetDistances.Count - 1;
+            var invRatioSum = (float)(targetDistances.Count - 1);
+
+            // Defender's shield: expand the roll range for each shield-bearer so they attract more attention
+            const float defenderBonus = 0.5f;
+            // Thief's Dagger: shrink the roll range for each dagger-bearer so they attract less attention
+            const float thiefPenalty = 0.4f;
+            foreach (var td in targetDistances)
+            {
+                var p = td.Target as Player;
+                if (p?.GetEquippedShield()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield) == true)
+                    invRatioSum += defenderBonus;
+                if (p?.GetEquippedMeleeWeapon()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
+                    invRatioSum -= thiefPenalty;
+            }
+
+            // ensure invRatioSum stays positive (edge case: all players have Thief's Daggers)
+            if (invRatioSum <= 0.0f) invRatioSum = 0.01f;
 
             // roll between 0 - invRatioSum here,
             // instead of 0-1 (the source of the original wi bug)
@@ -313,7 +329,16 @@ namespace ACE.Server.WorldObjects
             var invRatio = 0.0f;
             foreach (var targetDistance in targetDistances)
             {
-                invRatio += 1.0f - (targetDistance.Distance / distSum);
+                var weight = 1.0f - (targetDistance.Distance / distSum);
+
+                var p = targetDistance.Target as Player;
+                if (p?.GetEquippedShield()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield) == true)
+                    weight += defenderBonus;
+                if (p?.GetEquippedMeleeWeapon()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
+                    weight -= thiefPenalty;
+                if (weight < 0.0f) weight = 0.0f;
+
+                invRatio += weight;
 
                 if (rng < invRatio)
                     return targetDistance.Target;

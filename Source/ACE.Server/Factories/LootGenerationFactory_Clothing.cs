@@ -102,6 +102,14 @@ namespace ACE.Server.Factories
                 MutateValue(wo, profile.Tier, roll);
 
             wo.LongDesc = GetLongDesc(wo);
+
+            // Defender's shield: 5% chance on any T6+ shield drop
+            if (wo.IsShield && profile.Tier >= 6 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.05f)
+            {
+                wo.Name = "Defender's " + wo.Name;
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield, true);
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge — enemies are more likely to target its bearer.";
+            }
         }
 
         private static bool AssignArmorLevel(WorldObject wo, TreasureDeath profile, TreasureRoll roll)

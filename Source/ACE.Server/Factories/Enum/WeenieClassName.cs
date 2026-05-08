@@ -41887,5 +41887,13 @@ namespace ACE.Server.Factories.Enum
         ace87831_surface = 87831,
         ace87832_rootsofskuldgenerator = 87832,
         ace420420420_randomdye = 420420420,
+        ace420420421_martyrstaff = 420420421,
+        ace5238245_aciddartflinger = 5238245,
+        ace5238246_bluntdartflinger = 5238246,
+        ace5238247_electricdartflinger = 5238247,
+        ace5238248_firedartflinger = 5238248,
+        ace5238249_frostdartflinger = 5238249,
+        ace5238250_piercingdartflinger = 5238250,
+        ace5238251_slashingdartflinger = 5238251,
     }
 }

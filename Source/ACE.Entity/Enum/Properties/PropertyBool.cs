@@ -182,5 +182,8 @@ namespace ACE.Entity.Enum.Properties
         FreeAttributeResetRenewed        = 9008,
         SkillTemplesTimerReset           = 9009,
         FreeMasteryResetRenewed          = 9010,
+        IsDefendersShield                = 9011,
+        IsArchmagiCaster                 = 9012,
+        IsThievesDagger                  = 9013,
     }
 }

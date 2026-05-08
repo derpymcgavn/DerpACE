@@ -824,6 +824,7 @@ namespace ACE.Server.WorldObjects
             }
 
             var sneakAttackMod = (100 + damageRating) / 100.0f;
+
             //Console.WriteLine("SneakAttackMod: " + sneakAttackMod);
             return sneakAttackMod;
         }

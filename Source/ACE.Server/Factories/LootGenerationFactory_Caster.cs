@@ -12,6 +12,11 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
+        private static readonly System.Collections.Generic.HashSet<ACE.Server.Factories.Enum.WeenieClassName> LifeCasterWcids = new System.Collections.Generic.HashSet<ACE.Server.Factories.Enum.WeenieClassName>
+        {
+            ACE.Server.Factories.Enum.WeenieClassName.ace420420421_martyrstaff,
+        };
+
         public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical)
         {
             // this function is only used by test methods, and is not part of regular lootgen
@@ -27,6 +32,10 @@ namespace ACE.Server.Factories
 
         private static void MutateCaster(WorldObject wo, TreasureDeath profile, bool isMagical, TreasureRoll roll)
         {
+            // Ensure custom life caster templates always use the life-damage mutation path.
+            if (LifeCasterWcids.Contains((ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId) && wo.W_DamageType == DamageType.Undef)
+                wo.W_DamageType = DamageType.Health;
+
             // mutate ManaConversionMod
             var mutationFilter = MutationCache.GetMutation("Casters.caster.txt");
             mutationFilter.TryMutate(wo, profile.Tier);
@@ -43,6 +52,8 @@ namespace ACE.Server.Factories
             {
                 if (wo.W_DamageType == DamageType.Nether)
                     wo.WieldSkillType = (int)Skill.VoidMagic;
+                else if (wo.W_DamageType == DamageType.Health)
+                    wo.WieldSkillType = (int)Skill.LifeMagic;
                 else
                     wo.WieldSkillType = (int)Skill.WarMagic;
             }
@@ -99,6 +110,41 @@ namespace ACE.Server.Factories
 
             // long description
             wo.LongDesc = GetLongDesc(wo);
+
+            // Archmagi: 5% chance on any T6+ magical caster with a bound spell.
+            // ProcSpell is set at loot time (element-matched bolt, or HealSelf for life casters).
+            // The actual proc is driven at runtime by TryProcArchmagi in Player_Magic.cs —
+            // it only fires when the player casts a spell whose element matches the caster,
+            // and never on ring, wall, volley, or blast AoE spells.
+            if (isMagical && profile.Tier >= 6 && wo.SpellDID.HasValue && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.05f)
+            {
+                var isLifeCaster = wo.W_DamageType == DamageType.Health;
+
+                var archagiSpellLevels = isLifeCaster
+                    ? SpellLevelProgression.GetSpellLevels(SpellId.HealSelf1)
+                    : SpellLevelProgression.GetSpellLevels((SpellId)wo.SpellDID.Value);
+
+                if (archagiSpellLevels != null && archagiSpellLevels.Count >= 5)
+                {
+                    // maxIdx is the highest level index (0-based) available for this tier
+                    var maxIdx = profile.Tier >= 8 ? 4 : profile.Tier >= 7 ? 2 : 1;
+
+                    // squaring the roll biases heavily toward level 1; higher levels are progressively rarer
+                    var rawRoll = ThreadSafeRandom.Next(0.0f, 1.0f);
+                    var procIdx = (int)(rawRoll * rawRoll * (maxIdx + 1));
+                    if (procIdx > maxIdx) procIdx = maxIdx;
+
+                    var procSpellLevel = procIdx + 1;
+                    var procDesc = isLifeCaster
+                        ? $"a level {procSpellLevel} heal upon yourself"
+                        : $"a level {procSpellLevel} duplicate of its bound spell against your target";
+
+                    wo.Name = wo.Name + " of the Archmagi";
+                    wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster, true);
+                    wo.ProcSpell = (uint)archagiSpellLevels[procIdx]; // stored for appraisal display; fired by TryProcArchmagi
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory — when you cast a matching spell, it has a 10% chance to echo {procDesc}.";
+                }
+            }
         }
 
         private static void MutateCaster_SpellDID(WorldObject wo, TreasureDeath profile)

@@ -1,5 +1,6 @@
 using ACE.Common;
 using ACE.Database.Models.World;
+using ACE.Entity.Enum;
 using ACE.Server.Entity.Mutations;
 using ACE.Server.Factories.Entity;
 using ACE.Server.Factories.Enum;
@@ -98,6 +99,24 @@ namespace ACE.Server.Factories
 
             // long description
             wo.LongDesc = GetLongDesc(wo);
+
+            // Thief's Dagger: 5% chance on any T6+ dagger — requires Specialized Sneak Attack to wield.
+            // Equipping grants 50% translucency, -aggro weight, and +10% sneak attack damage.
+            if ((roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS)
+                && profile.Tier >= 6
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.05f)
+            {
+                wo.Name = wo.Name + " of the Thief";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
+                wo.IconUnderlayId = 0x060065FC;
+
+                // require Specialized Sneak Attack (WieldRequirement.Training, difficulty = 3 = Specialized)
+                wo.WieldRequirements = WieldRequirement.Training;
+                wo.WieldSkillType = (int)Skill.SneakAttack;
+                wo.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
+
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis dagger was honed in shadow — while equipped, you appear translucent and monsters are less likely to notice you. Sneak attacks have a 10% chance to proc an additional 10% bonus damage.";
+            }
         }
 
         private static string GetDamageScript(MeleeWeaponSkill weaponSkill, TreasureWeaponType weaponType)
