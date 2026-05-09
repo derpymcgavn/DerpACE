@@ -29,7 +29,79 @@ namespace ACE.Server.Command.Handlers
             "  sentinel.tier         SentinelSpearMinTier (int)\n" +
             "  sentinel.proc         SentinelSpearProcChance (float 0-1)\n" +
             "  sentinel.drain        SentinelSpearDrainPct (float 0-1)\n" +
-            "  sentinel.return       SentinelSpearReturnMult (float)")]
+            "  sentinel.return       SentinelSpearReturnMult (float)\n" +
+            "  unarmed.drop          UnarmedElemDropChance (float 0-1)\n" +
+            "  unarmed.procmin       UnarmedElemProcMin (int %)\n" +
+            "  unarmed.procmax       UnarmedElemProcMax (int %)\n" +
+            "  fencer.drop           FencerBladeDropChance (float 0-1)\n" +
+            "  fencer.tier           FencerBladeMinTier (int)\n" +
+            "  fencer.piercemin      FencerPierceMin (int %)\n" +
+            "  fencer.piercemax      FencerPierceMax (int %)\n" +
+            "  fencer.procmin        FencerPierceProcMin (int %)\n" +
+            "  fencer.procmax        FencerPierceProcMax (int %)\n" +
+            "  fencer.deflectmin     FencerDeflectMin (int %)\n" +
+            "  fencer.deflectmax     FencerDeflectMax (int %)\n" +
+            "  ravager.drop          RavagerAxeDropChance (float 0-1)\n" +
+            "  ravager.tier          RavagerAxeMinTier (int)\n" +
+            "  ravager.procmin       RavagerProcMin (int %)\n" +
+            "  ravager.procmax       RavagerProcMax (int %)\n" +
+            "  ravager.bleedmin      RavagerBleedMin (int %)\n" +
+            "  ravager.bleedmax      RavagerBleedMax (int %)\n" +
+            "  ravager.twohandmult   RavagerTwoHandMult (float)\n" +
+            "  ravager.ticks         RavagerBleedTicks (int)\n" +
+            "  ravager.interval      RavagerBleedInterval (float seconds)\n" +
+            "  warden.drop           WardenMaulDropChance (float 0-1)\n" +
+            "  warden.tier           WardenMaulMinTier (int)\n" +
+            "  warden.procmin        WardenProcMin (int %)\n" +
+            "  warden.procmax        WardenProcMax (int %)\n" +
+            "  warden.penaltymin     WardenPenaltyMin (int defense skill)\n" +
+            "  warden.penaltymax     WardenPenaltyMax (int defense skill)\n" +
+            "  warden.durationmin    WardenDurationMin (int seconds)\n" +
+            "  warden.durationmax    WardenDurationMax (int seconds)\n" +
+            "  warden.twohandmult    WardenTwoHandMult (float)\n" +
+            "  resolute.drop         ResoluteBladeDropChance (float 0-1)\n" +
+            "  resolute.tier         ResoluteBladeMinTier (int)\n" +
+            "  resolute.procmin      ResoluteProcMin (int %)\n" +
+            "  resolute.procmax      ResoluteProcMax (int %)\n" +
+            "  resolute.healmin      ResoluteHealMin (int %)\n" +
+            "  resolute.healmax      ResoluteHealMax (int %)\n" +
+            "  resolute.killburst    ResoluteKillBurstPct (float 0-1)\n" +
+            "  resolute.twohandmult  ResoluteTwoHandMult (float)\n" +
+            "  polebreaker.drop      PolebreakerDropChance (float 0-1)\n" +
+            "  polebreaker.tier      PolebreakerMinTier (int)\n" +
+            "  polebreaker.stackmin  PolebreakerStackMin (int %)\n" +
+            "  polebreaker.stackmax  PolebreakerStackMax (int %)\n" +
+            "  polebreaker.maxstackmin  PolebreakerMaxStackMin (int)\n" +
+            "  polebreaker.maxstackmax  PolebreakerMaxStackMax (int)\n" +
+            "  stalker.drop          StalkerBowDropChance (float 0-1)\n" +
+            "  stalker.tier          StalkerBowMinTier (int)\n" +
+            "  stalker.procmin       StalkerProcMin (int %)\n" +
+            "  stalker.procmax       StalkerProcMax (int %)\n" +
+            "  stalker.bonusmin      StalkerBonusMin (int %)\n" +
+            "  stalker.bonusmax      StalkerBonusMax (int %)\n" +
+            "  breacher.drop         BreacherCrossbowDropChance (float 0-1)\n" +
+            "  breacher.tier         BreacherCrossbowMinTier (int)\n" +
+            "  breacher.piercemin    BreacherPierceMin (int %)\n" +
+            "  breacher.piercemax    BreacherPierceMax (int %)\n" +
+            "  reaper.drop           ReaperAtlatlDropChance (float 0-1)\n" +
+            "  reaper.tier           ReaperAtlatlMinTier (int)\n" +
+            "  reaper.procmin        ReaperProcMin (int %)\n" +
+            "  reaper.procmax        ReaperProcMax (int %)\n" +
+            "  reaper.healmin        ReaperHealMin (int % MaxHealth)\n" +
+            "  reaper.healmax        ReaperHealMax (int % MaxHealth)\n" +
+            "  armor.banenormal      ArmorBaneChanceNormal (float 0-1, per-bane chance on normal armor)\n" +
+            "  armor.banecovenant    ArmorBaneChanceCovenant (float 0-1, per-bane chance on Covenant armor)\n" +
+            "  mobmod.enabled        MobModifierEnabled (bool, master switch)\n" +
+            "  mobmod.tier           MobModifierMinTier (int)\n" +
+            "  vampiric.chance       VampiricMobChance (float 0-1)\n" +
+            "  vampiric.lifestealmin VampiricLifestealMin (int %)\n" +
+            "  vampiric.lifestealmax VampiricLifestealMax (int %)\n" +
+            "  thiefmob.chance       ThiefMobChance (float 0-1)\n" +
+            "  thiefmob.proc         ThiefStealProc (float 0-1)\n" +
+            "  thiefmob.chestchance  ThiefChestDropChance (float 0-1)\n" +
+            "  thiefmob.chestwcid    ThiefChestWcid (uint)\n" +
+            "  thiefmob.chestdespawn ThiefChestDespawnSeconds (float, 0=never)\n" +
+            "  simulacrum.chance     SimulacrumMobChance (float 0-1)")]
         public static void HandleLootConfig(Session session, params string[] parameters)
         {
             var sub = parameters[0].ToLower();
@@ -54,6 +126,78 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  sentinel.proc   = {DerpACEConfig.SentinelSpearProcChance:P0}  ({DerpACEConfig.SentinelSpearProcChance})");
                 sb.AppendLine($"  sentinel.drain  = {DerpACEConfig.SentinelSpearDrainPct:P0}  ({DerpACEConfig.SentinelSpearDrainPct})");
                 sb.AppendLine($"  sentinel.return = {DerpACEConfig.SentinelSpearReturnMult}");
+                sb.AppendLine($"  unarmed.drop    = {DerpACEConfig.UnarmedElemDropChance:P0}  ({DerpACEConfig.UnarmedElemDropChance})");
+                sb.AppendLine($"  unarmed.procmin = {DerpACEConfig.UnarmedElemProcMin}%");
+                sb.AppendLine($"  unarmed.procmax = {DerpACEConfig.UnarmedElemProcMax}%");
+                sb.AppendLine($"  fencer.drop     = {DerpACEConfig.FencerBladeDropChance:P0}  ({DerpACEConfig.FencerBladeDropChance})");
+                sb.AppendLine($"  fencer.tier     = {DerpACEConfig.FencerBladeMinTier}");
+                sb.AppendLine($"  fencer.piercemin = {DerpACEConfig.FencerPierceMin}%");
+                sb.AppendLine($"  fencer.piercemax = {DerpACEConfig.FencerPierceMax}%");
+                sb.AppendLine($"  fencer.procmin  = {DerpACEConfig.FencerPierceProcMin}%");
+                sb.AppendLine($"  fencer.procmax  = {DerpACEConfig.FencerPierceProcMax}%");
+                sb.AppendLine($"  fencer.deflectmin = {DerpACEConfig.FencerDeflectMin}%");
+                sb.AppendLine($"  fencer.deflectmax = {DerpACEConfig.FencerDeflectMax}%");
+                sb.AppendLine($"  ravager.drop        = {DerpACEConfig.RavagerAxeDropChance:P0}  ({DerpACEConfig.RavagerAxeDropChance})");
+                sb.AppendLine($"  ravager.tier        = {DerpACEConfig.RavagerAxeMinTier}");
+                sb.AppendLine($"  ravager.procmin     = {DerpACEConfig.RavagerProcMin}%");
+                sb.AppendLine($"  ravager.procmax     = {DerpACEConfig.RavagerProcMax}%");
+                sb.AppendLine($"  ravager.bleedmin    = {DerpACEConfig.RavagerBleedMin}%");
+                sb.AppendLine($"  ravager.bleedmax    = {DerpACEConfig.RavagerBleedMax}%");
+                sb.AppendLine($"  ravager.twohandmult = {DerpACEConfig.RavagerTwoHandMult}");
+                sb.AppendLine($"  ravager.ticks       = {DerpACEConfig.RavagerBleedTicks}");
+                sb.AppendLine($"  ravager.interval    = {DerpACEConfig.RavagerBleedInterval}s");
+                sb.AppendLine($"  warden.drop         = {DerpACEConfig.WardenMaulDropChance:P0}  ({DerpACEConfig.WardenMaulDropChance})");
+                sb.AppendLine($"  warden.tier         = {DerpACEConfig.WardenMaulMinTier}");
+                sb.AppendLine($"  warden.procmin      = {DerpACEConfig.WardenProcMin}%");
+                sb.AppendLine($"  warden.procmax      = {DerpACEConfig.WardenProcMax}%");
+                sb.AppendLine($"  warden.penaltymin   = {DerpACEConfig.WardenPenaltyMin}");
+                sb.AppendLine($"  warden.penaltymax   = {DerpACEConfig.WardenPenaltyMax}");
+                sb.AppendLine($"  warden.durationmin  = {DerpACEConfig.WardenDurationMin}s");
+                sb.AppendLine($"  warden.durationmax  = {DerpACEConfig.WardenDurationMax}s");
+                sb.AppendLine($"  warden.twohandmult  = {DerpACEConfig.WardenTwoHandMult}");
+                sb.AppendLine($"  resolute.drop        = {DerpACEConfig.ResoluteBladeDropChance:P0}  ({DerpACEConfig.ResoluteBladeDropChance})");
+                sb.AppendLine($"  resolute.tier        = {DerpACEConfig.ResoluteBladeMinTier}");
+                sb.AppendLine($"  resolute.procmin     = {DerpACEConfig.ResoluteProcMin}%");
+                sb.AppendLine($"  resolute.procmax     = {DerpACEConfig.ResoluteProcMax}%");
+                sb.AppendLine($"  resolute.healmin     = {DerpACEConfig.ResoluteHealMin}%");
+                sb.AppendLine($"  resolute.healmax     = {DerpACEConfig.ResoluteHealMax}%");
+                sb.AppendLine($"  resolute.killburst   = {DerpACEConfig.ResoluteKillBurstPct:P0}");
+                sb.AppendLine($"  resolute.twohandmult = {DerpACEConfig.ResoluteTwoHandMult}");
+                sb.AppendLine($"  polebreaker.drop        = {DerpACEConfig.PolebreakerDropChance:P0}  ({DerpACEConfig.PolebreakerDropChance})");
+                sb.AppendLine($"  polebreaker.tier        = {DerpACEConfig.PolebreakerMinTier}");
+                sb.AppendLine($"  polebreaker.stackmin    = {DerpACEConfig.PolebreakerStackMin}%");
+                sb.AppendLine($"  polebreaker.stackmax    = {DerpACEConfig.PolebreakerStackMax}%");
+                sb.AppendLine($"  polebreaker.maxstackmin = {DerpACEConfig.PolebreakerMaxStackMin}");
+                sb.AppendLine($"  polebreaker.maxstackmax = {DerpACEConfig.PolebreakerMaxStackMax}");
+                sb.AppendLine($"  stalker.drop         = {DerpACEConfig.StalkerBowDropChance:P0}  ({DerpACEConfig.StalkerBowDropChance})");
+                sb.AppendLine($"  stalker.tier         = {DerpACEConfig.StalkerBowMinTier}");
+                sb.AppendLine($"  stalker.procmin      = {DerpACEConfig.StalkerProcMin}%");
+                sb.AppendLine($"  stalker.procmax      = {DerpACEConfig.StalkerProcMax}%");
+                sb.AppendLine($"  stalker.bonusmin     = {DerpACEConfig.StalkerBonusMin}%");
+                sb.AppendLine($"  stalker.bonusmax     = {DerpACEConfig.StalkerBonusMax}%");
+                sb.AppendLine($"  breacher.drop        = {DerpACEConfig.BreacherCrossbowDropChance:P0}  ({DerpACEConfig.BreacherCrossbowDropChance})");
+                sb.AppendLine($"  breacher.tier        = {DerpACEConfig.BreacherCrossbowMinTier}");
+                sb.AppendLine($"  breacher.piercemin   = {DerpACEConfig.BreacherPierceMin}%");
+                sb.AppendLine($"  breacher.piercemax   = {DerpACEConfig.BreacherPierceMax}%");
+                sb.AppendLine($"  reaper.drop          = {DerpACEConfig.ReaperAtlatlDropChance:P0}  ({DerpACEConfig.ReaperAtlatlDropChance})");
+                sb.AppendLine($"  reaper.tier          = {DerpACEConfig.ReaperAtlatlMinTier}");
+                sb.AppendLine($"  reaper.procmin       = {DerpACEConfig.ReaperProcMin}%");
+                sb.AppendLine($"  reaper.procmax       = {DerpACEConfig.ReaperProcMax}%");
+                sb.AppendLine($"  reaper.healmin       = {DerpACEConfig.ReaperHealMin}%");
+                sb.AppendLine($"  reaper.healmax       = {DerpACEConfig.ReaperHealMax}%");
+                sb.AppendLine($"  armor.banenormal     = {DerpACEConfig.ArmorBaneChanceNormal:P0}  ({DerpACEConfig.ArmorBaneChanceNormal})");
+                sb.AppendLine($"  armor.banecovenant   = {DerpACEConfig.ArmorBaneChanceCovenant:P0}  ({DerpACEConfig.ArmorBaneChanceCovenant})");
+                sb.AppendLine($"  mobmod.enabled       = {DerpACEConfig.MobModifierEnabled}");
+                sb.AppendLine($"  mobmod.tier          = {DerpACEConfig.MobModifierMinTier}");
+                sb.AppendLine($"  vampiric.chance      = {DerpACEConfig.VampiricMobChance:P1}  ({DerpACEConfig.VampiricMobChance})");
+                sb.AppendLine($"  vampiric.lifestealmin= {DerpACEConfig.VampiricLifestealMin}%");
+                sb.AppendLine($"  vampiric.lifestealmax= {DerpACEConfig.VampiricLifestealMax}%");
+                sb.AppendLine($"  thiefmob.chance      = {DerpACEConfig.ThiefMobChance:P1}  ({DerpACEConfig.ThiefMobChance})");
+                sb.AppendLine($"  thiefmob.proc        = {DerpACEConfig.ThiefStealProc:P0}  ({DerpACEConfig.ThiefStealProc})");
+                sb.AppendLine($"  thiefmob.chestchance = {DerpACEConfig.ThiefChestDropChance:P0}  ({DerpACEConfig.ThiefChestDropChance})");
+                sb.AppendLine($"  thiefmob.chestwcid   = {DerpACEConfig.ThiefChestWcid}");
+                sb.AppendLine($"  thiefmob.chestdespawn= {DerpACEConfig.ThiefChestDespawnSeconds}s");
+                sb.AppendLine($"  simulacrum.chance    = {DerpACEConfig.SimulacrumMobChance:P1}  ({DerpACEConfig.SimulacrumMobChance})");
                 CommandHandlerHelper.WriteOutputInfo(session, sb.ToString().TrimEnd(), ChatMessageType.Broadcast);
                 return;
             }
@@ -140,6 +284,302 @@ namespace ACE.Server.Command.Handlers
                     case "sentinel.return":
                         if (!TryFloat(out var sr)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.SentinelSpearReturnMult = sr;
+                        break;
+
+                    case "unarmed.drop":
+                        if (!TryFloat(out var ud)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.UnarmedElemDropChance = ud;
+                        break;
+                    case "unarmed.procmin":
+                        if (!TryInt(out var upmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.UnarmedElemProcMin = upmin;
+                        break;
+                    case "unarmed.procmax":
+                        if (!TryInt(out var upmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.UnarmedElemProcMax = upmax;
+                        break;
+
+                    case "fencer.drop":
+                        if (!TryFloat(out var fdr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.FencerBladeDropChance = fdr;
+                        break;
+                    case "fencer.tier":
+                        if (!TryInt(out var ft)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerBladeMinTier = ft;
+                        break;
+                    case "fencer.piercemin":
+                        if (!TryInt(out var fpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerPierceMin = fpmin;
+                        break;
+                    case "fencer.piercemax":
+                        if (!TryInt(out var fpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerPierceMax = fpmax;
+                        break;
+                    case "fencer.procmin":
+                        if (!TryInt(out var fppmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerPierceProcMin = fppmin;
+                        break;
+                    case "fencer.procmax":
+                        if (!TryInt(out var fppmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerPierceProcMax = fppmax;
+                        break;
+                    case "fencer.deflectmin":
+                        if (!TryInt(out var fdmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerDeflectMin = fdmin;
+                        break;
+                    case "fencer.deflectmax":
+                        if (!TryInt(out var fdmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.FencerDeflectMax = fdmax;
+                        break;
+                    case "ravager.drop":
+                        if (!TryFloat(out var rdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RavagerAxeDropChance = rdrop;
+                        break;
+                    case "ravager.tier":
+                        if (!TryInt(out var rtier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerAxeMinTier = rtier;
+                        break;
+                    case "ravager.procmin":
+                        if (!TryInt(out var rpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerProcMin = rpmin;
+                        break;
+                    case "ravager.procmax":
+                        if (!TryInt(out var rpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerProcMax = rpmax;
+                        break;
+                    case "ravager.bleedmin":
+                        if (!TryInt(out var rbmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerBleedMin = rbmin;
+                        break;
+                    case "ravager.bleedmax":
+                        if (!TryInt(out var rbmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerBleedMax = rbmax;
+                        break;
+                    case "ravager.twohandmult":
+                        if (!TryFloat(out var rthm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RavagerTwoHandMult = rthm;
+                        break;
+                    case "ravager.ticks":
+                        if (!TryInt(out var rticks)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerBleedTicks = rticks;
+                        break;
+                    case "ravager.interval":
+                        if (!TryFloat(out var rint)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RavagerBleedInterval = rint;
+                        break;
+                    case "warden.drop":
+                        if (!TryFloat(out var wdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.WardenMaulDropChance = wdrop;
+                        break;
+                    case "warden.tier":
+                        if (!TryInt(out var wtier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenMaulMinTier = wtier;
+                        break;
+                    case "warden.procmin":
+                        if (!TryInt(out var wpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenProcMin = wpmin;
+                        break;
+                    case "warden.procmax":
+                        if (!TryInt(out var wpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenProcMax = wpmax;
+                        break;
+                    case "warden.penaltymin":
+                        if (!TryInt(out var wpenmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenPenaltyMin = wpenmin;
+                        break;
+                    case "warden.penaltymax":
+                        if (!TryInt(out var wpenmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenPenaltyMax = wpenmax;
+                        break;
+                    case "warden.durationmin":
+                        if (!TryInt(out var wdmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenDurationMin = wdmin;
+                        break;
+                    case "warden.durationmax":
+                        if (!TryInt(out var wdmaxw)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WardenDurationMax = wdmaxw;
+                        break;
+                    case "warden.twohandmult":
+                        if (!TryFloat(out var wthm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.WardenTwoHandMult = wthm;
+                        break;
+                    case "resolute.drop":
+                        if (!TryFloat(out var resdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ResoluteBladeDropChance = resdrop;
+                        break;
+                    case "resolute.tier":
+                        if (!TryInt(out var restier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ResoluteBladeMinTier = restier;
+                        break;
+                    case "resolute.procmin":
+                        if (!TryInt(out var respmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ResoluteProcMin = respmin;
+                        break;
+                    case "resolute.procmax":
+                        if (!TryInt(out var respmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ResoluteProcMax = respmax;
+                        break;
+                    case "resolute.healmin":
+                        if (!TryInt(out var reshmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ResoluteHealMin = reshmin;
+                        break;
+                    case "resolute.healmax":
+                        if (!TryInt(out var reshmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ResoluteHealMax = reshmax;
+                        break;
+                    case "resolute.killburst":
+                        if (!TryFloat(out var reskb)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ResoluteKillBurstPct = reskb;
+                        break;
+                    case "resolute.twohandmult":
+                        if (!TryFloat(out var resthm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ResoluteTwoHandMult = resthm;
+                        break;
+
+                    case "polebreaker.drop":
+                        if (!TryFloat(out var pbdr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.PolebreakerDropChance = pbdr;
+                        break;
+                    case "polebreaker.tier":
+                        if (!TryInt(out var pbtr)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.PolebreakerMinTier = pbtr;
+                        break;
+                    case "polebreaker.stackmin":
+                        if (!TryInt(out var pbsmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.PolebreakerStackMin = pbsmin;
+                        break;
+                    case "polebreaker.stackmax":
+                        if (!TryInt(out var pbsmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.PolebreakerStackMax = pbsmax;
+                        break;
+                    case "polebreaker.maxstackmin":
+                        if (!TryInt(out var pbmsmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.PolebreakerMaxStackMin = pbmsmin;
+                        break;
+                    case "polebreaker.maxstackmax":
+                        if (!TryInt(out var pbmsmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.PolebreakerMaxStackMax = pbmsmax;
+                        break;
+
+                    case "stalker.drop":
+                        if (!TryFloat(out var sbdr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.StalkerBowDropChance = sbdr;
+                        break;
+                    case "stalker.tier":
+                        if (!TryInt(out var sbtr)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.StalkerBowMinTier = sbtr;
+                        break;
+                    case "stalker.procmin":
+                        if (!TryInt(out var sbpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.StalkerProcMin = sbpmin;
+                        break;
+                    case "stalker.procmax":
+                        if (!TryInt(out var sbpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.StalkerProcMax = sbpmax;
+                        break;
+                    case "stalker.bonusmin":
+                        if (!TryInt(out var sbbmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.StalkerBonusMin = sbbmin;
+                        break;
+                    case "stalker.bonusmax":
+                        if (!TryInt(out var sbbmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.StalkerBonusMax = sbbmax;
+                        break;
+
+                    case "breacher.drop":
+                        if (!TryFloat(out var bcdr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.BreacherCrossbowDropChance = bcdr;
+                        break;
+                    case "breacher.tier":
+                        if (!TryInt(out var bctr)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.BreacherCrossbowMinTier = bctr;
+                        break;
+                    case "breacher.piercemin":
+                        if (!TryInt(out var bcpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.BreacherPierceMin = bcpmin;
+                        break;
+                    case "breacher.piercemax":
+                        if (!TryInt(out var bcpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.BreacherPierceMax = bcpmax;
+                        break;
+
+                    case "reaper.drop":
+                        if (!TryFloat(out var radr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ReaperAtlatlDropChance = radr;
+                        break;
+                    case "reaper.tier":
+                        if (!TryInt(out var ratr)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ReaperAtlatlMinTier = ratr;
+                        break;
+                    case "reaper.procmin":
+                        if (!TryInt(out var rapmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ReaperProcMin = rapmin;
+                        break;
+                    case "reaper.procmax":
+                        if (!TryInt(out var rapmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ReaperProcMax = rapmax;
+                        break;
+                    case "reaper.healmin":
+                        if (!TryInt(out var rahmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ReaperHealMin = rahmin;
+                        break;
+                    case "reaper.healmax":
+                        if (!TryInt(out var rahmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ReaperHealMax = rahmax;
+                        break;
+
+                    case "armor.banenormal":
+                        if (!TryFloat(out var abn)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ArmorBaneChanceNormal = abn;
+                        break;
+                    case "armor.banecovenant":
+                        if (!TryFloat(out var abc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ArmorBaneChanceCovenant = abc;
+                        break;
+
+                    case "mobmod.enabled":
+                        if (!bool.TryParse(raw, out var mme)) { BadValue(session, key, "bool"); return; }
+                        DerpACEConfig.MobModifierEnabled = mme;
+                        break;
+                    case "mobmod.tier":
+                        if (!TryInt(out var mmt)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.MobModifierMinTier = mmt;
+                        break;
+                    case "vampiric.chance":
+                        if (!TryFloat(out var vmc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.VampiricMobChance = vmc;
+                        break;
+                    case "vampiric.lifestealmin":
+                        if (!TryInt(out var vlsmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.VampiricLifestealMin = vlsmin;
+                        break;
+                    case "vampiric.lifestealmax":
+                        if (!TryInt(out var vlsmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.VampiricLifestealMax = vlsmax;
+                        break;
+                    case "thiefmob.chance":
+                        if (!TryFloat(out var tmc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ThiefMobChance = tmc;
+                        break;
+                    case "thiefmob.proc":
+                        if (!TryFloat(out var tsp)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ThiefStealProc = tsp;
+                        break;
+                    case "thiefmob.chestchance":
+                        if (!TryFloat(out var tcc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ThiefChestDropChance = tcc;
+                        break;
+                    case "thiefmob.chestwcid":
+                        if (!uint.TryParse(raw, out var tcw)) { BadValue(session, key, "uint"); return; }
+                        DerpACEConfig.ThiefChestWcid = tcw;
+                        break;
+                    case "thiefmob.chestdespawn":
+                        if (!TryFloat(out var tcd)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ThiefChestDespawnSeconds = tcd;
+                        break;
+                    case "simulacrum.chance":
+                        if (!TryFloat(out var smc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.SimulacrumMobChance = smc;
                         break;
 
                     default:

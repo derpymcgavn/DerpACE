@@ -305,6 +305,9 @@ namespace ACE.Server
             log.Info("Initializing PlayerManager...");
             PlayerManager.Initialize();
 
+            log.Info("Initializing IronmanKillerTracker...");
+            IronmanKillerTracker.Initialize();
+
             log.Info("Initializing HouseManager...");
             HouseManager.Initialize();
 

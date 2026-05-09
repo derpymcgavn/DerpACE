@@ -70,5 +70,278 @@ namespace ACE.Server.Managers
 
         /// <summary>Multiplier applied to drained stamina before restoring it to the wielder. Default 1.25 = 125%.</summary>
         public static float SentinelSpearReturnMult { get; set; } = 1.25f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Elemental Unarmed (cast-on-strike)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Chance that a magical elemental unarmed weapon rolls the cast-on-strike proc (0–1). Default 0.05 = 5%.</summary>
+        public static float UnarmedElemDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum proc rate (integer %) rolled at loot time. Default 1.</summary>
+        public static int UnarmedElemProcMin { get; set; } = 1;
+
+        /// <summary>Maximum proc rate (integer %) rolled at loot time. Default 5.</summary>
+        public static int UnarmedElemProcMax { get; set; } = 5;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Fencer's Blade (Épée / Rapier / Schlager)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float FencerBladeDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int FencerBladeMinTier { get; set; } = 6;
+
+        /// <summary>Minimum armor pierce % rolled at loot time (integer). Default 1.</summary>
+        public static int FencerPierceMin { get; set; } = 1;
+
+        /// <summary>Maximum armor pierce % rolled at loot time (integer). Default 5.</summary>
+        public static int FencerPierceMax { get; set; } = 5;
+
+        /// <summary>Minimum pierce proc chance % rolled at loot time (integer). Default 1.</summary>
+        public static int FencerPierceProcMin { get; set; } = 1;
+
+        /// <summary>Maximum pierce proc chance % rolled at loot time (integer). Default 4.</summary>
+        public static int FencerPierceProcMax { get; set; } = 4;
+
+        /// <summary>Minimum deflect proc chance % rolled at loot time (integer). Default 1.</summary>
+        public static int FencerDeflectMin { get; set; } = 1;
+
+        /// <summary>Maximum deflect proc chance % rolled at loot time (integer). Default 2.</summary>
+        public static int FencerDeflectMax { get; set; } = 2;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Ravager's Axe (Axe / TwoHandedAxe)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float RavagerAxeDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int RavagerAxeMinTier { get; set; } = 6;
+
+        /// <summary>Minimum bleed proc chance % rolled at loot time (integer). Default 2.</summary>
+        public static int RavagerProcMin { get; set; } = 2;
+
+        /// <summary>Maximum bleed proc chance % rolled at loot time (integer). Default 5.</summary>
+        public static int RavagerProcMax { get; set; } = 5;
+
+        /// <summary>Minimum bleed damage % (of the triggering hit) rolled at loot time (integer). Default 30.</summary>
+        public static int RavagerBleedMin { get; set; } = 30;
+
+        /// <summary>Maximum bleed damage % (of the triggering hit) rolled at loot time (integer). Default 60.</summary>
+        public static int RavagerBleedMax { get; set; } = 60;
+
+        /// <summary>Multiplier applied to the bleed total when the weapon is two-handed. Default 1.5.</summary>
+        public static float RavagerTwoHandMult { get; set; } = 1.5f;
+
+        /// <summary>Number of bleed ticks. Default 3.</summary>
+        public static int RavagerBleedTicks { get; set; } = 3;
+
+        /// <summary>Seconds between bleed ticks. Default 2.</summary>
+        public static float RavagerBleedInterval { get; set; } = 2.0f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Warden's Maul (Mace / MaceJitte / TwoHandedMace)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float WardenMaulDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int WardenMaulMinTier { get; set; } = 6;
+
+        /// <summary>Minimum concussion proc chance % rolled at loot time (integer). Default 4.</summary>
+        public static int WardenProcMin { get; set; } = 4;
+
+        /// <summary>Maximum concussion proc chance % rolled at loot time (integer). Default 8.</summary>
+        public static int WardenProcMax { get; set; } = 8;
+
+        /// <summary>Minimum flat defense-skill penalty rolled at loot time (integer). Default 10.</summary>
+        public static int WardenPenaltyMin { get; set; } = 10;
+
+        /// <summary>Maximum flat defense-skill penalty rolled at loot time (integer). Default 30.</summary>
+        public static int WardenPenaltyMax { get; set; } = 30;
+
+        /// <summary>Minimum debuff duration in seconds rolled at loot time (integer). Default 5.</summary>
+        public static int WardenDurationMin { get; set; } = 5;
+
+        /// <summary>Maximum debuff duration in seconds rolled at loot time (integer). Default 10.</summary>
+        public static int WardenDurationMax { get; set; } = 10;
+
+        /// <summary>Multiplier applied to the penalty when the weapon is two-handed. Default 1.5.</summary>
+        public static float WardenTwoHandMult { get; set; } = 1.5f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Resolute Blade (Sword / TwoHandedSword)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float ResoluteBladeDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int ResoluteBladeMinTier { get; set; } = 6;
+
+        /// <summary>Minimum heal-on-crit proc chance % rolled at loot time (integer). Default 25.</summary>
+        public static int ResoluteProcMin { get; set; } = 25;
+
+        /// <summary>Maximum heal-on-crit proc chance % rolled at loot time (integer). Default 50.</summary>
+        public static int ResoluteProcMax { get; set; } = 50;
+
+        /// <summary>Minimum heal % of crit damage rolled at loot time (integer). Default 2.</summary>
+        public static int ResoluteHealMin { get; set; } = 2;
+
+        /// <summary>Maximum heal % of crit damage rolled at loot time (integer). Default 5.</summary>
+        public static int ResoluteHealMax { get; set; } = 5;
+
+        /// <summary>Killing-blow burst % of MaxHealth and MaxStamina restored. Default 0.10 = 10%.</summary>
+        public static float ResoluteKillBurstPct { get; set; } = 0.10f;
+
+        /// <summary>Multiplier applied to the kill burst when the weapon is two-handed. Default 1.5.</summary>
+        public static float ResoluteTwoHandMult { get; set; } = 1.5f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Polebreaker Staff (Staff)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float PolebreakerDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int PolebreakerMinTier { get; set; } = 6;
+
+        /// <summary>Minimum per-stack damage bonus % rolled at loot time (integer). Default 1.</summary>
+        public static int PolebreakerStackMin { get; set; } = 1;
+
+        /// <summary>Maximum per-stack damage bonus % rolled at loot time (integer). Default 3.</summary>
+        public static int PolebreakerStackMax { get; set; } = 3;
+
+        /// <summary>Minimum max-stack count rolled at loot time (integer). Default 4.</summary>
+        public static int PolebreakerMaxStackMin { get; set; } = 4;
+
+        /// <summary>Maximum max-stack count rolled at loot time (integer). Default 6.</summary>
+        public static int PolebreakerMaxStackMax { get; set; } = 6;
+
+        // ───────────────────────────────────────────────────────────────────
+        // Stalker's Bow (Bow)
+        // ───────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float StalkerBowDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int StalkerBowMinTier { get; set; } = 6;
+
+        /// <summary>Minimum first-strike proc chance % rolled at loot time (integer). Default 30.</summary>
+        public static int StalkerProcMin { get; set; } = 30;
+
+        /// <summary>Maximum first-strike proc chance % rolled at loot time (integer). Default 50.</summary>
+        public static int StalkerProcMax { get; set; } = 50;
+
+        /// <summary>Minimum first-strike bonus damage % rolled at loot time (integer). Default 25.</summary>
+        public static int StalkerBonusMin { get; set; } = 25;
+
+        /// <summary>Maximum first-strike bonus damage % rolled at loot time (integer). Default 50.</summary>
+        public static int StalkerBonusMax { get; set; } = 50;
+
+        // ───────────────────────────────────────────────────────────────────
+        // Breacher's Crossbow (Crossbow)
+        // ───────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float BreacherCrossbowDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int BreacherCrossbowMinTier { get; set; } = 6;
+
+        /// <summary>Minimum pierce % rolled at loot time (integer). Default 1.</summary>
+        public static int BreacherPierceMin { get; set; } = 1;
+
+        /// <summary>Maximum pierce % rolled at loot time (integer). Default 5.</summary>
+        public static int BreacherPierceMax { get; set; } = 5;
+
+        // ───────────────────────────────────────────────────────────────────
+        // Reaper's Atlatl (Atlatl)
+        // ───────────────────────────────────────────────────────────────────
+
+        /// <summary>Loot drop chance (0–1). Default 0.05 = 5%.</summary>
+        public static float ReaperAtlatlDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 6.</summary>
+        public static int ReaperAtlatlMinTier { get; set; } = 6;
+
+        /// <summary>Minimum kill-heal proc % rolled at loot time (integer). Default 30.</summary>
+        public static int ReaperProcMin { get; set; } = 30;
+
+        /// <summary>Maximum kill-heal proc % rolled at loot time (integer). Default 60.</summary>
+        public static int ReaperProcMax { get; set; } = 60;
+
+        /// <summary>Minimum heal % of MaxHealth rolled at loot time (integer). Default 5.</summary>
+        public static int ReaperHealMin { get; set; } = 5;
+
+        /// <summary>Maximum heal % of MaxHealth rolled at loot time (integer). Default 15.</summary>
+        public static int ReaperHealMax { get; set; } = 15;
+
+        // ---------- Armor Item-Spell Roll Chances ----------
+
+        /// <summary>Per-bane roll chance on normal (non-Covenant) armor. Retail default was 0.15. Default 0.20 (slight bump).</summary>
+        public static float ArmorBaneChanceNormal { get; set; } = 0.20f;
+
+        /// <summary>Per-bane roll chance on Covenant armor. Default 0.60 (significant bump).</summary>
+        public static float ArmorBaneChanceCovenant { get; set; } = 0.60f;
+
+        // ---------- Mob Modifiers (rare spawn affixes) ----------
+
+        /// <summary>Master switch for the mob modifier system. Default true.</summary>
+        public static bool MobModifierEnabled { get; set; } = true;
+
+        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 5.</summary>
+        public static int MobModifierMinTier { get; set; } = 5;
+
+        /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.02.</summary>
+        public static float VampiricMobChance { get; set; } = 0.02f;
+
+        /// <summary>Minimum vampiric lifesteal % rolled at spawn (integer). Default 5.</summary>
+        public static int VampiricLifestealMin { get; set; } = 5;
+
+        /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 15.</summary>
+        public static int VampiricLifestealMax { get; set; } = 15;
+
+        /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.02.</summary>
+        public static float ThiefMobChance { get; set; } = 0.02f;
+
+        /// <summary>Per-hit chance (0-1) the Thief modifier steals a tradenote stack from a player. Default 0.10.</summary>
+        public static float ThiefStealProc { get; set; } = 0.10f;
+
+        /// <summary>Chance (0-1) a slain Thieving mob drops a Chest of Tradenotes (WCID 80524) on its corpse. Default 0.50.</summary>
+        public static float ThiefChestDropChance { get; set; } = 0.50f;
+
+        /// <summary>WCID of the chest spawned by the Thief mob death drop. Default 80524.</summary>
+        public static uint ThiefChestWcid { get; set; } = 80524;
+
+        /// <summary>Seconds before the spawned Thief chest auto-despawns. Default 30.</summary>
+        public static float ThiefChestDespawnSeconds { get; set; } = 30.0f;
+
+        /// <summary>Per-spawn chance (0-1) for the Simulacrum modifier to land on an eligible mob. Default 0.02 (currently 1.0 for testing).</summary>
+        public static float SimulacrumMobChance { get; set; } = 1.0f;
+
+        // ---------- Ironman Mode (irreversible solo / hardcore character) ----------
+
+        /// <summary>Master switch for the Ironman mode opt-in command. Default true.</summary>
+        public static bool IronmanEnabled { get; set; } = true;
+
+        /// <summary>Welcome line shown to a player who has just become an Ironman.</summary>
+        public static string IronmanWelcomeMessage { get; set; } = "You have committed to the Ironman path. There is no turning back.";
+
+        /// <summary>Skill credit budget the Ironman roller will plan for when distributing trains/specs across the secondary pool. Default 50.</summary>
+        public static int IronmanCreditsToPlanFor { get; set; } = 50;
+
+        /// <summary>Number of hardcore lives an Ironman starts with. Final death (lives reaches 0) marks the character as deleted. Default 1.</summary>
+        public static int IronmanHardcoreStartingLives { get; set; } = 1;
+
+        /// <summary>Cooldown (seconds) between deaths that count toward life loss. Default 7 days.</summary>
+        public static float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 60f * 60f * 24f * 7f;
     }
 }

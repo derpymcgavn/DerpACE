@@ -650,6 +650,9 @@ namespace ACE.Entity.Enum.Properties
         VisualClothingPriority                   = 9013,
         SquelchGlobal                            = 9014,
         InventoryOrder                           = 9015,
+
+        /* DerpACE Ironman mode */
+        HardcoreLives                            = 9016,
     }
 
     public static class PropertyIntExtensions

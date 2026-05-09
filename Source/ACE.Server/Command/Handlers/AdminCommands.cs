@@ -3173,6 +3173,138 @@ namespace ACE.Server.Command.Handlers
             }
         }
 
+        // tester (DerpACE) — admin-only "specced 500" testing form. Reuses GodState save/restore.
+        [CommandHandler("tester", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 0,
+            "Toggles tester mode: every skill specialized at base 500 for testing.",
+            "Usage: /tester        — enter tester mode\n"
+          + "       /tester off    — return to your saved pre-tester state\n"
+          + "Stores prior state in PropertyString.GodState (same as /god); /ungod also reverts it.")]
+        public static void HandleTester(Session session, params string[] parameters)
+        {
+            if (parameters.Length > 0 && string.Equals(parameters[0], "off", StringComparison.OrdinalIgnoreCase))
+            {
+                HandleUngod(session, parameters);
+                return;
+            }
+
+            DatabaseManager.Shard.SaveBiota(session.Player.Biota, session.Player.BiotaDatabaseLock,
+                result => DoTesterMode(result, session));
+        }
+
+        private static void DoTesterMode(bool playerSaved, Session session)
+        {
+            if (!playerSaved)
+            {
+                ChatPacket.SendServerMessage(session, "Error saving player. Tester mode not available.", ChatMessageType.Broadcast);
+                return;
+            }
+
+            var biota = session.Player.Biota;
+            var godString = session.Player.GodState;
+
+            if (godString != null && godString.StartsWith("1"))
+            {
+                ChatPacket.SendServerMessage(session, "You are already in god/tester mode. Use /tester off or /ungod first.", ChatMessageType.Broadcast);
+                return;
+            }
+
+            // Build the same GodState snapshot format /god uses, so /ungod can restore it.
+            string returnState = "1=";
+            returnState += $"{DateTime.UtcNow.ToCommonString()}=";
+            returnState += $"24={session.Player.AvailableSkillCredits}=25={session.Player.Level}=";
+            returnState += $"1={session.Player.TotalExperience}=2={session.Player.AvailableExperience}=";
+
+            foreach (var kvp in biota.PropertiesAttribute)
+            {
+                var att = kvp.Value;
+                if (kvp.Key > 0 && (int)kvp.Key <= 6)
+                {
+                    returnState += $"{(int)kvp.Key}={att.InitLevel}={att.LevelFromCP}={att.CPSpent}=";
+                }
+            }
+
+            foreach (var kvp in biota.PropertiesAttribute2nd)
+            {
+                var attSec = kvp.Value;
+                if ((int)kvp.Key == 1 || (int)kvp.Key == 3 || (int)kvp.Key == 5)
+                {
+                    returnState += $"{(int)kvp.Key}={attSec.InitLevel}={attSec.LevelFromCP}={attSec.CPSpent}={attSec.CurrentLevel}=";
+                }
+            }
+
+            foreach (var kvp in biota.PropertiesSkill)
+            {
+                var sk = kvp.Value;
+                if (SkillHelper.ValidSkills.Contains(kvp.Key))
+                {
+                    returnState += $"{(int)kvp.Key}={sk.LevelFromPP}={(uint)sk.SAC}={sk.PP}={sk.InitLevel}=";
+                }
+            }
+
+            if (returnState.Split("=").Length != 240)
+            {
+                ChatPacket.SendServerMessage(session, "Tester mode is not available at this time.", ChatMessageType.Broadcast);
+                Console.WriteLine($"Player {session.Player.Name} tried /tester but godString length was {returnState.Split("=").Length}.");
+                return;
+            }
+
+            session.Player.SetProperty(PropertyString.GodState, returnState);
+            session.Player.SaveBiotaToDatabase();
+
+            // Apply tester stats: level boost so skills aren't capped, attributes high, every valid skill specialized at base 500.
+            var currentPlayer = session.Player;
+            currentPlayer.Level = 275;
+            currentPlayer.AvailableExperience = 0;
+            currentPlayer.AvailableSkillCredits = 0;
+            currentPlayer.TotalExperience = 191226310247;
+
+            currentPlayer.Session.Network.EnqueueSend(
+                new GameMessagePrivateUpdatePropertyInt(currentPlayer, PropertyInt.Level, (int)currentPlayer.Level),
+                new GameMessagePrivateUpdatePropertyInt64(currentPlayer, PropertyInt64.AvailableExperience, (long)currentPlayer.AvailableExperience),
+                new GameMessagePrivateUpdatePropertyInt(currentPlayer, PropertyInt.AvailableSkillCredits, (int)currentPlayer.AvailableSkillCredits),
+                new GameMessagePrivateUpdatePropertyInt64(currentPlayer, PropertyInt64.TotalExperience, (long)currentPlayer.TotalExperience));
+
+            foreach (var s in currentPlayer.Skills)
+            {
+                if (!SkillHelper.ValidSkills.Contains(s.Key))
+                    continue;
+
+                currentPlayer.TrainSkill(s.Key, 0);
+                currentPlayer.SpecializeSkill(s.Key, 0);
+
+                var playerSkill = currentPlayer.Skills[s.Key];
+                playerSkill.Ranks = 0;
+                playerSkill.ExperienceSpent = 0u;
+                playerSkill.InitLevel = 500;
+                currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateSkill(currentPlayer, playerSkill));
+            }
+
+            foreach (var a in currentPlayer.Attributes)
+            {
+                var playerAttr = currentPlayer.Attributes[a.Key];
+                playerAttr.StartingValue = 500u;
+                playerAttr.Ranks = 0u;
+                playerAttr.ExperienceSpent = 0u;
+                currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(currentPlayer, playerAttr));
+            }
+
+            currentPlayer.SetMaxVitals();
+
+            foreach (var v in currentPlayer.Vitals)
+            {
+                var playerVital = currentPlayer.Vitals[v.Key];
+                playerVital.Ranks = 0u;
+                playerVital.ExperienceSpent = 0u;
+                playerVital.StartingValue = 1000u;
+                currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateVital(currentPlayer, playerVital));
+            }
+
+            currentPlayer.PlayParticleEffect(PlayScript.LevelUp, currentPlayer.Guid);
+            currentPlayer.SetMaxVitals();
+
+            ChatPacket.SendServerMessage(session, "Tester mode engaged: all skills specialized at base 500. Use /tester off (or /ungod) to revert.", ChatMessageType.Broadcast);
+        }
+
         // magic god
         [CommandHandler("magic god", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 0)]
         public static void HandleMagicGod(Session session, params string[] parameters)

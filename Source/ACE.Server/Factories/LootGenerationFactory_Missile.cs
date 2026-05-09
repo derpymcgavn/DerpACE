@@ -95,6 +95,70 @@ namespace ACE.Server.Factories
 
             // long description
             wo.LongDesc = GetLongDesc(wo);
+
+            // Stalker's Bow: configurable chance on T6+ bows to grant a first-strike damage bonus (see @lootconfig)
+            if (roll.WeaponType == TreasureWeaponType.Bow
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier
+                && ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.StalkerBowDropChance)
+            {
+                var procPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
+                    (float)ACE.Server.Managers.DerpACEConfig.StalkerProcMin,
+                    (float)ACE.Server.Managers.DerpACEConfig.StalkerProcMax));
+                var bonusPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
+                    (float)ACE.Server.Managers.DerpACEConfig.StalkerBonusMin,
+                    (float)ACE.Server.Managers.DerpACEConfig.StalkerBonusMax));
+                if (procPct < 1) procPct = 1;
+                if (bonusPct < 1) bonusPct = 1;
+
+                wo.Name = wo.Name + " of the Stalker";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStalkersBow, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc,  procPct  / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus, bonusPct / 100.0);
+                wo.IconOverlayId = 0x06002699u;
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis bow rewards the patient hunter \u2014 the *first* arrow loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets or letting the target drop resets the opportunity.";
+            }
+
+            // Breacher's Crossbow: configurable chance on T6+ crossbows for an always-on armor pierce % (see @lootconfig)
+            if (roll.WeaponType == TreasureWeaponType.Crossbow
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.BreacherCrossbowMinTier
+                && ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.BreacherCrossbowDropChance)
+            {
+                var piercePct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
+                    (float)ACE.Server.Managers.DerpACEConfig.BreacherPierceMin,
+                    (float)ACE.Server.Managers.DerpACEConfig.BreacherPierceMax));
+                if (piercePct < 1) piercePct = 1;
+
+                wo.Name = wo.Name + " of the Breacher";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherPiercePct, piercePct / 100.0);
+                wo.IconOverlayId = 0x06002878u;
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis crossbow drives bolts through plate \u2014 every hit ignores {piercePct}% of the damage absorbed by the target's armor and adds it back as bonus damage.";
+            }
+
+            // Reaper's Atlatl: configurable chance on T6+ atlatls for a kill-fed self-heal proc (see @lootconfig)
+            if (roll.WeaponType == TreasureWeaponType.Atlatl
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier
+                && ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ReaperAtlatlDropChance)
+            {
+                var procPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
+                    (float)ACE.Server.Managers.DerpACEConfig.ReaperProcMin,
+                    (float)ACE.Server.Managers.DerpACEConfig.ReaperProcMax));
+                var healPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
+                    (float)ACE.Server.Managers.DerpACEConfig.ReaperHealMin,
+                    (float)ACE.Server.Managers.DerpACEConfig.ReaperHealMax));
+                if (procPct < 1) procPct = 1;
+                if (healPct < 1) healPct = 1;
+
+                wo.Name = wo.Name + " of the Reaper";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc,    procPct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct, healPct / 100.0);
+                wo.IconOverlayId = 0x06002860u;
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis atlatl feasts on the slain \u2014 a killing blow has a {procPct}% chance to instantly restore {healPct}% of your maximum health.";
+            }
         }
 
         private static string GetMissileScript(TreasureWeaponType weaponType, bool isElemental = false)

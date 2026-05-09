@@ -33,6 +33,10 @@ namespace ACE.Server.WorldObjects
         public bool Attacking;
         public bool AttackCancelled;
 
+        // Polebreaker Staff (DerpACE) — transient consecutive-hit chain state (resets on logout/restart)
+        public uint LastPolebreakerTargetGuid { get; set; } = 0;
+        public int PolebreakerStackCount { get; set; } = 0;
+
         public DateTime NextRefillTime;
 
         public double LastPkAttackTimestamp
@@ -145,6 +149,24 @@ namespace ACE.Server.WorldObjects
                 thievesDaggerBonus = (uint)Math.Round(bonus);
             }
 
+            // Fencer's Blade: armor pierce proc — deals a portion of what armor blocked as bonus damage
+            uint fencerPierceBonus = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true)
+            {
+                var pierceProc = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc) ?? 0.0;
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < pierceProc)
+                {
+                    var piercePct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.0;
+                    var bonus = Math.Max(0.0f, damageEvent.DamageMitigated) * (float)piercePct;
+                    if (bonus >= 1.0f)
+                    {
+                        damageEvent.Damage += bonus;
+                        fencerPierceBonus = (uint)Math.Round(bonus);
+                    }
+                }
+            }
+
             // Sentinel's Spear: configurable proc/drain/return (see @lootconfig)
             uint sentinelStaminaDrained = 0;
             uint sentinelStaminaReturned = 0;
@@ -163,6 +185,168 @@ namespace ACE.Server.WorldObjects
                     UpdateVitalDelta(Stamina, restore);
                     sentinelStaminaReturned = (uint)restore;
                 }
+            }
+
+            // Ravager's Axe: configurable proc to apply a bleed DoT (see @lootconfig)
+            uint ravagerBleedTotal = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe) == true)
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc) ?? 0.0;
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var bleedPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct) ?? 0.0;
+                    var totalBleed = damageEvent.Damage * (float)bleedPct;
+                    var ticks = Math.Max(1, ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks);
+                    var interval = Math.Max(0.1f, ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval);
+                    var perTick = (float)(totalBleed / ticks);
+                    if (perTick >= 1.0f)
+                    {
+                        ravagerBleedTotal = (uint)Math.Round(totalBleed);
+                        var bleedType = damageEvent.DamageType;
+                        var bleedTarget = target;
+                        var attacker = this;
+
+                        var chain = new ActionChain();
+                        for (var i = 0; i < ticks; i++)
+                        {
+                            chain.AddDelaySeconds(interval);
+                            chain.AddAction(this, () =>
+                            {
+                                if (bleedTarget == null || !bleedTarget.IsAlive)
+                                    return;
+
+                                bleedTarget.TakeDamage(attacker, bleedType, perTick, false);
+                                bleedTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftBack);
+
+                                if (attacker.Session != null && !SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatSelf))
+                                    attacker.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                        $"-{(uint)Math.Round(perTick)} bleed [{bleedTarget.Name}] [Ravager's Axe]",
+                                        ChatMessageType.CombatSelf));
+                            });
+                        }
+                        chain.EnqueueChain();
+                    }
+                }
+            }
+
+            // Warden's Maul: configurable proc to apply a flat defense-skill debuff (see @lootconfig)
+            uint wardenPenaltyApplied = 0;
+            int wardenDurationApplied = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsWardensMaul) == true)
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussProc) ?? 0.0;
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var penalty = (uint)Math.Max(0, (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussPenalty) ?? 0.0));
+                    var duration = (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussDuration) ?? 0.0);
+                    if (penalty > 0 && duration > 0)
+                    {
+                        var newUntil = DateTime.UtcNow.AddSeconds(duration);
+                        // refresh-and-take-stronger: keep the larger penalty if currently concussed
+                        if (target.ConcussedUntil > DateTime.UtcNow && target.ConcussedPenalty >= penalty)
+                            target.ConcussedUntil = newUntil; // just refresh duration
+                        else
+                        {
+                            target.ConcussedPenalty = penalty;
+                            target.ConcussedUntil = newUntil;
+                        }
+                        wardenPenaltyApplied = penalty;
+                        wardenDurationApplied = duration;
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
+                    }
+                }
+            }
+
+            // Resolute Blade: heal-on-critical proc (see @lootconfig)
+            uint resoluteHealApplied = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.IsCritical
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true)
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc) ?? 0.0;
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealPct) ?? 0.0;
+                    var heal = (int)Math.Round(damageEvent.Damage * (float)healPct);
+                    if (heal >= 1 && Health.Current < Health.MaxValue)
+                    {
+                        UpdateVitalDelta(Health, heal);
+                        resoluteHealApplied = (uint)heal;
+                    }
+                }
+            }
+
+            // Breacher's Crossbow: always-on armor pierce (see @lootconfig)
+            uint breacherPierceBonus = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) == true)
+            {
+                var piercePct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherPiercePct) ?? 0.0;
+                var bonus = Math.Max(0.0f, damageEvent.DamageMitigated) * (float)piercePct;
+                if (bonus >= 1.0f)
+                {
+                    damageEvent.Damage += bonus;
+                    breacherPierceBonus = (uint)Math.Round(bonus);
+                }
+            }
+
+            // Stalker's Bow: opening-shot proc - first time this attacker hits a target, roll a chance for bonus damage (see @lootconfig)
+            uint stalkerBonusApplied = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStalkersBow) == true
+                && !target.DamageHistory.TotalDamage.ContainsKey(this.Guid))
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc) ?? 0.0;
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var bonusPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus) ?? 0.0;
+                    var bonus = damageEvent.Damage * (float)bonusPct;
+                    if (bonus >= 1.0f)
+                    {
+                        damageEvent.Damage += bonus;
+                        stalkerBonusApplied = (uint)Math.Round(bonus);
+                    }
+                }
+            }
+
+            // Polebreaker Staff: consecutive-hit escalation against the same target (see @lootconfig)
+            uint polebreakerBonus = 0;
+            int polebreakerStacks = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff) == true)
+            {
+                var stackPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerStackBonus) ?? 0.0;
+                var maxStacks = (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks) ?? 0.0);
+                if (stackPct > 0 && maxStacks > 0)
+                {
+                    if (LastPolebreakerTargetGuid == target.Guid.Full)
+                        PolebreakerStackCount = Math.Min(PolebreakerStackCount + 1, maxStacks);
+                    else
+                    {
+                        LastPolebreakerTargetGuid = target.Guid.Full;
+                        PolebreakerStackCount = 1;
+                    }
+                    polebreakerStacks = PolebreakerStackCount;
+                    // bonus uses the *prior* stacks (1st hit = no bonus, 2nd hit = +stackPct, ...)
+                    var bonusStacks = polebreakerStacks - 1;
+                    if (bonusStacks > 0)
+                    {
+                        var bonus = damageEvent.Damage * (float)stackPct * bonusStacks;
+                        if (bonus >= 1.0f)
+                        {
+                            damageEvent.Damage += bonus;
+                            polebreakerBonus = (uint)Math.Round(bonus);
+                        }
+                    }
+                }
+            }
+            else if (damageEvent.HasDamage)
+            {
+                // any non-Polebreaker hit breaks the chain
+                LastPolebreakerTargetGuid = 0;
+                PolebreakerStackCount = 0;
             }
 
             if (damageEvent.HasDamage)
@@ -200,6 +384,12 @@ namespace ACE.Server.WorldObjects
                         $"+{thievesDaggerBonus} [Thief's Dagger]",
                         ChatMessageType.CombatSelf));
 
+                // Fencer's Blade: show pierce bonus when armor-pierce proc fired
+                if (fencerPierceBonus > 0)
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"+{fencerPierceBonus} pierce [Fencer's Blade]",
+                        ChatMessageType.CombatSelf));
+
                 // Sentinel's Spear: show stamina drain/return when proc fired
                 if (sentinelStaminaDrained > 0)
                 {
@@ -207,6 +397,46 @@ namespace ACE.Server.WorldObjects
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpYellow);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
                         $"-{sentinelStaminaDrained} stamina [{target.Name}] +{sentinelStaminaReturned} [Sentinel's Spear]",
+                        ChatMessageType.CombatSelf));
+                }
+
+                // Ravager's Axe: announce the bleed when proc fired (ticks deliver damage on a delay)
+                if (ravagerBleedTotal > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"{target.Name} is bleeding (+{ravagerBleedTotal}) [Ravager's Axe]",
+                        ChatMessageType.CombatSelf));
+                }
+
+                // Warden's Maul: announce the concussion when proc fired
+                if (wardenPenaltyApplied > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"crushes {target.Name}'s guard — -{wardenPenaltyApplied} defense skill for {wardenDurationApplied} sec [Warden's Maul]",
+                        ChatMessageType.CombatSelf));
+                }
+
+                // Polebreaker Staff: announce current stack and bonus damage (if any) on the chained hit
+                if (polebreakerStacks > 1 && polebreakerBonus > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"[Polebreaker] +{polebreakerBonus} (x{polebreakerStacks})",
+                        ChatMessageType.CombatSelf));
+                }
+
+                // Stalker's Bow: announce opening-shot bonus damage when proc fired
+                if (stalkerBonusApplied > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"+{stalkerBonusApplied} [Stalker's Bow] first strike",
+                        ChatMessageType.CombatSelf));
+                }
+
+                // Breacher's Crossbow: announce armor-pierce bonus damage on every hit
+                if (breacherPierceBonus > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"+{breacherPierceBonus} pierce [Breacher's Crossbow]",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -232,7 +462,57 @@ namespace ACE.Server.WorldObjects
                 if (damageEvent.IsCritical)
                     target.EmoteManager.OnReceiveCritical(this);
             }
-            
+
+            // Resolute Blade: announce heal-on-crit if it fired
+            if (resoluteHealApplied > 0 && !SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"+{resoluteHealApplied} health [Resolute Blade]",
+                    ChatMessageType.CombatSelf));
+
+            // Resolute Blade: bloodthirst burst on killing blow (heal + stamina)
+            if (damageEvent.HasDamage
+                && !target.IsAlive
+                && targetPlayer == null
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true)
+            {
+                var burstPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct) ?? 0.0;
+                if (burstPct > 0)
+                {
+                    var hpBurst = (int)Math.Round(Health.MaxValue * burstPct);
+                    var stamBurst = (int)Math.Round(Stamina.MaxValue * burstPct);
+                    if (hpBurst >= 1 && Health.Current < Health.MaxValue) UpdateVitalDelta(Health, hpBurst);
+                    if (stamBurst >= 1 && Stamina.Current < Stamina.MaxValue) UpdateVitalDelta(Stamina, stamBurst);
+                    ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
+                    if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"Bloodthirst! +{(uint)Math.Max(0, hpBurst)} health, +{(uint)Math.Max(0, stamBurst)} stamina [Resolute Blade]",
+                            ChatMessageType.CombatSelf));
+                }
+            }
+
+            // Reaper's Atlatl: kill-fed self-heal proc on killing blow (see @lootconfig)
+            if (damageEvent.HasDamage
+                && !target.IsAlive
+                && targetPlayer == null
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl) == true)
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc) ?? 0.0;
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct) ?? 0.0;
+                    var heal = (int)Math.Round(Health.MaxValue * healPct);
+                    if (heal >= 1 && Health.Current < Health.MaxValue)
+                    {
+                        UpdateVitalDelta(Health, heal);
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
+                        if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"Reaped! +{(uint)heal} health [Reaper's Atlatl]",
+                                ChatMessageType.CombatSelf));
+                    }
+                }
+            }
+
             if (targetPlayer == null)
                 OnAttackMonster(target);
 
@@ -293,6 +573,10 @@ namespace ACE.Server.WorldObjects
             var defenseSkill = attackType == CombatType.Missile ? Skill.MissileDefense : Skill.MeleeDefense;
             var defenseMod = defenseSkill == Skill.MeleeDefense ? GetWeaponMeleeDefenseModifier(creature) : 1.0f;
             var effectiveDefense = (uint)Math.Round(creature.GetCreatureSkill(defenseSkill).Current * defenseMod);
+
+            // Warden's Maul: flat defense-skill penalty while concussed
+            if (creature.ConcussedUntil > DateTime.UtcNow && creature.ConcussedPenalty > 0)
+                effectiveDefense = effectiveDefense > creature.ConcussedPenalty ? effectiveDefense - creature.ConcussedPenalty : 0u;
 
             if (creature.IsExhausted) effectiveDefense = 0;
 
@@ -515,6 +799,69 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
+        /// DerpACE: handles Mob-Modifier on-hit procs (Vampiric lifesteal, Thief pickpocket).
+        /// Thief steal targets any item with ItemType.PromissoryNote (tradenote / MMD), covering all denominations including custom ones.
+        /// Called from <see cref="TakeDamage(WorldObject, DamageType, float, BodyPart, bool, AttackConditions)"/>
+        /// after the player's HP has been updated and damage history recorded.
+        /// </summary>
+        private void TryProcMobModifiers(Creature attacker, uint damageDealt)
+        {
+            // Vampiric: heal mob for a fraction of damage just dealt
+            if (attacker.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsVampiricMob) == true)
+            {
+                var pct = attacker.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.VampiricLifestealPct) ?? 0.0;
+                if (pct > 0 && attacker.Health != null && attacker.Health.Current < attacker.Health.MaxValue)
+                {
+                    var heal = (int)System.Math.Round(damageDealt * pct);
+                    if (heal >= 1)
+                    {
+                        attacker.UpdateVitalDelta(attacker.Health, heal);
+                        attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
+                        if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"{attacker.Name} drains {heal} health from you. [Vampiric]",
+                                ChatMessageType.CombatEnemy));
+                    }
+                }
+            }
+
+            // Thief: chance to pickpocket a tradenote stack (only if mob isn't already holding one)
+            if (attacker.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThiefMob) == true
+                && attacker.StolenTradeNoteWcid == 0
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThiefStealProc)
+            {
+                // Pick smallest tradenote stack (least painful, still meaningful)
+                // GetAllPossessions covers main pack + side packs + equipped; filter to PromissoryNote (tradenote) only.
+                // Using ItemType instead of a WCID allowlist so any denomination (incl. custom server tradenotes) is fair game.
+                var tradenote = GetAllPossessions()
+                    .Where(i => (i.ItemType & ACE.Entity.Enum.ItemType.PromissoryNote) != 0 && i.WielderId == null)
+                    .OrderBy(i => (i.StackSize ?? 1) * (i.Value ?? 0))
+                    .FirstOrDefault();
+
+                if (tradenote != null)
+                {
+                    var wcid = tradenote.WeenieClassId;
+                    var amount = tradenote.StackSize ?? 1;
+
+                    if (TryRemoveFromInventoryWithNetworking(tradenote.Guid, out var removed, RemoveFromInventoryAction.SpendItem))
+                    {
+                        attacker.StolenTradeNoteWcid = wcid;
+                        attacker.StolenTradeNoteAmount = amount;
+                        attacker.StolenFromGuid = Guid;
+
+                        removed.Destroy();
+
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
+                        if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"Pickpocketed! {attacker.Name} stole a tradenote stack ({amount}). Kill it to recover. [Thief]",
+                                ChatMessageType.CombatEnemy));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// Applies damages to a player from a physical damage source
         /// </summary>
         public int TakeDamage(WorldObject source, DamageType damageType, float _amount, BodyPart bodyPart, bool crit = false, AttackConditions attackConditions = AttackConditions.None)
@@ -555,6 +902,10 @@ namespace ACE.Server.WorldObjects
             // update health
             var damageTaken = (uint)-UpdateVitalDelta(Health, (int)-amount);
             DamageHistory.Add(source, damageType, damageTaken);
+
+            // DerpACE: Mob Modifier on-hit procs (Vampiric lifesteal, Thief pickpocket)
+            if (source is Creature mobAttacker && damageTaken > 0)
+                TryProcMobModifiers(mobAttacker, damageTaken);
 
             // update stamina
             if (CombatMode != CombatMode.NonCombat)
@@ -613,6 +964,27 @@ namespace ACE.Server.WorldObjects
 
             if (equippedCloak != null && Cloak.HasProcSpell(equippedCloak))
                 Cloak.TryProcSpell(this, source, equippedCloak, percent);
+
+            // Fencer's Blade: deflect proc — reflects 10% of incoming damage back at the attacker
+            if (source is Creature fencerAttacker && fencerAttacker.IsAlive && damageTaken > 0)
+            {
+                var fencerWeapon = GetEquippedWeapon();
+                if (fencerWeapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true)
+                {
+                    var deflectChance = fencerWeapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0;
+                    if (ThreadSafeRandom.Next(0.0f, 1.0f) < deflectChance)
+                    {
+                        var reflectAmount = (float)Math.Round(damageTaken * 0.10);
+                        if (reflectAmount >= 1.0f)
+                        {
+                            fencerAttacker.TakeDamage(this, DamageType.Pierce, reflectAmount);
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"[Fencer's Blade] Deflected! -{(uint)reflectAmount} [{fencerAttacker.Name}]",
+                                ChatMessageType.CombatSelf));
+                        }
+                    }
+                }
+            }
 
             // if player attacker, update PK timer
             if (source is Player attacker)

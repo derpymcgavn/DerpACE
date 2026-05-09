@@ -494,10 +494,39 @@ namespace ACE.Server.WorldObjects
 
             var effectiveDefense = (uint)Math.Round(GetCreatureSkill(defenseSkill).Current * defenseMod * burdenMod * stanceMod + defenseImbues);
 
+            // Warden's Maul: flat defense-skill penalty while concussed (transient, in-memory only)
+            if (ConcussedUntil > DateTime.UtcNow && ConcussedPenalty > 0)
+                effectiveDefense = effectiveDefense > ConcussedPenalty ? effectiveDefense - ConcussedPenalty : 0u;
+
             if (IsExhausted) effectiveDefense = 0;
 
             return effectiveDefense;
         }
+
+        /// <summary>
+        /// Warden's Maul: timestamp until which this creature is concussed (in-memory, resets on logout/respawn).
+        /// </summary>
+        public DateTime ConcussedUntil { get; set; } = DateTime.MinValue;
+
+        /// <summary>
+        /// Warden's Maul: flat defense-skill penalty applied while ConcussedUntil is in the future.
+        /// </summary>
+        public uint ConcussedPenalty { get; set; } = 0;
+
+        /// <summary>
+        /// DerpACE Thief modifier: WeenieClassId of the tradenote stack currently held by this mob (0 = none stolen).
+        /// </summary>
+        public uint StolenTradeNoteWcid { get; set; } = 0;
+
+        /// <summary>
+        /// DerpACE Thief modifier: stack size of the held tradenote.
+        /// </summary>
+        public int StolenTradeNoteAmount { get; set; } = 0;
+
+        /// <summary>
+        /// DerpACE Thief modifier: original victim's guid (for future tightening; auto-credit goes to killing-blow player).
+        /// </summary>
+        public ACE.Entity.ObjectGuid StolenFromGuid { get; set; } = ACE.Entity.ObjectGuid.Invalid;
 
 
         private static double MinAttackSpeed = 0.5;

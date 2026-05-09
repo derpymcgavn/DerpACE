@@ -66,7 +66,7 @@ namespace ACE.Server.Factories
             //if (roll.IsArmor || roll.IsArmorClothing(wo))
             if (roll.HasArmorLevel(wo))
             {
-                spells = ArmorSpells.Roll(profile);
+                spells = ArmorSpells.Roll(profile, roll);
             }
             else if (roll.IsMeleeWeapon)
             {

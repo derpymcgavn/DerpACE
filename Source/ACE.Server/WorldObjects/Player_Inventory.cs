@@ -92,6 +92,18 @@ namespace ACE.Server.WorldObjects
             if (!TryAddToInventory(item, out container)) // We don't have enough burden available or no empty pack slot.
                 return false;
 
+            // DerpACE Ironman: any item that enters an Ironman's inventory is auto-tagged
+            // as an Ironman item. This is what lets corpse/chest/vendor loot survive the
+            // wield/use checks while still preventing trades from non-Ironman players.
+            // Equipable loot (items with workmanship) also get a [IM] name prefix so the
+            // player can distinguish Ironman-bound gear at a glance.
+            if (GetProperty(PropertyBool.IsIronman) == true && item.GetProperty(PropertyBool.IsIronmanItem) != true)
+            {
+                item.SetProperty(PropertyBool.IsIronmanItem, true);
+                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.StartsWith("[IM] "))
+                    item.Name = "[IM] " + item.Name;
+            }
+
             Session.Network.EnqueueSend(new GameMessageCreateObject(item));
 
             if (item is Container itemAsContainer)
@@ -2095,6 +2107,13 @@ namespace ACE.Server.WorldObjects
 
         private WeenieError CheckWieldRequirements(WorldObject item)
         {
+            // DerpACE Ironman: cannot wield items that aren't flagged as Ironman items,
+            // unless the item has no workmanship (quest items, keys, tokens, notes, etc.).
+            if (GetProperty(PropertyBool.IsIronman) == true
+                && item.GetProperty(PropertyBool.IsIronmanItem) != true
+                && item.GetProperty(PropertyInt.ItemWorkmanship) != null)
+                return WeenieError.YouCannotUseThatItem;
+
             if (!PropertyManager.GetBool("use_wield_requirements").Item)
                 return WeenieError.None;
 

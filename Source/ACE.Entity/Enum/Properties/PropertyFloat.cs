@@ -221,5 +221,42 @@ namespace ACE.Entity.Enum.Properties
         PCAPRecordeOmegaX              = 8016,
         PCAPRecordeOmegaY              = 8017,
         PCAPRecordeOmegaZ              = 8018,
+
+        /* DerpACE Fencer's Blade — per-weapon proc values */
+        FencerArmorPiercePct           = 9001,  // fraction of mitigated damage restored on pierce proc
+        FencerArmorPierceProc          = 9002,  // per-hit proc chance for armor pierce
+        FencerDeflectChance            = 9003,  // per-hit chance to deflect incoming damage back
+
+        /* DerpACE Ravager's Axe — per-weapon proc values */
+        RavagerBleedProc               = 9004,  // per-hit chance to apply a bleed DoT
+        RavagerBleedPct                = 9005,  // total bleed damage as a fraction of the triggering hit
+
+        /* DerpACE Warden's Maul — per-weapon proc values */
+        WardenConcussProc              = 9006,  // per-hit chance to apply a defense-skill debuff
+        WardenConcussPenalty           = 9007,  // flat defense skill points removed during the debuff
+        WardenConcussDuration          = 9008,  // duration of the debuff in seconds
+
+        /* DerpACE Resolute Blade — per-weapon proc values */
+        ResoluteHealProc               = 9009,  // per-critical-hit chance to heal the wielder
+        ResoluteHealPct                = 9010,  // fraction of crit damage restored as health on heal proc
+        ResoluteKillBurstPct           = 9011,  // fraction of wielder MaxHealth/MaxStamina restored on a killing blow
+
+        /* DerpACE Polebreaker Staff — per-weapon escalation values */
+        PolebreakerStackBonus          = 9012,  // bonus damage fraction per consecutive hit stack
+        PolebreakerMaxStacks           = 9013,  // maximum stack count
+
+        /* DerpACE Stalker's Bow — per-weapon opening-shot values */
+        StalkerFirstStrikeProc         = 9014,  // chance to fire when this is the first hit on the target
+        StalkerFirstStrikeBonus        = 9015,  // bonus damage fraction added on a successful first strike
+
+        /* DerpACE Breacher's Crossbow — always-on armor pierce */
+        BreacherPiercePct              = 9016,  // fraction of DamageMitigated added back as bonus damage on every hit
+
+        /* DerpACE Reaper's Atlatl — kill-fed sustain */
+        ReaperKillProc                 = 9017,  // chance the kill heal fires on a killing blow
+        ReaperKillHealPct              = 9018,  // fraction of wielder MaxHealth restored when proc fires
+
+        /* DerpACE Mob Modifiers — vampiric */
+        VampiricLifestealPct           = 9019,  // fraction of damage dealt healed back to vampiric mob
     }
 }

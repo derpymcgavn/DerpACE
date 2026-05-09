@@ -268,6 +268,9 @@ namespace ACE.Server.Entity
                 if (Biota.StackSize.HasValue && Biota.StackSize > 0)
                     wo.SetStackSize(Biota.StackSize);
 
+                // DerpACE: roll rare mob modifiers (Vampiric, Thief, ...) on freshly-spawned creatures
+                ACE.Server.Factories.MobModifierFactory.TryApplyModifiers(wo);
+
                 objects.Add(wo);
             }
 

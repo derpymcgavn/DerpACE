@@ -1,4 +1,5 @@
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
@@ -86,6 +87,13 @@ namespace ACE.Server.WorldObjects
         public void FellowshipRecruit(Player newPlayer)
         {
             if (newPlayer == null) return;
+
+            // DerpACE Ironman: ironmen cannot recruit or be recruited.
+            if (GetProperty(PropertyBool.IsIronman) == true || newPlayer.GetProperty(PropertyBool.IsIronman) == true)
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen walk alone — no fellowship can be formed.", ChatMessageType.Broadcast));
+                return;
+            }
 
             // An Olthoi player cannot join a fellowship
             if (newPlayer.IsOlthoiPlayer)

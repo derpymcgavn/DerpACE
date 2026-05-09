@@ -372,6 +372,19 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public void CreateEnchantment(WorldObject target, WorldObject caster, WorldObject weapon, Spell spell, bool equip = false, bool fromProc = false, bool isWeaponSpell = false)
         {
+            // DerpACE Ironman: refuse to enchant an Ironman target if the caster is not also an Ironman.
+            // (Self-buffs and items wielded by the Ironman are still allowed because both source and target are the same player or their own gear.)
+            if (target is Player ironTarget && ironTarget.GetProperty(PropertyBool.IsIronman) == true)
+            {
+                var sourcePlayer = (this as Player) ?? (caster as Player);
+                if (sourcePlayer != null && sourcePlayer != ironTarget && sourcePlayer.GetProperty(PropertyBool.IsIronman) != true)
+                {
+                    sourcePlayer.SendMessage($"{ironTarget.Name} is an Ironman and cannot be aided by your magic.");
+                    ironTarget.SendMessage($"{sourcePlayer.Name} attempts to enchant you, but your Ironman vow rejects the spell.");
+                    return;
+                }
+            }
+
             // weird itemCaster -> caster collapsing going on here -- fixme
 
             var player = this as Player;

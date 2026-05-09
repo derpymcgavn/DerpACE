@@ -179,11 +179,23 @@ namespace ACE.Server.Factories.Tables
 
         public static List<SpellId> Roll(TreasureDeath treasureDeath)
         {
+            return Roll(treasureDeath, null);
+        }
+
+        public static List<SpellId> Roll(TreasureDeath treasureDeath, ACE.Server.Factories.Entity.TreasureRoll roll)
+        {
             // this roll also applies to clothing w/ AL!
             // ie., shirts and pants would never have item spells on them,
             // but cloth gloves would
 
             // thanks to Sapphire Knight and Butterflygolem for helping to figure this part out!
+
+            // DerpACE: Covenant armor rolls banes at a much higher chance; normal armor gets a slight bump.
+            // Tunables: DerpACEConfig.ArmorBaneChanceCovenant / ArmorBaneChanceNormal (see @lootconfig)
+            var isCovenant = roll != null && roll.ArmorType == ACE.Server.Factories.Enum.TreasureArmorType.Covenant;
+            var baneChance = isCovenant
+                ? ACE.Server.Managers.DerpACEConfig.ArmorBaneChanceCovenant
+                : ACE.Server.Managers.DerpACEConfig.ArmorBaneChanceNormal;
 
             var spells = new List<SpellId>();
 
@@ -191,7 +203,10 @@ namespace ACE.Server.Factories.Tables
             {
                 var rng = ThreadSafeRandom.NextInterval(treasureDeath.LootQualityMod);
 
-                if (rng < spell.chance)
+                // Impenetrability keeps its original 1.00 chance; banes use the configurable chance.
+                var chance = spell.spellId == SpellId.Impenetrability1 ? spell.chance : baneChance;
+
+                if (rng < chance)
                     spells.Add(spell.spellId);
             }
             return spells;

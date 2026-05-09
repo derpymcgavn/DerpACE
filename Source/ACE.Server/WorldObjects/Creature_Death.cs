@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using ACE.Common;
 using ACE.Database;
 using ACE.Database.Models.World;
 using ACE.Entity;
@@ -51,7 +52,48 @@ namespace ACE.Server.WorldObjects
             if (!IsOnNoDeathXPLandblock)
                 OnDeath_GrantXP();
 
+            // DerpACE Thief modifier: refund stolen tradenote to killing-blow player
+            if (StolenTradeNoteWcid != 0 && StolenTradeNoteAmount > 0)
+                TryRefundStolenTradeNote(lastDamager);
+
             return GetDeathMessage(lastDamager, damageType, criticalHit);
+        }
+
+        /// <summary>
+        /// DerpACE: re-creates the stolen tradenote and credits the killing-blow player.
+        /// Falls back to dropping on the corpse if the player's pack is full or unreachable.
+        /// </summary>
+        private void TryRefundStolenTradeNote(DamageHistoryInfo lastDamager)
+        {
+            var wcid = StolenTradeNoteWcid;
+            var amount = StolenTradeNoteAmount;
+
+            // Clear state up-front so we can't double-refund
+            StolenTradeNoteWcid = 0;
+            StolenTradeNoteAmount = 0;
+
+            var killer = lastDamager?.TryGetAttacker() as Player;
+            if (killer == null) return;
+
+            var note = WorldObjectFactory.CreateNewWorldObject(wcid);
+            if (note == null) return;
+
+            if (amount > 1) note.SetStackSize(amount);
+
+            if (!killer.TryCreateInInventoryWithNetworking(note))
+            {
+                // Inventory full — drop on the ground at the corpse for manual pickup
+                note.Location = new ACE.Entity.Position(Location);
+                ACE.Server.Managers.LandblockManager.AddObject(note);
+                killer.Session?.Network.EnqueueSend(new ACE.Server.Network.GameMessages.Messages.GameMessageSystemChat(
+                    $"You recover {amount} stolen tradenotes from {Name}, but your pack is full — they fall to the ground. [Thief]",
+                    ChatMessageType.Broadcast));
+                return;
+            }
+
+            killer.Session?.Network.EnqueueSend(new ACE.Server.Network.GameMessages.Messages.GameMessageSystemChat(
+                $"You recover {amount} stolen tradenotes from {Name}. [Thief]",
+                ChatMessageType.Broadcast));
         }
 
 
@@ -659,6 +701,30 @@ namespace ACE.Server.WorldObjects
                         droppedItems.Add(wo);
 
                     DoCantripLogging(killer, wo);
+                }
+            }
+
+            // DerpACE Thief modifier: chance to spawn a Chest of Tradenotes at the death location
+            if (GetProperty(PropertyBool.IsThiefMob) == true
+                && ACE.Server.Managers.DerpACEConfig.ThiefChestDropChance > 0
+                && Location != null
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThiefChestDropChance)
+            {
+                var chest = WorldObjectFactory.CreateNewWorldObject(ACE.Server.Managers.DerpACEConfig.ThiefChestWcid);
+                if (chest != null)
+                {
+                    chest.Location = new ACE.Entity.Position(Location);
+                    ACE.Server.Managers.LandblockManager.AddObject(chest);
+
+                    // Auto-despawn after a short window so the chest doesn't litter the world
+                    var despawn = ACE.Server.Managers.DerpACEConfig.ThiefChestDespawnSeconds;
+                    if (despawn > 0)
+                    {
+                        var chain = new ActionChain();
+                        chain.AddDelaySeconds(despawn);
+                        chain.AddAction(chest, () => { if (!chest.IsDestroyed) chest.Destroy(); });
+                        chain.EnqueueChain();
+                    }
                 }
             }
 

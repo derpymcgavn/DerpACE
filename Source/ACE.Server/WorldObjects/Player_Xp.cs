@@ -307,14 +307,17 @@ namespace ACE.Server.WorldObjects
 
             if (Level > startingLevel)
             {
+                // DerpACE Ironman: suppress skill credits from level-up message and always show 0
+                bool isIronman = GetProperty(PropertyBool.IsIronman) == true;
+
                 var message = (Level == maxLevel) ? $"You have reached the maximum level of {Level}!" : $"You are now level {Level}!";
 
-                message += (AvailableSkillCredits > 0) ? $"\nYou have {AvailableExperience:#,###0} experience points and {AvailableSkillCredits} skill credits available to raise skills and attributes." : $"\nYou have {AvailableExperience:#,###0} experience points available to raise skills and attributes.";
+                message += (!isIronman && AvailableSkillCredits > 0) ? $"\nYou have {AvailableExperience:#,###0} experience points and {AvailableSkillCredits} skill credits available to raise skills and attributes." : $"\nYou have {AvailableExperience:#,###0} experience points available to raise skills and attributes.";
 
                 var levelUp = new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.Level, Level ?? 1);
-                var currentCredits = new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.AvailableSkillCredits, AvailableSkillCredits ?? 0);
+                var currentCredits = new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.AvailableSkillCredits, isIronman ? 0 : (AvailableSkillCredits ?? 0));
 
-                if (Level != maxLevel && !creditEarned)
+                if (Level != maxLevel && !creditEarned && !isIronman)
                 {
                     var nextLevelWithCredits = 0;
 
@@ -334,6 +337,10 @@ namespace ACE.Server.WorldObjects
 
                 if (AllegianceNode != null)
                     AllegianceNode.OnLevelUp();
+
+                // DerpACE: apply level-gated Ironman skill grants
+                if (GetProperty(PropertyBool.IsIronman) == true)
+                    ACE.Server.Factories.IronmanFactory.CheckIronmanLevelGrants(this);
 
                 Session.Network.EnqueueSend(levelUp);
 

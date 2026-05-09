@@ -144,6 +144,142 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 * Plays `HealthDownYellow` on the target and `HealthUpYellow` on the player when the proc fires
 * When the proc fires, the player sees: `-N stamina [TargetName] +N [Sentinel's Spear]` in the combat chat channel
 
+### Fencer's Blades
+* **5% of T6+ SwordMS loot drops** (épée, rapier, schlager) are converted to a Fencer's Blade (e.g. *Emerald Épée of the Fencer*)
+* `TreasureWeaponType.SwordMS` covers exactly these three weapon types, so no additional WCID filter is needed
+* The item stores `PropertyBool.IsFencerBlade = true` on the world object
+* **Icon overlay:** `0x06002699` (placeholder — swap for a blade-appropriate overlay)
+* Drop chance and all proc ranges are runtime-adjustable via `@lootconfig` (`fencer.*` keys)
+
+#### Per-Weapon Values (rolled at loot time, stored as PropertyFloat)
+| Property | Range | Description |
+|---|---|---|
+| `FencerArmorPiercePct` | 1–5% | Fraction of armor-mitigated damage recovered as bonus |
+| `FencerArmorPierceProc` | 1–4% | Per-hit proc chance for the pierce |
+| `FencerDeflectChance` | 1–2% | Per-incoming-hit chance to deflect |
+
+#### Armor Pierce (outgoing proc)
+* Fires in `Player.AttackTarget` after `DamageEvent.CalculateDamage` — only when `HasDamage` is true
+* Bonus damage = `DamageMitigated × FencerArmorPiercePct` (i.e., X% of what armor actually blocked gets through)
+* If armor blocked nothing (`DamageMitigated = 0`), the proc has no effect — pierce only matters against armored targets
+* When the proc fires, the player sees: `+N pierce [Fencer's Blade]` in the combat chat channel
+
+#### Deflect (incoming proc)
+* Fires at the end of `Player.TakeDamage` after all damage, network messages, and cloak procs are resolved
+* Reflect amount = `damageTaken × 0.10` — dealt to the attacker creature via `Creature.TakeDamage(player, DamageType.Pierce, amount)`
+* Only fires against `Creature` attackers; does not trigger in PvP
+* When the proc fires, the player sees: `[Fencer's Blade] Deflected! -N [AttackerName]` in the combat chat channel
+* **Long description** example: *"This blade is perfectly balanced for dueling — each strike has a 3% chance to find a gap in the target's defenses, bypassing 4% of their armor. There is also a 2% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant."*
+
+### Ravager's Axes
+* **5% of T6+ axe loot drops** (Axe and TwoHandedAxe types) are converted to a Ravager's Axe (e.g. *Obsidian Axe of the Ravager*)
+* The item stores `PropertyBool.IsRavagersAxe = true` on the world object
+* **Icon overlay:** `0x06002878`
+* Drop chance and proc variables are runtime-adjustable via `@lootconfig` (`ravager.*` keys)
+
+#### Bleed (proc)
+* Each hit has a **2–5% proc chance** (rolled at loot time, stored as `PropertyFloat.RavagerBleedProc`) to inflict a bleed
+* Bleed total = `hitDamage × bleedPct`, rolled per-weapon at loot time (default 30–60%, stored as `PropertyFloat.RavagerBleedPct`)
+* **Two-handed axes** apply a `RavagerTwoHandMult` multiplier (default 1.5×) baked into the stored `RavagerBleedPct`, so they hit harder and longer
+* Bleed total is split evenly across `ravager.ticks` ticks (default 3) at `ravager.interval` second intervals (default 2.0s) via an `ActionChain` on the wielder
+* Each tick: re-checks `target.IsAlive`, deals `perTick` of the same damage type as the triggering hit, plays `SplatterMidLeftBack`, and emits `-N bleed [TargetName] [Ravager's Axe]` in CombatSelf chat
+* On proc, an immediate announce message is sent: `[TargetName] is bleeding (+N) [Ravager's Axe]` (N = total bleed)
+* **`@lootconfig` keys:** `ravager.drop`, `ravager.tier`, `ravager.procmin`, `ravager.procmax`, `ravager.bleedmin`, `ravager.bleedmax`, `ravager.twohandmult`, `ravager.ticks`, `ravager.interval`
+
+### Warden's Mauls
+* **5% of T6+ mace loot drops** (Mace and TwoHandedMace types) are converted to a Warden's Maul (e.g. *Ebony Mace of the Warden*)
+* The item stores `PropertyBool.IsWardensMaul = true` on the world object
+* Drop chance and proc variables are runtime-adjustable via `@lootconfig` (`warden.*` keys)
+
+#### Concussion (proc)
+* Each hit has a **2–5% proc chance** (stored as `PropertyFloat.WardenConcussProc`) to apply **Concussion** to the target
+* Concussion reduces the target's effective defense skill by **10–30 points** (stored as `PropertyFloat.WardenConcussPenalty`) for **8 seconds**
+* Tracked via `ConcussedUntil` timestamp + `ConcussedDefensePenalty` on the target `Creature`, checked in `DamageEvent` defense roll
+* When the proc fires: `[TargetName] concussed (-N defense) [Warden's Maul]` in combat chat
+* **Long description** example: *"This maul is weighted to shatter focus — each strike has a 3% chance to stagger the target, reducing their defense by N for 8 seconds."*
+* **Planned `@lootconfig` keys:** `warden.drop`, `warden.tier`, `warden.procmin`, `warden.procmax`, `warden.penaltymin`, `warden.penaltymax`, `warden.duration`
+
+### Berserker's Staves
+* **5% of T6+ staff loot drops** (Staff and TwoHandedStaff types) are converted to a Berserker's Staff (e.g. *Granite Staff of the Berserker*)
+* The item stores `PropertyBool.IsBerserkerStaff = true` on the world object
+* Drop chance and proc variables are runtime-adjustable via `@lootconfig` (`berserker.*` keys)
+
+#### Stamina Restore (proc)
+* Each hit has a **2–5% proc chance** (stored as `PropertyFloat.BerserkerRestoreProc`) to restore stamina = `damage × restorePct` to the wielder
+* Restore % rolled at loot time (25–50%), stored as `PropertyFloat.BerserkerRestorePct`
+* Uses `UpdateVitalDelta(Stamina, restore)` — mirrors Sentinel's Spear but targets the wielder's own stamina
+* When the proc fires: `+N stamina [Berserker's Staff]` in combat chat
+* **Long description** example: *"This staff thrums with brutal momentum — each strike has a 3% chance to surge stamina back to the wielder, restoring N stamina from the impact."*
+* **Planned `@lootconfig` keys:** `berserker.drop`, `berserker.tier`, `berserker.procmin`, `berserker.procmax`, `berserker.restoremin`, `berserker.restoremax`
+
+### Resolute Blades
+* **5% of T6+ sword loot drops** (Sword and TwoHandedSword types) are converted to a Resolute Blade (e.g. *Emerald Sword of Resolve*)
+* The item stores `PropertyBool.IsResoluteBlade = true` on the world object
+* Drop chance and proc variables are runtime-adjustable via `@lootconfig` (`resolute.*` keys)
+
+#### Life Drain on Critical (proc)
+* When a **critical hit** lands, there is a **2–5% proc chance** (stored as `PropertyFloat.ResoluteHealProc`) to restore health = `damage × healPct` to the wielder
+* Heal % rolled at loot time (5–15%), stored as `PropertyFloat.ResoluteHealPct`
+* Fires in `Player_Combat.AttackTarget` gated on `damageEvent.IsCritical`
+* When the proc fires: `+N health [Resolute Blade]` in combat chat
+* **Long description** example: *"This blade is forged for the decisive moment — critical strikes have a 3% chance to draw life from the wound, restoring N health to the wielder."*
+* **Planned `@lootconfig` keys:** `resolute.drop`, `resolute.tier`, `resolute.procmin`, `resolute.procmax`, `resolute.healmin`, `resolute.healmax`
+
+### Stalker's Bows
+* **5% of T6+ bow loot drops** are converted to a Stalker's Bow (e.g. *Yew Bow of the Stalker*)
+* The item stores `PropertyBool.IsStalkersbow = true` on the world object
+* Drop chance and proc variables are runtime-adjustable via `@lootconfig` (`stalker.*` keys)
+
+#### First Strike Bonus (proc)
+* If the current hit is the **first registered hit against this target** (attacker GUID not yet in target `DamageHistory`), there is an **N% proc chance** (rolled at loot time, 1–4%, stored as `PropertyFloat.StalkerFirstHitProc`) for a **+25–50% bonus damage** multiplier (stored as `PropertyFloat.StalkerFirstHitBonus`)
+* Hook point: `ProjectileCollisionHelper` after `DamageEvent.CalculateDamage`, before `TakeDamage`
+* When the proc fires: `+N [Stalker's Bow] first strike` in combat chat
+* **Long description** example: *"This bow is strung for the killing shot — the first arrow loosed at an unsuspecting target has a 3% chance to strike true for an additional N% damage."*
+* **Planned `@lootconfig` keys:** `stalker.drop`, `stalker.tier`, `stalker.procmin`, `stalker.procmax`, `stalker.bonusmin`, `stalker.bonusmax`
+
+### Breacher's Crossbows
+* **5% of T6+ crossbow loot drops** are converted to a Breacher's Crossbow (e.g. *Steel Crossbow of the Breacher*)
+* The item stores `PropertyBool.IsBreachersXbow = true` on the world object
+* Drop chance and pierce % are runtime-adjustable via `@lootconfig` (`breacher.*` keys)
+
+#### Armor Pierce (always-on)
+* Every hit applies bonus pierce damage = `DamageMitigated × piercePct` — **no proc roll**, always fires when armor absorbs something
+* Pierce % rolled at loot time (1–5%), stored as `PropertyFloat.BreaherPiercePct`
+* Distinct from Fencer's Blade: the crossbow pierce is **deterministic** — rewards targeting heavily armored enemies without a luck requirement
+* Hook point: `ProjectileCollisionHelper` — apply bonus after `TakeDamage` when `damageEvent.DamageMitigated > 0`
+* When it fires: `+N pierce [Breacher's Crossbow]` in combat chat
+* **Long description** example: *"This crossbow is built to punch through plate — each bolt recovers N% of what the target's armor absorbs as direct piercing damage."*
+* **Planned `@lootconfig` keys:** `breacher.drop`, `breacher.tier`, `breacher.piercemin`, `breacher.piercemax`
+
+### Reaper's Atlatls
+* **5% of T6+ atlatl loot drops** are converted to a Reaper's Atlatl (e.g. *Ivory Atlatl of the Reaper*)
+* The item stores `PropertyBool.IsReapersAtlatl = true` on the world object
+* Drop chance and proc variables are runtime-adjustable via `@lootconfig` (`reaper.*` keys)
+
+#### Kill Feed (proc)
+* When a killing blow is landed (`!target.IsAlive` after `TakeDamage`), there is an **N% proc chance** (rolled at loot time, 3–8%, stored as `PropertyFloat.ReaperKillProc`) to restore **X% of the wielder's max health** (stored as `PropertyFloat.ReaperKillHealPct`)
+* Heal % rolled at loot time (5–15%)
+* Hook point: `ProjectileCollisionHelper` — check `!target.IsAlive` after the `TakeDamage` call
+* When the proc fires: `+N health [Reaper's Atlatl] kill` in combat chat
+* **Long description** example: *"This atlatl is bound to the hunt — finishing a kill has a 5% chance to surge N health back into the wielder."*
+* **Planned `@lootconfig` keys:** `reaper.drop`, `reaper.tier`, `reaper.procmin`, `reaper.procmax`, `reaper.healmin`, `reaper.healmax`
+
+### Elemental Unarmed Weapons
+* **5% of magical elemental unarmed loot drops** (cestus, katar, nekode — acid, electric, fire, frost variants) receive a cast-on-strike proc
+* Drop chance and proc rate range are runtime-adjustable via `@lootconfig` (`unarmed.drop`, `unarmed.procmin`, `unarmed.procmax`)
+* Each qualifying weapon rolls a **random proc rate between 1–5%** at loot time; the exact value is reflected in the long description
+
+#### Element Details
+| Element | Name Suffix | Icon Overlay | UiEffect | Proc Spell |
+|---|---|---|---|---|
+| Fire | *of Cinders* | `0x06005B3A` | `Fire` | `FlameBlast3` |
+| Frost | *of Rime* | `0x06005B3E` | `Frost` | `FrostBolt3` |
+| Acid | *of Vitriol* | `0x0600667B` | `Acid` | `AcidBlast3` |
+| Lightning | *of Tempests* | `0x06006680` | `Lightning` | `LightningBlast3` |
+
+* The proc fires through the standard `TryProcEquippedItems` → `TryProcItem` path — no custom combat code required
+* **Long description** example: *"This weapon crackles with frost energy — each strike has a 3% chance to discharge a frost blast."*
+
 ### Wacky Loot Event
 * A lightweight server-side event flag system (`ServerEvents` static class) that requires no database entries
 * `@start event wacky` — enables the Wacky Loot event; broadcasts *"A strange wind sweeps through Dereth..."* to all players

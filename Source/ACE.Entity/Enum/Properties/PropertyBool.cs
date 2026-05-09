@@ -186,5 +186,26 @@ namespace ACE.Entity.Enum.Properties
         IsArchmagiCaster                 = 9012,
         IsThievesDagger                  = 9013,
         IsSentinelSpear                  = 9014,
+        IsFencerBlade                    = 9015,
+        IsRavagersAxe                    = 9016,
+        IsWardensMaul                    = 9017,
+        IsResoluteBlade                  = 9018,
+        IsPolebreakerStaff               = 9019,
+        IsStalkersBow                    = 9020,
+        IsBreachersCrossbow              = 9021,
+        IsReapersAtlatl                  = 9022,
+
+        /* DerpACE Mob Modifiers — rare affixes applied at spawn */
+        IsVampiricMob                    = 9023,
+        IsThiefMob                       = 9024,
+        // 9025 reserved IsWardenMob (future)
+        // 9026 reserved IsNocturnalMob (future)
+        // 9027 reserved IsAssassinMob (future)
+        IsSimulacrumMob                  = 9028,
+
+        /* DerpACE Ironman mode (irreversible solo / hardcore character flag) */
+        IsIronman                        = 9029,
+        IsHardcore                       = 9030,
+        IsIronmanItem                    = 9031,
     }
 }

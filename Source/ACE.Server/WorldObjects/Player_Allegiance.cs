@@ -295,6 +295,13 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool IsPledgable(Player target)
         {
+            // DerpACE Ironman: ironmen cannot swear or be sworn to.
+            if (GetProperty(PropertyBool.IsIronman) == true || target.GetProperty(PropertyBool.IsIronman) == true)
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen walk alone — no allegiance can be sworn.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             // the client doesn't seem to display most of these werrors,
             // so we also send similar messages as text
 

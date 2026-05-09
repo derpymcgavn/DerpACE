@@ -26,6 +26,10 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public Dictionary<ObjectGuid, DateTime> LootPermission;
 
+        // DerpACE Ironman: per-character timestamp of last hardcore-life loss.
+        // Process-lifetime only; resets on server restart by design.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, double> _lastHardcoreDeathTimestamp = new System.Collections.Concurrent.ConcurrentDictionary<uint, double>();
+
         /// <summary>
         /// Called when a player dies, in conjunction with Die()
         /// </summary>
@@ -38,6 +42,51 @@ namespace ACE.Server.WorldObjects
             HandlePKDeathBroadcast(lastDamager, topDamager);
 
             var deathMessage = base.OnDeath(lastDamager, damageType, criticalHit);
+
+            // DerpACE Ironman: hardcore-life accounting. Decrement lives and, on final
+            // death, mark the character as deleted + force logoff. The cooldown lets
+            // back-to-back deaths in PK / accidents not chain-burn lives.
+            if (GetProperty(PropertyBool.IsHardcore) == true)
+            {
+                var nowTs = ACE.Common.Time.GetUnixTime();
+                var cooldown = ACE.Server.Managers.DerpACEConfig.IronmanHardcoreSecondsBetweenDeaths;
+                if (!_lastHardcoreDeathTimestamp.TryGetValue(Guid.Full, out var lastTs) || nowTs - lastTs >= cooldown)
+                {
+                    _lastHardcoreDeathTimestamp[Guid.Full] = nowTs;
+                    var lives = (GetProperty(PropertyInt.HardcoreLives) ?? 0) - 1;
+                    SetProperty(PropertyInt.HardcoreLives, lives);
+
+                    if (lives <= 0)
+                    {
+                        SendMessage("FINAL DEATH. Your hardcore character has fallen for the last time.", ChatMessageType.Broadcast);
+                        try
+                        {
+                            Character.DeleteTime = (ulong)ACE.Common.Time.GetUnixTime();
+                            Character.IsDeleted = true;
+                            CharacterChangesDetected = true;
+                            var charId = Character.Id;
+                            var chain = new ACE.Server.Entity.Actions.ActionChain();
+                            chain.AddDelaySeconds(2.0);
+                            chain.AddAction(this, () =>
+                            {
+                                Session?.LogOffPlayer(true);
+                                ACE.Server.Managers.PlayerManager.HandlePlayerDelete(charId);
+                                ACE.Server.Managers.PlayerManager.ProcessDeletedPlayer(charId);
+                            });
+                            chain.EnqueueChain();
+                        }
+                        catch { /* swallow — death path must not throw */ }
+                    }
+                    else
+                    {
+                        SendMessage($"You have lost a hardcore life. {lives} remaining.", ChatMessageType.Broadcast);
+                    }
+                }
+            }
+
+            // DerpACE Ironman: record which creature killed this Ironman player for the killer leaderboard
+            if (GetProperty(PropertyBool.IsIronman) == true && lastDamager != null && !(lastDamager.TryGetAttacker() is ACE.Server.WorldObjects.Player))
+                ACE.Server.Managers.IronmanKillerTracker.RecordKill(lastDamager.Name);
 
             var lastDamagerObj = lastDamager?.TryGetAttacker();
 

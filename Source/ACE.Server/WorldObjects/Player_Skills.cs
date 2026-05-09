@@ -113,6 +113,13 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool HandleActionTrainSkill(Skill skill, int creditsSpent)
         {
+            // DerpACE Ironman: skills are locked to the reroll — no manual training allowed.
+            if (GetProperty(PropertyBool.IsIronman) == true)
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen cannot train skills — your abilities were decided at the moment of commitment.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             if (creditsSpent > AvailableSkillCredits)
             {
                 log.Warn($"{Name}.HandleActionTrainSkill({skill}, {creditsSpent}) - not enough skill credits ({AvailableSkillCredits})");
