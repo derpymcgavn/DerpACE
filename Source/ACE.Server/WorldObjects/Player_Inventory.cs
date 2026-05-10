@@ -1378,6 +1378,16 @@ namespace ACE.Server.WorldObjects
                 containerRootOwner.Value += (item.Value ?? 0);
             }
 
+            // DerpACE Ironman: tag items moving into an Ironman player's inventory from an
+            // external container (chest, corpse, etc.) — same logic as TryCreateInInventoryWithNetworking.
+            if (containerRootOwner == this && GetProperty(PropertyBool.IsIronman) == true
+                && item.GetProperty(PropertyBool.IsIronmanItem) != true)
+            {
+                item.SetProperty(PropertyBool.IsIronmanItem, true);
+                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.StartsWith("[IM] "))
+                    item.Name = "[IM] " + item.Name;
+            }
+
             // when moving from a non-stuck container to a different container,
             // the database must be synced immediately
             if (prevContainer != null && !prevContainer.Stuck && container != prevContainer)
@@ -2125,9 +2135,7 @@ namespace ACE.Server.WorldObjects
             }
             else if (IsGearKnightPlayer)
             {
-                if (((item.ValidLocations & (EquipMask.Clothing | EquipMask.Armor)) != 0)
-                    && (heritageSpecificArmor == null || (HeritageGroup)heritageSpecificArmor != HeritageGroup))
-                    return WeenieError.HeritageRequiresSpecificArmor;
+                // DerpACE: Gear Knights can wear any armor — skip the gear-plating requirement.
             }    
             else
             {

@@ -10,6 +10,7 @@ using ACE.Server.Factories;
 using ACE.Server.Entity;
 using ACE.Server.Managers;
 using ACE.Server.Network;
+using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.Command.Handlers
 {
@@ -58,6 +59,13 @@ namespace ACE.Server.Command.Handlers
             {
                 // Already an Ironman — any sub-command also shows the summary.
                 ShowIronmanStatus(player);
+                return;
+            }
+
+            // Hardcore characters cannot also become Ironman.
+            if (player.GetProperty(PropertyBool.IsHardcore) == true)
+            {
+                player.SendMessage("Hardcore characters cannot become Ironman.", ChatMessageType.System);
                 return;
             }
 
@@ -197,6 +205,104 @@ namespace ACE.Server.Command.Handlers
         }
 
         private const int LeaderboardSize = 10;
+
+        // ----------------------------------------------------------------
+        //  /hardcore command
+        // ----------------------------------------------------------------
+
+        private static readonly ConcurrentDictionary<uint, DateTime> PendingHardcoreConfirms = new ConcurrentDictionary<uint, DateTime>();
+
+        [CommandHandler("hardcore", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
+            "Toggle Hardcore self-found mode (IRREVERSIBLE).",
+            "on      - begin Hardcore commitment (you must then run /hardcore confirm within 30 seconds)\n" +
+            "confirm - finalize Hardcore conversion. Cannot be undone.\n\n" +
+            "Hardcore characters have 1 life. On death, the character is permanently deleted.\n" +
+            "Your radar blip will appear pink. No other restrictions apply.")]
+        public static void HandleHardcore(Session session, params string[] parameters)
+        {
+            var player = session?.Player;
+            if (player == null) return;
+
+            // Already hardcore — show status regardless of sub-command.
+            if (player.GetProperty(PropertyBool.IsHardcore) == true)
+            {
+                // Only show the status message if triggered directly; Ironman already
+                // shows lives in ShowIronmanStatus, so skip duplicate output there.
+                if (player.GetProperty(PropertyBool.IsIronman) != true)
+                {
+                    var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0;
+                    player.SendMessage(
+                        $"Hardcore lives remaining: {lives}\n" +
+                        (lives <= 0 ? "Your character is pending deletion." : ""),
+                        ChatMessageType.System);
+                }
+                else
+                {
+                    player.SendMessage("You are an Ironman — use /ironman for your status.", ChatMessageType.System);
+                }
+                return;
+            }
+
+            // Ironman characters cannot also become standalone Hardcore.
+            if (player.GetProperty(PropertyBool.IsIronman) == true)
+            {
+                player.SendMessage("Ironman characters cannot become Hardcore.", ChatMessageType.System);
+                return;
+            }
+
+            if (parameters == null || parameters.Length == 0)
+            {
+                player.SendMessage("Usage: /hardcore on | confirm", ChatMessageType.System);
+                return;
+            }
+
+            var sub = parameters[0].ToLowerInvariant();
+
+            switch (sub)
+            {
+                case "on":
+                    PendingHardcoreConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
+                    player.SendMessage(
+                        $"WARNING: Hardcore mode is permanent. You will have 1 life — death deletes your character forever.\n" +
+                        $"Type /hardcore confirm within {ConfirmWindowSeconds} seconds to proceed.",
+                        ChatMessageType.System);
+                    break;
+
+                case "confirm":
+                    if (!PendingHardcoreConfirms.TryRemove(player.Guid.Full, out var expires))
+                    {
+                        player.SendMessage("No pending Hardcore commitment. Type /hardcore on first.", ChatMessageType.System);
+                        return;
+                    }
+                    if (DateTime.UtcNow > expires)
+                    {
+                        player.SendMessage("Your Hardcore commitment window expired. Type /hardcore on again.", ChatMessageType.System);
+                        return;
+                    }
+                    ApplyHardcoreStandalone(player);
+                    break;
+
+                default:
+                    player.SendMessage("Usage: /hardcore on | confirm", ChatMessageType.System);
+                    break;
+            }
+        }
+
+        private static void ApplyHardcoreStandalone(ACE.Server.WorldObjects.Player player)
+        {
+            player.SetProperty(PropertyBool.IsHardcore, true);
+            player.SetProperty(PropertyInt.HardcoreLives, 1);
+            player.SetModeTitle("HARDCORE");
+
+            // Pink radar blip — visible to all nearby players.
+            player.RadarColor = RadarColor.Pink;
+            player.EnqueueBroadcast(true,
+                new GameMessagePublicUpdatePropertyInt(player, PropertyInt.RadarBlipColor, (int)RadarColor.Pink));
+
+            player.SendMessage(
+                "You have entered Hardcore mode. You have 1 life. Good luck.",
+                ChatMessageType.System);
+        }
 
         [CommandHandler("ironmantop", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Show the Ironman leaderboard (top players by mob kills).")]

@@ -838,10 +838,24 @@ namespace ACE.Server.WorldObjects
                     .OrderBy(i => (i.StackSize ?? 1) * (i.Value ?? 0))
                     .FirstOrDefault();
 
-                if (tradenote != null)
+                if (tradenote == null)
+                {
+                    // Attempted but nothing to steal
+                    if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"{attacker.Name} attempts to pickpocket you but finds nothing to steal. [Thief]",
+                            ChatMessageType.CombatEnemy));
+                }
+                else
                 {
                     var wcid = tradenote.WeenieClassId;
                     var amount = tradenote.StackSize ?? 1;
+
+                    // Warn the player the attempt is happening before we know if it succeeds
+                    if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"{attacker.Name} reaches for your tradenotes! [Thief]",
+                            ChatMessageType.CombatEnemy));
 
                     if (TryRemoveFromInventoryWithNetworking(tradenote.Guid, out var removed, RemoveFromInventoryAction.SpendItem))
                     {
@@ -854,7 +868,14 @@ namespace ACE.Server.WorldObjects
                         ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
                         if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
                             Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"Pickpocketed! {attacker.Name} stole a tradenote stack ({amount}). Kill it to recover. [Thief]",
+                                $"Pickpocketed! {attacker.Name} stole {amount} tradenote(s). Kill it to recover them. [Thief]",
+                                ChatMessageType.CombatEnemy));
+                    }
+                    else
+                    {
+                        if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"{attacker.Name} tried to steal your tradenotes but failed. [Thief]",
                                 ChatMessageType.CombatEnemy));
                     }
                 }

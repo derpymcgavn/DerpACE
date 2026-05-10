@@ -474,6 +474,7 @@ namespace ACE.Server.Factories
         {
             player.SetProperty(PropertyInt.HardcoreLives, DerpACEConfig.IronmanHardcoreStartingLives);
             player.SetProperty(PropertyBool.IsHardcore, true);
+            player.SetModeTitle("HARDCORE");
             player.SendMessage($"You begin with {DerpACEConfig.IronmanHardcoreStartingLives} hardcore life/lives. Final death is permanent.");
         }
 
@@ -481,6 +482,7 @@ namespace ACE.Server.Factories
         {
             player.SetProperty(PropertyBool.IsIronman, true);
             player.RadarColor = RadarColor.Sentinel;
+            player.SetModeTitle("IRONMAN");
             player.QuestManager.Stamp("IronmanChallenge");
 
             // Append " - IM" suffix to the character name if not already present

@@ -630,6 +630,19 @@ namespace ACE.Server.WorldObjects
                 else
                     GenerateTreasure_Olthoi(killer, corpse);
 
+                // DerpACE Ironman: tag all loot on monster corpses killed by an Ironman player
+                // so the items pass the wield gate and get the [IM] name prefix.
+                if (killer != null && killer.TryGetAttacker() is Player killerIronman
+                    && killerIronman.GetProperty(PropertyBool.IsIronman) == true)
+                {
+                    foreach (var lootItem in corpse.Inventory.Values)
+                    {
+                        lootItem.SetProperty(PropertyBool.IsIronmanItem, true);
+                        if (lootItem.GetProperty(PropertyInt.ItemWorkmanship) != null && !lootItem.Name.StartsWith("[IM] "))
+                            lootItem.Name = "[IM] " + lootItem.Name;
+                    }
+                }
+
                 if (killer != null && killer.IsPlayer && !killer.IsOlthoiPlayer)
                 {
                     if (Level >= 100)

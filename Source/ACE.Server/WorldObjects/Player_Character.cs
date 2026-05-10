@@ -374,6 +374,16 @@ namespace ACE.Server.WorldObjects
             AddTitle(title, true);
         }
 
+        /// <summary>
+        /// DerpACE: Clear the displayed title and set PropertyString.Template
+        /// to a custom mode label (e.g. "IRONMAN" or "HARDCORE").
+        /// </summary>
+        public void SetModeTitle(string modeLabel)
+        {
+            CharacterTitleId = null;
+            SetProperty(PropertyString.Template, modeLabel);
+        }
+
         public uint EnumMapper_CharacterTitle_FileID = 0x22000041;
 
         public string GetTitle(CharacterTitle title)

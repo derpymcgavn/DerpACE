@@ -3173,9 +3173,9 @@ namespace ACE.Server.Command.Handlers
             }
         }
 
-        // tester (DerpACE) — admin-only "specced 500" testing form. Reuses GodState save/restore.
+        // tester (DerpACE) — admin-only "290 stats / max skills" testing form. Reuses GodState save/restore.
         [CommandHandler("tester", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 0,
-            "Toggles tester mode: every skill specialized at base 500 for testing.",
+            "Toggles tester mode: 290 in all attributes, every skill specialized at max ranks.",
             "Usage: /tester        — enter tester mode\n"
           + "       /tester off    — return to your saved pre-tester state\n"
           + "Stores prior state in PropertyString.GodState (same as /god); /ungod also reverts it.")]
@@ -3273,16 +3273,16 @@ namespace ACE.Server.Command.Handlers
                 currentPlayer.SpecializeSkill(s.Key, 0);
 
                 var playerSkill = currentPlayer.Skills[s.Key];
-                playerSkill.Ranks = 0;
+                playerSkill.Ranks = 226;
                 playerSkill.ExperienceSpent = 0u;
-                playerSkill.InitLevel = 500;
+                playerSkill.InitLevel = 0;
                 currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateSkill(currentPlayer, playerSkill));
             }
 
             foreach (var a in currentPlayer.Attributes)
             {
                 var playerAttr = currentPlayer.Attributes[a.Key];
-                playerAttr.StartingValue = 500u;
+                playerAttr.StartingValue = 290u;
                 playerAttr.Ranks = 0u;
                 playerAttr.ExperienceSpent = 0u;
                 currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(currentPlayer, playerAttr));
@@ -3302,7 +3302,7 @@ namespace ACE.Server.Command.Handlers
             currentPlayer.PlayParticleEffect(PlayScript.LevelUp, currentPlayer.Guid);
             currentPlayer.SetMaxVitals();
 
-            ChatPacket.SendServerMessage(session, "Tester mode engaged: all skills specialized at base 500. Use /tester off (or /ungod) to revert.", ChatMessageType.Broadcast);
+            ChatPacket.SendServerMessage(session, "Tester mode engaged: 290 in all attributes, all skills specialized at max ranks. Use /tester off (or /ungod) to revert.", ChatMessageType.Broadcast);
         }
 
         // magic god
