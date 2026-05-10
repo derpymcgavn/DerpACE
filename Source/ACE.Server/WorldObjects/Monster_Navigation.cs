@@ -64,6 +64,21 @@ namespace ACE.Server.WorldObjects
         public double NextMoveTime;
         public double NextCancelTime;
 
+        // Smart chase recovery state (wall-stuck detection + course correction).
+        private Vector3 lastStuckSamplePos = new Vector3(float.NaN, float.NaN, float.NaN);
+        private float lastStuckSampleTargetDist = float.MaxValue;
+        private double nextStuckSampleTime;
+        private int stuckStrikeCount;
+        private int courseCorrectionAttemptCount;
+        private double nextCourseCorrectionTime;
+
+        private const double StuckSampleInterval = 0.35;
+        private const float StuckMinTravelDistance = 0.18f;
+        private const float StuckMinDistanceImprovement = 0.10f;
+        private const int StuckCourseCorrectionThreshold = 2;
+        private const double CourseCorrectionCooldownMin = 0.20;
+        private const double CourseCorrectionCooldownMax = 0.45;
+
         /// <summary>
         /// Starts the process of monster turning towards target
         /// </summary>
@@ -83,10 +98,11 @@ namespace ACE.Server.WorldObjects
             //Console.WriteLine($"[{Timers.RunningTime}] - {Name} ({Guid}) - starting turn");
 
             IsTurning = true;
+            ResetStuckTracking();
 
             // send network actions
             var targetDist = GetDistanceToTarget();
-            var turnTo = IsRanged || (CurrentAttack == CombatType.Magic && targetDist <= GetSpellMaxRange()) || AiImmobile;
+            var turnTo = (IsRanged && targetDist <= MaxRange) || (CurrentAttack == CombatType.Magic && targetDist <= GetSpellMaxRange()) || AiImmobile;
             if (turnTo)
                 TurnTo(AttackTarget);
             else
@@ -107,6 +123,103 @@ namespace ACE.Server.WorldObjects
 
             // prevent initial snap
             PhysicsObj.UpdateTime = PhysicsTimer.CurrentTime;
+        }
+
+        private void ResetStuckTracking()
+        {
+            lastStuckSamplePos = new Vector3(float.NaN, float.NaN, float.NaN);
+            lastStuckSampleTargetDist = float.MaxValue;
+            nextStuckSampleTime = 0;
+            stuckStrikeCount = 0;
+        }
+
+        private bool TrySmartCourseCorrection(bool escalate = false)
+        {
+            if (AttackTarget?.Location == null || Location == null)
+                return false;
+
+            var now = Timers.RunningTime;
+            if (!escalate && now < nextCourseCorrectionTime)
+                return false;
+
+            if (PathfindingEnabled && Location.Indoors)
+            {
+                TryRoute();
+                if (IsRouteStartPending || IsRouting)
+                    return true;
+            }
+
+            var toTarget = AttackTarget.Location.ToGlobal() - Location.ToGlobal();
+            toTarget.Z = 0;
+            if (toTarget.LengthSquared() <= 0.0001f)
+                return false;
+
+            var forward = Vector3.Normalize(toTarget);
+            var side = Vector3.Normalize(new Vector3(-forward.Y, forward.X, 0));
+
+            // Alternate left/right strafing and gradually widen sidesteps if still blocked.
+            var sideSign = (courseCorrectionAttemptCount % 2 == 0) ? 1.0f : -1.0f;
+            var widen = Math.Min(3, courseCorrectionAttemptCount / 2);
+            var lateralDistance = 1.8f + (widen * 0.6f);
+            var forwardDistance = 1.2f + (widen * 0.4f);
+
+            var sidestep = side * sideSign * lateralDistance;
+            var advance = forward * forwardDistance;
+
+            var candidate = new ACE.Entity.Position(Location)
+            {
+                PositionX = Location.PositionX + sidestep.X + advance.X,
+                PositionY = Location.PositionY + sidestep.Y + advance.Y,
+            };
+
+            if ((candidate.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                return false;
+
+            MoveTo(candidate, RunRate, true, 1.0f);
+            IsMoving = true;
+            courseCorrectionAttemptCount++;
+            nextCourseCorrectionTime = now + ThreadSafeRandom.Next((float)CourseCorrectionCooldownMin, (float)CourseCorrectionCooldownMax);
+            NextCancelTime = now + 1.25;
+            return true;
+        }
+
+        private void TrackAndHandleStuck()
+        {
+            if (AttackTarget?.Location == null || !IsMoving)
+                return;
+
+            var now = Timers.RunningTime;
+            if (now < nextStuckSampleTime)
+                return;
+
+            nextStuckSampleTime = now + StuckSampleInterval;
+
+            var pos = Location.ToGlobal();
+            var targetDist = GetDistanceToTarget();
+
+            if (float.IsNaN(lastStuckSamplePos.X))
+            {
+                lastStuckSamplePos = pos;
+                lastStuckSampleTargetDist = targetDist;
+                return;
+            }
+
+            var traveled = Vector3.Distance(lastStuckSamplePos, pos);
+            var improved = lastStuckSampleTargetDist - targetDist;
+
+            if (traveled < StuckMinTravelDistance && improved < StuckMinDistanceImprovement)
+                stuckStrikeCount++;
+            else
+                stuckStrikeCount = Math.Max(0, stuckStrikeCount - 1);
+
+            lastStuckSamplePos = pos;
+            lastStuckSampleTargetDist = targetDist;
+
+            if (stuckStrikeCount >= StuckCourseCorrectionThreshold)
+            {
+                stuckStrikeCount = 0;
+                TrySmartCourseCorrection(escalate: true);
+            }
         }
 
         /// <summary>
@@ -140,8 +253,46 @@ namespace ACE.Server.WorldObjects
             if (DebugMove)
                 Console.WriteLine($"{Name} ({Guid}) - OnMoveComplete({status})");
 
-            if (status != WeenieError.None)
-                return;
+            OnMovementStopped();
+
+            if (IsMovingToHome)
+                PendingEndMoveToHome = true;
+            if (IsGrantingPassage)
+                PendingEndGrantPassage = true;
+            if (IsWandering)
+                PendingEndWandering = true;
+
+            switch (status)
+            {
+                case WeenieError.ObjectGone:
+                    FailedMovementCount = 0;
+                    ResetStuckTracking();
+                    return;
+                case WeenieError.None:
+                    FailedMovementCount = 0;
+                    ResetStuckTracking();
+
+                    if (IsRouting)
+                    {
+                        PendingContinueRoute = true;
+                        return;
+                    }
+                    break;
+                default:
+                    FailedMovementCount++;
+
+                    if (MonsterState == State.Awake && AttackTarget != null && TrySmartCourseCorrection())
+                        return;
+
+                    if (IsRouting)
+                    {
+                        if (FailedMovementCount >= FailedRoutingThreshold)
+                            PendingEndRoute = true;
+                        else
+                            PendingRetryRoute = true;
+                    }
+                    return;
+            }
 
             if (AiImmobile && CurrentAttack == CombatType.Melee)
             {
@@ -241,6 +392,8 @@ namespace ACE.Server.WorldObjects
             //if (!IsRanged)
                 UpdatePosition();
 
+            TrackAndHandleStuck();
+
             if (MonsterState == State.Awake && GetDistanceToTarget() >= MaxChaseRange)
             {
                 CancelMoveTo();
@@ -249,7 +402,10 @@ namespace ACE.Server.WorldObjects
             }
 
             if (PhysicsObj.MovementManager.MoveToManager.FailProgressCount > 0 && Timers.RunningTime > NextCancelTime)
-                CancelMoveTo();
+            {
+                if (!TrySmartCourseCorrection())
+                    CancelMoveTo();
+            }
         }
 
         public void UpdatePosition(bool netsend = true)
@@ -362,7 +518,7 @@ namespace ACE.Server.WorldObjects
             }
 
             var runSkill = GetCreatureSkill(Skill.Run).Current;
-            var runRate = MovementSystem.GetRunRate(burden, (int)runSkill, 1.0f);
+            var runRate = MovementSystem.GetRunRate(burden, (int)runSkill, 1.5f);
 
             return (float)runRate;
         }
@@ -511,6 +667,7 @@ namespace ACE.Server.WorldObjects
             EnqueueBroadcastMotion(new Motion(CurrentMotionState.Stance, MotionCommand.Ready));
 
             IsMoving = false;
+            ResetStuckTracking();
             NextMoveTime = Timers.RunningTime + 1.0f;
 
             ResetAttack();

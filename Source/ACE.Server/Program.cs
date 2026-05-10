@@ -308,6 +308,9 @@ namespace ACE.Server
             log.Info("Initializing IronmanKillerTracker...");
             IronmanKillerTracker.Initialize();
 
+            log.Info("Initializing GlobalKillQuestManager...");
+            GlobalKillQuestManager.Initialize();
+
             log.Info("Initializing HouseManager...");
             HouseManager.Initialize();
 

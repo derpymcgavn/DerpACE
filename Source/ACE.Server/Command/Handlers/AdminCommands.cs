@@ -2567,6 +2567,48 @@ namespace ACE.Server.Command.Handlers
             PlayerManager.BroadcastToAuditChannel(session.Player, $"{session.Player.Name} has created {obj.Name} (0x{obj.Guid:X8}) in their inventory.");
         }
 
+        [CommandHandler("cimob", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 2,
+            "Spawns a creature near you and force-applies a mob modifier.",
+            "<vamp|thief|scout|sim> <wcid or classname>\nExample: /cimob scout 1218")]
+        public static void HandleCIMob(Session session, params string[] parameters)
+        {
+            var modifier = parameters[0]?.ToLowerInvariant();
+            var weenie = GetWeenieForCreate(session, parameters[1]);
+
+            if (weenie == null)
+                return;
+
+            if (weenie.WeenieType != WeenieType.Creature)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat("/cimob only supports creature weenies.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var obj = CreateObjectForCommand(session, weenie);
+            if (obj is not Creature creature)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat("Failed to create creature for /cimob.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (!MobModifierFactory.TryApplyModifier(creature, modifier))
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "Failed to apply modifier. Valid modifiers: vamp, thief, scout, sim (sim requires a simulacrum creature type and a nearby player).",
+                    ChatMessageType.Broadcast));
+                return;
+            }
+
+            creature.EnterWorld();
+
+            session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Spawned {creature.Name} with modifier '{modifier}'.",
+                ChatMessageType.Broadcast));
+
+            PlayerManager.BroadcastToAuditChannel(session.Player,
+                $"{session.Player.Name} has spawned a {modifier} mob: {creature.Name} (0x{creature.Guid:X8}) at {creature.Location.ToLOCString()}.");
+        }
+
         [CommandHandler("crack", AccessLevel.Envoy, CommandHandlerFlag.RequiresWorld, 0, "Cracks the most recently appraised locked target.", "[. open it too]")]
         public static void HandleCrack(Session session, params string[] parameters)
         {

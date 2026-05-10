@@ -118,6 +118,39 @@ namespace ACE.Server.WorldObjects
             var nearbyPlayers = EnqueueBroadcast(excludePlayers, true, broadcastMsg);
 
             excludePlayers.AddRange(nearbyPlayers);
+            
+            // Global announcement for Ironman/Hardcore player deaths
+            if (GetProperty(PropertyBool.IsIronman) == true)
+            {
+                var victimLevel = DeathLevel ?? Level ?? 1;
+                var killerName = lastDamager?.Name ?? "Unknown";
+                var ridiculeMsgs = new[] {
+                    $"joins the graveyard of fallen adventurers",
+                    $"has learned the hard way",
+                    $"meets their demise",
+                    $"becomes one with the dust",
+                    $"takes a final bow"
+                };
+                var ridicule = ridiculeMsgs[Math.Abs((Name.GetHashCode())) % ridiculeMsgs.Length];
+                var hardcoreLives = GetProperty(PropertyInt.HardcoreLives) ?? 0;
+                var ironmanDeathMsg = $"[IRONMAN FALLEN] {Name} (Level {victimLevel}) was slain by {killerName} and {ridicule}.";
+                if (hardcoreLives > 0)
+                    ironmanDeathMsg += $" {hardcoreLives} life/lives remain.";
+                
+                var ironmanDeathBroadcast = new GameMessageSystemChat(ironmanDeathMsg, ChatMessageType.WorldBroadcast);
+                PlayerManager.BroadcastToAll(ironmanDeathBroadcast);
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, this, ironmanDeathMsg);
+            }
+            else if (GetProperty(PropertyBool.IsHardcore) == true)
+            {
+                var victimLevel = DeathLevel ?? Level ?? 1;
+                var killerName = lastDamager?.Name ?? "Unknown";
+                var hardcoreDeathMsg = $"[HARDCORE FALLEN] {Name} (Level {victimLevel}) was slain by {killerName} and loses their one and only life.";
+                
+                var hardcoreDeathBroadcast = new GameMessageSystemChat(hardcoreDeathMsg, ChatMessageType.WorldBroadcast);
+                PlayerManager.BroadcastToAll(hardcoreDeathBroadcast);
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, this, hardcoreDeathMsg);
+            }
 
             if (Fellowship != null)
                 Fellowship.OnDeath(this);

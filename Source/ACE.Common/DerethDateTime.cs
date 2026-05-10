@@ -319,6 +319,22 @@ namespace ACE.Common
         }
 
         /// <summary>
+        /// Determines whether the current time is day or night.
+        /// </summary>
+        public Daytime GetDaytime()
+        {
+            if (hour >= (int)Hours.Darktide && hour <= (int)Hours.Foredawn_and_Half)
+            {
+                return Daytime.Night;
+            }
+            else if (hour >= (int)Hours.Dawnsong && hour <= (int)Hours.Gloaming_and_Half)
+            {
+                return Daytime.Day;
+            }
+            return Daytime.Night; // Default to night if hour is out of range.
+        }
+
+        /// <summary>
         /// Indicates whether this instance of <see cref="DerethDateTime"/> is within the day time range for the current day.
         /// </summary>
         public bool IsDaytime

@@ -100,8 +100,8 @@ namespace ACE.Server.WorldObjects
             if (GetProperty(PropertyBool.IsIronman) == true && item.GetProperty(PropertyBool.IsIronmanItem) != true)
             {
                 item.SetProperty(PropertyBool.IsIronmanItem, true);
-                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.StartsWith("[IM] "))
-                    item.Name = "[IM] " + item.Name;
+                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.EndsWith(" [IM]"))
+                    item.Name = item.Name + " [IM]";
             }
 
             Session.Network.EnqueueSend(new GameMessageCreateObject(item));
@@ -317,7 +317,7 @@ namespace ACE.Server.WorldObjects
                 new GameEventWieldItem(Session, item.Guid.Full, wieldedLocation),
                 new GameMessageSound(Guid, Sound.WieldObject));
 
-            if (item.GearMaxHealth != null)
+            if (item.GearMaxHealth != null || item.GearMaxStamina != null || item.GearMaxMana != null)
                 HandleMaxHealthUpdate();
 
             TryShuffleStance(wieldedLocation);
@@ -420,7 +420,7 @@ namespace ACE.Server.WorldObjects
             if (item.HasItemSet)
                 DequipItemFromSet(item);
 
-            if (item.GearMaxHealth != null)
+            if (item.GearMaxHealth != null || item.GearMaxStamina != null || item.GearMaxMana != null)
                 HandleMaxHealthUpdate();
 
             if (dequipObjectAction == DequipObjectAction.ToCorpseOnDeath || dequipObjectAction == DequipObjectAction.TradeItem)
@@ -976,10 +976,11 @@ namespace ACE.Server.WorldObjects
                     compBase.Type == (uint)SpellComponentsTable.Type.Scarab;
 
                 var isPrismaticTaper = item.WeenieClassId == 20631 || item.WeenieClassId == 20963;
+                var isManaStone = item.WeenieType == WeenieType.ManaStone;
 
-                if (!isScarab && !isPrismaticTaper)
+                if (!isScarab && !isPrismaticTaper && !isManaStone)
                 {
-                    Session.Network.EnqueueSend(new GameMessageSystemChat("Only scarabs and prismatic tapers can be placed in a focus.", ChatMessageType.Broadcast));
+                    Session.Network.EnqueueSend(new GameMessageSystemChat("Only scarabs, prismatic tapers, and mana stones can be placed in a focus.", ChatMessageType.Broadcast));
                     Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, itemGuid));
                     return false;
                 }
@@ -1384,8 +1385,8 @@ namespace ACE.Server.WorldObjects
                 && item.GetProperty(PropertyBool.IsIronmanItem) != true)
             {
                 item.SetProperty(PropertyBool.IsIronmanItem, true);
-                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.StartsWith("[IM] "))
-                    item.Name = "[IM] " + item.Name;
+                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.EndsWith(" [IM]"))
+                    item.Name = item.Name + " [IM]";
             }
 
             // when moving from a non-stuck container to a different container,

@@ -43,6 +43,30 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
+### Recent Patch Notes (May 2026)
+* Added server-wide activation broadcasts when players commit to modes:
+  * Ironman: `[IRONMAN] <name> has taken the Ironman path. There is no turning back!`
+  * Hardcore: `[HARDCORE] <name> has entered Hardcore mode. One life remains.`
+* Added server-wide death/fall broadcasts:
+  * Ironman deaths announce killer + victim level with mild ridicule flavor text.
+  * Hardcore deaths announce killer + victim level.
+* Expanded Ironman command UX:
+  * `/ironman` now shows an Ironman help menu for committed players.
+  * `/ironman char` shows progression details.
+  * `/ironman topkillers` is available through `/ironman` subcommand routing.
+* Ironman progression display improvements:
+  * Milestones now show unlock level.
+  * Specialized skills are marked with `[Spec]`.
+* Added Global Kill Quest system:
+  * Rotates a server-wide kill target every 30 minutes.
+  * Players can track progress with `/gquest`.
+  * Completing the objective grants a 4x XP bonus based on kill XP earned toward the quest.
+  * Quest expiry is enforced; late kills do not count after timer expiry.
+  * End-of-quest wrap-up broadcast announces completion count before the next quest starts.
+* Foci now allow mana stones in addition to scarabs and prismatic tapers.
+* Added admin Ironman toggle command: `@ironmanmode on|off|toggle|status`.
+* Added admin special-mob spawn command: `/cimob <vamp|thief|sim> <wcid or classname>`.
+
 ### Random Dye (Enigmatic Dye)
 * Added `RandomDye` world object class (`WCID 420420420`) that applies a random palette to the target item
 * Works on **armor, clothing, weapons (melee/missile), casters, and shields** — any item with a `ClothingBase` property
@@ -54,8 +78,8 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 
 ### Foci Improvements
 * Foci (Enchantment 15268, Artifice 15269, Verdancy 15270, Strife 15271, Shadow 43173) now default to **15 item slots** instead of 0
-* Foci only accept **scarabs** (all tiers: lead, iron, copper, silver, gold, pyreal) and **prismatic tapers** (regular WCID 20631 and PEA variant WCID 20963)
-* Attempting to place any other item into a foci displays the message: *"Only scarabs and prismatic tapers can be placed in a focus."*
+* Foci only accept **scarabs** (all tiers: lead, iron, copper, silver, gold, pyreal), **prismatic tapers** (regular WCID 20631 and PEA variant WCID 20963), and **mana stones**
+* Attempting to place any other item into a foci displays the message: *"Only scarabs, prismatic tapers, and mana stones can be placed in a focus."*
 
 ### Loot Generation Additions
 * Added **Lyceum Hood** (`ace44977_lyceumhood`, WCID 44977) to the leather armor loot table (`ArmorWcids.LeatherWcids`) at 2% chance
@@ -251,14 +275,14 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 * The item stores `PropertyBool.IsBreachersCrossbow = true` on the world object
 * **Icon overlay:** `0x06002878`
 * Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.BreacherPiercePct` — fraction of `DamageMitigated` added back as bonus damage on **every** hit (default 1–5%)
+  * `PropertyFloat.BreacherArmorIgnoreChance` — chance per shot to completely ignore the target's armor mitigation (default 5–15%)
 
-#### Always-On Armor Pierce
-* Same `DamageMitigated × N%` formula as the Fencer's Blade pierce, but **no proc roll** — every bolt that strikes adds back a portion of what armor blocked
-* Bonus = `max(0, DamageMitigated) × BreacherPiercePct`, rounded; only displayed when ≥ 1
-* Combat message: `+N pierce [Breacher's Crossbow]`
-* Fits the slow-but-punishing crossbow archetype: low proc theatrics, steady armor-defeating chip damage on every shot
-* All values runtime-tunable via `@lootconfig` (`breacher.drop`, `breacher.tier`, `breacher.piercemin`, `breacher.piercemax`)
+#### Armor Bypass Proc
+* Small chance per shot to trigger armor bypass, allowing the full pre-mitigation damage to pass through
+* When triggered: `Damage = DamageBeforeMitigation` (armor entirely bypassed for that one hit)
+* Combat message: `+N armor bypass [Breacher's Crossbow]` (N = the damage that armor blocked)
+* Fits the crossbow archetype: rare, dramatic armor-piercing moments instead of steady chip damage
+* All values runtime-tunable via `@lootconfig` (`breacher.drop`, `breacher.tier`, `breacher.ignorechancemin`, `breacher.ignorechancemax`)
 
 ### Reaper's Atlatls
 * **5% of T6+ atlatl loot drops** (`TreasureWeaponType.Atlatl`) are converted to a Reaper's Atlatl (e.g. *Obsidian Atlatl of the Reaper*)
@@ -333,6 +357,10 @@ Rare "affix" variants applied to freshly-spawned hostile mobs (think Diablo rare
 * All copied state is in-memory only; the original player is unaffected and a server restart wipes it
 * Tunable: `simulacrum.chance` (kill-switch only — any value `> 0` enables, `0` disables)
 
+#### Admin Spawn Helper
+* Added `/cimob <vamp|thief|sim> <wcid or classname>` for admins to spawn a creature and force-apply a specific modifier without RNG.
+* `sim` follows the same eligibility rules as normal Simulacrum logic (requires Simulacrum creature type and a nearby player in the same landblock).
+
 ### Ironman Mode
 A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.BaseMod/tree/master/Samples/Ironman). Players opt in with a chat command; the choice is **irreversible** for the lifetime of the character.
 
@@ -343,9 +371,12 @@ A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.B
 | `/ironman` | Player | If already an Ironman: show skill plan status. Otherwise: show usage. |
 | `/ironman on` | Player | Begin commitment — prints a warning and opens a 30-second confirmation window. Only available at level 10 or below. |
 | `/ironman confirm` | Player | Finalize the conversion within the window. **Cannot be undone.** |
+| `/ironman char` | Player | Show Ironman character progression milestones and unlocked skills. |
 | `/ironman top` | Player | Show the Ironman leaderboard (top 10 players by creature kills). |
+| `/ironman topkillers` | Player | Show the top 10 creatures that have killed the most Ironman players. |
 | `/ironmantop` | Player | Shortcut for `/ironman top`. |
 | `/ironmantopkillers` | Player | Show the top 10 creatures that have killed the most Ironman players. |
+| `@ironmanmode on|off|toggle|status` | Admin | Live server toggle for Ironman opt-in availability. |
 
 > **Flow:** type `/ironman on`, read the warning, then type `/ironman confirm` within 30 seconds. If the window expires you must run `/ironman on` again.
 
@@ -371,7 +402,7 @@ A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.B
   * Creature kills on Ironman players are recorded in `ironmanKillers.json` for the `/ironmantopkillers` leaderboard
 * Ongoing restrictions (inlined into source — no Harmony):
   * **Wield gate** — `Player_Inventory.CheckWieldRequirements` rejects any item that isn't flagged `IsIronmanItem` with `WeenieError.YouCannotUseThatItem`
-  * **Auto-tag** — `Player_Inventory.TryCreateInInventoryWithNetworking` flips `IsIronmanItem = true` on every item that successfully enters an Ironman's inventory (covers corpse loot, chest loot, vendor purchase, emote grants, etc.)
+  * **Auto-tag** — `Player_Inventory.TryCreateInInventoryWithNetworking` flips `IsIronmanItem = true` on every item that successfully enters an Ironman's inventory; items with workmanship also get a ` [IM]` suffix appended to their name (e.g. `Ebony Sword [IM]`) so players can distinguish Ironman-bound gear at a glance (covers corpse loot, chest loot, vendor purchase, emote grants, etc.)
   * **Skill train/specialize lock** — `HandleActionTrainSkill` blocks spending skill credits to train new skills; `SkillAlterationDevice.VerifyRequirements` blocks Gems of Enlightenment (specialize) and Gems of Forgetfulness (lower/untrain). Raising already-trained skills with XP is unrestricted
   * **Allegiance** — `Player_Allegiance.IsPledgable` returns `false` if either party is an Ironman
   * **Fellowship** — `Player_Fellowship.FellowshipRecruit` blocks if either party is an Ironman
@@ -386,6 +417,27 @@ A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.B
   * `IronmanCreditsToPlanFor` (int, default 50)
   * `IronmanHardcoreStartingLives` (int, default 1)
   * `IronmanHardcoreSecondsBetweenDeaths` (float, default 7 days)
+* Global announcements:
+  * Ironman activation and Hardcore activation both broadcast server-wide.
+  * Ironman and Hardcore deaths broadcast server-wide with killer + victim level context.
+
+### Global Kill Quest
+Server-wide rotating kill quest that gives all online players the same timed objective.
+
+#### Commands
+
+| Command | Access | Description |
+|---|---|---|
+| `/gquest` | Player | Shows current global quest target, required kills, your progress, and time remaining. |
+
+#### Behavior
+* A new quest rolls every 30 minutes and is announced globally.
+* Quest objective is randomized from a curated creature pool with per-creature kill ranges.
+* Progress is tracked per-player for the active quest epoch.
+* Kills grant normal XP as usual; quest progress accumulates the XP earned on matching kills.
+* On completion, player receives bonus XP equal to `4x` accumulated matching-kill XP (`XpType.Quest`).
+* Expiry enforcement: once quest timer ends, additional kills do not count even before next tick roll.
+* At rollover, previous quest wraps up with a global completion-count message, then the next quest is announced.
 * Leaderboard data:
   * Player leaderboard (`/ironman top`) — live query over all online + offline players via `PlayerManager.GetAllPlayers()`, sorted by `CreatureKills` descending
   * Killer leaderboard (`/ironmantopkillers`) — persisted to `ironmanKillers.json` in the server exe directory; loaded at startup by `IronmanKillerTracker.Initialize()`, incremented on every Ironman player death caused by a non-player creature

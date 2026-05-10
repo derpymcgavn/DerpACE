@@ -189,6 +189,10 @@ namespace ACE.Server.WorldObjects
 
             // Ravager's Axe: configurable proc to apply a bleed DoT (see @lootconfig)
             uint ravagerBleedTotal = 0;
+            uint ravagerCrushBonus = 0;
+            uint ravagerStaminaDrained = 0;
+            uint ravagerCleaveHits = 0;
+            uint ravagerCleaveTotal = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe) == true)
             {
@@ -196,36 +200,108 @@ namespace ACE.Server.WorldObjects
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
                 {
                     var bleedPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct) ?? 0.0;
-                    var totalBleed = damageEvent.Damage * (float)bleedPct;
-                    var ticks = Math.Max(1, ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks);
-                    var interval = Math.Max(0.1f, ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval);
-                    var perTick = (float)(totalBleed / ticks);
-                    if (perTick >= 1.0f)
+
+                    var isHammerNamedAxe = damageEvent.Weapon.Name?.IndexOf("hammer", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (isHammerNamedAxe)
                     {
-                        ravagerBleedTotal = (uint)Math.Round(totalBleed);
-                        var bleedType = damageEvent.DamageType;
-                        var bleedTarget = target;
-                        var attacker = this;
-
-                        var chain = new ActionChain();
-                        for (var i = 0; i < ticks; i++)
+                        var crushBonus = damageEvent.Damage * (float)bleedPct;
+                        if (crushBonus >= 1.0f)
                         {
-                            chain.AddDelaySeconds(interval);
-                            chain.AddAction(this, () =>
-                            {
-                                if (bleedTarget == null || !bleedTarget.IsAlive)
-                                    return;
-
-                                bleedTarget.TakeDamage(attacker, bleedType, perTick, false);
-                                bleedTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftBack);
-
-                                if (attacker.Session != null && !SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatSelf))
-                                    attacker.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                        $"-{(uint)Math.Round(perTick)} bleed [{bleedTarget.Name}] [Ravager's Axe]",
-                                        ChatMessageType.CombatSelf));
-                            });
+                            damageEvent.Damage += crushBonus;
+                            ravagerCrushBonus = (uint)Math.Round(crushBonus);
                         }
-                        chain.EnqueueChain();
+
+                        if (target.Stamina.Current > 0)
+                        {
+                            var drainPct = Math.Clamp((float)bleedPct * 0.5f, 0.04f, 0.08f);
+                            var drain = (int)Math.Round(target.Stamina.Current * drainPct);
+                            if (drain < 1) drain = 1;
+                            ravagerStaminaDrained = (uint)-target.UpdateVitalDelta(target.Stamina, -drain);
+                        }
+
+                        // Hammer proc feedback: attacker slam animation + target knock motion
+                        var attackerStance = CurrentMotionState?.Stance ?? MotionStance.NonCombat;
+                        EnqueueBroadcastMotion(new Motion(attackerStance, MotionCommand.AttackHigh3));
+
+                        var targetStance = target.CurrentMotionState?.Stance ?? MotionStance.NonCombat;
+                        target.EnqueueBroadcastMotion(new Motion(targetStance, MotionCommand.Knock));
+
+                        // Play explosion particle effect on target for visual feedback
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
+
+                        // Chance-based hammer cleave: hit nearby monsters for reduced rolled damage.
+                        // Cleave count includes the primary target, so secondary count is (maxTargets - 1).
+                        var cleaveChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.RavagerHammerCleaveChance, 0.0f, 1.0f);
+                        var cleaveMaxSecondary = Math.Max(0, ACE.Server.Managers.DerpACEConfig.RavagerHammerCleaveMaxTargets - 1);
+                        var cleaveScale = Math.Clamp(ACE.Server.Managers.DerpACEConfig.RavagerHammerCleaveDamageScale, 0.0f, 1.0f);
+                        var cleaveRadius = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.RavagerHammerCleaveRadius);
+
+                        if (cleaveMaxSecondary > 0
+                            && cleaveScale > 0.0f
+                            && CurrentLandblock != null
+                            && target.Location != null
+                            && ThreadSafeRandom.Next(0.0f, 1.0f) < cleaveChance)
+                        {
+                            var cleaveDamage = Math.Max(1.0f, damageEvent.Damage * cleaveScale);
+                            var radiusSq = cleaveRadius * cleaveRadius;
+
+                            var splashTargets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
+                                .OfType<Creature>()
+                                .Where(c => c != null
+                                            && c != target
+                                            && c != this
+                                            && c.IsAlive
+                                            && c.Attackable
+                                            && c.IsMonster
+                                            && !c.Teleporting
+                                            && c.Location != null
+                                            && target.Location.SquaredDistanceTo(c.Location) <= radiusSq)
+                                .OrderBy(c => target.Location.SquaredDistanceTo(c.Location))
+                                .Take(cleaveMaxSecondary)
+                                .ToList();
+
+                            foreach (var splashTarget in splashTargets)
+                            {
+                                splashTarget.TakeDamage(this, damageEvent.DamageType, cleaveDamage, false);
+                                splashTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
+                                ravagerCleaveHits++;
+                                ravagerCleaveTotal += (uint)Math.Round(cleaveDamage);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var totalBleed = damageEvent.Damage * (float)bleedPct;
+                        var ticks = Math.Max(1, ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks);
+                        var interval = Math.Max(0.1f, ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval);
+                        var perTick = (float)(totalBleed / ticks);
+                        if (perTick >= 1.0f)
+                        {
+                            ravagerBleedTotal = (uint)Math.Round(totalBleed);
+                            var bleedType = damageEvent.DamageType;
+                            var bleedTarget = target;
+                            var attacker = this;
+
+                            var chain = new ActionChain();
+                            for (var i = 0; i < ticks; i++)
+                            {
+                                chain.AddDelaySeconds(interval);
+                                chain.AddAction(this, () =>
+                                {
+                                    if (bleedTarget == null || !bleedTarget.IsAlive)
+                                        return;
+
+                                    bleedTarget.TakeDamage(attacker, bleedType, perTick, false);
+                                    bleedTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftBack);
+
+                                    if (attacker.Session != null && !SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatSelf))
+                                        attacker.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                            $"-{(uint)Math.Round(perTick)} bleed [{bleedTarget.Name}] [Ravager's Axe]",
+                                            ChatMessageType.CombatSelf));
+                                });
+                            }
+                            chain.EnqueueChain();
+                        }
                     }
                 }
             }
@@ -278,17 +354,18 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            // Breacher's Crossbow: always-on armor pierce (see @lootconfig)
-            uint breacherPierceBonus = 0;
+            // Breacher's Crossbow: proc chance to ignore all armor on a shot (see @lootconfig)
+            uint breacherArmorIgnored = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) == true)
             {
-                var piercePct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherPiercePct) ?? 0.0;
-                var bonus = Math.Max(0.0f, damageEvent.DamageMitigated) * (float)piercePct;
-                if (bonus >= 1.0f)
+                var ignoreChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance) ?? 0.0;
+                if (ignoreChance > 0 && ThreadSafeRandom.Next(0.0f, 1.0f) < ignoreChance)
                 {
-                    damageEvent.Damage += bonus;
-                    breacherPierceBonus = (uint)Math.Round(bonus);
+                    // Ignore all armor: restore the full unmitigated damage
+                    var fullDamage = damageEvent.DamageBeforeMitigation;
+                    breacherArmorIgnored = (uint)Math.Round(damageEvent.DamageMitigated);
+                    damageEvent.Damage = fullDamage;
                 }
             }
 
@@ -307,6 +384,52 @@ namespace ACE.Server.WorldObjects
                     {
                         damageEvent.Damage += bonus;
                         stalkerBonusApplied = (uint)Math.Round(bonus);
+                    }
+                }
+            }
+
+            // Armor vital affix: rare on-hit replenish proc from equipped vital armor pieces.
+            uint armorVitalProcRestore = 0;
+            string armorVitalProcLabel = null;
+            if (damageEvent.HasDamage
+                && (Health.Current < Health.MaxValue || Stamina.Current < Stamina.MaxValue || Mana.Current < Mana.MaxValue))
+            {
+                foreach (var equipped in EquippedObjects.Values)
+                {
+                    var procAmount = equipped.ArmorVitalProcAmount ?? 0;
+                    var procChance = equipped.ArmorVitalProcChance ?? 0.0;
+
+                    if (procAmount <= 0 || procChance <= 0)
+                        continue;
+
+                    if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                        continue;
+
+                    int restored;
+                    if ((equipped.GearMaxHealth ?? 0) > 0)
+                    {
+                        restored = UpdateVitalDelta(Health, procAmount);
+                        armorVitalProcLabel = "health";
+                    }
+                    else if ((equipped.GearMaxStamina ?? 0) > 0)
+                    {
+                        restored = UpdateVitalDelta(Stamina, procAmount);
+                        armorVitalProcLabel = "stamina";
+                    }
+                    else if ((equipped.GearMaxMana ?? 0) > 0)
+                    {
+                        restored = UpdateVitalDelta(Mana, procAmount);
+                        armorVitalProcLabel = "mana";
+                    }
+                    else
+                    {
+                        continue;
+                    }
+
+                    if (restored > 0)
+                    {
+                        armorVitalProcRestore = (uint)restored;
+                        break;
                     }
                 }
             }
@@ -408,6 +531,21 @@ namespace ACE.Server.WorldObjects
                         ChatMessageType.CombatSelf));
                 }
 
+                // Ravager's Axe (hammer-named variants): announce crushing proc when fired
+                if (ravagerCrushBonus > 0 || ravagerStaminaDrained > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"{target.Name} is crushed (+{ravagerCrushBonus} dmg, -{ravagerStaminaDrained} stamina) [Ravager's Axe]",
+                        ChatMessageType.CombatSelf));
+                }
+
+                if (ravagerCleaveHits > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"Hammer cleave hits {ravagerCleaveHits} nearby target(s) for {ravagerCleaveTotal} total splash [Ravager's Axe]",
+                        ChatMessageType.CombatSelf));
+                }
+
                 // Warden's Maul: announce the concussion when proc fired
                 if (wardenPenaltyApplied > 0)
                 {
@@ -432,11 +570,18 @@ namespace ACE.Server.WorldObjects
                         ChatMessageType.CombatSelf));
                 }
 
-                // Breacher's Crossbow: announce armor-pierce bonus damage on every hit
-                if (breacherPierceBonus > 0)
+                // Breacher's Crossbow: announce armor bypass proc
+                if (breacherArmorIgnored > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{breacherPierceBonus} pierce [Breacher's Crossbow]",
+                        $"+{breacherArmorIgnored} armor bypass [Breacher's Crossbow]",
+                        ChatMessageType.CombatSelf));
+                }
+
+                if (armorVitalProcRestore > 0 && armorVitalProcLabel != null)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"+{armorVitalProcRestore} {armorVitalProcLabel} [Vital Armor]",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -497,6 +642,16 @@ namespace ACE.Server.WorldObjects
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl) == true)
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc) ?? 0.0;
+
+                // Backward compatibility: legacy Reaper drops stored this proc at 9017
+                // before ReaperKillProc moved to its own unique property id.
+                if (procChance <= 0.0)
+                {
+                    var legacyProcChance = damageEvent.Weapon.GetProperty((ACE.Entity.Enum.Properties.PropertyFloat)9017) ?? 0.0;
+                    if (legacyProcChance > 0.0 && damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) != true)
+                        procChance = legacyProcChance;
+                }
+
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
                 {
                     var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct) ?? 0.0;
@@ -849,7 +1004,8 @@ namespace ACE.Server.WorldObjects
                 else
                 {
                     var wcid = tradenote.WeenieClassId;
-                    var amount = tradenote.StackSize ?? 1;
+                    var stackAmount = tradenote.StackSize ?? 1;
+                    var amount = System.Math.Min(stackAmount, ThreadSafeRandom.Next(1, 3));
 
                     // Warn the player the attempt is happening before we know if it succeeds
                     if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
@@ -857,18 +1013,30 @@ namespace ACE.Server.WorldObjects
                             $"{attacker.Name} reaches for your tradenotes! [Thief]",
                             ChatMessageType.CombatEnemy));
 
-                    if (TryRemoveFromInventoryWithNetworking(tradenote.Guid, out var removed, RemoveFromInventoryAction.SpendItem))
+                    bool stealSuccess;
+                    if (stackAmount <= amount)
+                    {
+                        stealSuccess = TryRemoveFromInventoryWithNetworking(tradenote.Guid, out var removed, RemoveFromInventoryAction.SpendItem);
+                        if (stealSuccess)
+                            removed.Destroy();
+                    }
+                    else
+                    {
+                        tradenote.SetStackSize(stackAmount - amount);
+                        Session.Network.EnqueueSend(new GameMessageSetStackSize(tradenote));
+                        stealSuccess = true;
+                    }
+
+                    if (stealSuccess)
                     {
                         attacker.StolenTradeNoteWcid = wcid;
                         attacker.StolenTradeNoteAmount = amount;
                         attacker.StolenFromGuid = Guid;
 
-                        removed.Destroy();
-
                         ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
                         if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
                             Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"Pickpocketed! {attacker.Name} stole {amount} tradenote(s). Kill it to recover them. [Thief]",
+                                $"Pickpocketed! {attacker.Name} stole {amount} tradenote(s) (max 3 per hit). Kill it to recover them. [Thief]",
                                 ChatMessageType.CombatEnemy));
                     }
                     else

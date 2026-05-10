@@ -127,42 +127,54 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyInt property, int value)
         {
-            var result = biota.BiotaPropertiesInt.FirstOrDefault(x => x.Type == (uint)property);
+            var entries = biota.BiotaPropertiesInt.Where(x => x.Type == (uint)property).ToList();
 
-            if (result != null)
-                result.Value = value;
+            if (entries.Count > 0)
+            {
+                // If multiple entries exist for the same property, keep the first and remove the rest
+                entries[0].Value = value;
+                for (int i = 1; i < entries.Count; i++)
+                    biota.BiotaPropertiesInt.Remove(entries[i]);
+            }
             else
             {
                 var entity = new BiotaPropertiesInt { ObjectId = biota.Id, Type = (ushort)property, Value = value, Object = biota };
-
                 biota.BiotaPropertiesInt.Add(entity);
             }
         }
 
         public static void SetProperty(this Biota biota, PropertyInt64 property, long value)
         {
-            var result = biota.BiotaPropertiesInt64.FirstOrDefault(x => x.Type == (uint)property);
+            var entries = biota.BiotaPropertiesInt64.Where(x => x.Type == (uint)property).ToList();
 
-            if (result != null)
-                result.Value = value;
+            if (entries.Count > 0)
+            {
+                // If multiple entries exist for the same property, keep the first and remove the rest
+                entries[0].Value = value;
+                for (int i = 1; i < entries.Count; i++)
+                    biota.BiotaPropertiesInt64.Remove(entries[i]);
+            }
             else
             {
                 var entity = new BiotaPropertiesInt64 { ObjectId = biota.Id, Type = (ushort)property, Value = value, Object = biota };
-
                 biota.BiotaPropertiesInt64.Add(entity);
             }
         }
 
         public static void SetProperty(this Biota biota, PropertyString property, string value)
         {
-            var result = biota.BiotaPropertiesString.FirstOrDefault(x => x.Type == (uint)property);
+            var entries = biota.BiotaPropertiesString.Where(x => x.Type == (uint)property).ToList();
 
-            if (result != null)
-                result.Value = value;
+            if (entries.Count > 0)
+            {
+                // If multiple entries exist for the same property, keep the first and remove the rest
+                entries[0].Value = value;
+                for (int i = 1; i < entries.Count; i++)
+                    biota.BiotaPropertiesString.Remove(entries[i]);
+            }
             else
             {
                 var entity = new BiotaPropertiesString { ObjectId = biota.Id, Type = (ushort)property, Value = value, Object = biota };
-
                 biota.BiotaPropertiesString.Add(entity);
             }
         }

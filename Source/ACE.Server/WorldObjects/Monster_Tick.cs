@@ -33,8 +33,16 @@ namespace ACE.Server.WorldObjects
 
             NextMonsterTickTime = currentUnixTime + monsterTickInterval;
 
+            // Pathfinding tick: dispatches pending wander/route/emote/passage state transitions.
+            // Returns true if a pathfinding action is currently in progress (skip normal movement this tick).
+            if (TickPathfinding(currentUnixTime))
+                return;
+
             if (!IsAwake)
             {
+                if (IsScoutMob)
+                    TryScoutHeartbeatRoam(currentUnixTime);
+
                 if (MonsterState == State.Return)
                     MonsterState = State.Idle;
 
@@ -100,7 +108,7 @@ namespace ACE.Server.WorldObjects
 
             if (weapon == null && CurrentAttack != null && CurrentAttack == CombatType.Missile)
             {
-                EquipInventoryItems(true);
+                EquipInventoryItems(true, false, true, false);
                 DoAttackStance();
                 CurrentAttack = null;
             }
@@ -130,7 +138,13 @@ namespace ACE.Server.WorldObjects
                     if (!IsTurning && !IsMoving)
                         StartTurn();
                     else
-                        Movement();
+                    {
+                        if (CurrentAttack == CombatType.Melee && targetDist > 20 && HasRangedWeapon
+                            && !SwitchWeaponsPending && LastWeaponSwitchTime + 5 < currentUnixTime)
+                            TrySwitchToMissileAttack();
+                        else
+                            Movement();
+                    }
                 }
                 else
                 {

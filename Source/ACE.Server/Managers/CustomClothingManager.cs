@@ -317,10 +317,34 @@ namespace ACE.Server.Managers
 
             // ClothingBaseEffects
             var cbeNode = new JsonObject();
+            // Build a lookup of setupId -> (race, sex) for all player setups
+            var setupIdToLabel = new Dictionary<uint, string>();
+            try
+            {
+                var charGen = ACE.DatLoader.DatManager.PortalDat?.CharGen;
+                if (charGen != null)
+                {
+                    foreach (var hg in charGen.HeritageGroups.Values)
+                    {
+                        foreach (var gender in hg.Genders.Values)
+                        {
+                            // e.g. "Aluvian Male"
+                            var label = $"{hg.Name} {gender.Name}";
+                            setupIdToLabel[gender.SetupID] = label;
+                        }
+                    }
+                }
+            }
+            catch { /* ignore errors, fallback to no comments */ }
+
             foreach (var kv in table.ClothingBaseEffects)
             {
                 var effectNode = new JsonObject();
                 var effectsArr = new JsonArray();
+
+                // If this setupId is a known player race/sex, add a _comment
+                if (setupIdToLabel.TryGetValue(kv.Key, out var label))
+                    effectNode["_comment"] = label;
 
                 foreach (var coe in kv.Value.CloObjectEffects)
                 {

@@ -24,6 +24,7 @@ using ACE.Server.Factories;
 using ACE.Server.Managers;
 using ACE.Server.Physics.Common;
 using ACE.Server.Network.GameMessages;
+using ACE.Server.Pathfinding;
 using ACE.Server.WorldObjects;
 
 using Position = ACE.Entity.Position;
@@ -1149,6 +1150,9 @@ namespace ACE.Server.Entity
             ProcessPendingWorldObjectAdditionsAndRemovals();
 
             actionQueue.Clear();
+
+            // unload pathfinding mesh for this landblock
+            Pathfinder.TryUnloadMesh(this);
 
             // remove physics landblock
             LScape.unload_landblock(landblockID);

@@ -250,13 +250,17 @@ namespace ACE.Entity.Enum.Properties
         StalkerFirstStrikeBonus        = 9015,  // bonus damage fraction added on a successful first strike
 
         /* DerpACE Breacher's Crossbow — always-on armor pierce */
-        BreacherPiercePct              = 9016,  // fraction of DamageMitigated added back as bonus damage on every hit
+        BreacherPiercePct              = 9016,  // DEPRECATED: fraction of DamageMitigated added back as bonus damage on every hit
+        BreacherArmorIgnoreChance      = 9017,  // chance per shot to ignore all armor on that shot (0.0-1.0)
 
         /* DerpACE Reaper's Atlatl — kill-fed sustain */
-        ReaperKillProc                 = 9017,  // chance the kill heal fires on a killing blow
+        ReaperKillProc                 = 9021,  // chance the kill heal fires on a killing blow
         ReaperKillHealPct              = 9018,  // fraction of wielder MaxHealth restored when proc fires
 
         /* DerpACE Mob Modifiers — vampiric */
         VampiricLifestealPct           = 9019,  // fraction of damage dealt healed back to vampiric mob
+
+        /* DerpACE armor vital proc */
+        ArmorVitalProcChance           = 9020,  // chance on hit to restore ArmorVitalProcAmount of the matching vital
     }
 }

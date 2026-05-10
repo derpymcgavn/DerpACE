@@ -45,13 +45,20 @@ namespace ACE.Server.Network
                 Socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 Socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
-                //if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                //{
-                //    var sioUdpConnectionReset = -1744830452;
-                //    var inValue = new byte[] { 0 };
-                //    var outValue = new byte[] { 0 };
-                //    Socket.IOControl(sioUdpConnectionReset, inValue, outValue);
-                //}
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    // Prevent WSAECONNRESET surfacing from UDP ICMP "port unreachable" responses.
+                    // This keeps routine disconnect/network churn from spamming first-chance SocketException in the debugger.
+                    const int SioUdpConnReset = -1744830452; // 0x9800000C
+                    try
+                    {
+                        Socket.IOControl(SioUdpConnReset, new byte[] { 0 }, null);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.DebugFormat("ConnectionListener({1}, {2}) failed to apply SIO_UDP_CONNRESET: {0}", ex.Message, listeningHost, listeningPort);
+                    }
+                }
 
                 Socket.Bind(ListenerEndpoint);
                 Listen();

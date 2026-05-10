@@ -1,4 +1,5 @@
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 
 namespace ACE.Server.WorldObjects
 {
@@ -7,6 +8,12 @@ namespace ACE.Server.WorldObjects
     /// </summary>
     partial class Creature
     {
+        public bool IsScoutMob
+        {
+            get => GetProperty(PropertyBool.IsScoutMob) ?? false;
+            set { if (!value) RemoveProperty(PropertyBool.IsScoutMob); else SetProperty(PropertyBool.IsScoutMob, value); }
+        }
+
         public bool IsMonster { get; set; }
 
         public bool IsChessPiece { get; set; }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using ACE.Common;
 using ACE.Database.Models.World;
@@ -14,6 +15,108 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
+        // Hammer WCIDs eligible for Bonebreak crush variant (instead of Ravager bleed)
+        private static readonly HashSet<int> HammerWcids = new HashSet<int>
+        {
+            359,    // War Hammer
+            542,    // Lugian Hammer
+            1436,   // Hammer of Lightning
+            2018,   // Trothyr's War Hammer
+            3905,   // Acid War Hammer
+            3906,   // Lightning War Hammer
+            3907,   // Flaming War Hammer
+            3908,   // Frost War Hammer
+            4982,   // Hammer of Frore
+            7522,   // Scroll of Hammering Crawler
+            12465,  // Hammer of Might
+            14508,  // Hammer of Acid
+            14509,  // Hammer of Fire
+            14510,  // Hammer of Ice
+            14511,  // Hammer of Lightning
+            14862,  // Hammer of Olthoi Slaying
+            22846,  // The Hammer
+            23753,  // Lugian Hammer
+            23754,  // Lugian Hammer
+            23755,  // Lugian Hammer
+            23756,  // Lugian Hammer
+            26009,  // Hammer of Frore
+            30866,  // Hammer of the Fallen
+            31151,  // War Hammer
+            31152,  // War Hammer
+            31153,  // War Hammer
+            31154,  // War Hammer
+            31155,  // War Hammer
+            31156,  // War Hammer
+            31157,  // War Hammer
+            31158,  // War Hammer
+            31159,  // War Hammer
+            31338,  // Gronk the Hammer
+            31763,  // Frost Lugian Hammer
+            31764,  // Lugian Hammer
+            31765,  // Acid Lugian Hammer
+            31766,  // Lightning Lugian Hammer
+            31767,  // Flaming Lugian Hammer
+            31838,  // Hammer of Discipline
+            35462,  // Jarvis Hammerstone
+            35535,  // "Doom Hammer" Summoning Gem
+            35547,  // Doom Hammer
+            35598,  // Bonecrunch's Hammer
+            36659,  // Hammer of the Ages
+            38267,  // Gavin Hammerstone
+            38421,  // Kieran Stronghammer
+            38935,  // Lugian Hammer
+            41420,  // Hammer
+            45113,  // Hammer
+            45114,  // Acid Hammer
+            45115,  // Lightning Hammer
+            45116,  // Flaming Hammer
+            45117,  // Frost Hammer
+            51460,  // (name not provided in list)
+            73081   // Shade Iron Ore Hammer
+        };
+
+        private static int RollTierScaledInt(int min, int max, int tier, int minTier)
+        {
+            if (max <= min)
+                return min;
+
+            // Bias rolls upward as tier rises so higher-tier drops feel stronger.
+            var clampedTier = Math.Max(tier, minTier);
+            var t = Math.Clamp((clampedTier - minTier) / 6.0f, 0.0f, 1.0f); // tier 2..8 => 0..1
+            var scaledMin = min + (int)Math.Round((max - min) * t * 0.6f);
+            if (scaledMin > max)
+                scaledMin = max;
+
+            return (int)Math.Round(ThreadSafeRandom.Next((float)scaledMin, (float)max));
+        }
+
+        private static float GetAdjustedModifierChance(float baseChance)
+        {
+            var adjusted = baseChance * ACE.Server.Managers.DerpACEConfig.LootModifierGlobalDropMultiplier;
+            return Math.Clamp(adjusted, 0.0f, 1.0f);
+        }
+
+        private static bool TryRollWeaponModifier(TreasureDeath profile, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible, bool interchangeableEligible = false)
+        {
+            if (profile == null || profile.Tier < minTier)
+                return false;
+
+            if (ACE.Server.Managers.DerpACEConfig.LootModifierExclusivePerItem && specialModifierApplied)
+                return false;
+
+            var allowInterchange = ACE.Server.Managers.DerpACEConfig.LootModifierInterchangeable
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.LootModifierInterchangeableMinTier;
+
+            if (!primaryEligible && !(allowInterchange && interchangeableEligible))
+                return false;
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= GetAdjustedModifierChance(baseChance))
+                return false;
+
+            specialModifierApplied = true;
+            return true;
+        }
+
         public static WorldObject CreateMeleeWeapon(TreasureDeath profile, bool isMagical)
         {
             // this function is only used by test methods, and is not part of regular lootgen
@@ -102,11 +205,17 @@ namespace ACE.Server.Factories
             // long description
             wo.LongDesc = GetLongDesc(wo);
 
+            var specialModifierApplied = false;
+
             // Thief's Dagger: configurable chance on any T6+ dagger (see @lootconfig)
             // Equipping grants 50% translucency, -aggro weight, and +10% sneak attack damage.
-            if ((roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS)
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ThievesDaggerMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.ThievesDaggerDropChance,
+                ACE.Server.Managers.DerpACEConfig.ThievesDaggerMinTier,
+                roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS,
+                roll.WeaponType == TreasureWeaponType.SwordMS || roll.WeaponType == TreasureWeaponType.Sword))
             {
                 wo.Name = wo.Name + " of the Thief";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
@@ -124,19 +233,29 @@ namespace ACE.Server.Factories
             // SwordMS is exclusively these three weapon types — no additional WCID check required.
             // Pierce proc: per-weapon chance to bypass armor (deals mitigated damage × piercePct as bonus).
             // Deflect proc: per-incoming-hit chance to reflect 10% of damage back at the attacker.
-            if (roll.WeaponType == TreasureWeaponType.SwordMS
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.FencerBladeDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.FencerBladeDropChance,
+                ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier,
+                roll.WeaponType == TreasureWeaponType.SwordMS,
+                roll.WeaponType == TreasureWeaponType.DaggerMS || roll.WeaponType == TreasureWeaponType.Sword))
             {
-                var piercePct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.FencerPierceMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.FencerPierceMax));
-                var pierceProc = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.FencerPierceProcMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.FencerPierceProcMax));
-                var deflectChance = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.FencerDeflectMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.FencerDeflectMax));
+                var piercePct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.FencerPierceMin,
+                    ACE.Server.Managers.DerpACEConfig.FencerPierceMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier);
+                var pierceProc = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.FencerPierceProcMin,
+                    ACE.Server.Managers.DerpACEConfig.FencerPierceProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier);
+                var deflectChance = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.FencerDeflectMin,
+                    ACE.Server.Managers.DerpACEConfig.FencerDeflectMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier);
 
                 wo.Name = wo.Name + " of the Fencer";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade, true);
@@ -151,51 +270,87 @@ namespace ACE.Server.Factories
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
             // Bleed total damage = bleedPct% of the triggering hit, spread evenly across RavagerBleedTicks at RavagerBleedInterval seconds.
             // Two-handed axes get the bleed total scaled by RavagerTwoHandMult.
-            if ((roll.WeaponType == TreasureWeaponType.Axe || roll.WeaponType == TreasureWeaponType.TwoHandedAxe)
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.RavagerAxeMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.RavagerAxeDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.RavagerAxeDropChance,
+                ACE.Server.Managers.DerpACEConfig.RavagerAxeMinTier,
+                roll.WeaponType == TreasureWeaponType.Axe || roll.WeaponType == TreasureWeaponType.TwoHandedAxe,
+                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear))
             {
-                var procPct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.RavagerProcMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.RavagerProcMax));
-                var bleedPct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.RavagerBleedMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.RavagerBleedMax));
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.RavagerProcMin,
+                    ACE.Server.Managers.DerpACEConfig.RavagerProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.RavagerAxeMinTier);
+                var bleedPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.RavagerBleedMin,
+                    ACE.Server.Managers.DerpACEConfig.RavagerBleedMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.RavagerAxeMinTier);
 
                 var isTwoHanded = roll.WeaponType == TreasureWeaponType.TwoHandedAxe;
                 var bleedFraction = bleedPct / 100.0;
                 if (isTwoHanded)
                     bleedFraction *= ACE.Server.Managers.DerpACEConfig.RavagerTwoHandMult;
 
-                wo.Name = wo.Name + " of the Ravager";
+                // Check if this is a hammer weapon by WCID
+                var isHammer = HammerWcids.Contains((int)roll.Wcid) || (wo.Name?.IndexOf("hammer", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                wo.Name = wo.Name + (isHammer ? " of Bonebreak" : " of the Ravager");
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc, procPct / 100.0);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct,  bleedFraction);
                 wo.IconOverlayId = 0x06002878u;
 
-                var displayBleed = (int)Math.Round(bleedFraction * 100.0);
-                var ticks = ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks;
-                var interval = ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval;
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis axe is wickedly serrated — each strike has a {procPct}% chance to inflict a vicious bleed dealing {displayBleed}% of the hit's damage over {ticks} ticks ({interval:0.#}s apart).{(isTwoHanded ? " The two-handed grip drives the wound deeper." : "")}";
+                if (isHammer)
+                {
+                    // Hammer-named axes get a crushing mechanic instead of serrated bleed.
+                    var crushBonusPct = Math.Clamp(bleedFraction * 0.4, 0.08, 0.15);
+                    var stamDrainPct = Math.Clamp(crushBonusPct * 0.5, 0.04, 0.08);
+                    wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct, crushBonusPct);
+
+                    var displayCrush = (int)Math.Round(crushBonusPct * 100.0);
+                    var displayDrain = (int)Math.Round(stamDrainPct * 100.0);
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis hammer-headed axe crushes through guard — each strike has a {procPct}% chance to slam for +{displayCrush}% bonus damage and drain {displayDrain}% of the target's current stamina.{(isTwoHanded ? " The two-handed leverage amplifies the impact." : "")}";
+                }
+                else
+                {
+                    wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct, bleedFraction);
+
+                    var displayBleed = (int)Math.Round(bleedFraction * 100.0);
+                    var ticks = ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks;
+                    var interval = ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval;
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis axe is wickedly serrated — each strike has a {procPct}% chance to inflict a vicious bleed dealing {displayBleed}% of the hit's damage over {ticks} ticks ({interval:0.#}s apart).{(isTwoHanded ? " The two-handed grip drives the wound deeper." : "")}";
+                }
             }
 
             // Warden's Maul: configurable chance on T6+ maces (1H, MS, or 2H) to apply a flat defense-skill debuff (see @lootconfig)
             // Two-handed maces get the penalty scaled by WardenTwoHandMult.
-            if ((roll.WeaponType == TreasureWeaponType.Mace
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.WardenMaulDropChance,
+                ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier,
+                roll.WeaponType == TreasureWeaponType.Mace
                     || roll.WeaponType == TreasureWeaponType.MaceJitte
-                    || roll.WeaponType == TreasureWeaponType.TwoHandedMace)
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.WardenMaulDropChance)
+                    || roll.WeaponType == TreasureWeaponType.TwoHandedMace,
+                roll.WeaponType == TreasureWeaponType.Staff))
             {
-                var procPct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.WardenProcMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.WardenProcMax));
-                var penalty = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.WardenPenaltyMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.WardenPenaltyMax));
-                var duration = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.WardenDurationMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.WardenDurationMax));
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.WardenProcMin,
+                    ACE.Server.Managers.DerpACEConfig.WardenProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier);
+                var penalty = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.WardenPenaltyMin,
+                    ACE.Server.Managers.DerpACEConfig.WardenPenaltyMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier);
+                var duration = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.WardenDurationMin,
+                    ACE.Server.Managers.DerpACEConfig.WardenDurationMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier);
 
                 var isTwoHandedMace = roll.WeaponType == TreasureWeaponType.TwoHandedMace;
                 if (isTwoHandedMace)
@@ -213,16 +368,24 @@ namespace ACE.Server.Factories
 
             // Resolute Blade: configurable chance on T6+ swords (1H or 2H, excluding fencer SwordMS) (see @lootconfig)
             // On crit hits, restores % of damage as health. On killing blows, restores % of MaxHealth + MaxStamina.
-            if ((roll.WeaponType == TreasureWeaponType.Sword || roll.WeaponType == TreasureWeaponType.TwoHandedSword)
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ResoluteBladeMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ResoluteBladeDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.ResoluteBladeDropChance,
+                ACE.Server.Managers.DerpACEConfig.ResoluteBladeMinTier,
+                roll.WeaponType == TreasureWeaponType.Sword || roll.WeaponType == TreasureWeaponType.TwoHandedSword,
+                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear))
             {
-                var procPct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.ResoluteProcMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.ResoluteProcMax));
-                var healPct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.ResoluteHealMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.ResoluteHealMax));
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.ResoluteProcMin,
+                    ACE.Server.Managers.DerpACEConfig.ResoluteProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.ResoluteBladeMinTier);
+                var healPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.ResoluteHealMin,
+                    ACE.Server.Managers.DerpACEConfig.ResoluteHealMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.ResoluteBladeMinTier);
 
                 var isTwoHandedSword = roll.WeaponType == TreasureWeaponType.TwoHandedSword;
                 var killBurst = ACE.Server.Managers.DerpACEConfig.ResoluteKillBurstPct;
@@ -241,16 +404,24 @@ namespace ACE.Server.Factories
             }
 
             // Polebreaker Staff: configurable chance on T6+ staves to escalate damage on consecutive hits against the same target (see @lootconfig)
-            if (roll.WeaponType == TreasureWeaponType.Staff
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.PolebreakerDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.PolebreakerDropChance,
+                ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier,
+                roll.WeaponType == TreasureWeaponType.Staff,
+                roll.WeaponType == TreasureWeaponType.TwoHandedMace || roll.WeaponType == TreasureWeaponType.MaceJitte))
             {
-                var stackPct = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.PolebreakerStackMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.PolebreakerStackMax));
-                var maxStacks = (int)Math.Round(ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.PolebreakerMaxStackMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.PolebreakerMaxStackMax));
+                var stackPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.PolebreakerStackMin,
+                    ACE.Server.Managers.DerpACEConfig.PolebreakerStackMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier);
+                var maxStacks = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.PolebreakerMaxStackMin,
+                    ACE.Server.Managers.DerpACEConfig.PolebreakerMaxStackMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier);
                 if (stackPct < 1) stackPct = 1;
                 if (maxStacks < 1) maxStacks = 1;
 
@@ -329,9 +500,13 @@ namespace ACE.Server.Factories
             }
 
             // Sentinel's Spear: configurable chance on any T6+ spear (see @lootconfig)
-            if ((roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear)
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.SentinelSpearMinTier
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.SentinelSpearDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.SentinelSpearDropChance,
+                ACE.Server.Managers.DerpACEConfig.SentinelSpearMinTier,
+                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear,
+                roll.WeaponType == TreasureWeaponType.Staff))
             {
                 wo.Name = wo.Name + " of the Sentinel";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);

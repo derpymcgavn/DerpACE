@@ -207,5 +207,6 @@ namespace ACE.Entity.Enum.Properties
         IsIronman                        = 9029,
         IsHardcore                       = 9030,
         IsIronmanItem                    = 9031,
+        IsScoutMob                       = 9032,
     }
 }

@@ -10,12 +10,17 @@ using ACE.Server.Factories.Entity;
 using ACE.Server.Factories.Enum;
 using ACE.Server.Factories.Tables;
 using ACE.Server.Factories.Tables.Wcids;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
+    private const float ArmorVitalProcRollChance = 0.10f;
+    private const int ArmorVitalProcChanceMinPct = 2;
+    private const int ArmorVitalProcChanceMaxPct = 5;
+
         /// <summary>
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
@@ -97,11 +102,17 @@ namespace ACE.Server.Factories
             if (profile.Tier == 8)
                 TryMutateGearRating(wo, profile, roll);
 
+            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
+                TryMutateArmorVitalBonus(wo, profile);
+
             // item value
             //if (wo.HasMutateFilter(MutateFilter.Value))   // fixme: data
                 MutateValue(wo, profile.Tier, roll);
 
             wo.LongDesc = GetLongDesc(wo);
+
+            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
+                AppendArmorVitalBonusLongDesc(wo);
 
             // Defender's shield: configurable chance on any T6+ shield drop (see @lootconfig)
             if (wo.IsShield && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
@@ -112,6 +123,94 @@ namespace ACE.Server.Factories
                 wo.UiEffects = ACE.Entity.Enum.UiEffects.Fire;
                 wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge — enemies are more likely to target its bearer.";
             }
+        }
+
+        private static void TryMutateArmorVitalBonus(WorldObject wo, TreasureDeath profile)
+        {
+            if (wo == null || profile == null)
+                return;
+
+            // Keep drop gating/chance aligned with Aetheria: tiers 5+, using aetheria_drop_rate.
+            if (profile.Tier < 5)
+                return;
+
+            var aetheriaDropRate = (float)PropertyManager.GetDouble("aetheria_drop_rate").Item;
+            if (aetheriaDropRate <= 0.0f)
+                return;
+
+            var dropRateMod = 1.0f / aetheriaDropRate;
+            var rng = ThreadSafeRandom.Next(0.0f, 1.0f * dropRateMod);
+            if (rng >= 0.02f)
+                return;
+
+            var bonus = ThreadSafeRandom.Next(1, 5);
+            var roll = ThreadSafeRandom.Next(0, 2);
+            string suffix;
+            if (roll == 0)
+            {
+                wo.GearMaxHealth = bonus;
+                suffix = "HP";
+                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostHealth;
+            }
+            else if (roll == 1)
+            {
+                wo.GearMaxStamina = bonus;
+                suffix = "Stam";
+                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostStamina;
+            }
+            else
+            {
+                wo.GearMaxMana = bonus;
+                suffix = "Mana";
+                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostMana;
+            }
+
+            wo.IconOverlaySecondary = bonus switch
+            {
+                1 => 0x06006C20,
+                2 => 0x06006C21,
+                3 => 0x06006C22,
+                4 => 0x06006C23,
+                _ => 0x06006C24,
+            };
+
+            wo.Name = $"{wo.Name} + {bonus} {suffix}";
+
+            // Rare secondary roll: on-hit replenish proc tied to the same stat family.
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < ArmorVitalProcRollChance)
+            {
+                var procAmount = ThreadSafeRandom.Next(1, 5);
+                var procChancePct = ThreadSafeRandom.Next(ArmorVitalProcChanceMinPct, ArmorVitalProcChanceMaxPct);
+
+                wo.ArmorVitalProcAmount = procAmount;
+                wo.ArmorVitalProcChance = procChancePct / 100.0;
+            }
+        }
+
+        private static void AppendArmorVitalBonusLongDesc(WorldObject wo)
+        {
+            if (wo == null)
+                return;
+
+            if ((wo.GearMaxHealth ?? 0) > 0)
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis armor grants +{wo.GearMaxHealth.Value} HP while worn.";
+            else if ((wo.GearMaxStamina ?? 0) > 0)
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis armor grants +{wo.GearMaxStamina.Value} Stam while worn.";
+            else if ((wo.GearMaxMana ?? 0) > 0)
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis armor grants +{wo.GearMaxMana.Value} Mana while worn.";
+
+            var procAmount = wo.ArmorVitalProcAmount ?? 0;
+            var procChance = wo.ArmorVitalProcChance ?? 0.0;
+            if (procAmount <= 0 || procChance <= 0)
+                return;
+
+            var procPct = Math.Max(1, (int)Math.Round(procChance * 100.0));
+            if ((wo.GearMaxHealth ?? 0) > 0)
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRarely on hit ({procPct}% chance), this armor replenishes {procAmount} health.";
+            else if ((wo.GearMaxStamina ?? 0) > 0)
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRarely on hit ({procPct}% chance), this armor replenishes {procAmount} stamina.";
+            else if ((wo.GearMaxMana ?? 0) > 0)
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRarely on hit ({procPct}% chance), this armor replenishes {procAmount} mana.";
         }
 
         private static bool AssignArmorLevel(WorldObject wo, TreasureDeath profile, TreasureRoll roll)

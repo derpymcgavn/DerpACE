@@ -41895,5 +41895,6 @@ namespace ACE.Server.Factories.Enum
         ace5238249_frostdartflinger = 5238249,
         ace5238250_piercingdartflinger = 5238250,
         ace5238251_slashingdartflinger = 5238251,
+        pathfinderHelper = 50201,
     }
 }

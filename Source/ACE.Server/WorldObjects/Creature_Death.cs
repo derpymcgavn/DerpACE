@@ -233,8 +233,12 @@ namespace ACE.Server.WorldObjects
                 var damagePercent = totalDamage / totalHealth;
 
                 var totalXP = (XpOverride ?? 0) * damagePercent;
+                var xpForKill = (long)Math.Round(totalXP);
 
-                playerDamager.EarnXP((long)Math.Round(totalXP), XpType.Kill);
+                playerDamager.EarnXP(xpForKill, XpType.Kill);
+
+                // notify global kill quest tracker
+                GlobalKillQuestManager.OnCreatureKilled(playerDamager, this, xpForKill);
 
                 // handle luminance
                 if (LuminanceAward != null)
@@ -638,8 +642,8 @@ namespace ACE.Server.WorldObjects
                     foreach (var lootItem in corpse.Inventory.Values)
                     {
                         lootItem.SetProperty(PropertyBool.IsIronmanItem, true);
-                        if (lootItem.GetProperty(PropertyInt.ItemWorkmanship) != null && !lootItem.Name.StartsWith("[IM] "))
-                            lootItem.Name = "[IM] " + lootItem.Name;
+                        if (lootItem.GetProperty(PropertyInt.ItemWorkmanship) != null && !lootItem.Name.EndsWith(" [IM]"))
+                            lootItem.Name = lootItem.Name + " [IM]";
                     }
                 }
 

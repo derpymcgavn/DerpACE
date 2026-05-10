@@ -3502,6 +3502,41 @@ namespace ACE.Server.Command.Handlers
             monster.AttackTarget = prevAttackTarget;
         }
 
+        [CommandHandler("reitem", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 1, "Rename the last appraised weapon or shield.", "<new name>")]
+        public static void HandleReitem(Session session, params string[] parameters)
+        {
+            var item = CommandHandlerHelper.GetLastAppraisedObject(session);
+
+            if (item == null)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat("You must appraise an item first.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var isWeapon = item.WeenieType == WeenieType.MeleeWeapon || item.WeenieType == WeenieType.MissileLauncher || item.WeenieType == WeenieType.Caster;
+            var isShield = item.IsShield;
+
+            if (!isWeapon && !isShield)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat($"{item.Name} is not a weapon or shield.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var newName = string.Join(" ", parameters);
+
+            if (string.IsNullOrWhiteSpace(newName) || newName.Length > 255)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat("Item name must be between 1 and 255 characters.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var oldName = item.Name;
+            item.Name = newName;
+            item.EnqueueBroadcastUpdateObject();
+
+            session.Network.EnqueueSend(new GameMessageSystemChat($"Renamed {oldName} to {item.Name}", ChatMessageType.Broadcast));
+        }
+
         [CommandHandler("debugspellbook", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, "Shows the spellbook for the last appraised object")]
         public static void HandleDebugSpellbook(Session session, params string[] parameters)
         {

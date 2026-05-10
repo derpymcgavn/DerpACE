@@ -144,7 +144,7 @@ namespace ACE.Server.Factories
                     wo.IconOverlayId = 0x06002860;
                     wo.UiEffects = ACE.Entity.Enum.UiEffects.Frost;
                     wo.ProcSpell = (uint)archagiSpellLevels[procIdx]; // stored for appraisal display; fired by TryProcArchmagi
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory — when you cast a matching spell, it has a 10% chance to echo {procDesc}.";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory — when you cast a matching spell, it has a {ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance:P0} chance to echo {procDesc}.";
                 }
             }
         }

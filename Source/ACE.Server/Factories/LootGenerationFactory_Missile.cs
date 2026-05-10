@@ -96,17 +96,27 @@ namespace ACE.Server.Factories
             // long description
             wo.LongDesc = GetLongDesc(wo);
 
+            var specialModifierApplied = false;
+
             // Stalker's Bow: configurable chance on T6+ bows to grant a first-strike damage bonus (see @lootconfig)
-            if (roll.WeaponType == TreasureWeaponType.Bow
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier
-                && ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.StalkerBowDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.StalkerBowDropChance,
+                ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier,
+                roll.WeaponType == TreasureWeaponType.Bow,
+                roll.WeaponType == TreasureWeaponType.Crossbow || roll.WeaponType == TreasureWeaponType.Atlatl))
             {
-                var procPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.StalkerProcMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.StalkerProcMax));
-                var bonusPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.StalkerBonusMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.StalkerBonusMax));
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.StalkerProcMin,
+                    ACE.Server.Managers.DerpACEConfig.StalkerProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier);
+                var bonusPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.StalkerBonusMin,
+                    ACE.Server.Managers.DerpACEConfig.StalkerBonusMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier);
                 if (procPct < 1) procPct = 1;
                 if (bonusPct < 1) bonusPct = 1;
 
@@ -120,34 +130,48 @@ namespace ACE.Server.Factories
             }
 
             // Breacher's Crossbow: configurable chance on T6+ crossbows for an always-on armor pierce % (see @lootconfig)
-            if (roll.WeaponType == TreasureWeaponType.Crossbow
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.BreacherCrossbowMinTier
-                && ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.BreacherCrossbowDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.BreacherCrossbowDropChance,
+                ACE.Server.Managers.DerpACEConfig.BreacherCrossbowMinTier,
+                roll.WeaponType == TreasureWeaponType.Crossbow,
+                roll.WeaponType == TreasureWeaponType.Bow || roll.WeaponType == TreasureWeaponType.Atlatl))
             {
-                var piercePct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.BreacherPierceMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.BreacherPierceMax));
-                if (piercePct < 1) piercePct = 1;
+                var armorIgnoreChance = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.BreacherArmorIgnoreMin,
+                    ACE.Server.Managers.DerpACEConfig.BreacherArmorIgnoreMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.BreacherCrossbowMinTier);
+                if (armorIgnoreChance < 1) armorIgnoreChance = 1;
 
                 wo.Name = wo.Name + " of the Breacher";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow, true);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherPiercePct, piercePct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance, armorIgnoreChance / 100.0);
                 wo.IconOverlayId = 0x06002878u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis crossbow drives bolts through plate \u2014 every hit ignores {piercePct}% of the damage absorbed by the target's armor and adds it back as bonus damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis crossbow pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
             // Reaper's Atlatl: configurable chance on T6+ atlatls for a kill-fed self-heal proc (see @lootconfig)
-            if (roll.WeaponType == TreasureWeaponType.Atlatl
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier
-                && ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ReaperAtlatlDropChance)
+            if (TryRollWeaponModifier(
+                profile,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.ReaperAtlatlDropChance,
+                ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier,
+                roll.WeaponType == TreasureWeaponType.Atlatl,
+                roll.WeaponType == TreasureWeaponType.Bow || roll.WeaponType == TreasureWeaponType.Crossbow))
             {
-                var procPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.ReaperProcMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.ReaperProcMax));
-                var healPct = (int)System.Math.Round(ACE.Common.ThreadSafeRandom.Next(
-                    (float)ACE.Server.Managers.DerpACEConfig.ReaperHealMin,
-                    (float)ACE.Server.Managers.DerpACEConfig.ReaperHealMax));
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.ReaperProcMin,
+                    ACE.Server.Managers.DerpACEConfig.ReaperProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier);
+                var healPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.ReaperHealMin,
+                    ACE.Server.Managers.DerpACEConfig.ReaperHealMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier);
                 if (procPct < 1) procPct = 1;
                 if (healPct < 1) healPct = 1;
 

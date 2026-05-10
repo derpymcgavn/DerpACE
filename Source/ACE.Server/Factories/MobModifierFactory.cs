@@ -17,6 +17,45 @@ namespace ACE.Server.Factories
     public static class MobModifierFactory
     {
         /// <summary>
+        /// Force-applies a specific modifier to a creature for admin/debug spawning.
+        /// Returns false when the key is unknown or the modifier cannot be applied.
+        /// </summary>
+        public static bool TryApplyModifier(WorldObject wo, string modifierKey)
+        {
+            if (wo is not Creature creature) return false;
+            if (creature is Player) return false;
+            if (creature is Pet) return false;
+
+            var key = (modifierKey ?? string.Empty).Trim().ToLowerInvariant();
+            switch (key)
+            {
+                case "vamp":
+                case "vampiric":
+                    ApplyVampiric(creature);
+                    return true;
+
+                case "thief":
+                case "thieving":
+                    ApplyThief(creature);
+                    return true;
+
+                case "scout":
+                case "scouting":
+                    ApplyScout(creature);
+                    return true;
+
+                case "sim":
+                case "simulacrum":
+                    // ApplySimulacrum has internal eligibility checks; detect success via property.
+                    ApplySimulacrum(creature);
+                    return creature.GetProperty(PropertyBool.IsSimulacrumMob) == true;
+
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
         /// Entry point — call once per spawned WorldObject. Filters non-eligible
         /// objects and rolls each enabled modifier independently.
         /// </summary>
@@ -47,6 +86,9 @@ namespace ACE.Server.Factories
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < DerpACEConfig.ThiefMobChance)
                 ApplyThief(creature);
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < DerpACEConfig.ScoutMobChance)
+                ApplyScout(creature);
         }
 
         private static void ApplyVampiric(Creature creature)
@@ -73,6 +115,12 @@ namespace ACE.Server.Factories
         {
             creature.SetProperty(PropertyBool.IsThiefMob, true);
             PrependPrefix(creature, "Thieving");
+        }
+
+        private static void ApplyScout(Creature creature)
+        {
+            creature.SetProperty(PropertyBool.IsScoutMob, true);
+            PrependPrefix(creature, "Scout");
         }
 
         /// <summary>

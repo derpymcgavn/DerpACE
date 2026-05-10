@@ -412,6 +412,8 @@ namespace ACE.Server.Managers
 
             HouseManager.Tick();
 
+            GlobalKillQuestManager.Tick();
+
             ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.UpdateGameWorld_Entire);
             ServerPerformanceMonitor.RegisterCumulativeEvents();
 

@@ -653,6 +653,13 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Ironman mode */
         HardcoreLives                            = 9016,
+
+        /* DerpACE loot armor vitals bonus */
+        GearMaxStamina                           = 9017,
+        GearMaxMana                              = 9018,
+
+        /* DerpACE armor vital proc */
+        ArmorVitalProcAmount                     = 9019,
     }
 
     public static class PropertyIntExtensions

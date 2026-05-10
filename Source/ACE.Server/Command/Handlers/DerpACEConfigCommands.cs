@@ -50,6 +50,10 @@ namespace ACE.Server.Command.Handlers
             "  ravager.twohandmult   RavagerTwoHandMult (float)\n" +
             "  ravager.ticks         RavagerBleedTicks (int)\n" +
             "  ravager.interval      RavagerBleedInterval (float seconds)\n" +
+            "  ravager.cleavechance  RavagerHammerCleaveChance (float 0-1)\n" +
+            "  ravager.cleavetargets RavagerHammerCleaveMaxTargets (int, includes primary)\n" +
+            "  ravager.cleavescale   RavagerHammerCleaveDamageScale (float 0-1)\n" +
+            "  ravager.cleaveradius  RavagerHammerCleaveRadius (float meters)\n" +
             "  warden.drop           WardenMaulDropChance (float 0-1)\n" +
             "  warden.tier           WardenMaulMinTier (int)\n" +
             "  warden.procmin        WardenProcMin (int %)\n" +
@@ -81,14 +85,18 @@ namespace ACE.Server.Command.Handlers
             "  stalker.bonusmax      StalkerBonusMax (int %)\n" +
             "  breacher.drop         BreacherCrossbowDropChance (float 0-1)\n" +
             "  breacher.tier         BreacherCrossbowMinTier (int)\n" +
-            "  breacher.piercemin    BreacherPierceMin (int %)\n" +
-            "  breacher.piercemax    BreacherPierceMax (int %)\n" +
+            "  breacher.ignorechancemin  BreacherArmorIgnoreMin (int %)\n" +
+            "  breacher.ignorechancemax  BreacherArmorIgnoreMax (int %)\n" +
             "  reaper.drop           ReaperAtlatlDropChance (float 0-1)\n" +
             "  reaper.tier           ReaperAtlatlMinTier (int)\n" +
             "  reaper.procmin        ReaperProcMin (int %)\n" +
             "  reaper.procmax        ReaperProcMax (int %)\n" +
             "  reaper.healmin        ReaperHealMin (int % MaxHealth)\n" +
             "  reaper.healmax        ReaperHealMax (int % MaxHealth)\n" +
+            "  lootmod.mult          LootModifierGlobalDropMultiplier (float 0-2)\n" +
+            "  lootmod.exclusive     LootModifierExclusivePerItem (bool)\n" +
+            "  lootmod.interchange   LootModifierInterchangeable (bool)\n" +
+            "  lootmod.interchangetier LootModifierInterchangeableMinTier (int)\n" +
             "  armor.banenormal      ArmorBaneChanceNormal (float 0-1, per-bane chance on normal armor)\n" +
             "  armor.banecovenant    ArmorBaneChanceCovenant (float 0-1, per-bane chance on Covenant armor)\n" +
             "  mobmod.enabled        MobModifierEnabled (bool, master switch)\n" +
@@ -97,11 +105,13 @@ namespace ACE.Server.Command.Handlers
             "  vampiric.lifestealmin VampiricLifestealMin (int %)\n" +
             "  vampiric.lifestealmax VampiricLifestealMax (int %)\n" +
             "  thiefmob.chance       ThiefMobChance (float 0-1)\n" +
+            "  scoutmob.chance       ScoutMobChance (float 0-1)\n" +
             "  thiefmob.proc         ThiefStealProc (float 0-1)\n" +
             "  thiefmob.chestchance  ThiefChestDropChance (float 0-1)\n" +
             "  thiefmob.chestwcid    ThiefChestWcid (uint)\n" +
             "  thiefmob.chestdespawn ThiefChestDespawnSeconds (float, 0=never)\n" +
-            "  simulacrum.chance     SimulacrumMobChance (float 0-1)")]
+            "  simulacrum.chance     SimulacrumMobChance (float 0-1)\n" +
+            "  ironman.enabled       IronmanEnabled (bool, master switch)")]
         public static void HandleLootConfig(Session session, params string[] parameters)
         {
             var sub = parameters[0].ToLower();
@@ -146,6 +156,10 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  ravager.twohandmult = {DerpACEConfig.RavagerTwoHandMult}");
                 sb.AppendLine($"  ravager.ticks       = {DerpACEConfig.RavagerBleedTicks}");
                 sb.AppendLine($"  ravager.interval    = {DerpACEConfig.RavagerBleedInterval}s");
+                sb.AppendLine($"  ravager.cleavechance  = {DerpACEConfig.RavagerHammerCleaveChance:P0}  ({DerpACEConfig.RavagerHammerCleaveChance})");
+                sb.AppendLine($"  ravager.cleavetargets = {DerpACEConfig.RavagerHammerCleaveMaxTargets}");
+                sb.AppendLine($"  ravager.cleavescale   = {DerpACEConfig.RavagerHammerCleaveDamageScale:P0}  ({DerpACEConfig.RavagerHammerCleaveDamageScale})");
+                sb.AppendLine($"  ravager.cleaveradius  = {DerpACEConfig.RavagerHammerCleaveRadius}m");
                 sb.AppendLine($"  warden.drop         = {DerpACEConfig.WardenMaulDropChance:P0}  ({DerpACEConfig.WardenMaulDropChance})");
                 sb.AppendLine($"  warden.tier         = {DerpACEConfig.WardenMaulMinTier}");
                 sb.AppendLine($"  warden.procmin      = {DerpACEConfig.WardenProcMin}%");
@@ -177,14 +191,18 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  stalker.bonusmax     = {DerpACEConfig.StalkerBonusMax}%");
                 sb.AppendLine($"  breacher.drop        = {DerpACEConfig.BreacherCrossbowDropChance:P0}  ({DerpACEConfig.BreacherCrossbowDropChance})");
                 sb.AppendLine($"  breacher.tier        = {DerpACEConfig.BreacherCrossbowMinTier}");
-                sb.AppendLine($"  breacher.piercemin   = {DerpACEConfig.BreacherPierceMin}%");
-                sb.AppendLine($"  breacher.piercemax   = {DerpACEConfig.BreacherPierceMax}%");
+                sb.AppendLine($"  breacher.ignorechancemin = {DerpACEConfig.BreacherArmorIgnoreMin}%");
+                sb.AppendLine($"  breacher.ignorechancemax = {DerpACEConfig.BreacherArmorIgnoreMax}%");
                 sb.AppendLine($"  reaper.drop          = {DerpACEConfig.ReaperAtlatlDropChance:P0}  ({DerpACEConfig.ReaperAtlatlDropChance})");
                 sb.AppendLine($"  reaper.tier          = {DerpACEConfig.ReaperAtlatlMinTier}");
                 sb.AppendLine($"  reaper.procmin       = {DerpACEConfig.ReaperProcMin}%");
                 sb.AppendLine($"  reaper.procmax       = {DerpACEConfig.ReaperProcMax}%");
                 sb.AppendLine($"  reaper.healmin       = {DerpACEConfig.ReaperHealMin}%");
                 sb.AppendLine($"  reaper.healmax       = {DerpACEConfig.ReaperHealMax}%");
+                sb.AppendLine($"  lootmod.mult         = {DerpACEConfig.LootModifierGlobalDropMultiplier}");
+                sb.AppendLine($"  lootmod.exclusive    = {DerpACEConfig.LootModifierExclusivePerItem}");
+                sb.AppendLine($"  lootmod.interchange  = {DerpACEConfig.LootModifierInterchangeable}");
+                sb.AppendLine($"  lootmod.interchangetier = {DerpACEConfig.LootModifierInterchangeableMinTier}");
                 sb.AppendLine($"  armor.banenormal     = {DerpACEConfig.ArmorBaneChanceNormal:P0}  ({DerpACEConfig.ArmorBaneChanceNormal})");
                 sb.AppendLine($"  armor.banecovenant   = {DerpACEConfig.ArmorBaneChanceCovenant:P0}  ({DerpACEConfig.ArmorBaneChanceCovenant})");
                 sb.AppendLine($"  mobmod.enabled       = {DerpACEConfig.MobModifierEnabled}");
@@ -193,11 +211,13 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  vampiric.lifestealmin= {DerpACEConfig.VampiricLifestealMin}%");
                 sb.AppendLine($"  vampiric.lifestealmax= {DerpACEConfig.VampiricLifestealMax}%");
                 sb.AppendLine($"  thiefmob.chance      = {DerpACEConfig.ThiefMobChance:P1}  ({DerpACEConfig.ThiefMobChance})");
+                sb.AppendLine($"  scoutmob.chance      = {DerpACEConfig.ScoutMobChance:P1}  ({DerpACEConfig.ScoutMobChance})");
                 sb.AppendLine($"  thiefmob.proc        = {DerpACEConfig.ThiefStealProc:P0}  ({DerpACEConfig.ThiefStealProc})");
                 sb.AppendLine($"  thiefmob.chestchance = {DerpACEConfig.ThiefChestDropChance:P0}  ({DerpACEConfig.ThiefChestDropChance})");
                 sb.AppendLine($"  thiefmob.chestwcid   = {DerpACEConfig.ThiefChestWcid}");
                 sb.AppendLine($"  thiefmob.chestdespawn= {DerpACEConfig.ThiefChestDespawnSeconds}s");
                 sb.AppendLine($"  simulacrum.chance    = {DerpACEConfig.SimulacrumMobChance:P1}  ({DerpACEConfig.SimulacrumMobChance})");
+                sb.AppendLine($"  ironman.enabled      = {DerpACEConfig.IronmanEnabled}");
                 CommandHandlerHelper.WriteOutputInfo(session, sb.ToString().TrimEnd(), ChatMessageType.Broadcast);
                 return;
             }
@@ -367,6 +387,22 @@ namespace ACE.Server.Command.Handlers
                         if (!TryFloat(out var rint)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.RavagerBleedInterval = rint;
                         break;
+                    case "ravager.cleavechance":
+                        if (!TryFloat(out var rcleavechance)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RavagerHammerCleaveChance = rcleavechance;
+                        break;
+                    case "ravager.cleavetargets":
+                        if (!TryInt(out var rcleavetargets)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RavagerHammerCleaveMaxTargets = rcleavetargets;
+                        break;
+                    case "ravager.cleavescale":
+                        if (!TryFloat(out var rcleavescale)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RavagerHammerCleaveDamageScale = rcleavescale;
+                        break;
+                    case "ravager.cleaveradius":
+                        if (!TryFloat(out var rcleaveradius)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RavagerHammerCleaveRadius = rcleaveradius;
+                        break;
                     case "warden.drop":
                         if (!TryFloat(out var wdrop)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.WardenMaulDropChance = wdrop;
@@ -494,13 +530,13 @@ namespace ACE.Server.Command.Handlers
                         if (!TryInt(out var bctr)) { BadValue(session, key, "int"); return; }
                         DerpACEConfig.BreacherCrossbowMinTier = bctr;
                         break;
-                    case "breacher.piercemin":
-                        if (!TryInt(out var bcpmin)) { BadValue(session, key, "int"); return; }
-                        DerpACEConfig.BreacherPierceMin = bcpmin;
+                    case "breacher.ignorechancemin":
+                        if (!TryInt(out var bcmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.BreacherArmorIgnoreMin = bcmin;
                         break;
-                    case "breacher.piercemax":
-                        if (!TryInt(out var bcpmax)) { BadValue(session, key, "int"); return; }
-                        DerpACEConfig.BreacherPierceMax = bcpmax;
+                    case "breacher.ignorechancemax":
+                        if (!TryInt(out var bcmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.BreacherArmorIgnoreMax = bcmax;
                         break;
 
                     case "reaper.drop":
@@ -526,6 +562,23 @@ namespace ACE.Server.Command.Handlers
                     case "reaper.healmax":
                         if (!TryInt(out var rahmax)) { BadValue(session, key, "int"); return; }
                         DerpACEConfig.ReaperHealMax = rahmax;
+                        break;
+
+                    case "lootmod.mult":
+                        if (!TryFloat(out var lmm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.LootModifierGlobalDropMultiplier = lmm;
+                        break;
+                    case "lootmod.exclusive":
+                        if (!bool.TryParse(raw, out var lme)) { BadValue(session, key, "bool"); return; }
+                        DerpACEConfig.LootModifierExclusivePerItem = lme;
+                        break;
+                    case "lootmod.interchange":
+                        if (!bool.TryParse(raw, out var lmi)) { BadValue(session, key, "bool"); return; }
+                        DerpACEConfig.LootModifierInterchangeable = lmi;
+                        break;
+                    case "lootmod.interchangetier":
+                        if (!TryInt(out var lmit)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.LootModifierInterchangeableMinTier = lmit;
                         break;
 
                     case "armor.banenormal":
@@ -561,6 +614,10 @@ namespace ACE.Server.Command.Handlers
                         if (!TryFloat(out var tmc)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.ThiefMobChance = tmc;
                         break;
+                    case "scoutmob.chance":
+                        if (!TryFloat(out var smobc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ScoutMobChance = smobc;
+                        break;
                     case "thiefmob.proc":
                         if (!TryFloat(out var tsp)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.ThiefStealProc = tsp;
@@ -580,6 +637,10 @@ namespace ACE.Server.Command.Handlers
                     case "simulacrum.chance":
                         if (!TryFloat(out var smc)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.SimulacrumMobChance = smc;
+                        break;
+                    case "ironman.enabled":
+                        if (!bool.TryParse(raw, out var ime)) { BadValue(session, key, "bool"); return; }
+                        DerpACEConfig.IronmanEnabled = ime;
                         break;
 
                     default:

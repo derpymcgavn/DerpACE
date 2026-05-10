@@ -102,8 +102,6 @@ namespace ACE.Server.WorldObjects
                 ephemeralPropertyInts = new Dictionary<PropertyInt, int?>();
         }
 
-            private static readonly System.Collections.Generic.HashSet<uint> _fociWCIDs = new System.Collections.Generic.HashSet<uint> { 15268, 15269, 15270, 15271, 43173 };
-
         private void SetEphemeralValues(bool fromBiota)
         {
             ephemeralPropertyInts.TryAdd(PropertyInt.EncumbranceVal, EncumbranceVal ?? 0); // Containers are init at 0 burden or their initial value from database. As inventory/equipment is added the burden will be increased
@@ -117,15 +115,6 @@ namespace ACE.Server.WorldObjects
 
             if (!ContainerCapacity.HasValue)
                 ContainerCapacity = 0;
-
-            // Force foci to have RequiresBackpackSlot and 15 item slots regardless of DB values
-            if (_fociWCIDs.Contains(WeenieClassId))
-            {
-                if (!RequiresPackSlot)
-                    RequiresPackSlot = true;
-                if (ItemCapacity == null || ItemCapacity == 0)
-                    ItemCapacity = 15;
-            }
 
             if (!UseRadius.HasValue)
                 UseRadius = 0.5f;
@@ -173,7 +162,7 @@ namespace ACE.Server.WorldObjects
                     Inventory[worldObjects[i].Guid] = worldObjects[i];
                     worldObjects[i].Container = this;
 
-                    if (worldObjects[i].WeenieType != WeenieType.Container) // We skip over containers because we'll add their burden/value in the next loop.
+                    if (!(worldObjects[i] is Container)) // We skip over containers because we'll add their burden/value in the next loop.
                     {
                         EncumbranceVal += (worldObjects[i].EncumbranceVal ?? 0);
                         Value += (worldObjects[i].Value ?? 0);
@@ -195,10 +184,10 @@ namespace ACE.Server.WorldObjects
 
             // All that should be left are side pack sub contents.
 
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().ToList();
             foreach (var container in sideContainers)
             {
-                ((Container)container).SortWorldObjectsIntoInventory(worldObjects); // This will set the InventoryLoaded flag for this sideContainer
+                container.SortWorldObjectsIntoInventory(worldObjects); // This will set the InventoryLoaded flag for this sideContainer
                 EncumbranceVal += container.EncumbranceVal; // This value includes the containers burden itself + all child items
                 Value += container.Value; // This value includes the containers value itself + all child items
             }
@@ -281,14 +270,14 @@ namespace ACE.Server.WorldObjects
             }
 
             // Next search all containers for item.. run function again for each container.
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().ToList();
             foreach (var sideContainer in sideContainers)
             {
-                var containerItem = ((Container)sideContainer).GetInventoryItem(objectGuid);
+                var containerItem = sideContainer.GetInventoryItem(objectGuid);
 
                 if (containerItem != null)
                 {
-                    container = (Container)sideContainer;
+                    container = sideContainer;
                     return containerItem;
                 }
             }
@@ -310,9 +299,9 @@ namespace ACE.Server.WorldObjects
             items.AddRange(localInventory);
 
             // next search all containers for type.. run function again for each container.
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).OrderBy(i => i.PlacementPosition).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().OrderBy(i => i.PlacementPosition).ToList();
             foreach (var container in sideContainers)
-                items.AddRange(((Container)container).GetInventoryItemsOfTypeWeenieType(type));
+                items.AddRange(container.GetInventoryItemsOfTypeWeenieType(type));
 
             return items;
         }
@@ -330,7 +319,7 @@ namespace ACE.Server.WorldObjects
             items.AddRange(localInventory);
 
             // next search any side containers
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).Select(i => i as Container).OrderBy(i => i.PlacementPosition).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().OrderBy(i => i.PlacementPosition).ToList();
             foreach (var container in sideContainers)
                 items.AddRange(container.GetInventoryItemsOfWCID(weenieClassId));
 
@@ -358,7 +347,7 @@ namespace ACE.Server.WorldObjects
             items.AddRange(localInventory);
 
             // next search any side containers
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).Select(i => i as Container).OrderBy(i => i.PlacementPosition).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().OrderBy(i => i.PlacementPosition).ToList();
             foreach (var container in sideContainers)
                 items.AddRange(container.GetInventoryItemsOfWeenieClass(weenieClassName));
 
@@ -387,7 +376,7 @@ namespace ACE.Server.WorldObjects
             items.AddRange(localInventory);
 
             // next search any side containers
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).Select(i => i as Container).OrderBy(i => i.PlacementPosition).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().OrderBy(i => i.PlacementPosition).ToList();
             foreach (var container in sideContainers)
                 items.AddRange(container.GetTradeNotes());
 
@@ -682,10 +671,10 @@ namespace ACE.Server.WorldObjects
             }
 
             // next search all containers for item.. run function again for each container.
-            var sideContainers = Inventory.Values.Where(i => i.WeenieType == WeenieType.Container).ToList();
+            var sideContainers = Inventory.Values.OfType<Container>().ToList();
             foreach (var container in sideContainers)
             {
-                if (((Container)container).TryRemoveFromInventory(objectGuid, out item))
+                if (container.TryRemoveFromInventory(objectGuid, out item))
                 {
                     EncumbranceVal -= (item.EncumbranceVal ?? 0);
                     Value -= (item.Value ?? 0);

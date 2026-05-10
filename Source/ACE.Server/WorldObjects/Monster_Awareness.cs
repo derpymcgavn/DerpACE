@@ -10,6 +10,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
+using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.WorldObjects
 {
@@ -23,6 +24,10 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool IsAwake = false;
 
+        private double NextScoutAlertSpeechTime = 0;
+        private const double ScoutAlertSpeechCooldown = 8.0;
+        private const float ScoutInitialDetectionScale = 0.65f;
+
         /// <summary>
         /// Transitions a monster from idle to awake state
         /// </summary>
@@ -30,6 +35,10 @@ namespace ACE.Server.WorldObjects
         {
             MonsterState = State.Awake;
             IsAwake = true;
+
+            if (IsScoutMob && AttackTarget is Player playerTarget)
+                BroadcastScoutAlert(playerTarget);
+
             //DoAttackStance();
             EmoteManager.OnWakeUp(AttackTarget as Creature);
             EmoteManager.OnNewEnemy(AttackTarget as Creature);
@@ -37,6 +46,14 @@ namespace ACE.Server.WorldObjects
 
             if (alertNearby)
                 AlertFriendly();
+
+            // Pathfinding: if target indoors and not visible, attempt to compute a route
+            if (PathfindingEnabled && Location != null && Location.Indoors && AttackTarget != null)
+            {
+                if ((!IsRanged && !IsMeleeVisible(AttackTarget)) ||
+                    (IsRanged && (!IsDirectVisible(AttackTarget) || GetDistanceToTarget() > GetMaxRange())))
+                    TryRoute();
+            }
         }
 
         /// <summary>
@@ -46,6 +63,19 @@ namespace ACE.Server.WorldObjects
         {
             if (DebugMove)
                 Console.WriteLine($"{Name} ({Guid}).Sleep()");
+
+            // Cancel any pending pathfinding states
+            if (IsEmoting) EndEmoting();
+            if (IsWandering) EndWandering();
+            if (IsRouting) EndRoute();
+            if (IsGrantingPassage) EndGrantPassage();
+            if (IsMovingToHome) EndMoveToHome();
+            IsEmotePending = false;
+            IsWanderingPending = false;
+            IsRouteStartPending = false;
+            IsGrantPassagePending = false;
+            IsMoveToHomePending = false;
+            OnMovementStopped();
 
             SetCombatMode(CombatMode.NonCombat);
 
@@ -222,7 +252,17 @@ namespace ACE.Server.WorldObjects
                 //Console.WriteLine($"{Name}.FindNextTarget = {AttackTarget.Name}");
 
                 if (AttackTarget != null && AttackTarget != prevAttackTarget)
+                {
                     EmoteManager.OnNewEnemy(AttackTarget);
+
+                    // Pathfinding: if new target indoors and not visible, attempt route
+                    if (PathfindingEnabled && Location != null && Location.Indoors)
+                    {
+                        if ((!IsRanged && !IsMeleeVisible(AttackTarget)) ||
+                            (IsRanged && (!IsDirectVisible(AttackTarget) || GetDistanceToTarget() > GetMaxRange())))
+                            TryRoute();
+                    }
+                }
 
                 return AttackTarget != null;
             }
@@ -246,6 +286,10 @@ namespace ACE.Server.WorldObjects
 
                 // ensure within 'detection radius' ?
                 var chaseDistSq = creature == AttackTarget ? MaxChaseRangeSq : VisualAwarenessRangeSq;
+
+                // Scouts are less perceptive at first contact and must be closer to detect players.
+                if (IsScoutMob && !IsAwake && AttackTarget == null && creature is Player)
+                    chaseDistSq *= ScoutInitialDetectionScale * ScoutInitialDetectionScale;
 
                 /*if (Location.SquaredDistanceTo(creature.Location) > chaseDistSq)
                     continue;*/
@@ -274,6 +318,40 @@ namespace ACE.Server.WorldObjects
             }
 
             return visibleTargets;
+        }
+
+        private void BroadcastScoutAlert(Player playerTarget)
+        {
+            if (Timers.RunningTime < NextScoutAlertSpeechTime)
+                return;
+
+            NextScoutAlertSpeechTime = Timers.RunningTime + ScoutAlertSpeechCooldown;
+
+            EnqueueBroadcast(new GameMessageSystemChat($"{Name} says, 'Hold up... I see something moving.'", ChatMessageType.Broadcast));
+
+            var race = GetPlayerRaceLabel(playerTarget);
+            var chain = new ActionChain();
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(this, () =>
+            {
+                if (PhysicsObj == null || IsDead)
+                    return;
+
+                EnqueueBroadcast(new GameMessageSystemChat($"{Name} says, 'Hey, I see you! [{race}]'", ChatMessageType.Broadcast));
+            });
+            chain.EnqueueChain();
+        }
+
+        private static string GetPlayerRaceLabel(Player player)
+        {
+            if (player == null)
+                return "Unknown";
+
+            if (!string.IsNullOrWhiteSpace(player.HeritageGroupName))
+                return player.HeritageGroupName.Trim();
+
+            var heritage = player.HeritageGroup;
+            return heritage == HeritageGroup.Invalid ? "Unknown" : heritage.ToString();
         }
 
         /// <summary>
@@ -468,8 +546,17 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         private Dictionary<uint, DateTime> Alerted;
 
+        private const float ScoutAssistRadius = 40.0f;
+        private const float ScoutAssistRadiusSq = ScoutAssistRadius * ScoutAssistRadius;
+
         public void AlertFriendly()
         {
+            if (IsScoutMob && AttackTarget is Player)
+            {
+                AlertNearbyForScout();
+                return;
+            }
+
             // if current attacker has already alerted this monster recently,
             // don't re-alert friendlies
             if (Alerted != null && Alerted.TryGetValue(AttackTarget.Guid.Full, out var lastAlertTime) && DateTime.UtcNow - lastAlertTime < AlertThreshold)
@@ -524,6 +611,48 @@ namespace ACE.Server.WorldObjects
                 }
             }
             // only set alerted if monsters were actually alerted
+            if (alerted)
+            {
+                if (Alerted == null)
+                    Alerted = new Dictionary<uint, DateTime>();
+
+                Alerted[AttackTarget.Guid.Full] = DateTime.UtcNow;
+            }
+        }
+
+        private void AlertNearbyForScout()
+        {
+            if (AttackTarget == null)
+                return;
+
+            var visibleObjs = PhysicsObj.ObjMaint.GetVisibleObjects(PhysicsObj.CurCell);
+            var alerted = false;
+
+            foreach (var obj in visibleObjs)
+            {
+                var nearbyCreature = obj.WeenieObj.WorldObject as Creature;
+                if (nearbyCreature == null || nearbyCreature == this || nearbyCreature.IsAwake)
+                    continue;
+
+                if (nearbyCreature.IsDead || !nearbyCreature.Attackable && nearbyCreature.TargetingTactic == TargetingTactic.None)
+                    continue;
+
+                if ((nearbyCreature.Tolerance & AlertExclude) != 0)
+                    continue;
+
+                // Scouts do not recruit FoeType mobs to assist.
+                if (nearbyCreature.HasFoeType || PotentialFoe(nearbyCreature))
+                    continue;
+
+                var distSq = PhysicsObj.get_distance_sq_to_object(nearbyCreature.PhysicsObj, true);
+                if (distSq > ScoutAssistRadiusSq)
+                    continue;
+
+                nearbyCreature.AttackTarget = AttackTarget;
+                nearbyCreature.WakeUp(false);
+                alerted = true;
+            }
+
             if (alerted)
             {
                 if (Alerted == null)

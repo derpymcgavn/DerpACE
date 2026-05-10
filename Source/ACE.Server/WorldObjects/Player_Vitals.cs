@@ -205,23 +205,43 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
-        /// Called when a player equips/dequips an item w/ GearMaxHealth
+        /// Called when a player equips/dequips an item w/ gear max vital ratings.
         /// </summary>
         public void HandleMaxHealthUpdate()
         {
             var gearMaxHealth = GetGearMaxHealth();
+            var gearMaxStamina = GetGearMaxStamina();
+            var gearMaxMana = GetGearMaxMana();
 
             if (gearMaxHealth == 0)
                 GearMaxHealth = null;
             else
                 GearMaxHealth = gearMaxHealth;
 
+            if (gearMaxStamina == 0)
+                GearMaxStamina = null;
+            else
+                GearMaxStamina = gearMaxStamina;
+
+            if (gearMaxMana == 0)
+                GearMaxMana = null;
+            else
+                GearMaxMana = gearMaxMana;
+
             Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.GearMaxHealth, gearMaxHealth));
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.GearMaxStamina, gearMaxStamina));
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.GearMaxMana, gearMaxMana));
 
             if (Health.Current > Health.MaxValue)
                 Health.Current = Health.MaxValue;
+            if (Stamina.Current > Stamina.MaxValue)
+                Stamina.Current = Stamina.MaxValue;
+            if (Mana.Current > Mana.MaxValue)
+                Mana.Current = Mana.MaxValue;
 
             Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute2ndLevel(this, Vital.Health, Health.Current));
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute2ndLevel(this, Vital.Stamina, Stamina.Current));
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute2ndLevel(this, Vital.Mana, Mana.Current));
         }
     }
 }

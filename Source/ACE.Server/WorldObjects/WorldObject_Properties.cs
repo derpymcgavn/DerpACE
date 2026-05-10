@@ -3234,6 +3234,42 @@ namespace ACE.Server.WorldObjects
             set { if (!value.HasValue) RemoveProperty(PropertyInt.GearMaxHealth); else SetProperty(PropertyInt.GearMaxHealth, value.Value); }
         }
 
+        /// <summary>
+        /// The MaxStamina Boost Rating on a creature or item
+        /// </summary>
+        public int? GearMaxStamina
+        {
+            get => GetProperty(PropertyInt.GearMaxStamina);
+            set { if (!value.HasValue) RemoveProperty(PropertyInt.GearMaxStamina); else SetProperty(PropertyInt.GearMaxStamina, value.Value); }
+        }
+
+        /// <summary>
+        /// The MaxMana Boost Rating on a creature or item
+        /// </summary>
+        public int? GearMaxMana
+        {
+            get => GetProperty(PropertyInt.GearMaxMana);
+            set { if (!value.HasValue) RemoveProperty(PropertyInt.GearMaxMana); else SetProperty(PropertyInt.GearMaxMana, value.Value); }
+        }
+
+        /// <summary>
+        /// The amount restored when an armor vital proc fires.
+        /// </summary>
+        public int? ArmorVitalProcAmount
+        {
+            get => GetProperty(PropertyInt.ArmorVitalProcAmount);
+            set { if (!value.HasValue) RemoveProperty(PropertyInt.ArmorVitalProcAmount); else SetProperty(PropertyInt.ArmorVitalProcAmount, value.Value); }
+        }
+
+        /// <summary>
+        /// The chance to restore a matching vital on hit for armor vital proc items.
+        /// </summary>
+        public double? ArmorVitalProcChance
+        {
+            get => GetProperty(PropertyFloat.ArmorVitalProcChance);
+            set { if (!value.HasValue) RemoveProperty(PropertyFloat.ArmorVitalProcChance); else SetProperty(PropertyFloat.ArmorVitalProcChance, value.Value); }
+        }
+
         public int? GearPKDamageRating
         {
             get => GetProperty(PropertyInt.GearPKDamageRating);

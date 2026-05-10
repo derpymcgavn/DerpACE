@@ -16,6 +16,43 @@ namespace ACE.Server.Command.Handlers
 {
     public static class IronmanCommands
     {
+        [CommandHandler("ironmanmode", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 0,
+            "Enable or disable Ironman opt-in server-wide.",
+            "[ on | off | toggle | status ]")]
+        public static void HandleIronmanMode(Session session, params string[] parameters)
+        {
+            var sub = (parameters != null && parameters.Length > 0)
+                ? parameters[0].ToLowerInvariant()
+                : "status";
+
+            switch (sub)
+            {
+                case "on":
+                case "enable":
+                    DerpACEConfig.IronmanEnabled = true;
+                    break;
+
+                case "off":
+                case "disable":
+                    DerpACEConfig.IronmanEnabled = false;
+                    break;
+
+                case "toggle":
+                    DerpACEConfig.IronmanEnabled = !DerpACEConfig.IronmanEnabled;
+                    break;
+
+                case "status":
+                    break;
+
+                default:
+                    session.Player.SendMessage("Usage: @ironmanmode [on|off|toggle|status]", ChatMessageType.Broadcast);
+                    return;
+            }
+
+            var state = DerpACEConfig.IronmanEnabled ? "ENABLED" : "DISABLED";
+            session.Player.SendMessage($"Ironman mode is now {state}.", ChatMessageType.Broadcast);
+        }
+
         // GUID -> UTC time at which the pending /ironman on request expires.
         // 30-second confirm window matches the IronmanConfirmationSeconds intent.
         private static readonly ConcurrentDictionary<uint, DateTime> PendingConfirms = new ConcurrentDictionary<uint, DateTime>();
@@ -24,7 +61,10 @@ namespace ACE.Server.Command.Handlers
         [CommandHandler("ironman", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Ironman mode (IRREVERSIBLE).",
             "on        - begin Ironman commitment (you must then run /ironman confirm within 30 seconds)\n" +
-            "confirm   - finalize Ironman conversion. Cannot be undone.\n\n" +
+            "confirm   - finalize Ironman conversion. Cannot be undone.\n" +
+            "char      - view your character progression milestones\n" +
+            "top       - show the Ironman leaderboard\n" +
+            "topkillers - show top creatures that have killed Ironman players\n\n" +
             "Becoming an Ironman wipes your inventory and spellbook, rerolls your attributes\n" +
             "and skills, marks the character as hardcore (final death = permanent), and bars\n" +
             "you from fellowships, allegiances, external buffs, and using items not flagged\n" +
@@ -42,10 +82,10 @@ namespace ACE.Server.Command.Handlers
 
             if (parameters == null || parameters.Length == 0)
             {
-                // If the player is already an Ironman, /ironman with no args shows their skill summary.
+                // If the player is already an Ironman, /ironman with no args shows leaderboard commands.
                 if (player.GetProperty(PropertyBool.IsIronman) == true)
                 {
-                    ShowIronmanStatus(player);
+                    ShowIronmanHelp(player);
                     return;
                 }
 
@@ -55,10 +95,31 @@ namespace ACE.Server.Command.Handlers
 
             var sub = parameters[0].ToLowerInvariant();
 
+            // Handle read-only commands first (bypass enrollment checks)
+            switch (sub)
+            {
+                case "char":
+                    if (player.GetProperty(PropertyBool.IsIronman) == true)
+                    {
+                        ShowIronmanStatus(player);
+                        return;
+                    }
+                    player.SendMessage("You must be an Ironman to view character progression.");
+                    return;
+
+                case "top":
+                    ShowIronmanLeaderboard(player);
+                    return;
+
+                case "topkillers":
+                    HandleIronmanTopKillers(session);
+                    return;
+            }
+
+            // Show help for Ironman players using other commands
             if (player.GetProperty(PropertyBool.IsIronman) == true)
             {
-                // Already an Ironman — any sub-command also shows the summary.
-                ShowIronmanStatus(player);
+                ShowIronmanHelp(player);
                 return;
             }
 
@@ -78,9 +139,6 @@ namespace ACE.Server.Command.Handlers
 
             switch (sub)
             {
-                case "top":
-                    ShowIronmanLeaderboard(player);
-                    return;
 
                 case "on":
                     PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
@@ -102,6 +160,12 @@ namespace ACE.Server.Command.Handlers
                         return;
                     }
                     IronmanFactory.InitializeIronman(player);
+                    
+                    // Global announcement for Ironman activation
+                    var ironmanMsg = $"[IRONMAN] {player.Name} has taken the Ironman path. There is no turning back!";
+                    var ironmanBroadcast = new GameMessageSystemChat(ironmanMsg, ChatMessageType.WorldBroadcast);
+                    PlayerManager.BroadcastToAll(ironmanBroadcast);
+                    PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, ironmanMsg);
                     break;
 
                 default:
@@ -110,14 +174,40 @@ namespace ACE.Server.Command.Handlers
             }
         }
 
+        private static void ShowIronmanHelp(ACE.Server.WorldObjects.Player player)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("=== Ironman Commands ===");
+            sb.AppendLine("  /ironman char       - View your character progression milestones");
+            sb.AppendLine("  /ironman top        - Show the Ironman leaderboard (top 10 players)");
+            sb.AppendLine("  /ironman topkillers - Show top creatures that have killed Ironman players");
+            sb.AppendLine();
+            sb.AppendLine("Current Status:");
+            var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0;
+            sb.AppendLine($"  Hardcore lives remaining: {lives}");
+
+            player.SendMessage(sb.ToString(), ChatMessageType.System);
+        }
+
+        private static string FormatSkillName(Skill skill, bool isSpecialized = false)
+        {
+            var name = skill.ToSentence();
+            if (isSpecialized)
+                name += " [Spec]";
+            return name;
+        }
+
         private static void ShowIronmanStatus(ACE.Server.WorldObjects.Player player)
         {
             var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0;
             var planStr = player.GetProperty(PropertyString.IronmanPlan) ?? "";
+            var lifeMilestones = IronmanFactory.GetHardcoreLifeMilestones();
+            var claimedLifeMilestones = IronmanFactory.GetClaimedHardcoreLifeMilestones(player);
+            var currentLevel = (int)(player.Level ?? 1);
 
-            var applied      = new List<string>();
-            var pending      = new SortedDictionary<int, List<string>>();
-            var notObtainable = new List<string>();
+            var applied      = new List<(Skill skill, string displayName)>();
+            var pending      = new SortedDictionary<int, List<(Skill skill, string displayName)>>();
+            var notObtainable = new List<(Skill skill, string displayName)>();
 
             foreach (var entry in planStr.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
@@ -126,17 +216,31 @@ namespace ACE.Server.Command.Handlers
                 if (!System.Enum.TryParse<Skill>(parts[0], out var sk)) continue;
                 if (!int.TryParse(parts[1], out var lvl)) continue;
 
-                var displayName = sk.ToSentence();
+                var currentSkill = player.GetCreatureSkill(sk);
+                var isSpecialized = currentSkill != null && currentSkill.AdvancementClass == SkillAdvancementClass.Specialized;
+                var displayName = FormatSkillName(sk, isSpecialized);
+
                 if (lvl == 0 || lvl == -1)
-                    applied.Add(displayName);
+                    applied.Add((sk, displayName));
                 else if (lvl == -2)
-                    notObtainable.Add(displayName);
+                    notObtainable.Add((sk, FormatSkillName(sk, false)));
                 else if (lvl > 0)
                 {
                     if (!pending.ContainsKey(lvl))
-                        pending[lvl] = new List<string>();
-                    pending[lvl].Add(displayName);
+                        pending[lvl] = new List<(Skill, string)>();
+                    pending[lvl].Add((sk, FormatSkillName(sk, false)));
                 }
+            }
+
+            foreach (var milestone in lifeMilestones)
+            {
+                if (milestone <= currentLevel || claimedLifeMilestones.Contains(milestone))
+                    continue;
+
+                if (!pending.ContainsKey(milestone))
+                    pending[milestone] = new List<(Skill, string)>();
+
+                pending[milestone].Add((Skill.None, "+1 Hardcore life (max 3)"));
             }
 
             var sb = new StringBuilder();
@@ -146,10 +250,10 @@ namespace ACE.Server.Command.Handlers
 
             if (applied.Count > 0)
             {
-                applied.Sort();
-                sb.AppendLine("  Obtained skills:");
-                foreach (var s in applied)
-                    sb.AppendLine($"    {s}");
+                applied.Sort((a, b) => a.displayName.CompareTo(b.displayName));
+                sb.AppendLine("  Obtained skills (Level 0):");
+                foreach (var (skill, displayName) in applied)
+                    sb.AppendLine($"    {displayName}");
                 sb.AppendLine();
             }
 
@@ -157,17 +261,20 @@ namespace ACE.Server.Command.Handlers
             {
                 sb.AppendLine("  Upcoming milestones:");
                 foreach (var kv in pending)
-                    foreach (var s in kv.Value)
-                        sb.AppendLine($"    Level {kv.Key}: {s}");
+                {
+                    kv.Value.Sort((a, b) => a.displayName.CompareTo(b.displayName));
+                    foreach (var (skill, displayName) in kv.Value)
+                        sb.AppendLine($"    Level {kv.Key}: {displayName}");
+                }
                 sb.AppendLine();
             }
 
             if (notObtainable.Count > 0)
             {
-                notObtainable.Sort();
+                notObtainable.Sort((a, b) => a.displayName.CompareTo(b.displayName));
                 sb.AppendLine("  Not obtainable:");
-                foreach (var s in notObtainable)
-                    sb.AppendLine($"    {s}");
+                foreach (var (skill, displayName) in notObtainable)
+                    sb.AppendLine($"    {displayName}");
             }
 
             player.SendMessage(sb.ToString(), ChatMessageType.System);
@@ -280,6 +387,12 @@ namespace ACE.Server.Command.Handlers
                         return;
                     }
                     ApplyHardcoreStandalone(player);
+                    
+                    // Global announcement for Hardcore activation
+                    var hardcoreMsg = $"[HARDCORE] {player.Name} has entered Hardcore mode. One life remains.";
+                    var hardcoreBroadcast = new GameMessageSystemChat(hardcoreMsg, ChatMessageType.WorldBroadcast);
+                    PlayerManager.BroadcastToAll(hardcoreBroadcast);
+                    PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, hardcoreMsg);
                     break;
 
                 default:

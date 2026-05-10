@@ -5,11 +5,14 @@ using System.Text;
 
 using ACE.Common;
 using ACE.DatLoader;
+using ACE.DatLoader.FileTypes;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
+using ACE.Server.Network.Enum;
+using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
 
@@ -37,53 +40,119 @@ namespace ACE.Server.Factories
     {
         // ---------- Hardcoded settings (mirrors aquafir's Settings.cs) ----------
 
-        private static readonly Skill[] PrimarySkillPool =
+        private readonly struct IronmanCharacterSizeOption
         {
-            Skill.TwoHandedCombat,
-            Skill.MissileWeapons,
-            Skill.WarMagic,
-            Skill.VoidMagic,
-            Skill.LightWeapons,
-            Skill.HeavyWeapons,
-            Skill.FinesseWeapons,
+            public IronmanCharacterSizeOption(string label, float scaleMultiplier)
+            {
+                Label = label;
+                ScaleMultiplier = scaleMultiplier;
+            }
+
+            public string Label { get; }
+            public float ScaleMultiplier { get; }
+        }
+
+        // Mirrors the webpage race list.
+        private static readonly HeritageGroup[] IronmanRacePool =
+        {
+            HeritageGroup.Aluvian,
+            HeritageGroup.Gharundim,
+            HeritageGroup.Sho,
+            HeritageGroup.Viamontian,
+            HeritageGroup.Shadowbound, // Umbraen
+            HeritageGroup.Penumbraen,  // Panumoraen
+            HeritageGroup.Gearknight,
+            HeritageGroup.Undead,
+            HeritageGroup.Empyrean,
+            HeritageGroup.Tumerok,     // Aun Tumerok
+            HeritageGroup.Lugian,
         };
 
-        private static readonly HashSet<Skill> AugmentSpecializations = new HashSet<Skill>
+        // Mirrors the webpage character size list.
+        private static readonly IronmanCharacterSizeOption[] IronmanCharacterSizes =
         {
-            Skill.Salvaging,
-            Skill.ArmorTinkering,
-            Skill.ItemTinkering,
-            Skill.MagicItemTinkering,
-            Skill.WeaponTinkering,
+            new IronmanCharacterSizeOption("Extended Growth", 1.08f),
+            new IronmanCharacterSizeOption("Growth", 1.04f),
+            new IronmanCharacterSizeOption("Average", 1.00f),
+            new IronmanCharacterSizeOption("Degrowth", 0.96f),
+            new IronmanCharacterSizeOption("Extended Degrowth", 0.92f),
         };
 
-        private static readonly Skill[] SecondarySkillPool =
+        private readonly struct IronmanWeaponOption
         {
-            Skill.Alchemy,
-            Skill.ArmorTinkering,
-            Skill.AssessCreature,
-            Skill.AssessPerson,
-            Skill.Cooking,
-            Skill.CreatureEnchantment,
-            Skill.Deception,
-            Skill.DirtyFighting,
-            Skill.DualWield,
-            Skill.Fletching,
-            Skill.Healing,
-            Skill.ItemEnchantment,
-            Skill.ItemTinkering,
-            Skill.Leadership,
-            Skill.LifeMagic,
-            Skill.Lockpick,
-            Skill.MagicItemTinkering,
-            Skill.ManaConversion,
-            Skill.MeleeDefense,
-            Skill.MissileDefense,
-            Skill.Recklessness,
-            Skill.Shield,
-            Skill.SneakAttack,
-            Skill.Summoning,
-            Skill.WeaponTinkering,
+            public IronmanWeaponOption(Skill skill, int trainCost, bool isMagic)
+            {
+                Skill = skill;
+                TrainCost = trainCost;
+                IsMagic = isMagic;
+            }
+
+            public Skill Skill { get; }
+            public int TrainCost { get; }
+            public bool IsMagic { get; }
+        }
+
+        private readonly struct IronmanPrimarySkillOption
+        {
+            public IronmanPrimarySkillOption(Skill skill, int trainCost, int specCost)
+            {
+                Skill = skill;
+                TrainCost = trainCost;
+                SpecCost = specCost;
+            }
+
+            public Skill Skill { get; }
+            public int TrainCost { get; }
+            public int SpecCost { get; }
+        }
+
+        // Mirrors website weapon array ordering and train-cost values.
+        private static readonly IronmanWeaponOption[] WeaponSkillPool =
+        {
+            new IronmanWeaponOption(Skill.FinesseWeapons, 8, false),
+            new IronmanWeaponOption(Skill.LightWeapons, 8, false),
+            new IronmanWeaponOption(Skill.HeavyWeapons, 12, false),
+            new IronmanWeaponOption(Skill.TwoHandedCombat, 16, false),
+            new IronmanWeaponOption(Skill.MissileWeapons, 12, false),
+            new IronmanWeaponOption(Skill.VoidMagic, 28, true),
+            new IronmanWeaponOption(Skill.WarMagic, 28, true),
+            new IronmanWeaponOption(Skill.LifeMagic, 20, true),
+        };
+
+        // Mirrors website primary array ordering and train/spec costs.
+        private static readonly IronmanPrimarySkillOption[] PrimarySkillPool =
+        {
+            new IronmanPrimarySkillOption(Skill.ArmorTinkering, 4, 0),
+            new IronmanPrimarySkillOption(Skill.AssessCreature, 4, 2),
+            new IronmanPrimarySkillOption(Skill.AssessPerson, 2, 2),
+            new IronmanPrimarySkillOption(Skill.Deception, 4, 2),
+            new IronmanPrimarySkillOption(Skill.DualWield, 2, 2),
+            new IronmanPrimarySkillOption(Skill.ItemTinkering, 2, 0),
+            new IronmanPrimarySkillOption(Skill.Leadership, 4, 2),
+            new IronmanPrimarySkillOption(Skill.MagicItemTinkering, 4, 0),
+            new IronmanPrimarySkillOption(Skill.MeleeDefense, 10, 10),
+            new IronmanPrimarySkillOption(Skill.MissileDefense, 6, 4),
+            new IronmanPrimarySkillOption(Skill.Shield, 2, 2),
+            new IronmanPrimarySkillOption(Skill.WeaponTinkering, 4, 0),
+            new IronmanPrimarySkillOption(Skill.Alchemy, 6, 6),
+            new IronmanPrimarySkillOption(Skill.Cooking, 4, 4),
+            new IronmanPrimarySkillOption(Skill.CreatureEnchantment, 8, 8),
+            new IronmanPrimarySkillOption(Skill.DirtyFighting, 2, 2),
+            new IronmanPrimarySkillOption(Skill.Fletching, 4, 4),
+            new IronmanPrimarySkillOption(Skill.Healing, 6, 4),
+            new IronmanPrimarySkillOption(Skill.ItemEnchantment, 8, 8),
+            new IronmanPrimarySkillOption(Skill.LifeMagic, 12, 8),
+            new IronmanPrimarySkillOption(Skill.Lockpick, 6, 4),
+            new IronmanPrimarySkillOption(Skill.ManaConversion, 6, 6),
+            new IronmanPrimarySkillOption(Skill.SneakAttack, 4, 2),
+            new IronmanPrimarySkillOption(Skill.Summoning, 8, 4),
+
+            // Website "pretrained" entries
+            new IronmanPrimarySkillOption(Skill.ArcaneLore, 0, 2),
+            new IronmanPrimarySkillOption(Skill.Jump, 0, 4),
+            new IronmanPrimarySkillOption(Skill.Loyalty, 0, 2),
+            new IronmanPrimarySkillOption(Skill.MagicDefense, 0, 12),
+            new IronmanPrimarySkillOption(Skill.Run, 0, 4),
         };
 
         private static readonly SpellId[] DefaultSpells =
@@ -113,10 +182,10 @@ namespace ACE.Server.Factories
         {
             [Skill.WarMagic]       = new[] { "12748", "20631 100", "691 10" },
             [Skill.VoidMagic]      = new[] { "12748", "20631 100", "691 10" },
-            [Skill.LightWeapons]   = new[] { "30857" },               // wood training short sword
-            [Skill.HeavyWeapons]   = new[] { "30857" },
-            [Skill.FinesseWeapons] = new[] { "30857" },
-            [Skill.TwoHandedCombat] = new[] { "30857" },
+            [Skill.LightWeapons]   = new[] { "12739" },               // Training Dirk
+            [Skill.HeavyWeapons]   = new[] { "12740" },               // Training Battle Axe
+            [Skill.FinesseWeapons] = new[] { "12739" },               // Training Dirk
+            [Skill.TwoHandedCombat] = new[] { "41512" },              // Training Spadone
             [Skill.MissileWeapons] = new[] { "300", "302 50" },        // training bow + arrows
         };
 
@@ -132,48 +201,86 @@ namespace ACE.Server.Factories
                 return;
             }
 
-            // Reroll attributes and skills first; RollSkills returns the rolled primary skill
-            RollAttributes(player);
-            var rolledPrimary = RollSkills(player);
+            var rolledPrimary = Skill.None;
 
-            // Wipe inventory (everything in side packs + main pack + equipped)
-            WipeInventory(player);
-
-            // Wipe known spells, then learn the default low-level set on a short delay
-            // so the spellbook update lands after the inventory wipe networking settles.
-            // We also apply at-creation / level-0 skill grants here so the client is fully
-            // settled after the attribute/skill reset storm before we push new skill updates.
-            WipeKnownSpells(player);
+            // Cinematic flow: play EnterPortal emote first, then perform each verbose step with 1-second spacing.
+            player.SendMotionAsCommands(MotionCommand.EnterPortal, MotionStance.NonCombat);
 
             var chain = new ActionChain();
-            chain.AddDelaySeconds(2.0);
+            chain.AddDelaySeconds(1.0);
             chain.AddAction(player, () =>
             {
+                player.SendMessage("Ironman step 1/6: rerolling heritage, appearance, attributes, and skills...");
+                RollHeritageAndAppearance(player);
+                RollAttributes(player);
+                rolledPrimary = RollSkills(player);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Ironman step 2/6: wiping inventory...");
+                WipeInventory(player);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Ironman step 3/6: wiping known spells...");
+                WipeKnownSpells(player);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Ironman step 4/6: applying ironman skill milestones...");
+
                 // Apply at-creation skills and any milestones already met (real-time, no relog).
                 ApplyIronmanPlanForLevel(player, player.Level ?? 1, announceGrants: false);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Ironman step 5/6: teaching starter spells...");
 
                 foreach (var spellId in DefaultSpells)
                     player.LearnSpellWithNetworking((uint)spellId, false);
 
                 player.SendMessage("You have been taught the basic spells available to all Ironmen.");
             });
-            chain.EnqueueChain();
 
-            // Grant Ironman-specific starter items, then normal creation gear based on trained skills
-            GiveStarterItems(player, rolledPrimary);
-            GiveStarterGear(player);
+            chain.AddAction(player, () => player.SendMotionAsCommands(MotionCommand.ExitPortal, MotionStance.NonCombat));
+
+            chain.AddDelaySeconds(3.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Ironman step 6/6: granting starter gear...");
+                GiveStarterItems(player, rolledPrimary);
+                GiveStarterGear(player);
+
+                // Final pass after all conversion actions so every remaining item is correctly tagged.
+                TagAllPossessions(player);
+
+                player.SendMessage(DerpACEConfig.IronmanWelcomeMessage);
+                for (var i = 0; i < 6; i++)
+                    player.PlayParticleEffect(PlayScript.SkillUpPurple, player.Guid);
+            });
+
+            chain.AddAction(player, () => player.SendMotionAsCommands(MotionCommand.Cheer, MotionStance.NonCombat));
+            chain.AddAction(player, () => player.SendMotionAsCommands(MotionCommand.Wave, MotionStance.NonCombat));
+
+            chain.AddDelaySeconds(2.0);
+            chain.AddAction(player, () =>
+            {
+                const string relogMsg = "finalizing ironman mode - Relog!";
+                player.Session.Terminate(SessionTerminationReason.ForcedLogOffRequested, new GameMessageBootAccount($" - {relogMsg}"));
+            });
+            chain.EnqueueChain();
 
             // Hardcore + flag + visual
             ApplyHardcore(player);
             ApplyIronmanFlag(player);
-
-            // Tag every possession we now have so wield/use checks pass
-            TagAllPossessions(player);
-
-            // Welcome message + flair
-            player.SendMessage(DerpACEConfig.IronmanWelcomeMessage);
-            for (var i = 0; i < 6; i++)
-                player.PlayParticleEffect(PlayScript.SkillUpPurple, player.Guid);
         }
 
         // ---------- Attribute reroll ----------
@@ -195,8 +302,17 @@ namespace ACE.Server.Factories
 
         // ---------- Skill reroll ----------
 
-        // Milestone levels at which the Ironman plan grants new skills
-        private static readonly int[] SkillMilestones = { 5, 12, 20, 32, 50, 70, 100, 130, 150, 175, 200, 225, 250, 275 };
+        // Milestone levels mirror the website's level array.
+        private static readonly int[] SkillMilestones =
+        {
+            2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 23, 26, 29, 32, 35,
+            40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115,
+            120, 125, 130, 140, 150, 160, 180, 200, 225, 250, 275,
+        };
+
+        // Extra hardcore life milestones between levels 1-275.
+        private static readonly int[] HardcoreLifeMilestones = { 75, 150, 225 };
+        private const int IronmanMaxHardcoreLives = 3;
 
         /// <summary>
         /// Resets all skills, builds a level-milestone plan, and immediately applies any skills
@@ -213,63 +329,248 @@ namespace ACE.Server.Factories
 
             var plan = new Dictionary<Skill, int>();
 
-            // Pick + freely train + specialize primary weapon/magic skill (0 credit cost)
-            var primary = PrimarySkillPool[ThreadSafeRandom.Next(0, PrimarySkillPool.Length - 1)];
-            player.TrainSkill(primary, 0);
-            player.SpecializeSkill(primary, 0, false);
-            plan[primary] = 0; // 0 = already applied
-            // Push primary skill update to client immediately; always show 0 credits for Ironman
-            player.Session.Network.EnqueueSend(
-                new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(primary)),
-                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, 0));
+            // Roll the weapon skill from website-equivalent list, then freely train+spec it.
+            var rolledWeapon = WeaponSkillPool[ThreadSafeRandom.Next(0, WeaponSkillPool.Length - 1)];
+            player.TrainSkill(rolledWeapon.Skill, 0);
+            player.SpecializeSkill(rolledWeapon.Skill, 0, false);
+            plan[rolledWeapon.Skill] = 0;
+            SendIronmanSkillUpdate(player, rolledWeapon.Skill);
 
-            // Secondary: ManaConversion for magic primaries, else random non-aug skill
-            var pool = new List<Skill>(SecondarySkillPool);
-            pool.Remove(primary);
+            // Build mutable primary list from website-equivalent list.
+            var primaryPool = new List<IronmanPrimarySkillOption>(PrimarySkillPool);
 
-            bool isMagicPrimary = primary == Skill.WarMagic || primary == Skill.VoidMagic || primary == Skill.LifeMagic;
-            var secondary = isMagicPrimary
-                ? Skill.ManaConversion
-                : pool.Where(x => !AugmentSpecializations.Contains(x))
-                      .OrderBy(_ => ThreadSafeRandom.Next(0, int.MaxValue - 1))
-                      .FirstOrDefault();
+            // Magic primaries auto-train Mana Conversion (handled by prepending below).
+            if (rolledWeapon.IsMagic)
+                primaryPool.RemoveAll(x => x.Skill == Skill.ManaConversion);
 
-            if (secondary != Skill.None)
+            // If weapon is Life Magic, remove Life Magic from the primary pool.
+            if (rolledWeapon.Skill == Skill.LifeMagic)
+                primaryPool.RemoveAll(x => x.Skill == Skill.LifeMagic);
+
+            // Shuffle until first option has a non-zero specialization cost,
+            // mirroring the website's while(primary[0][2] == 0) guard.
+            do
             {
-                player.TrainSkill(secondary, 0);
-                if (!isMagicPrimary)
-                    player.SpecializeSkill(secondary, 0, false);
-                plan[secondary] = 0;
-                pool.Remove(secondary);
-                // Push secondary skill update to client immediately; always show 0 credits for Ironman
-                player.Session.Network.EnqueueSend(
-                    new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(secondary)),
-                    new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, 0));
+                Shuffle(primaryPool);
+            }
+            while (primaryPool.Count > 0 && primaryPool[0].SpecCost == 0);
+
+            // For magic weapon builds, force Mana Conversion to the front (trained only).
+            if (rolledWeapon.IsMagic)
+                primaryPool.Insert(0, new IronmanPrimarySkillOption(Skill.ManaConversion, 6, 6));
+
+            // Apply first primary option immediately:
+            // - magic builds: trained only (website treats Mana Conversion as auto-trained)
+            // - non-magic builds: train + spec first rolled primary option
+            if (primaryPool.Count > 0)
+            {
+                var firstPrimary = primaryPool[0];
+                if (!plan.ContainsKey(firstPrimary.Skill))
+                {
+                    if (player.GetCreatureSkill(firstPrimary.Skill)?.AdvancementClass < SkillAdvancementClass.Trained)
+                        player.TrainSkill(firstPrimary.Skill, 0);
+
+                    if (!rolledWeapon.IsMagic && firstPrimary.SpecCost > 0)
+                        player.SpecializeSkill(firstPrimary.Skill, 0, false);
+
+                    plan[firstPrimary.Skill] = 0;
+                    SendIronmanSkillUpdate(player, firstPrimary.Skill);
+                }
             }
 
-            // Fisher-Yates shuffle the remaining pool
-            for (int i = pool.Count - 1; i > 0; i--)
+            // Remaining primary options unlock by milestone levels.
+            int milestoneIndex = 0;
+            for (int i = 1; i < primaryPool.Count; i++)
             {
-                int j = ThreadSafeRandom.Next(0, i);
-                var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+                var skill = primaryPool[i].Skill;
+                if (plan.ContainsKey(skill))
+                    continue;
+
+                if (milestoneIndex < SkillMilestones.Length)
+                    plan[skill] = SkillMilestones[milestoneIndex++];
+                else
+                    plan[skill] = -2;
             }
-
-            // Assign: 2-4 extra at-creation skills (-1), one per milestone, rest not-obtainable (-2)
-            int atCreationCount = ThreadSafeRandom.Next(2, 4);
-            int idx = 0;
-            for (int i = 0; i < atCreationCount && idx < pool.Count; i++, idx++)
-                plan[pool[idx]] = -1;
-
-            for (int m = 0; m < SkillMilestones.Length && idx < pool.Count; m++, idx++)
-                plan[pool[idx]] = SkillMilestones[m];
-
-            for (; idx < pool.Count; idx++)
-                plan[pool[idx]] = -2;
 
             // Serialize and store the plan — at-creation grants will be applied by the delayed chain.
             player.SetProperty(PropertyString.IronmanPlan, string.Join(";", plan.Select(kv => $"{kv.Key}:{kv.Value}")));
 
-            return primary;
+            return rolledWeapon.Skill;
+        }
+
+        private static void RollHeritageAndAppearance(Player player)
+        {
+            var raceRoll = IronmanRacePool[ThreadSafeRandom.Next(0, IronmanRacePool.Length - 1)];
+            var charSize = IronmanCharacterSizes[ThreadSafeRandom.Next(0, IronmanCharacterSizes.Length - 1)];
+            var appearanceRoll = ThreadSafeRandom.Next(1, 15);
+
+            var heritageGroup = DatManager.PortalDat.CharGen.HeritageGroups[(uint)raceRoll];
+            if (heritageGroup == null || heritageGroup.Genders == null || heritageGroup.Genders.Count == 0)
+                return;
+
+            var genderKeys = heritageGroup.Genders.Keys.ToList();
+            var genderKey = genderKeys[ThreadSafeRandom.Next(0, genderKeys.Count - 1)];
+            var sex = heritageGroup.Genders[(int)genderKey];
+
+            // Build appearance indices safely from DAT lists.
+            var hairStyleIndex = PickAppearanceIndex(sex.HairStyleList?.Count ?? 0, appearanceRoll);
+            var hairColorIndex = PickAppearanceIndex(sex.HairColorList?.Count ?? 0, appearanceRoll);
+            var eyeIndex = PickAppearanceIndex(sex.EyeStripList?.Count ?? 0, appearanceRoll);
+            var eyeColorIndex = PickAppearanceIndex(sex.EyeColorList?.Count ?? 0, appearanceRoll);
+            var noseIndex = PickAppearanceIndex(sex.NoseStripList?.Count ?? 0, appearanceRoll);
+            var mouthIndex = PickAppearanceIndex(sex.MouthStripList?.Count ?? 0, appearanceRoll);
+
+            var skinHue = (float)ThreadSafeRandom.Next(0.0f, 1.0f);
+            var hairHue = (float)ThreadSafeRandom.Next(0.0f, 1.0f);
+
+            player.SetProperty(PropertyInt.HeritageGroup, (int)raceRoll);
+            player.SetProperty(PropertyString.HeritageGroup, heritageGroup.Name);
+            player.SetProperty(PropertyInt.Gender, (int)genderKey);
+            player.SetProperty(PropertyString.Sex, (int)genderKey == 1 ? "Male" : "Female");
+
+            player.SetProperty(PropertyDataId.MotionTable, sex.MotionTable);
+            player.SetProperty(PropertyDataId.SoundTable, sex.SoundTable);
+            player.SetProperty(PropertyDataId.PhysicsEffectTable, sex.PhysicsTable);
+            player.SetProperty(PropertyDataId.Setup, sex.SetupID);
+            player.SetProperty(PropertyDataId.PaletteBase, sex.BasePalette);
+            player.SetProperty(PropertyDataId.CombatTable, sex.CombatTable);
+
+            var baseScale = sex.Scale / 100.0f;
+            player.SetProperty(PropertyFloat.DefaultScale, baseScale * charSize.ScaleMultiplier);
+
+            var hairstyle = sex.HairStyleList[hairStyleIndex];
+
+            if (hairstyle.ObjDesc.AnimPartChanges.Count > 1)
+                player.SetProperty(PropertyInt.Hairstyle, hairStyleIndex);
+            else
+                player.RemoveProperty(PropertyInt.Hairstyle);
+
+            if (hairstyle.AlternateSetup > 0)
+                player.SetProperty(PropertyDataId.Setup, hairstyle.AlternateSetup);
+
+            player.SetProperty(PropertyDataId.EyesTexture, sex.GetEyeTexture((uint)eyeIndex, hairstyle.Bald));
+            player.SetProperty(PropertyDataId.DefaultEyesTexture, sex.GetDefaultEyeTexture((uint)eyeIndex, hairstyle.Bald));
+            player.SetProperty(PropertyDataId.NoseTexture, sex.GetNoseTexture((uint)noseIndex));
+            player.SetProperty(PropertyDataId.DefaultNoseTexture, sex.GetDefaultNoseTexture((uint)noseIndex));
+            player.SetProperty(PropertyDataId.MouthTexture, sex.GetMouthTexture((uint)mouthIndex));
+            player.SetProperty(PropertyDataId.DefaultMouthTexture, sex.GetDefaultMouthTexture((uint)mouthIndex));
+
+            player.CharacterDatabaseLock.EnterWriteLock();
+            try
+            {
+                player.Character.HairTexture = sex.GetHairTexture((uint)hairStyleIndex) ?? 0;
+                player.Character.DefaultHairTexture = sex.GetDefaultHairTexture((uint)hairStyleIndex) ?? 0;
+                player.CharacterChangesDetected = true;
+            }
+            finally
+            {
+                player.CharacterDatabaseLock.ExitWriteLock();
+            }
+
+            var headObject = sex.GetHeadObject((uint)hairStyleIndex);
+            if (headObject != null)
+                player.SetProperty(PropertyDataId.HeadObject, (uint)headObject);
+            else
+                player.RemoveProperty(PropertyDataId.HeadObject);
+
+            var skinPalSet = DatManager.PortalDat.ReadFromDat<PaletteSet>(sex.SkinPalSet);
+            if (skinPalSet != null)
+            {
+                player.SetProperty(PropertyDataId.SkinPalette, skinPalSet.GetPaletteID(skinHue));
+                player.SetProperty(PropertyFloat.Shade, skinHue);
+            }
+
+            if (sex.HairColorList.Count > hairColorIndex)
+            {
+                var hairPalSet = DatManager.PortalDat.ReadFromDat<PaletteSet>(sex.HairColorList[hairColorIndex]);
+                if (hairPalSet != null)
+                    player.SetProperty(PropertyDataId.HairPalette, hairPalSet.GetPaletteID(hairHue));
+            }
+
+            if (sex.EyeColorList.Count > eyeColorIndex)
+                player.SetProperty(PropertyDataId.EyesPalette, sex.EyeColorList[eyeColorIndex]);
+
+            GetMasteriesByHeritage(raceRoll, out WeaponType meleeMastery, out WeaponType rangedMastery);
+            player.SetProperty(PropertyInt.MeleeMastery, (int)meleeMastery);
+            player.SetProperty(PropertyInt.RangedMastery, (int)rangedMastery);
+
+            player.SendMessage($"[Ironman] Rolled heritage: {heritageGroup.Name} | Size: {charSize.Label}", ChatMessageType.System);
+        }
+
+        private static int PickAppearanceIndex(int count, int appearanceRoll)
+        {
+            if (count <= 0)
+                return 0;
+
+            var offset = ThreadSafeRandom.Next(0, count - 1);
+            return (appearanceRoll + offset) % count;
+        }
+
+        private static void GetMasteriesByHeritage(HeritageGroup heritageGroup, out WeaponType meleeMastery, out WeaponType rangedMastery)
+        {
+            switch (heritageGroup)
+            {
+                case HeritageGroup.Aluvian:
+                    meleeMastery = WeaponType.Dagger;
+                    rangedMastery = WeaponType.Bow;
+                    break;
+                case HeritageGroup.Gharundim:
+                    meleeMastery = WeaponType.Staff;
+                    rangedMastery = WeaponType.Magic;
+                    break;
+                case HeritageGroup.Sho:
+                    meleeMastery = WeaponType.Unarmed;
+                    rangedMastery = WeaponType.Bow;
+                    break;
+                case HeritageGroup.Viamontian:
+                    meleeMastery = WeaponType.Sword;
+                    rangedMastery = WeaponType.Crossbow;
+                    break;
+                case HeritageGroup.Penumbraen:
+                case HeritageGroup.Shadowbound:
+                    meleeMastery = WeaponType.Unarmed;
+                    rangedMastery = WeaponType.Crossbow;
+                    break;
+                case HeritageGroup.Gearknight:
+                    meleeMastery = WeaponType.Mace;
+                    rangedMastery = WeaponType.Crossbow;
+                    break;
+                case HeritageGroup.Tumerok:
+                    meleeMastery = WeaponType.Spear;
+                    rangedMastery = WeaponType.Thrown;
+                    break;
+                case HeritageGroup.Undead:
+                case HeritageGroup.Lugian:
+                    meleeMastery = WeaponType.Axe;
+                    rangedMastery = WeaponType.Thrown;
+                    break;
+                case HeritageGroup.Empyrean:
+                    meleeMastery = WeaponType.Sword;
+                    rangedMastery = WeaponType.Magic;
+                    break;
+                default:
+                    meleeMastery = WeaponType.Undef;
+                    rangedMastery = WeaponType.Undef;
+                    break;
+            }
+        }
+
+        private static void Shuffle<T>(IList<T> list)
+        {
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = ThreadSafeRandom.Next(0, i);
+                var tmp = list[i];
+                list[i] = list[j];
+                list[j] = tmp;
+            }
+        }
+
+        private static void SendIronmanSkillUpdate(Player player, Skill skill)
+        {
+            player.Session.Network.EnqueueSend(
+                new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(skill)),
+                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, 0));
         }
 
         /// <summary>
@@ -339,6 +640,7 @@ namespace ACE.Server.Factories
         {
             if (player.GetProperty(PropertyBool.IsIronman) != true) return;
             ApplyIronmanPlanForLevel(player, player.Level ?? 1, announceGrants: true);
+            ApplyIronmanLifeMilestones(player, player.Level ?? 1);
         }
 
         // ---------- Inventory wipe ----------
@@ -481,6 +783,7 @@ namespace ACE.Server.Factories
         private static void ApplyIronmanFlag(Player player)
         {
             player.SetProperty(PropertyBool.IsIronman, true);
+            player.RemoveProperty(PropertyString.IronmanLifeMilestones);
             player.RadarColor = RadarColor.Sentinel;
             player.SetModeTitle("IRONMAN");
             player.QuestManager.Stamp("IronmanChallenge");
@@ -507,5 +810,67 @@ namespace ACE.Server.Factories
                     item.SetProperty(PropertyBool.IsIronmanItem, true);
             }
         }
+
+        private static HashSet<int> GetClaimedLifeMilestones(Player player)
+        {
+            var raw = player.GetProperty(PropertyString.IronmanLifeMilestones) ?? string.Empty;
+            var claimed = new HashSet<int>();
+
+            foreach (var token in raw.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (int.TryParse(token, out var level))
+                    claimed.Add(level);
+            }
+
+            return claimed;
+        }
+
+        private static void SaveClaimedLifeMilestones(Player player, HashSet<int> claimed)
+        {
+            if (claimed == null || claimed.Count == 0)
+            {
+                player.RemoveProperty(PropertyString.IronmanLifeMilestones);
+                return;
+            }
+
+            player.SetProperty(PropertyString.IronmanLifeMilestones, string.Join(";", claimed.OrderBy(x => x)));
+        }
+
+        private static void ApplyIronmanLifeMilestones(Player player, int currentLevel)
+        {
+            if (player.GetProperty(PropertyBool.IsIronman) != true)
+                return;
+
+            var claimed = GetClaimedLifeMilestones(player);
+            var changed = false;
+            var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? DerpACEConfig.IronmanHardcoreStartingLives;
+
+            foreach (var milestone in HardcoreLifeMilestones)
+            {
+                if (currentLevel < milestone || claimed.Contains(milestone))
+                    continue;
+
+                claimed.Add(milestone);
+                changed = true;
+
+                var previousLives = lives;
+                lives = Math.Min(IronmanMaxHardcoreLives, lives + 1);
+
+                if (lives > previousLives)
+                    player.SendMessage($"[Ironman] Milestone reached (Level {milestone}): +1 hardcore life ({lives}/{IronmanMaxHardcoreLives}).", ChatMessageType.Advancement);
+                else
+                    player.SendMessage($"[Ironman] Milestone reached (Level {milestone}), but lives are already capped at {IronmanMaxHardcoreLives}.", ChatMessageType.Advancement);
+            }
+
+            if (!changed)
+                return;
+
+            player.SetProperty(PropertyInt.HardcoreLives, lives);
+            SaveClaimedLifeMilestones(player, claimed);
+        }
+
+        public static IReadOnlyList<int> GetHardcoreLifeMilestones() => HardcoreLifeMilestones;
+
+        public static HashSet<int> GetClaimedHardcoreLifeMilestones(Player player) => GetClaimedLifeMilestones(player);
     }
 }
