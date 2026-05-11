@@ -610,7 +610,9 @@ namespace ACE.Server.Managers
                 ("version_info_enabled", new Property<bool>(false, "toggles the /aceversion player command")),
                 ("vendor_shop_uses_generator", new Property<bool>(false, "enables or disables vendors using generator system in addition to createlist to create artificial scarcity")),
                 ("world_closed", new Property<bool>(false, "enable this to startup world as a closed to players world")),
-                ("pathfinding", new Property<bool>(true, "Allows creatures to use pathfinding to navigate dungeons"))
+                ("pathfinding", new Property<bool>(true, "Allows creatures to use pathfinding to navigate dungeons")),
+                ("pathfinding_prebuild_on_boot", new Property<bool>(true, "If TRUE, the server will scan all landblocks on startup and pre-build any missing navmesh files in the background. Once the on-disk cache is populated, subsequent boots are nearly instant.")),
+                ("pathfinding_fast_outdoor_mesh", new Property<bool>(true, "If TRUE, outdoor navmeshes are built with the MONOTONE partition algorithm, larger voxels, and no detail-mesh sampling. Several times faster to build with slightly chunkier polygons. Set FALSE for higher-fidelity meshes."))
                 );
 
         public static readonly ReadOnlyDictionary<string, Property<long>> DefaultLongProperties =
@@ -629,7 +631,8 @@ namespace ACE.Server.Managers
                 ("rares_max_days_between", new Property<long>(45, "for rares_real_time_v2: the maximum number of days a player can go before a rare is generated on rare eligible creature kills")),
                 ("rares_max_seconds_between", new Property<long>(5256000, "for rares_real_time: the maximum number of seconds a player can go before a second chance at a rare is allowed on rare eligible creature kills that did not generate a rare")),
                 ("summoning_killtask_multicredit_cap", new Property<long>(2, "if allow_summoning_killtask_multicredit is enabled, the maximum # of killtask credits a player can receive from 1 kill")),
-                ("teleport_visibility_fix", new Property<long>(0, "Fixes some possible issues with invisible players and mobs. 0 = default / disabled, 1 = players only, 2 = creatures, 3 = all world objects"))
+                ("teleport_visibility_fix", new Property<long>(0, "Fixes some possible issues with invisible players and mobs. 0 = default / disabled, 1 = players only, 2 = creatures, 3 = all world objects")),
+                ("pathfinding_prebuild_threads", new Property<long>(0, "Number of worker threads used by the boot-time navmesh prebuild. 0 = auto (max(1, ProcessorCount - 2))."))
                 );
 
         public static readonly ReadOnlyDictionary<string, Property<double>> DefaultDoubleProperties =

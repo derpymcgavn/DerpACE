@@ -61,7 +61,7 @@ namespace ACE.Server.Pathfinding.Geometry
         }
     }
 
-    class LandblockGeometryExporter
+    public class LandblockGeometryExporter
     {
         public List<Vector3> Vertices { get; } = new List<Vector3>();
         public List<List<int>> Polygons { get; } = new List<List<int>>();
@@ -77,6 +77,48 @@ namespace ACE.Server.Pathfinding.Geometry
         {
             Geometry = geometry;
             Neighbors = neighbors;
+        }
+
+        /// <summary>
+        /// Outdoor-only constructor for collecting building / static-object collision polygons
+        /// for navmesh subtraction. The exporter's Vertices/Polygons are populated by
+        /// <see cref="LoadOutdoorStaticObjects"/>.
+        /// </summary>
+        public LandblockGeometryExporter(LandblockGeometry geometry)
+        {
+            Geometry = geometry;
+            Neighbors = new List<CellGeometry>();
+        }
+
+        /// <summary>
+        /// Load physics polygons for every static object and building in the landblock's
+        /// outdoor surface (LandblockInfo.Objects + LandblockInfo.Buildings). Frames are
+        /// already in landblock-local coordinates, so vertices end up in the same space
+        /// the terrain uses.
+        /// </summary>
+        public void LoadOutdoorStaticObjects()
+        {
+            var info = Geometry?.LandblockInfo;
+            if (info == null)
+                return;
+
+            if (info.Objects != null)
+            {
+                foreach (var stab in info.Objects)
+                {
+                    var bb = new BoundingBox2();
+                    LoadSetupOrGfxObj(stab.Id, new List<Frame> { stab.Frame }, ref bb);
+                }
+            }
+
+            if (info.Buildings != null)
+            {
+                foreach (var building in info.Buildings)
+                {
+                    var bb = new BoundingBox2();
+                    LoadSetupOrGfxObj(building.ModelId, new List<Frame> { building.Frame }, ref bb);
+                }
+            }
         }
 
         public void LoadLandblockInfo()

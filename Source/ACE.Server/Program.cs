@@ -17,6 +17,7 @@ using ACE.Server.Command;
 using ACE.Server.Managers;
 using ACE.Server.Mods;
 using ACE.Server.Network.Managers;
+using ACE.Server.Pathfinding;
 
 namespace ACE.Server
 {
@@ -307,6 +308,9 @@ namespace ACE.Server
 
             log.Info("Initializing IronmanKillerTracker...");
             IronmanKillerTracker.Initialize();
+
+            log.Info("Initializing CreatureMutatorManager...");
+            Factories.CreatureMutatorManager.Initialize();
 
             log.Info("Initializing GlobalKillQuestManager...");
             GlobalKillQuestManager.Initialize();

@@ -32,7 +32,7 @@ namespace ACE.Server.WorldObjects
             if (result)
             {
                 PathfindingEnabled = Pathfinder.PathfindingEnabled;
-                if (PathfindingEnabled && Location != null && Location.Indoors)
+                if (PathfindingEnabled && Location != null)
                     Pathfinder.TryLoadMesh(Location);
             }
             return result;
@@ -292,9 +292,10 @@ namespace ACE.Server.WorldObjects
 
             var radius = (float)ThreadSafeRandom.Next(radiusMin, radiusMax);
 
-            if (PathfindingEnabled && Location != null && Location.Indoors)
+            if (PathfindingEnabled && Location != null)
             {
-                WanderTarget = Pathfinder.GetRandomPointWithinCircle(Location, radius, AgentWidth.Wide);
+                var agentWidthW = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
+                WanderTarget = Pathfinder.GetRandomPointWithinCircle(Location, radius, agentWidthW);
             }
             else if (Location != null)
             {
@@ -410,7 +411,7 @@ namespace ACE.Server.WorldObjects
             if (!PathfindingEnabled) return;
             if (IsRouting || IsRouteStartPending) return;
             if (Time.GetUnixTime() - LastRouteTime < MaxRouteFrequency) return;
-            if (Location == null || !Location.Indoors) return;
+            if (Location == null) return;
 
             if (route != null)
             {
@@ -421,7 +422,11 @@ namespace ACE.Server.WorldObjects
             }
 
             if (AttackTarget?.Location == null) return;
-            if ((Location.Cell & 0xFFFF0000) != (AttackTarget.Location.Cell & 0xFFFF0000)) return;
+
+            // Allow cross-landblock routes outdoors only.
+            var sameLandblock = (Location.Cell & 0xFFFF0000) == (AttackTarget.Location.Cell & 0xFFFF0000);
+            if (!sameLandblock && (Location.Indoors || AttackTarget.Location.Indoors))
+                return;
 
             var agentWidth = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
             var newRoute = Pathfinder.FindRoute(Location, AttackTarget.Location, agentWidth);

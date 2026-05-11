@@ -1,0 +1,219 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using ACE.Common;
+using ACE.Server.WorldObjects;
+using log4net;
+
+namespace ACE.Server.Factories
+{
+    /// <summary>
+    /// DerpACE: Central registry and controller for creature mutators.
+    /// Manages lifecycle, spawn-time application, and runtime configuration.
+    /// </summary>
+    public static class CreatureMutatorManager
+    {
+        private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+        private static readonly Dictionary<string, CreatureMutator> _mutators = new Dictionary<string, CreatureMutator>(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _lock = new object();
+        private static bool _initialized = false;
+
+        /// <summary>
+        /// All registered mutators.
+        /// </summary>
+        public static IReadOnlyDictionary<string, CreatureMutator> Mutators => _mutators;
+
+        /// <summary>
+        /// Initializes the mutator registry and all registered mutators.
+        /// Called once at server startup.
+        /// </summary>
+        public static void Initialize()
+        {
+            lock (_lock)
+            {
+                if (_initialized) return;
+
+                log.Info("Initializing CreatureMutatorManager...");
+
+                // Register existing DerpACE mob modifiers (refactored from MobModifierFactory)
+                RegisterMutator(new VampiricMutator());
+                RegisterMutator(new ThiefMutator());
+                RegisterMutator(new ScoutMutator());
+                RegisterMutator(new SimulacrumMutator());
+
+                // TODO: Port Expansion creature types
+                // RegisterMutator(new DrainerMutator());
+                // RegisterMutator(new ExploderMutator());
+                // RegisterMutator(new TankMutator());
+                // RegisterMutator(new HealerMutator());
+                // ... etc.
+
+                foreach (var mutator in _mutators.Values)
+                {
+                    try
+                    {
+                        mutator.Initialize();
+                        log.Info($"  Registered mutator: {mutator.Name} (Enabled={mutator.Enabled}, MinTier={mutator.MinTier}, Chance={mutator.Chance:P1})");
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error($"  Failed to initialize mutator {mutator.Name}: {ex.Message}");
+                    }
+                }
+
+                _initialized = true;
+                log.Info($"CreatureMutatorManager initialized with {_mutators.Count} mutators.");
+            }
+        }
+
+        /// <summary>
+        /// Shuts down all mutators. Called at server shutdown.
+        /// </summary>
+        public static void Shutdown()
+        {
+            lock (_lock)
+            {
+                if (!_initialized) return;
+
+                log.Info("Shutting down CreatureMutatorManager...");
+                foreach (var mutator in _mutators.Values)
+                {
+                    try
+                    {
+                        mutator.Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error($"  Error shutting down mutator {mutator.Name}: {ex.Message}");
+                    }
+                }
+
+                _mutators.Clear();
+                _initialized = false;
+                log.Info("CreatureMutatorManager shut down.");
+            }
+        }
+
+        /// <summary>
+        /// Registers a mutator into the manager.
+        /// </summary>
+        private static void RegisterMutator(CreatureMutator mutator)
+        {
+            if (mutator == null)
+                throw new ArgumentNullException(nameof(mutator));
+
+            if (_mutators.ContainsKey(mutator.Name))
+                throw new InvalidOperationException($"Mutator '{mutator.Name}' is already registered.");
+
+            _mutators[mutator.Name] = mutator;
+        }
+
+        /// <summary>
+        /// Attempts to apply all eligible mutators to a spawned creature.
+        /// Called from GeneratorProfile.Spawn after creation.
+        /// </summary>
+        public static void TryApplyMutators(Creature creature)
+        {
+            if (creature == null) return;
+
+            // Compute tier (same logic as old MobModifierFactory)
+            int tier = 1;
+            if (creature.DeathTreasure != null)
+                tier = creature.DeathTreasure.Tier;
+            else if (creature.Level.HasValue)
+                tier = (int)Math.Ceiling(creature.Level.Value / 10.0);
+
+            lock (_lock)
+            {
+                foreach (var mutator in _mutators.Values.OrderBy(m => ThreadSafeRandom.Next(0, 999999)))
+                {
+                    if (!mutator.Enabled) continue;
+
+                    try
+                    {
+                        if (mutator.TryApply(creature, tier))
+                        {
+                            // Only one mutator per creature for now (matches old behavior)
+                            // Future: allow stacking mutators with a priority system
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error($"Error applying mutator {mutator.Name} to {creature.Name}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Finds a mutator by name (case-insensitive).
+        /// </summary>
+        public static CreatureMutator GetMutator(string name)
+        {
+            lock (_lock)
+            {
+                _mutators.TryGetValue(name, out var mutator);
+                return mutator;
+            }
+        }
+
+        /// <summary>
+        /// Enables or disables a mutator by name.
+        /// </summary>
+        public static bool SetMutatorEnabled(string name, bool enabled)
+        {
+            var mutator = GetMutator(name);
+            if (mutator == null) return false;
+
+            mutator.Enabled = enabled;
+            return true;
+        }
+
+        /// <summary>
+        /// Sets the minimum tier requirement for a mutator.
+        /// </summary>
+        public static bool SetMutatorMinTier(string name, int tier)
+        {
+            var mutator = GetMutator(name);
+            if (mutator == null) return false;
+
+            mutator.MinTier = tier;
+            return true;
+        }
+
+        /// <summary>
+        /// Sets the spawn chance for a mutator.
+        /// </summary>
+        public static bool SetMutatorChance(string name, float chance)
+        {
+            var mutator = GetMutator(name);
+            if (mutator == null) return false;
+
+            mutator.Chance = Math.Clamp(chance, 0f, 1f);
+            return true;
+        }
+
+        /// <summary>
+        /// Returns a summary of all registered mutators for admin display.
+        /// </summary>
+        public static string GetMutatorSummary()
+        {
+            lock (_lock)
+            {
+                if (_mutators.Count == 0)
+                    return "No mutators registered.";
+
+                var lines = new List<string> { $"Registered Mutators ({_mutators.Count}):" };
+                foreach (var mutator in _mutators.Values.OrderBy(m => m.Name))
+                {
+                    var status = mutator.Enabled ? "ENABLED" : "DISABLED";
+                    lines.Add($"  [{status}] {mutator.Name}: {mutator.Description}");
+                    lines.Add($"       MinTier={mutator.MinTier}, Chance={mutator.Chance:P1}");
+                }
+
+                return string.Join("\n", lines);
+            }
+        }
+    }
+}

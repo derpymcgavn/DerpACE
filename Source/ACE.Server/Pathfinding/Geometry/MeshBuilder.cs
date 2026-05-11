@@ -1,5 +1,6 @@
 using DotRecast.Detour;
 using DotRecast.Recast;
+using DotRecast.Recast.Geom;
 using DotRecast.Recast.Toolset;
 using DotRecast.Recast.Toolset.Builder;
 
@@ -7,7 +8,7 @@ namespace ACE.Server.Pathfinding.Geometry
 {
     public class NavMeshBuilder
     {
-        public DtMeshData Build(CellGeometryProvider geom, RcNavMeshBuildSettings settings)
+        public DtMeshData Build(IInputGeomProvider geom, RcNavMeshBuildSettings settings)
         {
             return Build(geom,
                 RcPartitionType.OfValue(settings.partitioning),
@@ -21,7 +22,7 @@ namespace ACE.Server.Pathfinding.Geometry
                 settings.keepInterResults);
         }
 
-        public DtMeshData Build(CellGeometryProvider geom,
+        public DtMeshData Build(IInputGeomProvider geom,
             RcPartition partitionType,
             float cellSize, float cellHeight,
             float agentMaxSlope, float agentHeight, float agentRadius, float agentMaxClimb,
@@ -61,14 +62,14 @@ namespace ACE.Server.Pathfinding.Geometry
             return mesh;
         }
 
-        private RcBuilderResult BuildRecastResult(CellGeometryProvider geom, RcConfig cfg, bool keepInterResults)
+        private RcBuilderResult BuildRecastResult(IInputGeomProvider geom, RcConfig cfg, bool keepInterResults)
         {
             RcBuilderConfig bcfg = new RcBuilderConfig(cfg, geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax());
             RcBuilder rcBuilder = new RcBuilder();
             return rcBuilder.Build(geom, bcfg, keepInterResults);
         }
 
-        public DtMeshData BuildMeshData(CellGeometryProvider geom,
+        public DtMeshData BuildMeshData(IInputGeomProvider geom,
             float cellSize, float cellHeight,
             float agentHeight, float agentRadius, float agentMaxClimb,
             RcBuilderResult result)

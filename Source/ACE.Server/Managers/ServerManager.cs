@@ -200,6 +200,10 @@ namespace ACE.Server.Managers
             // Halt mods
             ModManager.Shutdown();
 
+            // Shutdown creature mutator system
+            log.Debug("Shutting down CreatureMutatorManager...");
+            Factories.CreatureMutatorManager.Shutdown();
+
             // Wait for world to end
             logUpdateTS = DateTime.MinValue;
             while (WorldManager.WorldActive)
