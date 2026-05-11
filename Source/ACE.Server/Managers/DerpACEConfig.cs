@@ -33,6 +33,49 @@ namespace ACE.Server.Managers
         /// <summary>Chance per cast to fire the echo proc (0–1). Default 0.06 = 6%.</summary>
         public static float ArchmagiProcChance { get; set; } = 0.06f;
 
+        /// <summary>Targeting weight subtracted from the caster (fragile burst). Default 0.2.</summary>
+        public static float ArchmagiAggroPenalty { get; set; } = 0.2f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Hierophant Caster (support life-staff variant of Martyr Staff)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Chance per eligible life caster (e.g. Martyr Staff) to roll the Hierophant variant. Default 0.10 = 10%.</summary>
+        public static float HierophantDropChance { get; set; } = 0.10f;
+
+        /// <summary>Minimum treasure tier required. Default 2.</summary>
+        public static int HierophantMinTier { get; set; } = 2;
+
+        /// <summary>Minimum heal-boost multiplier rolled at loot time (added to 1.0). Default 0.01 = +1%.</summary>
+        public static float HierophantHealBoostMin { get; set; } = 0.01f;
+
+        /// <summary>Maximum heal-boost multiplier rolled at loot time (added to 1.0). Default 0.10 = +10%.</summary>
+        public static float HierophantHealBoostMax { get; set; } = 0.10f;
+
+        /// <summary>Chance per beneficial heal cast to fire the regenerating HoT proc on the target. Default 0.15 = 15%.</summary>
+        public static float HierophantHotProcChance { get; set; } = 0.15f;
+
+        /// <summary>Minimum HoT magnitude rolled at loot time (fraction of target MaxHealth granted over the duration). Default 0.01 = 1%.</summary>
+        public static float HierophantHotPctMin { get; set; } = 0.01f;
+
+        /// <summary>Maximum HoT magnitude rolled at loot time. Default 0.25 = 25%.</summary>
+        public static float HierophantHotPctMax { get; set; } = 0.25f;
+
+        /// <summary>Total HoT duration in seconds.</summary>
+        public static float HierophantHotDurationSeconds { get; set; } = 12.0f;
+
+        /// <summary>HoT tick interval in seconds.</summary>
+        public static float HierophantHotTickInterval { get; set; } = 3.0f;
+
+        /// <summary>Bonus fellowship-echo heal as fraction of the primary heal applied to each fellow-in-range. Default 0.20 = 20%.</summary>
+        public static float HierophantFellowEchoPct { get; set; } = 0.20f;
+
+        /// <summary>Maximum range (meters) within which fellowship members receive the echo heal. Default 30.</summary>
+        public static float HierophantFellowEchoRange { get; set; } = 30.0f;
+
+        /// <summary>Targeting weight added to the hierophant-bearer (healer pull). Default 0.35.</summary>
+        public static float HierophantAggroBonus { get; set; } = 0.35f;
+
         // ──────────────────────────────────────────────────────────────────────
         // Thief's Dagger
         // ──────────────────────────────────────────────────────────────────────
@@ -70,6 +113,9 @@ namespace ACE.Server.Managers
 
         /// <summary>Multiplier applied to drained stamina before restoring it to the wielder. Default 1.25 = 125%.</summary>
         public static float SentinelSpearReturnMult { get; set; } = 1.0f;
+
+        /// <summary>Targeting weight added to the spear-bearer (off-tank). Default 0.25.</summary>
+        public static float SentinelSpearAggroBonus { get; set; } = 0.25f;
 
         // ──────────────────────────────────────────────────────────────────────
         // Elemental Unarmed (cast-on-strike)
@@ -152,6 +198,9 @@ namespace ACE.Server.Managers
         /// <summary>Secondary-target damage scale for hammer cleave. Default 0.50 = 50%.</summary>
         public static float RavagerHammerCleaveDamageScale { get; set; } = 0.50f;
 
+        /// <summary>Targeting weight added to the axe-wielder (berserker pull). Default 0.3.</summary>
+        public static float RavagerAxeAggroBonus { get; set; } = 0.3f;
+
         /// <summary>Radius around the primary target for hammer cleave secondary hits. Default 10 meters.</summary>
         public static float RavagerHammerCleaveRadius { get; set; } = 10.0f;
 
@@ -185,6 +234,9 @@ namespace ACE.Server.Managers
 
         /// <summary>Multiplier applied to the penalty when the weapon is two-handed. Default 1.5.</summary>
         public static float WardenTwoHandMult { get; set; } = 1.3f;
+
+        /// <summary>Targeting weight added to the maul-wielder (guardian pull). Default 0.3.</summary>
+        public static float WardenMaulAggroBonus { get; set; } = 0.3f;
 
         // ──────────────────────────────────────────────────────────────────────
         // Resolute Blade (Sword / TwoHandedSword)
@@ -236,6 +288,9 @@ namespace ACE.Server.Managers
         /// <summary>Maximum max-stack count rolled at loot time (integer). Default 6.</summary>
         public static int PolebreakerMaxStackMax { get; set; } = 5;
 
+        /// <summary>Targeting weight added to the staff-wielder (stacking DPS pull). Default 0.2.</summary>
+        public static float PolebreakerStaffAggroBonus { get; set; } = 0.2f;
+
         // ───────────────────────────────────────────────────────────────────
         // Stalker's Bow (Bow)
         // ───────────────────────────────────────────────────────────────────
@@ -257,6 +312,9 @@ namespace ACE.Server.Managers
 
         /// <summary>Maximum first-strike bonus damage % rolled at loot time (integer). Default 50.</summary>
         public static int StalkerBonusMax { get; set; } = 30;
+
+        /// <summary>Targeting weight subtracted from the stalker bow-wielder (stealth sniper). Default 0.2.</summary>
+        public static float StalkerBowAggroPenalty { get; set; } = 0.2f;
 
         // ───────────────────────────────────────────────────────────────────
         // Breacher's Crossbow (Crossbow)
@@ -323,8 +381,20 @@ namespace ACE.Server.Managers
         /// <summary>Master switch for the mob modifier system. Default true.</summary>
         public static bool MobModifierEnabled { get; set; } = true;
 
-        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 5.</summary>
-        public static int MobModifierMinTier { get; set; } = 5;
+        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 3.</summary>
+        public static int MobModifierMinTier { get; set; } = 3;
+
+        /// <summary>Per-spawn chance (0-1) for the Nocturnal modifier to land on an eligible mob (only at night). Default 0.05.</summary>
+        public static float NocturnalMobChance { get; set; } = 0.05f;
+
+        /// <summary>Per-spawn chance (0-1) for the Exploding modifier to land on an eligible mob. Default 0.02.</summary>
+        public static float ExplodingMobChance { get; set; } = 0.02f;
+
+        /// <summary>Radius (meters) of the Exploding modifier's on-death AoE. Default 6.</summary>
+        public static float ExplodingMobRadius { get; set; } = 6.0f;
+
+        /// <summary>Fraction of the mob's MaxHealth dealt as on-death AoE damage. Default 0.25.</summary>
+        public static float ExplodingMobDamageScale { get; set; } = 0.25f;
 
         /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.02.</summary>
         public static float VampiricMobChance { get; set; } = 0.02f;
@@ -372,5 +442,33 @@ namespace ACE.Server.Managers
 
         /// <summary>Cooldown (seconds) between deaths that count toward life loss. Default 7 days.</summary>
         public static float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 60f * 60f * 24f * 7f;
+
+        // ---------- Vampiric Jewelry (rings / necklaces / bracelets) ----------
+
+        /// <summary>Per-jewelry-piece chance (0-1) at lootgen to roll the Vampiric affix. Default 0.04.</summary>
+        public static float VampiricJewelryDropChance { get; set; } = 0.04f;
+
+        /// <summary>Minimum profile tier required for a piece to roll Vampiric. Default 4.</summary>
+        public static int VampiricJewelryMinTier { get; set; } = 4;
+
+        /// <summary>Minimum points granted by a single Vampiric piece. Default 1.</summary>
+        public static int VampiricJewelryPointsMin { get; set; } = 1;
+
+        /// <summary>Maximum points granted by a single Vampiric piece. Default 3.</summary>
+        public static int VampiricJewelryPointsMax { get; set; } = 3;
+
+        /// <summary>Seconds between passive Vampiric heartbeat heals. Default 5 (matches Player heartbeat cadence).</summary>
+        public static float VampiricJewelryRegenIntervalSeconds { get; set; } = 5.0f;
+
+        /// <summary>Diminishing-returns multiplier applied to the *summed* points based on equipped piece count.
+        /// Index 0 = 0 pieces, 1 = 1 piece (full), 2 = 2 pieces (~85%), 3 = 3 pieces (~70%), 4 = 4 pieces (~55%), 5+ caps at 5.</summary>
+        public static float[] VampiricJewelryDiminishingReturns { get; set; } = new[] { 0.0f, 1.0f, 0.85f, 0.70f, 0.55f, 0.45f };
+
+        /// <summary>Per-piece chance (0-1) on a successful melee/missile hit to immediately heal the wielder for a small burst. Default 0.04.</summary>
+        public static float VampiricJewelryOnHitProcChance { get; set; } = 0.04f;
+
+        /// <summary>Multiplier applied to the piece's points value to compute the on-hit heal. Default 2.0 (1–3 points => 2–6 hp burst).</summary>
+        public static float VampiricJewelryOnHitMultiplier { get; set; } = 2.0f;
     }
 }
+

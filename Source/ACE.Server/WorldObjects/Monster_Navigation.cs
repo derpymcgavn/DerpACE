@@ -279,6 +279,13 @@ namespace ACE.Server.WorldObjects
                     }
                     break;
                 default:
+                    // Don't recurse: ActionCancelled here can be caused by our own
+                    // TrySmartCourseCorrection issuing a new MoveTo, which cancels the
+                    // prior one and synchronously re-enters OnMoveComplete, leading to
+                    // a StackOverflowException.
+                    if (status == WeenieError.ActionCancelled)
+                        return;
+
                     FailedMovementCount++;
 
                     if (MonsterState == State.Awake && AttackTarget != null && TrySmartCourseCorrection())

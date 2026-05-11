@@ -13,6 +13,8 @@ namespace ACE.Server.Network.Structure
 {
     public class Enchantment
     {
+        private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
         public ushort SpellID;
         public ushort Layer;
         public ushort HasSpellSetID = 1; // default true?
@@ -68,7 +70,27 @@ namespace ACE.Server.Network.Structure
                 return;
             }
 
-            Init(new Spell((uint)entry.SpellId));
+            var spell = new Spell((uint)entry.SpellId);
+
+            if (spell._spellBase == null)
+            {
+                // Spell is missing from the client DAT SpellTable.
+                // Fall back to the registry entry so we don't NRE while building the network structure,
+                // and so the bad enchantment can still be sent/cleaned up rather than breaking login.
+                log.Warn($"Enchantment({target?.Name}, entry.SpellId={entry.SpellId}): spell missing from client DAT SpellTable, falling back to registry data.");
+
+                SpellID = (ushort)entry.SpellId;
+                SpellCategory = (ushort)entry.SpellCategory;
+                StatModType = (EnchantmentTypeFlags)entry.StatModType;
+                StatModKey = entry.StatModKey;
+                DegradeModifier = entry.DegradeModifier;
+                DegradeLimit = entry.DegradeLimit;
+                LastTimeDegraded = entry.LastTimeDegraded;
+            }
+            else
+            {
+                Init(spell);
+            }
 
             Layer = entry.LayerId;
             StartTime = entry.StartTime;

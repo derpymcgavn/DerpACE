@@ -1,4 +1,5 @@
 using System;
+using ACE.Common;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Managers;
@@ -26,9 +27,11 @@ namespace ACE.Server.Factories
 
         protected override void Apply(Creature creature, int tier)
         {
-            // Lifesteal % scales with tier
-            var lifestealPct = 0.05f + (tier * 0.01f);
-            creature.SetProperty(PropertyFloat.VampiricLifestealPct, lifestealPct);
+            // Roll lifesteal % from configured range (matches legacy MobModifierFactory behavior)
+            var minPct = Math.Max(0, DerpACEConfig.VampiricLifestealMin);
+            var maxPct = Math.Max(minPct, DerpACEConfig.VampiricLifestealMax);
+            var pct = ThreadSafeRandom.Next(minPct, maxPct) / 100.0;
+            creature.SetProperty(PropertyFloat.VampiricLifestealPct, pct);
 
             // Boost HP slightly (use biota properties for persistent stat changes)
             if (creature.Health.Current > 0)
@@ -163,6 +166,66 @@ namespace ACE.Server.Factories
             }
 
             // TODO: Hook TakeDamage or low-HP event to spawn duplicate
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Nocturnal mob mutator — boosts DamageRating + Overpower at spawn.
+    /// In random spawn flow, only rolls at night; force-apply (admin) bypasses time-of-day.
+    /// </summary>
+    public class NocturnalMutator : CreatureMutator
+    {
+        public override string Name => "Nocturnal";
+        public override string Description => "Hunts after dark — boosted damage and overpower.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsNocturnalMob;
+        public override string NamePrefix => "Nocturnal";
+
+        public NocturnalMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.NocturnalMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        public override bool CanApply(Creature creature, int tier)
+        {
+            if (!base.CanApply(creature, tier)) return false;
+
+            // Random-spawn path: only at night. Force-apply uses ForceApply() and bypasses CanApply().
+            // Use the same in-game day/night clock that spawners use (GeneratorTimeType.Night).
+            return !ACE.Server.Entity.Timers.CurrentInGameTime.IsDay;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            creature.DamageRating = (creature.DamageRating ?? 0) + ThreadSafeRandom.Next(1, 50);
+            creature.Overpower = (creature.Overpower ?? 0) + ThreadSafeRandom.Next(1, 5);
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Exploding mob mutator — detonates on death dealing AoE Fire damage to nearby players.
+    /// Death-side AoE is handled in Creature_Death.cs by checking PropertyBool.IsExplodingMob.
+    /// </summary>
+    public class ExplodingMutator : CreatureMutator
+    {
+        public override string Name => "Exploding";
+        public override string Description => "Explodes on death, dealing fire damage to nearby players.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsExplodingMob;
+        public override string NamePrefix => "Exploding";
+
+        public ExplodingMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.ExplodingMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Visual tell: orange-red tint and a slight scale-up.
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Red;
         }
     }
 }

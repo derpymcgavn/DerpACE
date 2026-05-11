@@ -16,7 +16,7 @@ namespace ACE.Server.Entity
         /// <summary>
         /// The spell ID
         /// </summary>
-        public uint Id { get => _spellBase.MetaSpellId; }
+        public uint Id { get => _spellBase?.MetaSpellId ?? 0; }
 
         /// <summary>
         /// The spell name

@@ -39,9 +39,24 @@ namespace ACE.Server.Pathfinding
         private const int VERTS_PER_POLY = 6;
         private const int MAX_POLYS = 256;
 
-        public static string InsideMeshDirectory => Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Pathfinding", "Meshes", "Indoors");
-        public static string OutsideMeshDirectory => Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Pathfinding", "Meshes", "Outdoors");
+        public static string InsideMeshDirectory => Path.Combine(GetMeshRoot(), "Indoors");
+        public static string OutsideMeshDirectory => Path.Combine(GetMeshRoot(), "Outdoors");
         public static readonly ConcurrentDictionary<uint, DtNavMesh> Meshes = new ConcurrentDictionary<uint, DtNavMesh>();
+
+        private static string GetMeshRoot()
+        {
+            try
+            {
+                var configured = PropertyManager.GetString("pathfinding_mesh_root").Item;
+                if (!string.IsNullOrWhiteSpace(configured))
+                    return configured;
+            }
+            catch
+            {
+                // PropertyManager may not be initialized yet during very early startup; fall through to default.
+            }
+            return Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Pathfinding", "Meshes");
+        }
 
         static Pathfinder()
         {
@@ -638,9 +653,21 @@ namespace ACE.Server.Pathfinding
         /// Outdoor terrain meshes cover an entire 192x192 landblock, so we use a coarser
         /// voxelization to keep build time and memory reasonable. Slope is also tightened
         /// to keep monsters off cliffs.
+        ///
+        /// When the "pathfinding_fast_outdoor_mesh" property is TRUE (default), we switch to
+        /// the MONOTONE partitioner, larger voxels, and skip detail-mesh sampling - this is
+        /// several times faster to build with only minor fidelity loss.
         /// </summary>
         private static RcNavMeshBuildSettings GetOutdoorMeshSettings(AgentWidth type)
         {
+            var fast = PropertyManager.GetBool("pathfinding_fast_outdoor_mesh").Item;
+            var partition = fast ? (int)RcPartition.MONOTONE : (int)RcPartition.WATERSHED;
+            var cellSize = fast ? 0.75f : 0.5f;
+            var cellHeight = fast ? 0.5f : 0.4f;
+            var detailDist = fast ? 0f : 6.0f;
+            var detailErr = fast ? 0f : 1.0f;
+            var edgeLen = fast ? 32.0f : 24.0f;
+
             switch (type)
             {
                 case AgentWidth.Narrow:
@@ -649,17 +676,17 @@ namespace ACE.Server.Pathfinding
                         agentHeight = 2f,
                         agentMaxClimb = 1.0f,
                         agentMaxSlope = 45f,
-                        cellHeight = 0.4f,
-                        cellSize = 0.5f,
+                        cellHeight = cellHeight,
+                        cellSize = cellSize,
                         agentRadius = 0.7f,
-                        detailSampleDist = 6.0f,
-                        detailSampleMaxError = 1.0f,
+                        detailSampleDist = detailDist,
+                        detailSampleMaxError = detailErr,
                         edgeMaxError = 1.3f,
-                        edgeMaxLen = 24.0f,
+                        edgeMaxLen = edgeLen,
                         mergedRegionSize = 20,
                         minRegionSize = 8,
                         vertsPerPoly = VERTS_PER_POLY,
-                        partitioning = (int)RcPartition.WATERSHED
+                        partitioning = partition
                     };
                 case AgentWidth.Wide:
                 default:
@@ -668,17 +695,17 @@ namespace ACE.Server.Pathfinding
                         agentHeight = 2f,
                         agentMaxClimb = 1.0f,
                         agentMaxSlope = 45f,
-                        cellHeight = 0.4f,
-                        cellSize = 0.5f,
+                        cellHeight = cellHeight,
+                        cellSize = cellSize,
                         agentRadius = 1.4f,
-                        detailSampleDist = 6.0f,
-                        detailSampleMaxError = 1.0f,
+                        detailSampleDist = detailDist,
+                        detailSampleMaxError = detailErr,
                         edgeMaxError = 1.3f,
-                        edgeMaxLen = 24.0f,
+                        edgeMaxLen = edgeLen,
                         mergedRegionSize = 20,
                         minRegionSize = 8,
                         vertsPerPoly = VERTS_PER_POLY,
-                        partitioning = (int)RcPartition.WATERSHED
+                        partitioning = partition
                     };
             }
         }

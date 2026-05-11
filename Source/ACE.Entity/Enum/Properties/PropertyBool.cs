@@ -199,8 +199,8 @@ namespace ACE.Entity.Enum.Properties
         IsVampiricMob                    = 9023,
         IsThiefMob                       = 9024,
         // 9025 reserved IsWardenMob (future)
-        // 9026 reserved IsNocturnalMob (future)
-        // 9027 reserved IsAssassinMob (future)
+        IsNocturnalMob                   = 9026,
+        IsExplodingMob                   = 9027,
         IsSimulacrumMob                  = 9028,
 
         /* DerpACE Ironman mode (irreversible solo / hardcore character flag) */
@@ -208,5 +208,14 @@ namespace ACE.Entity.Enum.Properties
         IsHardcore                       = 9030,
         IsIronmanItem                    = 9031,
         IsScoutMob                       = 9032,
+
+        /* DerpACE Hierophant Caster — support life-staff variant */
+        IsHierophantCaster               = 9033,
+
+        /* DerpACE Wacky Loot event — marks an item that should periodically re-roll palette */
+        IsWackyItem                      = 9034,
+
+        /* DerpACE Vampiric Jewelry — ring/necklace/bracelet that grants a small lifesteal regen */
+        IsVampiricJewelry                = 9035,
     }
 }

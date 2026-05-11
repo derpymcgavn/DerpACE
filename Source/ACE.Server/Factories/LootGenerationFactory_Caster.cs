@@ -147,6 +147,38 @@ namespace ACE.Server.Factories
                     wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory — when you cast a matching spell, it has a {ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance:P0} chance to echo {procDesc}.";
                 }
             }
+
+            // Hierophant: support-healer variant for life casters (Martyr Staff family).
+            // Only rolls if the caster is a life caster, didn't already become Archmagi, and meets tier.
+            if (isMagical
+                && wo.W_DamageType == DamageType.Health
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.HierophantMinTier
+                && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.HierophantDropChance)
+            {
+                var healBoost = ThreadSafeRandom.Next(
+                    ACE.Server.Managers.DerpACEConfig.HierophantHealBoostMin,
+                    ACE.Server.Managers.DerpACEConfig.HierophantHealBoostMax);
+
+                var hotPct = ThreadSafeRandom.Next(
+                    ACE.Server.Managers.DerpACEConfig.HierophantHotPctMin,
+                    ACE.Server.Managers.DerpACEConfig.HierophantHotPctMax);
+
+                var fellowEcho = ACE.Server.Managers.DerpACEConfig.HierophantFellowEchoPct;
+
+                wo.Name = wo.Name + " of the Hierophant";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHierophantCaster, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantHealBoostPct, healBoost);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantHotPct, hotPct);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantFellowEchoPct, fellowEcho);
+                wo.IconOverlayId = 0x06002CB7;
+                wo.UiEffects = ACE.Entity.Enum.UiEffects.Magical;
+
+                wo.LongDesc = (wo.LongDesc ?? "")
+                    + $"\n\nBlessed by the Hierophants — beneficial healing cast through this staff is amplified by {healBoost:P0}."
+                    + $"\nWhen you heal yourself or an ally, there is a {ACE.Server.Managers.DerpACEConfig.HierophantHotProcChance:P0} chance to bless the target with a regenerating ward restoring up to {hotPct:P0} of their health over {ACE.Server.Managers.DerpACEConfig.HierophantHotDurationSeconds:0}s."
+                    + $"\nEach heal also echoes a {fellowEcho:P0} bonus heal to nearby fellowship members within {ACE.Server.Managers.DerpACEConfig.HierophantFellowEchoRange:0}m.";
+            }
         }
 
         private static void MutateCaster_SpellDID(WorldObject wo, TreasureDeath profile)

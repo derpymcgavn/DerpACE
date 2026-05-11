@@ -12,7 +12,7 @@ namespace ACE.Server.Command.Handlers
             "Starts a named custom server event.",
             "event <name>\n" +
             "Supported events:\n" +
-            "  wacky — lootgen weapons and shields drop with a random scale (0.25 – 3.25)")]
+            "  wacky — lootgen weapons, shields, and armor/jewelry drop with a random scale")]
         public static void HandleStartEvent(Session session, params string[] parameters)
         {
             if (!string.Equals(parameters[0], "event", System.StringComparison.OrdinalIgnoreCase))
@@ -27,7 +27,7 @@ namespace ACE.Server.Command.Handlers
             {
                 case "wacky":
                     ServerEvents.WackyLoot = true;
-                    CommandHandlerHelper.WriteOutputInfo(session, "[Event] Wacky Loot is now ON — weapons and shields will drop at random scales!", ChatMessageType.Broadcast);
+                    CommandHandlerHelper.WriteOutputInfo(session, "[Event] Wacky Loot is now ON — weapons, shields, armor, clothing, jewelry, and cloaks will drop at random scales!", ChatMessageType.Broadcast);
                     PlayerManager.BroadcastToAll(new GameMessageSystemChat("A strange wind sweeps through Dereth... loot will never look the same.", ChatMessageType.Broadcast));
                     break;
 

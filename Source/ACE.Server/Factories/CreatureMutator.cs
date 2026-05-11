@@ -91,6 +91,38 @@ namespace ACE.Server.Factories
             if (!CanApply(creature, tier)) return false;
             if (!RollChance()) return false;
 
+            ApplyInternal(creature, tier);
+            return true;
+        }
+
+        /// <summary>
+        /// Force-applies this mutator to a creature regardless of MinTier / Chance / Enabled
+        /// (NPC, Pet, Player, and idempotency checks still apply). Used by admin summon commands.
+        /// Returns true if applied.
+        /// </summary>
+        public bool ForceApply(Creature creature)
+        {
+            if (creature == null) return false;
+            if (creature is Player) return false;
+            if (creature is Pet) return false;
+            if (creature.IsNPC) return false;
+
+            if (MutatorFlag.HasValue && creature.GetProperty(MutatorFlag.Value) == true)
+                return false;
+
+            // Use the mutator's effective tier when forcing, falling back to MinTier
+            int tier = MinTier;
+            if (creature.DeathTreasure != null)
+                tier = Math.Max(tier, creature.DeathTreasure.Tier);
+            else if (creature.Level.HasValue)
+                tier = Math.Max(tier, (int)Math.Ceiling(creature.Level.Value / 10.0));
+
+            ApplyInternal(creature, tier);
+            return true;
+        }
+
+        private void ApplyInternal(Creature creature, int tier)
+        {
             Apply(creature, tier);
 
             // Set flag + name prefix
@@ -99,8 +131,6 @@ namespace ACE.Server.Factories
 
             if (!string.IsNullOrEmpty(NamePrefix))
                 PrependPrefix(creature, NamePrefix);
-
-            return true;
         }
 
         /// <summary>

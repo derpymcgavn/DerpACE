@@ -56,7 +56,47 @@ namespace ACE.Server.WorldObjects
             if (StolenTradeNoteWcid != 0 && StolenTradeNoteAmount > 0)
                 TryRefundStolenTradeNote(lastDamager);
 
+            // DerpACE Exploding modifier: detonate on death, dealing fire damage to nearby players
+            if (GetProperty(PropertyBool.IsExplodingMob) == true)
+                TryExplodeOnDeath();
+
             return GetDeathMessage(lastDamager, damageType, criticalHit);
+        }
+
+        /// <summary>
+        /// DerpACE: Exploding mob death AoE — damages players within ExplodingMobRadius
+        /// for ExplodingMobDamageScale * MaxHealth.
+        /// </summary>
+        private void TryExplodeOnDeath()
+        {
+            if (CurrentLandblock == null || Location == null) return;
+
+            var radius = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.ExplodingMobRadius);
+            var scale = Math.Max(0.0f, ACE.Server.Managers.DerpACEConfig.ExplodingMobDamageScale);
+            if (scale <= 0.0f) return;
+
+            var maxHp = Health?.MaxValue ?? 0;
+            var damage = (float)Math.Round(maxHp * scale);
+            if (damage < 1.0f) return;
+
+            var radiusSq = radius * radius;
+            var victims = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Player>()
+                .Where(p => p != null
+                            && !p.IsDead
+                            && p.Location != null
+                            && Location.SquaredDistanceTo(p.Location) <= radiusSq)
+                .ToList();
+
+            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
+
+            foreach (var victim in victims)
+            {
+                victim.TakeDamage(this, DamageType.Fire, damage, BodyPart.Chest);
+                victim.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"{Name} explodes, searing you for {(uint)damage} fire damage! [Exploding]",
+                    ChatMessageType.CombatEnemy));
+            }
         }
 
         /// <summary>
@@ -234,6 +274,10 @@ namespace ACE.Server.WorldObjects
 
                 var totalXP = (XpOverride ?? 0) * damagePercent;
                 var xpForKill = (long)Math.Round(totalXP);
+
+                // Simulacrum XP scales with the underlying mob's loot tier, not the cloned player's stats
+                if (IsSimulacrum)
+                    xpForKill = GetSimulacrumXp(xpForKill);
 
                 playerDamager.EarnXP(xpForKill, XpType.Kill);
 
@@ -753,6 +797,10 @@ namespace ACE.Server.WorldObjects
             foreach (var item in wieldedTreasure.ToList())
             {
                 if (item.Bonded == BondedStatus.Destroy)
+                    continue;
+
+                // Simulacrum: do not drop the cloned player's gear, only the underlying mob loot
+                if (IsSimulacrum && IsSimulacrumGear(item))
                     continue;
 
                 if (TryDequipObjectWithBroadcasting(item.Guid, out var wo, out var wieldedLocation))

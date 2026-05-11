@@ -133,20 +133,6 @@ namespace ACE.Server.WorldObjects
                 Health.Current = Health.MaxValue;
                 Stamina.Current = Stamina.MaxValue;
                 Mana.Current = Mana.MaxValue;
-
-                // DerpACE: nocturnal mobs — only apply at-spawn (idempotent via name prefix)
-                // and do NOT mutate StartingValue (which persists). Multiply Current/MaxVital
-                // through ratings + a one-shot heal so reloads don't stack the buff.
-                if (!IsNPC
-                    && (Attackable || TargetingTactic != TargetingTactic.None)
-                    && !string.IsNullOrEmpty(Name)
-                    && !Name.StartsWith("[Nocturnal] ", StringComparison.Ordinal)
-                    && new DerethDateTime().GetDaytime() == DerethDateTime.Daytime.Night)
-                {
-                    DamageRating = (DamageRating ?? 0) + ACE.Common.ThreadSafeRandom.Next(1, 50);
-                    Overpower = (Overpower ?? 0) + ACE.Common.ThreadSafeRandom.Next(1, 5);
-                    Name = $"[Nocturnal] {Name}";
-                }
             }
 
             SetMonsterState();

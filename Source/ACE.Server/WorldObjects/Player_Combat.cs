@@ -472,6 +472,11 @@ namespace ACE.Server.WorldObjects
                 PolebreakerStackCount = 0;
             }
 
+            // Vampiric Jewelry: per-piece small chance on a successful hit to drink a tiny amount of health (see @lootconfig)
+            uint vampiricJewelryHealed = 0;
+            if (damageEvent.HasDamage)
+                vampiricJewelryHealed = TryProcVampiricJewelryOnHit();
+
             if (damageEvent.HasDamage)
             {
                 OnDamageTarget(target, damageEvent.CombatType, damageEvent.IsCritical);
@@ -506,6 +511,15 @@ namespace ACE.Server.WorldObjects
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
                         $"+{thievesDaggerBonus} [Thief's Dagger]",
                         ChatMessageType.CombatSelf));
+
+                // Vampiric Jewelry: announce the on-hit drink when any piece proc'd
+                if (vampiricJewelryHealed > 0)
+                {
+                    ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"+{vampiricJewelryHealed} drained from {target.Name} [Vampiric Jewelry]",
+                        ChatMessageType.CombatSelf));
+                }
 
                 // Fencer's Blade: show pierce bonus when armor-pierce proc fired
                 if (fencerPierceBonus > 0)

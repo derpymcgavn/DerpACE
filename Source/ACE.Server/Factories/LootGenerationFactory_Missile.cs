@@ -126,7 +126,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus, bonusPct / 100.0);
                 wo.IconOverlayId = 0x06002699u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis bow rewards the patient hunter \u2014 the *first* arrow loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets or letting the target drop resets the opportunity.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards the patient hunter \u2014 the *first* shot loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets or letting the target drop resets the opportunity.";
             }
 
             // Breacher's Crossbow: configurable chance on T6+ crossbows for an always-on armor pierce % (see @lootconfig)
@@ -150,7 +150,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance, armorIgnoreChance / 100.0);
                 wo.IconOverlayId = 0x06002878u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis crossbow pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
             // Reaper's Atlatl: configurable chance on T6+ atlatls for a kill-fed self-heal proc (see @lootconfig)
@@ -181,7 +181,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct, healPct / 100.0);
                 wo.IconOverlayId = 0x06002860u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis atlatl feasts on the slain \u2014 a killing blow has a {procPct}% chance to instantly restore {healPct}% of your maximum health.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} feasts on the slain \u2014 a killing blow has a {procPct}% chance to instantly restore {healPct}% of your maximum health.";
             }
         }
 

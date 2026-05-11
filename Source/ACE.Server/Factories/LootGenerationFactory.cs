@@ -369,14 +369,36 @@ namespace ACE.Server.Factories
                     // other mundane items (mana stones, food/drink, healing kits, lockpicks, and spell components/peas) don't get mutated
             }
 
-            // Wacky Loot event: randomise the visual scale of weapons and shields
+            // Wacky Loot event: randomise the visual scale of any wearable/wieldable loot
             if (ServerEvents.WackyLoot && wo != null)
             {
                 bool isWeapon = treasureRoll.ItemType == TreasureItemType.Weapon || treasureRoll.ItemType == TreasureItemType.Caster;
                 bool isShield = wo.IsShield;
-                if (isWeapon || isShield)
+                bool isArmor = treasureRoll.ItemType == TreasureItemType.Armor
+                    || treasureRoll.ItemType == TreasureItemType.Clothing
+                    || treasureRoll.ItemType == TreasureItemType.Cloak
+                    || treasureRoll.ItemType == TreasureItemType.Jewelry
+                    || treasureRoll.ItemType == TreasureItemType.SocietyArmor
+                    || treasureRoll.ItemType == TreasureItemType.SocietyBreastplate
+                    || treasureRoll.ItemType == TreasureItemType.SocietyGauntlets
+                    || treasureRoll.ItemType == TreasureItemType.SocietyGirth
+                    || treasureRoll.ItemType == TreasureItemType.SocietyGreaves
+                    || treasureRoll.ItemType == TreasureItemType.SocietyHelm
+                    || treasureRoll.ItemType == TreasureItemType.SocietyPauldrons
+                    || treasureRoll.ItemType == TreasureItemType.SocietyTassets
+                    || treasureRoll.ItemType == TreasureItemType.SocietyVambraces
+                    || treasureRoll.ItemType == TreasureItemType.SocietySollerets;
+
+                if (isWeapon || isShield || isArmor)
                 {
-                    wo.ObjScale = (float)Math.Round(ThreadSafeRandom.Next(0.25f, 3.25f), 2);
+                    // Armor uses a tighter range so wearables stay equippable/visible without absurd clipping
+                    var min = isArmor && !isShield ? 0.6f : 0.25f;
+                    var max = isArmor && !isShield ? 1.6f : 3.25f;
+                    wo.ObjScale = (float)Math.Round(ThreadSafeRandom.Next(min, max), 2);
+
+                    // Mark armor/clothing/cloaks/jewelry so the heartbeat tick will cycle their palette.
+                    if (isArmor)
+                        wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsWackyItem, true);
 
                     // The client prepends MaterialType as a word before wo.Name.
                     // To put [Whack] first we bake the material name into wo.Name ourselves

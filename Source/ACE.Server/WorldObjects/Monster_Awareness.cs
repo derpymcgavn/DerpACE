@@ -253,6 +253,10 @@ namespace ACE.Server.WorldObjects
 
                 if (AttackTarget != null && AttackTarget != prevAttackTarget)
                 {
+                    // Simulacrum mobs copy the first player they target
+                    if (IsSimulacrum && AttackTarget is Player simTarget)
+                        TryCopyFromPlayer(simTarget);
+
                     EmoteManager.OnNewEnemy(AttackTarget);
 
                     // Pathfinding: if new target indoors and not visible, attempt route
@@ -383,20 +387,12 @@ namespace ACE.Server.WorldObjects
             // get the sum of the inverted ratios
             var invRatioSum = (float)(targetDistances.Count - 1);
 
-            // Defender's shield: expand the roll range for each shield-bearer so they attract more attention
-            var defenderBonus = ACE.Server.Managers.DerpACEConfig.DefenderAggroBonus;
-            // Thief's Dagger: shrink the roll range for each dagger-bearer so they attract less attention
-            var thiefPenalty = ACE.Server.Managers.DerpACEConfig.ThievesDaggerAggroPenalty;
+            // Mod aggro: per-player weight delta from equipped DerpACE weapons/shields.
+            // Positive values pull threat (tank/berserker themes), negative shed it (stealth/fragile themes).
             foreach (var td in targetDistances)
-            {
-                var p = td.Target as Player;
-                if (p?.GetEquippedShield()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield) == true)
-                    invRatioSum += defenderBonus;
-                if (p?.GetEquippedMeleeWeapon()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
-                    invRatioSum -= thiefPenalty;
-            }
+                invRatioSum += GetGearAggroDelta(td.Target as Player);
 
-            // ensure invRatioSum stays positive (edge case: all players have Thief's Daggers)
+            // ensure invRatioSum stays positive (edge case: stacked penalties)
             if (invRatioSum <= 0.0f) invRatioSum = 0.01f;
 
             // roll between 0 - invRatioSum here,
@@ -409,11 +405,7 @@ namespace ACE.Server.WorldObjects
             {
                 var weight = 1.0f - (targetDistance.Distance / distSum);
 
-                var p = targetDistance.Target as Player;
-                if (p?.GetEquippedShield()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield) == true)
-                    weight += defenderBonus;
-                if (p?.GetEquippedMeleeWeapon()?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
-                    weight -= thiefPenalty;
+                weight += GetGearAggroDelta(targetDistance.Target as Player);
                 if (weight < 0.0f) weight = 0.0f;
 
                 invRatio += weight;
@@ -429,6 +421,59 @@ namespace ACE.Server.WorldObjects
             // precision error?
             Console.WriteLine($"{Name}.SelectWeightedDistance: couldn't find target: {string.Join(",", targetDistances.Select(i => i.Distance))}");
             return targetDistances[0].Target;
+        }
+
+        /// <summary>
+        /// Sum of weighted-aggro deltas contributed by all DerpACE-flagged equipment a
+        /// player is currently wielding. Positive = more attention, negative = less.
+        /// Tank/berserker weapons pull, stealth/fragile-caster weapons shed.
+        /// </summary>
+        private static float GetGearAggroDelta(Player p)
+        {
+            if (p == null) return 0f;
+
+            float delta = 0f;
+
+            // Shields
+            var shield = p.GetEquippedShield();
+            if (shield?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield) == true)
+                delta += ACE.Server.Managers.DerpACEConfig.DefenderAggroBonus;
+
+            // Melee weapon flags
+            var melee = p.GetEquippedMeleeWeapon();
+            if (melee != null)
+            {
+                if (melee.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
+                    delta -= ACE.Server.Managers.DerpACEConfig.ThievesDaggerAggroPenalty;
+                if (melee.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear) == true)
+                    delta += ACE.Server.Managers.DerpACEConfig.SentinelSpearAggroBonus;
+                if (melee.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe) == true)
+                    delta += ACE.Server.Managers.DerpACEConfig.RavagerAxeAggroBonus;
+                if (melee.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsWardensMaul) == true)
+                    delta += ACE.Server.Managers.DerpACEConfig.WardenMaulAggroBonus;
+                if (melee.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff) == true)
+                    delta += ACE.Server.Managers.DerpACEConfig.PolebreakerStaffAggroBonus;
+            }
+
+            // Missile weapon flags
+            var missile = p.GetEquippedMissileWeapon();
+            if (missile != null)
+            {
+                if (missile.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStalkersBow) == true)
+                    delta -= ACE.Server.Managers.DerpACEConfig.StalkerBowAggroPenalty;
+            }
+
+            // Caster weapon flag (wand/orb/staff caster slot)
+            var wand = p.GetEquippedWand();
+            if (wand != null)
+            {
+                if (wand.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true)
+                    delta -= ACE.Server.Managers.DerpACEConfig.ArchmagiAggroPenalty;
+                if (wand.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHierophantCaster) == true)
+                    delta += ACE.Server.Managers.DerpACEConfig.HierophantAggroBonus;
+            }
+
+            return delta;
         }
 
         /// <summary>

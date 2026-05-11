@@ -40,6 +40,8 @@ namespace ACE.Server.Factories
                 RegisterMutator(new ThiefMutator());
                 RegisterMutator(new ScoutMutator());
                 RegisterMutator(new SimulacrumMutator());
+                RegisterMutator(new NocturnalMutator());
+                RegisterMutator(new ExplodingMutator());
 
                 // TODO: Port Expansion creature types
                 // RegisterMutator(new DrainerMutator());
@@ -155,6 +157,61 @@ namespace ACE.Server.Factories
             {
                 _mutators.TryGetValue(name, out var mutator);
                 return mutator;
+            }
+        }
+
+        /// <summary>
+        /// Force-applies a named mutator to a creature regardless of tier/chance/enabled.
+        /// Used by admin summon commands. Returns true if applied.
+        /// </summary>
+        public static bool TryForceApplyMutator(Creature creature, string name)
+        {
+            if (creature == null || string.IsNullOrWhiteSpace(name)) return false;
+
+            var mutator = GetMutator(ResolveAlias(name));
+            if (mutator == null) return false;
+
+            try
+            {
+                return mutator.ForceApply(creature);
+            }
+            catch (Exception ex)
+            {
+                log.Error($"Error force-applying mutator {mutator.Name} to {creature.Name}: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Maps short / legacy aliases to canonical mutator names.
+        /// </summary>
+        public static string ResolveAlias(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return name;
+            switch (name.Trim().ToLowerInvariant())
+            {
+                case "vamp":
+                case "vampire":
+                case "vampiric":
+                    return "Vampiric";
+                case "thief":
+                case "thieving":
+                    return "Thieving";
+                case "scout":
+                case "scouting":
+                    return "Scout";
+                case "sim":
+                case "simulacrum":
+                    return "Simulacrum";
+                case "noc":
+                case "nocturnal":
+                    return "Nocturnal";
+                case "boom":
+                case "explode":
+                case "exploding":
+                    return "Exploding";
+                default:
+                    return name;
             }
         }
 

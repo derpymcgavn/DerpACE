@@ -97,6 +97,18 @@ namespace ACE.Server.WorldObjects
                 firstUpdate = false;
             }
 
+            // -- Ported from ClassicACE CustomDM --
+            // If awake and the target has fled past MaxChaseRange, give up the chase
+            // and re-acquire instead of sticking to a target we'll never catch.
+            if (MonsterState == State.Awake && AttackTarget != null
+                && GetDistanceToTarget() >= MaxChaseRange)
+            {
+                if (HasPendingMovement)
+                    CancelMoveTo(WeenieError.ObjectGone);
+                FindNextTarget();
+                return;
+            }
+
             // select a new weapon if missile launcher is out of ammo
             var weapon = GetEquippedWeapon();
             /*if (weapon != null && weapon.IsAmmoLauncher)
@@ -130,55 +142,112 @@ namespace ACE.Server.WorldObjects
             var targetDist = GetDistanceToTarget();
             //Console.WriteLine($"{Name} ({Guid}) - Dist: {targetDist}");
 
-            if (CurrentAttack != CombatType.Missile)
+            // -- Ported from ClassicACE CustomDM ruleset (Monster_Tick.cs) --
+            // Unified movement/attack logic so missile mobs also reposition,
+            // switch weapons, emote, wander, and route on threshold failures.
+            if (CurrentAttack != null)
             {
-                if (targetDist > MaxRange || (!IsFacing(AttackTarget) && !IsSelfCast()))
+                var isMeleeVisible = IsMeleeVisible(AttackTarget);
+                var isDirectVisible = IsDirectVisible(AttackTarget);
+                var canStick = PhysicsObj.IsSticky && CurrentAttack == CombatType.Melee && isMeleeVisible;
+                var aiImmobile = AiImmobile;
+
+                // -- Ported from ClassicACE CustomDM --
+                // If we lost sight of the target while not in any recovery state, accumulate
+                // FailedSightCount so the threshold logic below can trigger weapon-swap /
+                // emote / wander / route recovery instead of running blind forever.
+                var isInSight = CurrentAttack == CombatType.Melee ? isMeleeVisible : isDirectVisible;
+                if (!isInSight && !IsRouting && !IsWandering && !IsEmoting && !SwitchWeaponsPending && !IsAttacking)
                 {
-                    // turn / move towards
-                    if (!IsTurning && !IsMoving)
+                    FailedSightCount++;
+                    if (FailedSightCount >= FailedSightThreshold && HasPendingMovement)
+                        CancelMoveTo(WeenieError.ObjectGone);
+                }
+                else if (isInSight)
+                {
+                    FailedSightCount = 0;
+                }
+
+                if ((!canStick && targetDist > MaxRange) || (!IsFacing(AttackTarget) && !IsSelfCast()))
+                {
+                    bool failedThresholds = FailedMovementCount >= FailedMovementThreshold || FailedSightCount >= FailedSightThreshold;
+
+                    if (!IsTurning && !IsMoving && !failedThresholds && !aiImmobile)
+                    {
                         StartTurn();
+                    }
                     else
                     {
-                        if (CurrentAttack == CombatType.Melee && targetDist > 20 && HasRangedWeapon
-                            && !SwitchWeaponsPending && LastWeaponSwitchTime + 5 < currentUnixTime)
+                        if (failedThresholds)
+                        {
+                            // Reset and try to recover with another target / weapon swap / emote / wander / route
+                            FailedMovementCount = 0;
+                            FailedSightCount = 0;
+
+                            var currentTarget = AttackTarget;
+                            FindNextTarget();
+
+                            if (currentTarget == AttackTarget)
+                            {
+                                if (HasRangedWeapon && CurrentAttack == CombatType.Melee
+                                    && !SwitchWeaponsPending && LastWeaponSwitchTime + 5 < currentUnixTime
+                                    && isDirectVisible)
+                                {
+                                    TrySwitchToMissileAttack();
+                                }
+                                else
+                                {
+                                    if (LastEmoteTime + MaxEmoteFrequency < currentUnixTime
+                                        && EmoteChance > ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f))
+                                    {
+                                        TryEmoting();
+                                    }
+
+                                    if (LastWanderTime + MaxWanderFrequency < currentUnixTime
+                                        && WanderChance > ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f))
+                                    {
+                                        if (PathfindingEnabled && Location != null && Location.Indoors && !LastRouteStartAttemptWasNullRoute)
+                                            TryWandering(160, 200, 5);
+                                        else
+                                            TryWandering(100, 260, 7);
+                                    }
+
+                                    if (PathfindingEnabled && Location != null && Location.Indoors)
+                                        TryRoute();
+                                }
+                            }
+                        }
+                        else if (HasRangedWeapon && CurrentAttack == CombatType.Melee && targetDist > 20
+                                 && !SwitchWeaponsPending && LastWeaponSwitchTime + 5 < currentUnixTime
+                                 && isDirectVisible)
+                        {
                             TrySwitchToMissileAttack();
+                        }
                         else
+                        {
                             Movement();
+                        }
                     }
                 }
                 else
                 {
-                    // perform attack
-                    if (AttackReady())
-                        Attack();
-                }
-            }
-            else
-            {
-                if (IsTurning || IsMoving)
-                {
-                    Movement();
-                    return;
-                }
+                    // -- Ported from ClassicACE CustomDM --
+                    // Missile mob entered the "in-range-to-stop" band (80% of MaxRange):
+                    // cancel any chase MoveTo so we plant and fire instead of running into melee.
+                    var inRangeToStop = targetDist < MaxRange * 0.8f;
+                    if (CurrentAttack == CombatType.Missile && inRangeToStop && IsMoving && !IsTurning && !IsWandering && HasPendingMovement)
+                        CancelMoveTo(WeenieError.ObjectGone);
 
-                if (!IsFacing(AttackTarget))
-                {
-                    StartTurn();
-                }
-                else if (targetDist <= MaxRange)
-                {
-                    // perform attack
-                    if (AttackReady())
+                    // In range and facing: attack. Missile mobs at extreme range still try to switch back to melee.
+                    if (CurrentAttack == CombatType.Missile && targetDist > MaxRange)
+                    {
+                        // should ranged mobs only get CurrentTargets within MaxRange?
+                        TrySwitchToMeleeAttack();
+                    }
+                    else if (AttackReady())
+                    {
                         Attack();
-                }
-                else
-                {
-                    // monster switches to melee combat immediately,
-                    // if target is beyond max range?
-
-                    // should ranged mobs only get CurrentTargets within MaxRange?
-                    //Console.WriteLine($"{Name}.MissileAttack({AttackTarget.Name}): targetDist={targetDist}, MaxRange={MaxRange}, switching to melee");
-                    TrySwitchToMeleeAttack();
+                    }
                 }
             }
 

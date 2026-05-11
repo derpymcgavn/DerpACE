@@ -68,11 +68,96 @@ namespace ACE.Server.Factories
             if (profile.Tier == 8)
                 TryMutateGearRating(wo, profile, roll);
 
+            // Vampiric Jewelry affix: small per-piece vital-steal that ticks passively (with diminishing returns across pieces)
+            // and offers a tiny on-hit vital burst. Rolls one of three flavors: Health (vampiric), Stamina (leech), Mana (siphon).
+            // See @lootconfig.
+            var rolledVampiric = false;
+            var vampPts = 0;
+            var vampVitalRoll = 0;
+            string vampVitalLabel = null;
+            if (profile.Tier >= ACE.Server.Managers.DerpACEConfig.VampiricJewelryMinTier
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.VampiricJewelryDropChance)
+            {
+                vampPts = ThreadSafeRandom.Next(
+                    ACE.Server.Managers.DerpACEConfig.VampiricJewelryPointsMin,
+                    ACE.Server.Managers.DerpACEConfig.VampiricJewelryPointsMax);
+                if (vampPts < 1) vampPts = 1;
+
+                // 0 = Health (vampire), 1 = Stamina (leech), 2 = Mana (siphon)
+                vampVitalRoll = ThreadSafeRandom.Next(0, 2);
+
+                string suffix;
+                ACE.Entity.Enum.UiEffects uiEffect;
+                switch (vampVitalRoll)
+                {
+                    case 1:
+                        vampVitalLabel = "stamina";
+                        suffix = " of the Leech";
+                        uiEffect = ACE.Entity.Enum.UiEffects.BoostStamina;
+                        break;
+                    case 2:
+                        vampVitalLabel = "mana";
+                        suffix = " of the Siphon";
+                        uiEffect = ACE.Entity.Enum.UiEffects.BoostMana;
+                        break;
+                    default:
+                        vampVitalLabel = "health";
+                        suffix = " of the Vampire";
+                        uiEffect = ACE.Entity.Enum.UiEffects.BoostHealth;
+                        break;
+                }
+
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsVampiricJewelry, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyInt.VampiricJewelryPoints, vampPts);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyInt.VampiricJewelryVital, vampVitalRoll);
+                wo.UiEffects = uiEffect;
+                wo.Name = wo.Name + suffix;
+                rolledVampiric = true;
+            }
+
             // item value
             //  if (wo.HasMutateFilter(MutateFilter.Value))     // fixme: data
                 MutateValue(wo, profile.Tier, roll);
 
             wo.LongDesc = GetLongDesc(wo);
+
+            // Append the Vampiric jewelry description AFTER GetLongDesc so it survives the spell-name overwrite.
+            if (rolledVampiric)
+            {
+                var interval = ACE.Server.Managers.DerpACEConfig.VampiricJewelryRegenIntervalSeconds;
+                var procChancePct = (int)System.Math.Round(ACE.Server.Managers.DerpACEConfig.VampiricJewelryOnHitProcChance * 100.0);
+                var burst = (int)System.Math.Round(vampPts * ACE.Server.Managers.DerpACEConfig.VampiricJewelryOnHitMultiplier);
+                if (burst < 1) burst = 1;
+
+                // Build a per-piece-count diminishing returns breakdown so wearers can see exactly what stacking does.
+                var dr = ACE.Server.Managers.DerpACEConfig.VampiricJewelryDiminishingReturns;
+                string drBreakdown;
+                if (dr == null || dr.Length <= 1)
+                {
+                    drBreakdown = $"each piece grants its full {vampPts} {vampVitalLabel} per tick.";
+                }
+                else
+                {
+                    var parts = new System.Collections.Generic.List<string>();
+                    // dr[0] is unused (0 pieces), start at 1.
+                    for (var i = 1; i < dr.Length; i++)
+                    {
+                        var perTick = (int)System.Math.Round(vampPts * i * dr[i]);
+                        if (perTick < 1) perTick = 1;
+                        parts.Add($"{i} pc \u2192 {perTick}");
+                    }
+                    drBreakdown = "stacking with diminishing returns (assuming all pieces match this one): " + string.Join(", ", parts) + $" {vampVitalLabel} per tick.";
+                }
+
+                wo.LongDesc = (wo.LongDesc ?? wo.Name)
+                    + $"\n\nVampiric Jewelry ({vampVitalLabel}): while equipped, restores {vampPts} {vampVitalLabel} every {interval:0.#}s; "
+                    + drBreakdown
+                    + $" Each strike also has a {procChancePct}% chance to drain {burst} {vampVitalLabel} from your foe.";
+
+                // Inscription on the item itself, signed M.S., so the bonus is visible from the appraisal Inscription tab too.
+                wo.Inscription = $"+{vampPts} {vampVitalLabel} regen / {interval:0.#}s\nOn hit: {procChancePct}% to drain {burst} {vampVitalLabel}\nStacks with diminishing returns.";
+                wo.ScribeName = "M.S.";
+            }
         }
     }
 }

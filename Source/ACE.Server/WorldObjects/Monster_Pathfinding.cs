@@ -101,6 +101,15 @@ namespace ACE.Server.WorldObjects
         public bool PendingContinueRoute = false;
         protected const double MaxRouteFrequency = 5;
 
+        // ===== Route patrol burst =====
+        // To make routed movement look like scouting (rather than restarting on each
+        // waypoint, which can produce a circling appearance), each route start commits
+        // to a burst of 3-5 consecutive waypoints. After the burst is consumed the
+        // route either continues with the next burst or ends naturally.
+        protected const int RouteBurstMin = 3;
+        protected const int RouteBurstMax = 5;
+        protected int CurrentRouteBurstRemaining = 0;
+
         // ===== Passage granting =====
         protected double LastRequestPassageTime = 0;
         protected const double MaxRequestPassageFrequency = 5;
@@ -120,9 +129,25 @@ namespace ACE.Server.WorldObjects
         protected const float ScoutRoamRadiusMin = 10.0f;
         protected const float ScoutRoamRadiusMax = 32.0f;
 
+        // ===== Scout patrol (multi-waypoint roam) =====
+        // Instead of picking one random destination per tick (which produces an
+        // orbit-like wander), each scout plans a short 3-5 waypoint patrol that
+        // generally continues in one direction with a little jitter, walks the
+        // waypoints in order, then takes a short rest before planning the next.
+        protected const int ScoutPatrolMinWaypoints = 3;
+        protected const int ScoutPatrolMaxWaypoints = 5;
+        protected const float ScoutPatrolHeadingJitterRad = 0.6f; // ~34 degrees
+        protected const double ScoutPatrolRestMin = 1.5;
+        protected const double ScoutPatrolRestMax = 4.0;
+
+        private readonly Queue<Position> _scoutPatrolQueue = new Queue<Position>();
+        private Position _scoutPatrolCurrent = null;
+
         /// <summary>
-        /// Scout mobs continuously roam while idle, choosing random move targets
-        /// within their current landblock.
+        /// Scout mobs continuously roam while idle. They plan a short 3-5 waypoint
+        /// patrol biased to continue along a heading (with light jitter), then walk
+        /// it in order so they look like they are scouting an area instead of
+        /// circling around their spawn.
         /// </summary>
         public void TryScoutHeartbeatRoam(double currentUnixTime)
         {
@@ -130,7 +155,12 @@ namespace ACE.Server.WorldObjects
                 return;
 
             if (AttackTarget != null || MonsterState == State.Return)
+            {
+                // Combat / returning to home preempts patrols.
+                if (_scoutPatrolQueue.Count > 0) _scoutPatrolQueue.Clear();
+                _scoutPatrolCurrent = null;
                 return;
+            }
 
             if (IsMoving || IsTurning || HasPendingMovement || IsWandering || IsRouting || IsGrantingPassage || IsMovingToHome)
                 return;
@@ -141,34 +171,74 @@ namespace ACE.Server.WorldObjects
             if (MoveSpeed == 0.0f)
                 GetMovementSpeed();
 
-            var baseLandblock = Location.Cell & 0xFFFF0000;
-            Position roamTarget = null;
-
-            for (var i = 0; i < 6; i++)
+            // Step 1: if we still have patrol waypoints, walk the next one.
+            if (_scoutPatrolQueue.Count > 0)
             {
-                var radius = (float)ThreadSafeRandom.Next(ScoutRoamRadiusMin, ScoutRoamRadiusMax);
-                var angle = (float)ThreadSafeRandom.Next(0f, (float)(Math.PI * 2));
-                var offset = new Vector3((float)Math.Cos(angle) * radius, (float)Math.Sin(angle) * radius, 0);
-
-                var candidate = new Position(Location)
-                {
-                    PositionX = Location.PositionX + offset.X,
-                    PositionY = Location.PositionY + offset.Y,
-                };
-
-                if ((candidate.Cell & 0xFFFF0000) != baseLandblock)
-                    continue;
-
-                roamTarget = candidate;
-                break;
+                _scoutPatrolCurrent = _scoutPatrolQueue.Dequeue();
+                NextScoutRoamTime = currentUnixTime + ThreadSafeRandom.Next((float)ScoutRoamIntervalMin, (float)ScoutRoamIntervalMax);
+                MoveTo(_scoutPatrolCurrent, RunRate, false, 1.0f);
+                return;
             }
 
-            NextScoutRoamTime = currentUnixTime + ThreadSafeRandom.Next((float)ScoutRoamIntervalMin, (float)ScoutRoamIntervalMax);
+            // Step 2: no patrol queued - rest a beat, then plan a new one.
+            _scoutPatrolCurrent = null;
+            PlanScoutPatrol();
 
-            if (roamTarget == null)
+            // After planning, wait the patrol-rest interval before stepping off so the
+            // mob visibly pauses at the end of one patrol before starting the next.
+            NextScoutRoamTime = currentUnixTime + ThreadSafeRandom.Next((float)ScoutPatrolRestMin, (float)ScoutPatrolRestMax);
+        }
+
+        /// <summary>
+        /// Build a 3-5 waypoint patrol starting from the creature's current location.
+        /// Each waypoint extends the previous heading with a small random jitter and
+        /// random step length, and must stay within the current landblock.
+        /// </summary>
+        private void PlanScoutPatrol()
+        {
+            _scoutPatrolQueue.Clear();
+            if (Location == null)
                 return;
 
-            MoveTo(roamTarget, RunRate, false, 1.0f);
+            var baseLandblock = Location.Cell & 0xFFFF0000;
+            var waypointCount = ThreadSafeRandom.Next(ScoutPatrolMinWaypoints, ScoutPatrolMaxWaypoints);
+
+            // Start with a random base heading; subsequent waypoints rotate this by
+            // a small amount each step so the patrol curves smoothly.
+            var heading = (float)ThreadSafeRandom.Next(0f, (float)(Math.PI * 2));
+
+            var cursor = new Position(Location);
+            for (var step = 0; step < waypointCount; step++)
+            {
+                heading += (float)ThreadSafeRandom.Next(-ScoutPatrolHeadingJitterRad, ScoutPatrolHeadingJitterRad);
+
+                Position next = null;
+                for (var attempt = 0; attempt < 4; attempt++)
+                {
+                    var radius = (float)ThreadSafeRandom.Next(ScoutRoamRadiusMin, ScoutRoamRadiusMax);
+                    var candidate = new Position(cursor)
+                    {
+                        PositionX = cursor.PositionX + (float)Math.Cos(heading) * radius,
+                        PositionY = cursor.PositionY + (float)Math.Sin(heading) * radius,
+                    };
+
+                    if ((candidate.Cell & 0xFFFF0000) != baseLandblock)
+                    {
+                        // Reflect the heading away from the landblock edge and try again.
+                        heading += (float)Math.PI * 0.5f;
+                        continue;
+                    }
+
+                    next = candidate;
+                    break;
+                }
+
+                if (next == null)
+                    break;
+
+                _scoutPatrolQueue.Enqueue(next);
+                cursor = next;
+            }
         }
 
         // ===== Pending state checks =====
@@ -453,6 +523,7 @@ namespace ACE.Server.WorldObjects
             IsRouting = true;
             LastRouteTime = Time.GetUnixTime();
             CurrentRouteIndex = 0;
+            CurrentRouteBurstRemaining = ThreadSafeRandom.Next(RouteBurstMin, RouteBurstMax);
             ContinueRoute();
         }
 
@@ -469,6 +540,11 @@ namespace ACE.Server.WorldObjects
 
             if (!retry)
             {
+                // Refill the scouting burst whenever it runs out so the creature
+                // re-commits to another 3-5 waypoint segment of the route.
+                if (CurrentRouteBurstRemaining <= 0)
+                    CurrentRouteBurstRemaining = ThreadSafeRandom.Next(RouteBurstMin, RouteBurstMax);
+
                 // Follow route entries in order and skip tiny/no-op hops.
                 var nextWaypoint = CurrentRoute[CurrentRouteIndex];
                 CurrentRouteIndex++;
@@ -480,6 +556,7 @@ namespace ACE.Server.WorldObjects
                 }
 
                 RoutePositionTarget = nextWaypoint;
+                CurrentRouteBurstRemaining--;
             }
 
             if (RoutePositionTarget == null)
@@ -495,6 +572,37 @@ namespace ACE.Server.WorldObjects
         public void RetryRoute()
         {
             PendingRetryRoute = false;
+
+            // -- Ported from ClassicACE CustomDM --
+            // Rewind to the previous significant waypoint and try to step around the
+            // nearest wall geometry instead of re-issuing the same failed MoveTo.
+            if (CurrentRoute != null && CurrentRoute.Count > 0 && Location != null)
+            {
+                Position retryPos = RoutePositionTarget;
+                for (var retryIndex = Math.Max(CurrentRouteIndex - 1, 0); retryIndex > 0; retryIndex--)
+                {
+                    retryPos = CurrentRoute[retryIndex];
+                    if (Location.DistanceTo(retryPos) > 2.0f)
+                        break;
+                }
+
+                if (retryPos != null)
+                {
+                    var nearbyWallPos = Pathfinder.GetNearestWallPosition(retryPos, 1.0f, AgentWidth.Narrow, out _, false);
+                    if (nearbyWallPos != null)
+                    {
+                        var wallAvoidingPos = nearbyWallPos.InFrontOf(1.2f);
+                        if (HasPendingMovement && PhysicsObj?.MovementManager?.MoveToManager != null)
+                            PhysicsObj.MovementManager.MoveToManager.CancelMoveTo(WeenieError.ObjectGone);
+                        FailedSightCount = 0;
+
+                        LastPathMoveTarget = wallAvoidingPos;
+                        MoveTo(wallAvoidingPos, RunRate, false, 1.0f);
+                        return;
+                    }
+                }
+            }
+
             ContinueRoute(retry: true);
         }
 
@@ -507,6 +615,7 @@ namespace ACE.Server.WorldObjects
             PendingRetryRoute = false;
             CurrentRoute = null;
             CurrentRouteIndex = 0;
+            CurrentRouteBurstRemaining = 0;
             RouteAttackTarget = null;
 
             if (forced && PhysicsObj?.MovementManager?.MoveToManager != null)
@@ -582,6 +691,30 @@ namespace ACE.Server.WorldObjects
                 if (FailedSightCount > 0) FailedSightCount--;
             }
 
+            // -- Ported from ClassicACE CustomDM --
+            // If we regain sight/range of the target while emoting/wandering/routing, abort
+            // the path action immediately so combat can resume this tick. Without this, mobs
+            // appear "stuck" while finishing a wander/route the player is already standing in.
+            if (IsAwake && AttackTarget != null && (IsEmoting || IsEmotePending
+                || IsWandering || IsWanderingPending
+                || IsRouting || IsRouteStartPending))
+            {
+                var isMelee = CurrentAttack == CombatType.Melee;
+                var inSight = isMelee ? IsMeleeVisible(AttackTarget) : IsDirectVisible(AttackTarget);
+                if (inSight)
+                {
+                    FailedSightCount = 0;
+
+                    IsEmotePending = false;
+                    IsWanderingPending = false;
+                    IsRouteStartPending = false;
+
+                    if (IsWandering) PendingEndWandering = true;
+                    if (IsRouting) PendingEndRoute = true;
+                    if (IsEmoting) PendingEndEmoting = true;
+                }
+            }
+
             // Reset attack-counter-without-counter if no attacks for a while
             if (currentUnixTime > NextNoCounterResetTime)
             {
@@ -606,6 +739,18 @@ namespace ACE.Server.WorldObjects
             // Failsafe: never hold routing forever if no move is pending.
             if (IsRouting && !HasPendingMovement && !PendingContinueRoute && !PendingRetryRoute && !IsRouteStartPending)
                 PendingEndRoute = true;
+
+            // Failsafe: wandering / grant-passage / move-to-home don't have explicit completion
+            // callbacks from the physics MoveTo. If no move is pending and the creature isn't
+            // actively turning/moving, treat the action as complete so the AI can resume.
+            if (IsWandering && !IsWanderingPending && !HasPendingMovement && !IsMoving && !IsTurning)
+                PendingEndWandering = true;
+
+            if (IsGrantingPassage && !IsGrantPassagePending && !HasPendingMovement && !IsMoving && !IsTurning)
+                PendingEndGrantPassage = true;
+
+            if (IsMovingToHome && !IsMoveToHomePending && !HasPendingMovement && !IsMoving && !IsTurning)
+                PendingEndMoveToHome = true;
 
             // Detect emote completion
             if (IsEmoting && currentUnixTime >= ExpectedEmoteEndTime)

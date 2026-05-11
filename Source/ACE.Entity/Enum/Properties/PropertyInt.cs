@@ -660,6 +660,9 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE armor vital proc */
         ArmorVitalProcAmount                     = 9019,
+        VampiricJewelryPoints                    = 9020,
+        // 0 = Health (vampiric), 1 = Stamina (leech), 2 = Mana (siphon)
+        VampiricJewelryVital                     = 9021,
     }
 
     public static class PropertyIntExtensions

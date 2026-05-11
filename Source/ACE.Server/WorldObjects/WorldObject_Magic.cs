@@ -503,6 +503,17 @@ namespace ACE.Server.WorldObjects
             int tryBoost = ThreadSafeRandom.Next(minBoostValue, maxBoostValue);
             tryBoost = (int)Math.Round(tryBoost * targetCreature.GetResistanceMod(resistanceType));
 
+            // Hierophant amplification: scale up beneficial Health boosts cast by a wielder of a Hierophant caster.
+            var hierophantCaster = (player != null && spell.IsBeneficial && spell.VitalDamageType == DamageType.Health)
+                ? player.GetEquippedWand()
+                : null;
+            if (hierophantCaster?.GetProperty(PropertyBool.IsHierophantCaster) == true && tryBoost > 0)
+            {
+                var boostPct = (float)(hierophantCaster.GetProperty(PropertyFloat.HierophantHealBoostPct) ?? 0.0);
+                if (boostPct > 0.0f)
+                    tryBoost = (int)Math.Round(tryBoost * (1.0f + boostPct));
+            }
+
             int boost = tryBoost;
 
             // handle cloak damage proc for harm other
@@ -611,6 +622,88 @@ namespace ACE.Server.WorldObjects
             }
 
             HandleBoostTransferDeath(creature, targetCreature);
+
+            // Hierophant procs: HoT bless + fellowship echo on each successful beneficial Health cast.
+            if (player != null && spell.IsBeneficial && spell.VitalDamageType == DamageType.Health && boost > 0)
+                TryProcHierophant(player, targetCreature, boost);
+        }
+
+        /// <summary>
+        /// Hierophant proc: chance-on-cast to apply a regenerating HoT to the heal target,
+        /// and a small bonus echo heal to all nearby fellowship members.
+        /// </summary>
+        private static void TryProcHierophant(Player caster, Creature target, int healAmount)
+        {
+            var hierophant = caster.GetEquippedWand();
+            if (hierophant?.GetProperty(PropertyBool.IsHierophantCaster) != true)
+                return;
+
+            // Regenerating ward (HoT) proc
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.HierophantHotProcChance)
+            {
+                var hotPct = (float)(hierophant.GetProperty(PropertyFloat.HierophantHotPct) ?? 0.0);
+                if (hotPct > 0.0f && target?.IsAlive == true)
+                {
+                    var totalHot = (int)Math.Max(1, target.Health.MaxValue * hotPct);
+                    var duration = ACE.Server.Managers.DerpACEConfig.HierophantHotDurationSeconds;
+                    var interval = Math.Max(0.5f, ACE.Server.Managers.DerpACEConfig.HierophantHotTickInterval);
+                    var ticks = Math.Max(1, (int)Math.Round(duration / interval));
+                    var perTick = Math.Max(1, totalHot / ticks);
+
+                    var hotTarget = target;
+                    var hotChain = new ActionChain();
+                    for (var i = 0; i < ticks; i++)
+                    {
+                        hotChain.AddDelaySeconds(interval);
+                        hotChain.AddAction(hotTarget, () =>
+                        {
+                            if (hotTarget == null || !hotTarget.IsAlive) return;
+                            var applied = hotTarget.UpdateVitalDelta(hotTarget.Health, perTick);
+                            if (applied > 0)
+                            {
+                                hotTarget.DamageHistory.OnHeal((uint)applied);
+                                if (hotTarget is Player tp)
+                                    tp.SendMessage($"The Hierophant's ward restores {applied} health.", ChatMessageType.Magic);
+                            }
+                        });
+                    }
+                    hotChain.EnqueueChain();
+
+                    caster.SendMessage($"Your {hierophant.Name} blesses {(target == caster ? "you" : target.Name)} with a regenerating ward.", ChatMessageType.Magic);
+                }
+            }
+
+            // Fellowship echo: bonus heal to nearby fellows
+            var echoPct = (float)(hierophant.GetProperty(PropertyFloat.HierophantFellowEchoPct) ?? 0.0);
+            if (echoPct <= 0.0f) return;
+
+            var fellowship = caster.Fellowship;
+            if (fellowship == null) return;
+
+            var echoAmount = (int)Math.Round(healAmount * echoPct);
+            if (echoAmount <= 0) return;
+
+            var range = ACE.Server.Managers.DerpACEConfig.HierophantFellowEchoRange;
+            var rangeSq = range * range;
+            var casterPos = caster.Location?.ToGlobal() ?? Vector3.Zero;
+
+            foreach (var weakRef in fellowship.FellowshipMembers.Values)
+            {
+                if (!weakRef.TryGetTarget(out var fellow) || fellow == null) continue;
+                if (fellow == target) continue; // direct target already healed
+                if (!fellow.IsAlive) continue;
+                if (fellow.CurrentLandblock == null || fellow.CurrentLandblock != caster.CurrentLandblock) continue;
+                if (Vector3.DistanceSquared(fellow.Location.ToGlobal(), casterPos) > rangeSq) continue;
+
+                var applied = fellow.UpdateVitalDelta(fellow.Health, echoAmount);
+                if (applied <= 0) continue;
+
+                fellow.DamageHistory.OnHeal((uint)applied);
+                if (fellow != caster)
+                    fellow.SendMessage($"{caster.Name}'s Hierophant echo restores {applied} of your health.", ChatMessageType.Magic);
+                else
+                    caster.SendMessage($"Your Hierophant echo restores {applied} of your health.", ChatMessageType.Magic);
+            }
         }
 
         /// <summary>

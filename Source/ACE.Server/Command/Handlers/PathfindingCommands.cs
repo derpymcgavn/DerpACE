@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 
 using ACE.Entity.Enum;
@@ -22,12 +23,14 @@ namespace ACE.Server.Command.Handlers
     ///   /pathfinding list              - List all currently cached navmesh ids
     ///   /pathfinding prebuild          - Start the boot-time prebuild scan now (background)
     ///   /pathfinding prebuild stop     - Cancel an in-progress prebuild scan
+    ///   /pathfinding export <zipPath>  - Zip the current Indoors+Outdoors mesh cache to <zipPath>
+    ///   /pathfinding import <zipPath>  - Extract a navmesh pack zip into the current mesh root
     /// </summary>
     public static class PathfindingCommands
     {
         [CommandHandler("pathfinding", AccessLevel.Developer, CommandHandlerFlag.None, 0,
             "Manage the DotRecast monster pathfinding navmesh system.",
-            "status | on | off | load | rebuild | unload | list | prebuild [stop]")]
+            "status | on | off | load | rebuild | unload | list | prebuild [stop] | export <zipPath> | import <zipPath>")]
         public static void HandlePathfinding(Session session, params string[] parameters)
         {
             var sub = parameters.Length > 0 ? parameters[0].ToLowerInvariant() : "status";
@@ -60,9 +63,152 @@ namespace ACE.Server.Command.Handlers
                 case "prebuild":
                     HandlePrebuild(session, parameters);
                     break;
-                default:
-                    Send(session, "Usage: /pathfinding status | on | off | load | rebuild | unload | list | prebuild [stop]");
+                case "export":
+                    HandleExport(session, parameters);
                     break;
+                case "import":
+                    HandleImport(session, parameters);
+                    break;
+                default:
+                    Send(session, "Usage: /pathfinding status | on | off | load | rebuild | unload | list | prebuild [stop] | export <zipPath> | import <zipPath>");
+                    break;
+            }
+        }
+
+        private static void HandleExport(Session session, string[] parameters)
+        {
+            if (parameters.Length < 2 || string.IsNullOrWhiteSpace(parameters[1]))
+            {
+                Send(session, "Usage: /pathfinding export <zipPath>");
+                return;
+            }
+
+            var zipPath = parameters[1];
+            try
+            {
+                var indoor = Pathfinder.InsideMeshDirectory;
+                var outdoor = Pathfinder.OutsideMeshDirectory;
+                var indoorParent = Path.GetDirectoryName(indoor);
+                var outdoorParent = Path.GetDirectoryName(outdoor);
+                if (!string.Equals(indoorParent, outdoorParent, StringComparison.OrdinalIgnoreCase))
+                {
+                    Send(session, "Indoor and outdoor mesh dirs do not share a common parent; cannot export.");
+                    return;
+                }
+
+                var indoorCount = Directory.Exists(indoor) ? Directory.EnumerateFiles(indoor, "*.mesh", SearchOption.AllDirectories).Count() : 0;
+                var outdoorCount = Directory.Exists(outdoor) ? Directory.EnumerateFiles(outdoor, "*.mesh", SearchOption.AllDirectories).Count() : 0;
+                if (indoorCount + outdoorCount == 0)
+                {
+                    Send(session, "No mesh files found to export.");
+                    return;
+                }
+
+                Send(session, $"Exporting {indoorCount + outdoorCount} mesh files ({indoorCount} indoor, {outdoorCount} outdoor) to {zipPath} ...");
+
+                var dir = Path.GetDirectoryName(zipPath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+
+                if (File.Exists(zipPath))
+                    File.Delete(zipPath);
+
+                using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+                {
+                    AddDirectoryToZip(zip, indoor, "Indoors");
+                    AddDirectoryToZip(zip, outdoor, "Outdoors");
+                }
+
+                var info = new FileInfo(zipPath);
+                Send(session, $"Export complete: {zipPath} ({info.Length / (1024d * 1024d):F1} MB)");
+            }
+            catch (Exception ex)
+            {
+                Send(session, $"Export failed: {ex.Message}");
+            }
+        }
+
+        private static void AddDirectoryToZip(ZipArchive zip, string sourceDir, string entryRoot)
+        {
+            if (!Directory.Exists(sourceDir))
+                return;
+
+            foreach (var file in Directory.EnumerateFiles(sourceDir, "*.mesh", SearchOption.AllDirectories))
+            {
+                var rel = file.Substring(sourceDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var entryName = entryRoot + "/" + rel.Replace(Path.DirectorySeparatorChar, '/').Replace(Path.AltDirectorySeparatorChar, '/');
+                zip.CreateEntryFromFile(file, entryName, CompressionLevel.Optimal);
+            }
+        }
+
+        private static void HandleImport(Session session, string[] parameters)
+        {
+            if (parameters.Length < 2 || string.IsNullOrWhiteSpace(parameters[1]))
+            {
+                Send(session, "Usage: /pathfinding import <zipPath>");
+                return;
+            }
+
+            var zipPath = parameters[1];
+            if (!File.Exists(zipPath))
+            {
+                Send(session, $"Zip not found: {zipPath}");
+                return;
+            }
+
+            try
+            {
+                var indoor = Pathfinder.InsideMeshDirectory;
+                var outdoor = Pathfinder.OutsideMeshDirectory;
+                var indoorParent = Path.GetDirectoryName(indoor);
+                Directory.CreateDirectory(indoor);
+                Directory.CreateDirectory(outdoor);
+
+                int extracted = 0;
+                using (var zip = ZipFile.OpenRead(zipPath))
+                {
+                    foreach (var entry in zip.Entries)
+                    {
+                        if (string.IsNullOrEmpty(entry.Name))
+                            continue;
+
+                        var normalized = entry.FullName.Replace('\\', '/');
+                        if (!normalized.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        string targetRoot;
+                        string relative;
+                        if (normalized.StartsWith("Indoors/", StringComparison.OrdinalIgnoreCase))
+                        {
+                            targetRoot = indoor;
+                            relative = normalized.Substring("Indoors/".Length);
+                        }
+                        else if (normalized.StartsWith("Outdoors/", StringComparison.OrdinalIgnoreCase))
+                        {
+                            targetRoot = outdoor;
+                            relative = normalized.Substring("Outdoors/".Length);
+                        }
+                        else
+                        {
+                            continue;
+                        }
+
+                        var targetPath = Path.GetFullPath(Path.Combine(targetRoot, relative));
+                        var fullRoot = Path.GetFullPath(targetRoot) + Path.DirectorySeparatorChar;
+                        if (!targetPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+                            continue; // zip-slip guard
+
+                        Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
+                        entry.ExtractToFile(targetPath, overwrite: true);
+                        extracted++;
+                    }
+                }
+
+                Send(session, $"Import complete: {extracted} mesh file(s) extracted into {indoorParent}.");
+            }
+            catch (Exception ex)
+            {
+                Send(session, $"Import failed: {ex.Message}");
             }
         }
 

@@ -75,6 +75,33 @@ namespace ACE.Server.Factories
             73081   // Shade Iron Ore Hammer
         };
 
+        // Returns a flavor noun for the rolled weapon type so long descriptions match the actual weapon
+        // (since custom modifiers can roll across interchangeable weapon types).
+        private static string GetWeaponNoun(TreasureWeaponType weaponType)
+        {
+            switch (weaponType)
+            {
+                case TreasureWeaponType.Sword:           return "sword";
+                case TreasureWeaponType.SwordMS:         return "blade";
+                case TreasureWeaponType.TwoHandedSword:  return "greatsword";
+                case TreasureWeaponType.Dagger:          return "dagger";
+                case TreasureWeaponType.DaggerMS:        return "dagger";
+                case TreasureWeaponType.Axe:             return "axe";
+                case TreasureWeaponType.TwoHandedAxe:    return "greataxe";
+                case TreasureWeaponType.Mace:            return "mace";
+                case TreasureWeaponType.MaceJitte:       return "jitte";
+                case TreasureWeaponType.TwoHandedMace:   return "maul";
+                case TreasureWeaponType.Spear:           return "spear";
+                case TreasureWeaponType.TwoHandedSpear:  return "spear";
+                case TreasureWeaponType.Staff:           return "staff";
+                case TreasureWeaponType.Unarmed:         return "weapon";
+                case TreasureWeaponType.Bow:             return "bow";
+                case TreasureWeaponType.Crossbow:        return "crossbow";
+                case TreasureWeaponType.Atlatl:          return "atlatl";
+                default:                                 return "weapon";
+            }
+        }
+
         private static int RollTierScaledInt(int min, int max, int tier, int minTier)
         {
             if (max <= min)
@@ -226,7 +253,7 @@ namespace ACE.Server.Factories
                 wo.WieldSkillType = (int)Skill.SneakAttack;
                 wo.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis dagger was honed in shadow — while equipped, you appear translucent and monsters are less likely to notice you. Sneak attacks have a 10% chance to proc an additional 10% bonus damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} was honed in shadow — while equipped, you appear translucent and monsters are less likely to notice you. Sneak attacks have a 10% chance to proc an additional 10% bonus damage.";
             }
 
             // Fencer's Blade: configurable chance on T6+ épée / rapier / schlager (see @lootconfig)
@@ -264,7 +291,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance,   deflectChance / 100.0);
                 wo.IconOverlayId = 0x06002699u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis blade is perfectly balanced for dueling — each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling — each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
             }
 
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
@@ -311,7 +338,7 @@ namespace ACE.Server.Factories
 
                     var displayCrush = (int)Math.Round(crushBonusPct * 100.0);
                     var displayDrain = (int)Math.Round(stamDrainPct * 100.0);
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis hammer-headed axe crushes through guard — each strike has a {procPct}% chance to slam for +{displayCrush}% bonus damage and drain {displayDrain}% of the target's current stamina.{(isTwoHanded ? " The two-handed leverage amplifies the impact." : "")}";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis hammer-headed {GetWeaponNoun(roll.WeaponType)} crushes through guard — each strike has a {procPct}% chance to slam for +{displayCrush}% bonus damage and drain {displayDrain}% of the target's current stamina.{(isTwoHanded ? " The two-handed leverage amplifies the impact." : "")}";
                 }
                 else
                 {
@@ -320,7 +347,7 @@ namespace ACE.Server.Factories
                     var displayBleed = (int)Math.Round(bleedFraction * 100.0);
                     var ticks = ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks;
                     var interval = ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval;
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis axe is wickedly serrated — each strike has a {procPct}% chance to inflict a vicious bleed dealing {displayBleed}% of the hit's damage over {ticks} ticks ({interval:0.#}s apart).{(isTwoHanded ? " The two-handed grip drives the wound deeper." : "")}";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is wickedly serrated — each strike has a {procPct}% chance to inflict a vicious bleed dealing {displayBleed}% of the hit's damage over {ticks} ticks ({interval:0.#}s apart).{(isTwoHanded ? " The two-handed grip drives the wound deeper." : "")}";
                 }
             }
 
@@ -363,7 +390,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussDuration, duration);
                 wo.IconOverlayId = 0x06002878u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis maul is forged for crushing guards — each strike has a {procPct}% chance to concuss the target, reducing their effective defense skill by {penalty} for {duration} seconds.{(isTwoHandedMace ? " The two-handed swing rattles bone." : "")}";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is forged for crushing guards — each strike has a {procPct}% chance to concuss the target, reducing their effective defense skill by {penalty} for {duration} seconds.{(isTwoHandedMace ? " The two-handed swing rattles bone." : "")}";
             }
 
             // Resolute Blade: configurable chance on T6+ swords (1H or 2H, excluding fencer SwordMS) (see @lootconfig)
@@ -400,7 +427,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = 0x06002860u;
 
                 var killBurstPct = (int)Math.Round(killBurst * 100.0);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis blade is honed for the long fight — critical hits have a {procPct}% chance to restore {healPct}% of the damage dealt as health to the wielder. Killing blows surge with {killBurstPct}% of your maximum health and stamina.{(isTwoHandedSword ? " The two-handed grip drinks deeper from the slain." : "")}";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is honed for the long fight — critical hits have a {procPct}% chance to restore {healPct}% of the damage dealt as health to the wielder. Killing blows surge with {killBurstPct}% of your maximum health and stamina.{(isTwoHandedSword ? " The two-handed grip drinks deeper from the slain." : "")}";
             }
 
             // Polebreaker Staff: configurable chance on T6+ staves to escalate damage on consecutive hits against the same target (see @lootconfig)
@@ -432,7 +459,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = 0x06002699u;
 
                 var totalPct = stackPct * maxStacks;
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis staff finds a deadly rhythm — each consecutive hit on the same target adds +{stackPct}% bonus damage, stacking up to {maxStacks} times (+{totalPct}% at full stack). Switching targets or letting the target die resets the chain.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} finds a deadly rhythm — each consecutive hit on the same target adds +{stackPct}% bonus damage, stacking up to {maxStacks} times (+{totalPct}% at full stack). Switching targets or letting the target die resets the chain.";
             }
 
             // Unarmed elemental cast-on-strike: configurable % of magical elemental fist weapons roll a proc (see @lootconfig).
@@ -513,7 +540,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = 0x06002699;
                 wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostStamina;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis spear hums with a guardian's resolve — each strike has a 10% chance to drain 10% of the target's stamina, returning a quarter of it to the wielder.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} hums with a guardian's resolve — each strike has a 10% chance to drain 10% of the target's stamina, returning a quarter of it to the wielder.";
             }
         }
 
