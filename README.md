@@ -456,3 +456,352 @@ Server-wide rotating kill quest that gives all online players the same timed obj
   * The `[Whack]` prefix baked into the item name, placed **before the material type** (e.g. `[Whack] Ebony Sword`)
   * `MaterialType` is zeroed after baking the material name into `wo.Name` to prevent the client double-prepending it
 * New events can be added by extending the `ServerEvents` class and the `start`/`end` switch statements in `DerpACEEventCommands.cs`
+
+
+***
+## Full Command Reference
+
+This is an auto-generated index of every in-game command registered via `[CommandHandler(...)]`. Player commands are typed with `/` (e.g. `/ironman`); staff/admin commands are typed with `@` (e.g. `@teleto`). The required access level for each command is shown by section.
+
+For deeper documentation of DerpACE-specific systems (Defender's Shield, Ravager's Axe, Ironman, Hardcore, Loot Config, etc.), see the sections above.
+
+
+#### Player
+
+| Command | Description |
+|---|---|
+| `/acecommands` | Lists all commands. |
+| `/acehelp` | Displays help. |
+| `/aceversion` | Shows this server's version data |
+| `/castmeter` | Shows the fast casting efficiency meter |
+| `/config` | Manually sets a character option on the server.\nUse /config list to see a list of settings. |
+| `/debugcast` | Shows debug information about the current magic casting state |
+| `/fixbusy` | Attempts to remove the hourglass / fix the busy state for the player |
+| `/fixcast` | Fixes magic casting if locked up for an extended time |
+| `/gquest` | Show the current global kill quest status. |
+| `/hardcore` | Toggle Hardcore self-found mode (IRREVERSIBLE). |
+| `/house-select` | For characters/accounts who currently own multiple houses, used to select which house they want to keep |
+| `/ironman` | Toggle Ironman mode (IRREVERSIBLE). |
+| `/ironmantop` | Show the Ironman leaderboard (top players by mob kills). |
+| `/ironmantopkillers` | Show the top 10 creatures that have killed the most Ironman players. |
+| `/myquests` | Shows your quest log |
+| `/objsend` | Force resend of all visible objects known to this player. Can fix rare cases of invisible object bugs. Can only be used once every 5 mins max. |
+| `/passwd` | Change your account password. |
+| `/pop` | Show current world population |
+| `/reportbug` | Generate a Bug Report |
+
+#### Advocate
+
+| Command | Description |
+|---|---|
+| `@allstats` | Displays a summary of all server statistics and usage |
+| `@attackable` | Sets whether monsters will attack you or not. |
+| `@bestow` | Sets a character's Advocate Level. |
+| `@gcstatus` | Displays a summary of server GC Information |
+| `@landblockperformance` | Displays a summary of landblock performance statistics |
+| `@landblockstats` | Displays a summary of landblock performance statistics |
+| `@lbgroupstats` | Displays a summary of landblock group stats |
+| `@remove` | Removes the specified character from the Advocate ranks. |
+| `@serverperformance` | Displays a summary of server performance statistics |
+| `@serverstatus` | Displays a summary of server statistics and usage |
+| `@tele` | Teleports you(or a player) to some location. |
+
+#### Sentinel
+
+| Command | Description |
+|---|---|
+| `@adminvision` | Allows the admin to see admin-only visible items. |
+| `@ban` | Bans the specified player account. |
+| `@banlist` | Lists all banned accounts on this world. |
+| `@boot` | Boots the character out of the game. |
+| `@buff` | Buffs you (or a player) with all beneficial spells. |
+| `@cloak` | Sets your cloaking state. |
+| `@fellowbuff` | Buffs your fellowship (or a player's fellowship) with all beneficial spells. |
+| `@finger` | Show the given character's account name or vice-versa. |
+| `@gag` | Prevents a character from talking. |
+| `@god` | Turns current character into a god! |
+| `@home` | Teleports you to your sanctuary position. |
+| `@mrt` | Toggles the ability to bypass housing boundaries |
+| `@neversaydie` | Turn immortality on or off. |
+| `@portal_bypass` | Toggles the ability to bypass portal restrictions. |
+| `@run` | Temporarily boosts your run skill. |
+| `@save` | Sets your sanctuary position or a named recall point. |
+| `@telereturn` | Return a player to their previous location. |
+| `@teleto` | Teleport yourself to a player |
+| `@teletome` | Teleports a player to your current location. |
+| `@unban` | Unbans the specified player account. |
+| `@ungag` | Allows a gagged character to talk again. |
+| `@ungod` | Returns character to a mortal state. |
+
+#### Envoy
+
+| Command | Description |
+|---|---|
+| `@crack` | Cracks the most recently appraised locked target. |
+| `@delete` | Deletes the selected object. |
+| `@gamecast` | Sends a world-wide broadcast. |
+| `@heal` | Heals yourself (or the selected creature) |
+| `@myiid` | Displays your Instance ID (IID) |
+| `@regen` | Sends the selected generator a regeneration message. |
+| `@rename` | Rename a character. (Do NOT include +'s for admin names) |
+| `@smite` | Kills the selected target or all monsters in radar range if \ |
+| `@time` | Displays the server's current game time. |
+| `@trophies` | Shows a list of the trophies dropped by the target creature, and the percentage chance of dropping. |
+
+#### Developer
+
+| Command | Description |
+|---|---|
+| `@addallspells` | Adds all known spells to your own spellbook. |
+| `@addalltitles` | Add all titles to yourself |
+| `@addenc` | Spawns a new wcid or classname in the current outdoor cell as an encounter |
+| `@additemspell` | Adds a spell to the last appraised item's spellbook. |
+| `@addspell` | Adds the specified spell to your own spellbook. |
+| `@addtitle` | Add title to yourself |
+| `@animation` | Plays an animation on the current player, or optionally another object |
+| `@auditobjectmaint` | Iterates over physics objects to find leaks |
+| `@backward` | Teleports you backward by the specified distance (default 10). |
+| `@barbershop` | Displays the barber ui |
+| `@barrier-test` | Shows debug information for house barriers |
+| `@bumpvelocity` | Bumps the velocity of the last appraised object. |
+| `@castspell` | Casts a spell on the last appraised object |
+| `@cbclear` | Clears only the ClothingTable entries from the portal.dat file cache (forces a fresh re-read on next use). |
+| `@cbexport` | Exports a ClothingBase entry from portal.dat to a JSON file in Data/CustomClothingBase/. |
+| `@cbreload` | Reloads all custom ClothingBase JSON files from Data/CustomClothingBase/ and clears the ClothingTable cache. |
+| `@chatdump` | Spews 1000 lines of text to you. |
+| `@check-collision` | Checks if the player is currently colliding with any other objects. |
+| `@ci` | Creates an object in your inventory. |
+| `@ciaetheria` | Spawns an Aetheria in the player's inventory |
+| `@ciloot` | Generates randomized loot in player's inventory |
+| `@cimob` | Manage creature mutators in realtime. |
+| `@cirand` | Creates random objects in your inventory. |
+| `@cisalvage` | Create a salvage bag in your inventory |
+| `@clearcache` | Clears the various database caches. This enables live editing of the database information |
+| `@clearphysicscaches` | Clears Physics Object Caches |
+| `@cm` | Create a salvage bag in your inventory |
+| `@comps` | Creates spell component items in your inventory for testing. |
+| `@contract` | Query, stamp, and erase contracts on the targeted player |
+| `@copychar` | Copies an existing character into your character list. |
+| `@create` | Creates an object or objects in the world. |
+| `@createcreature` | Debug command to spawn a creature in front of the player and save it as a static spawn if the static option is specified. |
+| `@createinst` | Spawns a new wcid or classname as a landblock instance |
+| `@createliveops` | Creates an object or objects with lifespans in the world for live events. |
+| `@createnamed` | Creates a named object in the world. |
+| `@currency` | Creates some currency items in your inventory for testing. |
+| `@databaseperftest` | Test server/database performance. |
+| `@databasequeueinfo` | Show database queue information. |
+| `@database-shard-cache-npbrt` | Shard Database, Non-Player Biota Cache - Retention Time (in minutes) |
+| `@database-shard-cache-pbrt` | Shard Database, Player Biota Cache - Retention Time (in minutes) |
+| `@de_n` | Sends text to named player, formatted exactly as entered. |
+| `@de_s` | Sends text to selected player, formatted exactly as entered, with no prefix of any kind. |
+| `@deathxp` | Displays how much experience the last appraised creature is worth when killed. |
+| `@debugboard` | Shows the current chess board state |
+| `@debugchess` | Shows the chess move history for a player |
+| `@debugdamage` | Toggles the display for player damage info |
+| `@debugemote` | Enables emote debugging for the last appraised object |
+| `@debugmove` | Toggles movement debugging for the last appraised monster |
+| `@debugspell` | Toggles spell projectile debugging info |
+| `@debugspellbook` | Shows the spellbook for the last appraised object |
+| `@delevel` | Attempts to delevel the current player. Requires enough unassigned xp and unspent skill credits. |
+| `@destructionqueue` | Shows the list of previously visible objects queued for destruction for a player |
+| `@direct_emote_name` | Sends text to named player, formatted exactly as entered. |
+| `@direct_emote_select` | Sends text to selected player, formatted exactly as entered, with no prefix of any kind. |
+| `@dispel` | Removes all enchantments from the player |
+| `@dist` | Returns the distance to the last appraised object |
+| `@down` | Teleports you downward by the specified distance (default 10). |
+| `@dungeonname` | Shows the dungeon name for the current landblock |
+| `@echo` | Send text back to yourself. |
+| `@echoflags` | Echo flags back to you |
+| `@effect` | Plays an effect. |
+| `@enable-aetheria` | Enables the aetheria slots for the player |
+| `@end` | Ends a named custom server event. |
+| `@equiptest` | Simulates equipping a new item to your character, replacing all other items. |
+| `@event` | Maniuplates the state of an event |
+| `@export-json` | Exports content from database to JSON file |
+| `@export-json-folders` | Exports content from database to JSON file in a WeenieType/ItemType folder structure |
+| `@export-sql` | Exports content from database to SQL file |
+| `@export-sql-folders` | Exports weenie content from database to an SQL file in a WeenieType/ItemType folder structure |
+| `@faction` | sets your own faction state. |
+| `@fakelogin` | Fake Login Complete response |
+| `@fellow-dist` | Shows distance to each fellowship member |
+| `@fellow-info` | Shows debug info for fellowships. |
+| `@fly` | Toggles admin flight mode (no gravity, no fall damage). |
+| `@food` | Creates some food items in your inventory for testing. |
+| `@forcegc` | Forces .NET Garbage Collection |
+| `@forcegc2` | Forces .NET Garbage Collection with LOH Compact |
+| `@forcelogoff` | Force log off of specified character or last appraised character |
+| `@forcelogout` | Force log off of specified character or last appraised character |
+| `@forward` | Teleports you forward by the specified distance (default 10). |
+| `@gamecastemote` | Sends text to all players, formatted exactly as entered. |
+| `@gamecastlocal` | Sends a server-wide broadcast. |
+| `@gamecastlocalemote` | Sends text to all players within chat range, formatted exactly as entered. |
+| `@generate-classnames` | Generates WeenieClassName.cs from current world database |
+| `@generatordump` | Lists all properties for the last generator you examined. |
+| `@getallspellformula` | Tests spell formula calculation |
+| `@getinfo` | Shows basic info for the last appraised object. |
+| `@getproperty` | Gets a property for the last appraised object |
+| `@getspellformula` | Tests spell formula calculation |
+| `@givemana` | Gives mana to the last appraised object |
+| `@gps` | Display location. |
+| `@grantitemxp` | Give item XP to the last appraised item. |
+| `@grantluminance` | Give luminance to yourself (or the specified character). |
+| `@grantxp` | Give XP to yourself (or the specified character). |
+| `@harmself` | Sets all player vitals to 1 |
+| `@idlist` | Shows the next ID that will be allocated from GuidManager. |
+| `@import-json` | Imports json data from the Content folder |
+| `@import-sql` | Imports sql data from the Content folder |
+| `@import-sql-folders` | Imports all weenie sql data from the Content folder and all sub-folders |
+| `@inv` | Creates sample items, foci and containers in your inventory. |
+| `@knownobjs` | Shows the list of objects currently known to an object |
+| `@knownplayers` | Shows the list of players known to an object |
+| `@left` | Teleports you left by the specified distance (default 10). |
+| `@listcb` | List Clothing Tables available |
+| `@listplayers` | Displays all of the active players connected too the server. |
+| `@listpositions` | Displays all available saved character positions from the database. |
+| `@loadalllandblocks` | Loads all Landblocks. This is VERY crude. Do NOT use it on a live server!!! It will likely crash the server.  Landblock resources will be loaded async and will continue to do work even after all landblocks have been loaded. |
+| `@lootconfig` | View or modify DerpACE loot item variables. |
+| `@lootgen` | Generate a piece of loot from the LootGenerationFactory. |
+| `@lostest` | Tests for direct visibilty with latest appraised object |
+| `@makeiou` | Make an IOU and put it in your inventory |
+| `@monsterspell` | The last appraised creature casts a spell. For targeted spells, defaults to the current player. |
+| `@morph` | Morphs your bodily form into that of the specified creature. Be careful with this one! |
+| `@movement` | Movement testing command, to be removed soon |
+| `@MoveTo` | Used to test the MoveToObject message.   It will spawn a training wand in front of you and then move to that object. |
+| `@myloc` | Shows the current player location, from the server perspective |
+| `@netstats` | View network statistics |
+| `@nudge` | Adjusts the spawn position of a landblock instance |
+| `@pathfinding` | Manage the DotRecast monster pathfinding navmesh system. |
+| `@pk` | sets your own PK state. |
+| `@pktimer` | Sets your PK timer to the current time |
+| `@playsound` | Plays a sound. |
+| `@portalstorm` | Tests starting a portal storm on yourself |
+| `@propertydump` | Lists all properties for the last world object you examined. |
+| `@purchase-house` | Instantly purchase the house for the last appraised covenant crystal. |
+| `@qst` | Query, stamp, and erase quests on the targeted player |
+| `@readdat` | Tests reading the client_portal.dat |
+| `@recordcast` | Records spell casting keypresses to server for debugging |
+| `@reload-landblock` | Reloads the current landblock. |
+| `@removeenc` | Removes the last appraised object from the encounters table |
+| `@removeinst` | Removes the last appraised object from the current landblock instances |
+| `@removeitemspell` | Removes a spell to the last appraised item's spellbook. |
+| `@removespell` | Removes the specified spell to your own spellbook. |
+| `@remove-vitae` | Removes vitae from last appraised player |
+| `@requirecomps` | Sets whether spell components are required to cast spells. |
+| `@resist-info` | Shows the resistance info for the last appraised creature. |
+| `@retaliatetargets` | Shows the list of retaliate targets for a monster |
+| `@right` | Teleports you right by the specified distance (default 10). |
+| `@rotate` | Adjusts the rotation of a landblock instance |
+| `@rotate-x` | Adjusts the rotation of a landblock instance along the x-axis |
+| `@rotate-y` | Adjusts the rotation of a landblock instance along the y-axis |
+| `@rotate-z` | Adjusts the rotation of a landblock instance along the z-axis |
+| `@safecomps` | Enables / disables spell component burning |
+| `@save-now` | Saves your session. |
+| `@setcoin` | Set Coin display debug only usage |
+| `@setglobalenviron` | Sets or clears server's global environment option |
+| `@sethealth` | sets your current health to a specific value. |
+| `@setlbenviron` | Sets or clears your current landblock's environment option |
+| `@setposition` | Saves the supplied character position type to the database. |
+| `@setproperty` | Sets a property for the last appraised object |
+| `@setpurchasetime` | Sets the house purchase time for this player |
+| `@setvital` | Sets the specified vital to a specified value |
+| `@showsession` | Show IP and ID for network session of last appraised character |
+| `@showstats` | Shows a list of a creature's current attribute/skill levels |
+| `@showtier` | Shows the DeathTreasure tier for the last appraised monster |
+| `@showvelocity` | Shows the velocity of the last appraised object. |
+| `@show-wielded-treasure` | Shows the WieldedTreasure table for a Creature |
+| `@spendallxp` | Spend all available XP on Attributes, Vitals and Skills. |
+| `@splits` | Creates some stackable items in your inventory for testing. |
+| `@start` | Starts a named custom server event. |
+| `@sticky` | Sets whether you lose items should you die. |
+| `@targetloc` | Shows the location of the last appraised object |
+| `@teleallto` | Teleports all players to a player. If no target is specified, all players will be teleported to you. |
+| `@teledist` | Teleports a some distance ahead of the last object spawned |
+| `@teledungeon` | Teleport to a dungeon |
+| `@teleloc` | Teleport yourself to the specified location. |
+| `@telepoi` | Teleport yourself to a named Point of Interest |
+| `@teletype` | Teleport to a saved character position. |
+| `@telexyz` | Teleport to a location. |
+| `@testaim` | Tests the aim high/low motions, and projectile spawn position |
+| `@testdeathitems` | Test death item selection |
+| `@tiermobs` | Shows a list of monsters for a particular tier # |
+| `@turnto` | Turns the last appraised object to the player |
+| `@up` | Teleports you upward by the specified distance (default 10). |
+| `@usewith` | Uses specified object on last appraised object |
+| `@vendordump` | Lists all properties for the last vendor you examined. |
+| `@visibleobjs` | Shows the list of objects currently visible to an object |
+| `@visibleplayers` | Shows the list of players visible to a player |
+| `@visibletargets` | Shows the list of targets currently visible to a monster |
+| `@vloc2loc` | Output a set of LOCs for a given landblock found in the VLOCS dataset |
+| `@we` | Sends text to all players, formatted exactly as entered. |
+| `@weapons` | Creates testing items in your inventory. |
+| `@whoami` | Shows you your GUIDs. |
+
+#### Admin
+
+| Command | Description |
+|---|---|
+| `@accountcreate` | Creates a new account. |
+| `@accountget` | Gets an account. |
+| `@adminhouse` | House management tools for admins. |
+| `@bornagain` | Restores a deleted character to an account. |
+| `@cancel-shutdown` | Stops an active server shutdown. |
+| `@cell-export` | Export contents of CELL DAT file. |
+| `@cimobspawn` | Spawns a creature near you and force-applies a mob modifier. |
+| `@deletecharacter` | Deletes a character and removes it from players restore list |
+| `@exit` | Shut down server immediately. |
+| `@fetchbool` | Fetches a server property that is a bool |
+| `@fetchdouble` | Fetches a server property that is a double |
+| `@fetchlong` | Fetches a server property that is a long |
+| `@fetchstring` | Fetches a server property that is a string |
+| `@fix-allegiances` | Fixes the monarch data for allegiances |
+| `@fix-biota-emote-delay` | Fixes biota emotes with incorrect default delays |
+| `@fix-gear-plating` | Corrects the name on Gear Plating. |
+| `@fix-shortcut-bars` | Fixes the players with duplicate items on their shortcut bars. |
+| `@fix-spell-bars` | Fixes the players spell bars. |
+| `@getenchantments` | Shows the enchantments for the last appraised item |
+| `@highres-export` | Export contents of client_highres.dat file. |
+| `@image-export` | Export Texture/Image Files |
+| `@ironmanmode` | Enable or disable Ironman opt-in server-wide. |
+| `@language-export` | Export contents of client_local_English.dat file. |
+| `@modifyattr` | Adjusts an attribute for the last appraised mob/NPC/player |
+| `@modifybool` | Modifies a server property that is a bool |
+| `@modifydouble` | Modifies a server property that is a double |
+| `@modifylong` | Modifies a server property that is a long |
+| `@modifypropertydesc` | Modifies a server property's description |
+| `@modifyskill` | Adjusts the skill for the last appraised mob/player |
+| `@modifystring` | Modifies a server property that is a string |
+| `@modifyvital` | Adjusts the maximum vital attribute for the last appraised mob/player and restores full vitals |
+| `@movetome` | Moves the last appraised object to the current player location. |
+| `@portal-export` | Export contents of PORTAL DAT file. |
+| `@reitem` | Rename the last appraised weapon or shield. |
+| `@reload-loot-tables` | reloads the latest data from the loot tables |
+| `@resyncproperties` | Resync the properties database |
+| `@set-accountaccess` | Change the access level of an account. |
+| `@set-accountpassword` | Set the account password. |
+| `@set-characteraccess` | Sets the access level for the character |
+| `@set-shutdown-interval` | Changes the delay, in seconds, before the server will shutdown. |
+| `@show-allegiances` | Shows all of the allegiance chains on the server. |
+| `@showprops` | Displays the name of all properties configurable via the modify commands |
+| `@shutdown` | Begins the server shutdown process. Optionally displays a shutdown message, if a string is passed. |
+| `@tester` | Toggles tester mode: 290 in all attributes, every skill specialized at max ranks. |
+| `@testlootgen` | Generates Loot for testing LootFactories.  Do testlootgen -info for examples. |
+| `@testlootgencorpse` | Generates Corpses for testing LootFactories |
+| `@verify-armor-levels` | Verifies and optionally fixes any existing armor levels above AL cap |
+| `@verify-attributes` | Verifies and optionally fixes any bugs with player attribute data |
+| `@verify-beneficial-enchantments` | Verifies enchantment registry has correct StatModType for Beneficial spells and optionally fixes |
+| `@verify-clothing-wield-level` | Verifies and optionally fixes any t7/t8 clothing that is missing a wield level requirement |
+| `@verify-heritage-augs` | Verifies all players have their heritage augs. |
+| `@verify-legendary-wield-level` | Verifies and optionally fixes any items with legendary cantrips that have less than 180 wield level requirement |
+| `@verify-max-augs` | Verifies and optionally fixes any bugs with the # of augs each player has |
+| `@verify-melee-rares` | Verifies and optionally fixes any melee rares to EoR wcids |
+| `@verify-player-data` | Verifies and optionally fixes any bugs with player data. Runs all of the verify* commands. |
+| `@verify-shield-rating` | Verifies and optionally fixes any lootgen shields with incorrectly assigned CD/CDR |
+| `@verify-skill-credits` | Verifies and optionally fixes any bugs with player skill credits |
+| `@verify-skills` | Verifies and optionally fixes any bugs with player skill data |
+| `@verify-vitals` | Verifies and optionally fixes any bugs with player vitals data |
+| `@verify-xp` | Verifies and optionally fixes any bugs with player xp |
+| `@version` | Show server version information. |
+| `@watchmen` | Displays a list of accounts with the specified level of admin access. |
+| `@wave-export` | Export Wave Files |
+| `@world` | Open or Close world to player access. |
+
