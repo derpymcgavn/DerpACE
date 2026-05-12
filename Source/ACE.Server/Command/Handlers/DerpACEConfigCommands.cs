@@ -668,8 +668,8 @@ namespace ACE.Server.Command.Handlers
                         DerpACEConfig.HealerMobCooldownSeconds = hmcd;
                         break;
                     case "tankmob.chance":
-                        if (!TryFloat(out var tmc)) { BadValue(session, key, "float"); return; }
-                        DerpACEConfig.TankMobChance = tmc;
+                        if (!TryFloat(out var tankmobchance)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.TankMobChance = tankmobchance;
                         break;
                     case "tankmob.hpmult":
                         if (!TryFloat(out var tmhm)) { BadValue(session, key, "float"); return; }

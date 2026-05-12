@@ -663,6 +663,8 @@ namespace ACE.Entity.Enum.Properties
         VampiricJewelryPoints                    = 9020,
         // 0 = Health (vampiric), 1 = Stamina (leech), 2 = Mana (siphon)
         VampiricJewelryVital                     = 9021,
+        // DerpACE: stores DamageType for exploding mobs (Fire=0x10, Cold=0x08, Acid=0x20, Electric=0x40)
+        ExplodingMobElement                      = 9022,
     }
 
     public static class PropertyIntExtensions

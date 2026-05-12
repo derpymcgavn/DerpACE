@@ -200,13 +200,13 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Exploding mob mutator — detonates on death dealing AoE Fire damage to nearby players.
+    /// DerpACE: Exploding mob mutator — detonates on death casting an elemental ring spell.
     /// Death-side AoE is handled in Creature_Death.cs by checking PropertyBool.IsExplodingMob.
     /// </summary>
     public class ExplodingMutator : CreatureMutator
     {
         public override string Name => "Exploding";
-        public override string Description => "Explodes on death, dealing fire damage to nearby players.";
+        public override string Description => "Explodes on death, casting an elemental ring spell at nearby players.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsExplodingMob;
         public override string NamePrefix => "Exploding";
 
@@ -219,9 +219,31 @@ namespace ACE.Server.Factories
 
         protected override void Apply(Creature creature, int tier)
         {
-            // Visual tell: orange-red tint and a slight scale-up.
+            // Roll a random elemental damage type
+            var elements = new[] { DamageType.Fire, DamageType.Cold, DamageType.Acid, DamageType.Electric };
+            var element = elements[ThreadSafeRandom.Next(0, elements.Length - 1)];
+            creature.SetProperty(PropertyInt.ExplodingMobElement, (int)element);
+
+            // Visual tell: color by element and scale-up
             creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
-            creature.PaletteTemplate = (int)PaletteTemplate.Red;
+            switch (element)
+            {
+                case DamageType.Fire:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Red;
+                    break;
+                case DamageType.Cold:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Blue;
+                    creature.Shade = 0.5;
+                    break;
+                case DamageType.Acid:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Green;
+                    creature.Shade = 0.6;
+                    break;
+                case DamageType.Electric:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Yellow;
+                    creature.Shade = 0.7;
+                    break;
+            }
         }
     }
 
@@ -302,7 +324,7 @@ namespace ACE.Server.Factories
             var lightWeapons = creature.GetCreatureSkill(Skill.LightWeapons);
             if (lightWeapons.AdvancementClass >= SkillAdvancementClass.Trained)
             {
-                lightWeapons.Ranks += (uint)skillBonus;
+                lightWeapons.Ranks += (ushort)Math.Min(skillBonus, ushort.MaxValue);
                 lightWeapons.InitLevel += (uint)skillBonus;
                 creature.Skills[Skill.LightWeapons] = lightWeapons;
             }
@@ -310,7 +332,7 @@ namespace ACE.Server.Factories
             var shield = creature.GetCreatureSkill(Skill.Shield);
             if (shield.AdvancementClass >= SkillAdvancementClass.Trained)
             {
-                shield.Ranks += (uint)skillBonus;
+                shield.Ranks += (ushort)Math.Min(skillBonus, ushort.MaxValue);
                 shield.InitLevel += (uint)skillBonus;
                 creature.Skills[Skill.Shield] = shield;
             }

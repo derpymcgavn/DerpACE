@@ -64,38 +64,79 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
-        /// DerpACE: Exploding mob death AoE — damages players within ExplodingMobRadius
-        /// for ExplodingMobDamageScale * MaxHealth.
+        /// DerpACE: Exploding mob death AoE — casts an elemental ring spell based on the mob's assigned element.
         /// </summary>
         private void TryExplodeOnDeath()
         {
             if (CurrentLandblock == null || Location == null) return;
 
             var radius = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.ExplodingMobRadius);
-            var scale = Math.Max(0.0f, ACE.Server.Managers.DerpACEConfig.ExplodingMobDamageScale);
-            if (scale <= 0.0f) return;
 
-            var maxHp = Health?.MaxValue ?? 0;
-            var damage = (float)Math.Round(maxHp * scale);
-            if (damage < 1.0f) return;
+            // Get the element type assigned to this exploding mob
+            var elementInt = GetProperty(PropertyInt.ExplodingMobElement);
+            var element = elementInt.HasValue ? (DamageType)elementInt.Value : DamageType.Fire;
+
+            // Choose the appropriate ring spell based on element
+            SpellId ringSpell;
+            PlayScript explosionEffect;
+            string elementName;
+
+            switch (element)
+            {
+                case DamageType.Cold:
+                    ringSpell = SpellId.FrostWave;
+                    explosionEffect = PlayScript.BreatheFrost;
+                    elementName = "cold";
+                    break;
+                case DamageType.Acid:
+                    ringSpell = SpellId.AcidWave;
+                    explosionEffect = PlayScript.BreatheAcid;
+                    elementName = "acid";
+                    break;
+                case DamageType.Electric:
+                    ringSpell = SpellId.LightningWave;
+                    explosionEffect = PlayScript.BreatheLightning;
+                    elementName = "lightning";
+                    break;
+                case DamageType.Fire:
+                default:
+                    ringSpell = SpellId.FlameWave;
+                    explosionEffect = PlayScript.Explode;
+                    elementName = "flame";
+                    break;
+            }
+
+            // Play visual effect
+            ApplyVisualEffects(explosionEffect);
 
             var radiusSq = radius * radius;
-            var victims = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Player>()
-                .Where(p => p != null
-                            && !p.IsDead
-                            && p.Location != null
-                            && Location.SquaredDistanceTo(p.Location) <= radiusSq)
+            var targets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Creature>()
+                .Where(c => c != null
+                            && c != this
+                            && !c.IsDead
+                            && c.Location != null
+                            && Location.SquaredDistanceTo(c.Location) <= radiusSq)
                 .ToList();
 
-            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
+            if (targets.Count == 0) return;
 
-            foreach (var victim in victims)
+            // Load the spell and cast it on all targets in range
+            var spell = new ACE.Server.Entity.Spell(ringSpell);
+            if (spell == null || spell.NotFound) return;
+
+            foreach (var target in targets)
             {
-                victim.TakeDamage(this, DamageType.Fire, damage, BodyPart.Chest);
-                victim.Session?.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"{Name} explodes, searing you for {(uint)damage} fire damage! [Exploding]",
-                    ChatMessageType.CombatEnemy));
+                // Cast the ring spell on each target
+                target.HandleCastSpell(spell, target, this);
+
+                // Send combat message to players
+                if (target is Player player)
+                {
+                    player.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"{Name} explodes in a burst of {elementName}! [Exploding]",
+                        ChatMessageType.CombatEnemy));
+                }
             }
         }
 
