@@ -125,8 +125,6 @@ namespace ACE.Server.WorldObjects
 
             PhysicsObj.ObjMaint.DestroyObjects();
 
-            TickWackyAppearance();
-
             TickVampiricJewelry(currentUnixTime);
 
             // Check if we're due for our periodic SavePlayer

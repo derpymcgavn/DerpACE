@@ -217,5 +217,11 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Vampiric Jewelry — ring/necklace/bracelet that grants a small lifesteal regen */
         IsVampiricJewelry                = 9035,
+
+        /* DerpACE Healer mob — casts Heal Other on wounded nearby allies */
+        IsHealerMob                      = 9036,
+
+        /* DerpACE Tank mob — high HP, physical damage reduction, bonus to heals received */
+        IsTankMob                        = 9037,
     }
 }

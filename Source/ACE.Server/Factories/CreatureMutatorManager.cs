@@ -35,19 +35,18 @@ namespace ACE.Server.Factories
 
                 log.Info("Initializing CreatureMutatorManager...");
 
-                // Register existing DerpACE mob modifiers (refactored from MobModifierFactory)
+                // Register DerpACE mob modifiers
                 RegisterMutator(new VampiricMutator());
                 RegisterMutator(new ThiefMutator());
                 RegisterMutator(new ScoutMutator());
                 RegisterMutator(new SimulacrumMutator());
                 RegisterMutator(new NocturnalMutator());
                 RegisterMutator(new ExplodingMutator());
+                RegisterMutator(new HealerMutator());
+                RegisterMutator(new TankMutator());
 
                 // TODO: Port Expansion creature types
                 // RegisterMutator(new DrainerMutator());
-                // RegisterMutator(new ExploderMutator());
-                // RegisterMutator(new TankMutator());
-                // RegisterMutator(new HealerMutator());
                 // ... etc.
 
                 foreach (var mutator in _mutators.Values)
@@ -118,7 +117,7 @@ namespace ACE.Server.Factories
         {
             if (creature == null) return;
 
-            // Compute tier (same logic as old MobModifierFactory)
+            // Compute tier from DeathTreasure when available, otherwise approximate from level
             int tier = 1;
             if (creature.DeathTreasure != null)
                 tier = creature.DeathTreasure.Tier;
@@ -210,6 +209,14 @@ namespace ACE.Server.Factories
                 case "explode":
                 case "exploding":
                     return "Exploding";
+                case "heal":
+                case "healer":
+                case "medic":
+                    return "Healer";
+                case "tank":
+                case "guardian":
+                case "defender":
+                    return "Tank";
                 default:
                     return name;
             }

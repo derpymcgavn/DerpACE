@@ -9,7 +9,6 @@ namespace ACE.Server.Factories
 {
     /// <summary>
     /// DerpACE: Vampiric mob mutator (lifesteals on hit).
-    /// Ported from MobModifierFactory.
     /// </summary>
     public class VampiricMutator : CreatureMutator
     {
@@ -27,7 +26,7 @@ namespace ACE.Server.Factories
 
         protected override void Apply(Creature creature, int tier)
         {
-            // Roll lifesteal % from configured range (matches legacy MobModifierFactory behavior)
+            // Roll lifesteal % from configured range
             var minPct = Math.Max(0, DerpACEConfig.VampiricLifestealMin);
             var maxPct = Math.Max(minPct, DerpACEConfig.VampiricLifestealMax);
             var pct = ThreadSafeRandom.Next(minPct, maxPct) / 100.0;
@@ -51,7 +50,6 @@ namespace ACE.Server.Factories
 
     /// <summary>
     /// DerpACE: Thief mob mutator (steals tradenotes on hit, drops chest on death).
-    /// Ported from MobModifierFactory.
     /// </summary>
     public class ThiefMutator : CreatureMutator
     {
@@ -90,7 +88,6 @@ namespace ACE.Server.Factories
 
     /// <summary>
     /// DerpACE: Scout mob mutator (increases aggro range and perception).
-    /// Ported from MobModifierFactory.
     /// </summary>
     public class ScoutMutator : CreatureMutator
     {
@@ -138,7 +135,6 @@ namespace ACE.Server.Factories
 
     /// <summary>
     /// DerpACE: Simulacrum mob mutator (summons duplicate on low HP).
-    /// Ported from MobModifierFactory.
     /// </summary>
     public class SimulacrumMutator : CreatureMutator
     {
@@ -226,6 +222,103 @@ namespace ACE.Server.Factories
             // Visual tell: orange-red tint and a slight scale-up.
             creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
             creature.PaletteTemplate = (int)PaletteTemplate.Red;
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Healer mob mutator — casts Heal Other on wounded nearby allies,
+    /// spends mana, and shows heal notification/animation on the target.
+    /// Heartbeat logic is in Creature_Healer.cs.
+    /// </summary>
+    public class HealerMutator : CreatureMutator
+    {
+        public override string Name => "Healer";
+        public override string Description => "Casts Heal Other on wounded allies nearby.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsHealerMob;
+        public override string NamePrefix => "Healer";
+
+        public HealerMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.HealerMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Boost mana pool so it has enough to cast repeatedly
+            if (creature.Mana != null && creature.Mana.MaxValue > 0)
+            {
+                var currentMax = creature.Mana.MaxValue;
+                var manaBoost = (uint)(currentMax * 0.5);
+                creature.Mana.StartingValue += manaBoost;
+                creature.Mana.Current = creature.Mana.MaxValue;
+            }
+
+            // Visual tell: green tint
+            creature.PaletteTemplate = (int)PaletteTemplate.Green;
+            creature.Shade = 0.75;
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Tank mob mutator — high HP, physical damage reduction, bonus healing received,
+    /// and boosted Light Weapons + Shield skills.
+    /// </summary>
+    public class TankMutator : CreatureMutator
+    {
+        public override string Name => "Tank";
+        public override string Description => "High HP, physical damage reduction, bonus healing received, and skilled with light weapons & shields.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsTankMob;
+        public override string NamePrefix => "Tank";
+
+        public TankMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.TankMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // 250% health boost
+            if (creature.Health != null && creature.Health.MaxValue > 0)
+            {
+                var currentMax = creature.Health.MaxValue;
+                var healthMult = Math.Max(1.0f, DerpACEConfig.TankMobHealthMultiplier);
+                var hpBoost = (uint)((currentMax * healthMult) - currentMax);
+                creature.Health.StartingValue += hpBoost;
+                creature.Health.Current = creature.Health.MaxValue;
+            }
+
+            // Physical damage resistances (Slash/Pierce/Bludgeon)
+            var physReduction = Math.Clamp(DerpACEConfig.TankMobPhysicalReduction, 0.0f, 1.0f);
+            creature.SetProperty(PropertyFloat.ResistSlash, physReduction);
+            creature.SetProperty(PropertyFloat.ResistPierce, physReduction);
+            creature.SetProperty(PropertyFloat.ResistBludgeon, physReduction);
+
+            // Boost Light Weapons and Shield skills
+            var skillBonus = Math.Max(0, DerpACEConfig.TankMobSkillBonus);
+            var lightWeapons = creature.GetCreatureSkill(Skill.LightWeapons);
+            if (lightWeapons.AdvancementClass >= SkillAdvancementClass.Trained)
+            {
+                lightWeapons.Ranks += (uint)skillBonus;
+                lightWeapons.InitLevel += (uint)skillBonus;
+                creature.Skills[Skill.LightWeapons] = lightWeapons;
+            }
+
+            var shield = creature.GetCreatureSkill(Skill.Shield);
+            if (shield.AdvancementClass >= SkillAdvancementClass.Trained)
+            {
+                shield.Ranks += (uint)skillBonus;
+                shield.InitLevel += (uint)skillBonus;
+                creature.Skills[Skill.Shield] = shield;
+            }
+
+            // Visual tell: blue tint and larger scale
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.3f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Blue;
+            creature.Shade = 0.85;
         }
     }
 }

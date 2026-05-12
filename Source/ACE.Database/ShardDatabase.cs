@@ -312,28 +312,6 @@ namespace ACE.Database
         {
             SetBiotaPopulatedCollections(biota);
 
-            // Deduplicate PropertyInt entries by property type, keeping the last value
-            if (biota.BiotaPropertiesInt != null && biota.BiotaPropertiesInt.Count > 0)
-            {
-                var deduped = biota.BiotaPropertiesInt
-                    .GroupBy(x => x.Type)
-                    .Select(g => g.Last())
-                    .ToList();
-                if (deduped.Count != biota.BiotaPropertiesInt.Count)
-                    biota.BiotaPropertiesInt = deduped;
-            }
-
-            // Deduplicate PropertyInt64 entries by property type, keeping the last value
-            if (biota.BiotaPropertiesInt64 != null && biota.BiotaPropertiesInt64.Count > 0)
-            {
-                var deduped = biota.BiotaPropertiesInt64
-                    .GroupBy(x => x.Type)
-                    .Select(g => g.Last())
-                    .ToList();
-                if (deduped.Count != biota.BiotaPropertiesInt64.Count)
-                    biota.BiotaPropertiesInt64 = deduped;
-            }
-
             Exception firstException = null;
             retry:
 
@@ -378,14 +356,6 @@ namespace ACE.Database
                     }
                     else
                     {
-                        // Some legacy rows can have stale PopulatedCollectionFlags and skip loading int props.
-                        // Force-load existing int properties so SetProperty updates instead of inserting duplicates.
-                        if (biota.PropertiesInt != null && biota.PropertiesInt.Count > 0 &&
-                            (existingBiota.BiotaPropertiesInt == null || existingBiota.BiotaPropertiesInt.Count == 0))
-                        {
-                            existingBiota.BiotaPropertiesInt = context.BiotaPropertiesInt.Where(r => r.ObjectId == existingBiota.Id).ToList();
-                        }
-
                         ACE.Database.Adapter.BiotaUpdater.UpdateDatabaseBiota(context, biota, existingBiota);
                     }
                 }

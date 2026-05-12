@@ -149,12 +149,14 @@ namespace ACE.Server.WorldObjects
             if (totalStaminaRestored > 0)
             {
                 ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpYellow);
-                Session?.Network.EnqueueSend(new GameMessageSystemChat($"+{totalStaminaRestored} stamina drained [Vampiric Jewelry]", ChatMessageType.CombatSelf));
+                // Fellowship channel renders bright yellow client-side, matching the stamina visual.
+                Session?.Network.EnqueueSend(new GameMessageSystemChat($"+{totalStaminaRestored} stamina drained [Vampiric Jewelry]", ChatMessageType.Fellowship));
             }
             if (totalManaRestored > 0)
             {
                 ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpBlue);
-                Session?.Network.EnqueueSend(new GameMessageSystemChat($"+{totalManaRestored} mana siphoned [Vampiric Jewelry]", ChatMessageType.CombatSelf));
+                // Magic channel renders blue client-side, matching the mana visual.
+                Session?.Network.EnqueueSend(new GameMessageSystemChat($"+{totalManaRestored} mana siphoned [Vampiric Jewelry]", ChatMessageType.Magic));
             }
 
             return (uint)totalHealthHealed;

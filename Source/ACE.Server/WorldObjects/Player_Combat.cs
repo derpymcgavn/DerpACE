@@ -512,13 +512,14 @@ namespace ACE.Server.WorldObjects
                         $"+{thievesDaggerBonus} [Thief's Dagger]",
                         ChatMessageType.CombatSelf));
 
-                // Vampiric Jewelry: announce the on-hit drink when any piece proc'd
+                // Vampiric Jewelry: announce the on-hit drink when any health-flavor piece proc'd.
+                // Combat channel renders red client-side, matching the health visual.
                 if (vampiricJewelryHealed > 0)
                 {
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{vampiricJewelryHealed} drained from {target.Name} [Vampiric Jewelry]",
-                        ChatMessageType.CombatSelf));
+                        $"+{vampiricJewelryHealed} health drained from {target.Name} [Vampiric Jewelry]",
+                        ChatMessageType.Combat));
                 }
 
                 // Fencer's Blade: show pierce bonus when armor-pierce proc fired
@@ -865,11 +866,89 @@ namespace ACE.Server.WorldObjects
 
                 // no weapon, no hand or foot armor
                 if (damageSource?.Damage == null)
-                    return HeritageGroup == HeritageGroup.Olthoi ? new BaseDamageMod(new BaseDamage(130, 0.75f)) : new BaseDamageMod(new BaseDamage(2, 0.75f));
+                {
+                    var baseMod = HeritageGroup == HeritageGroup.Olthoi
+                        ? new BaseDamageMod(new BaseDamage(130, 0.75f))
+                        : GetTrulyUnarmedBaseDamageMod();
+
+                    ApplySteelBootDamageBonus(baseMod);
+                    return baseMod;
+                }
                 else
-                    return damageSource.GetDamageMod(this, damageSource);
+                {
+                    var baseMod = damageSource.GetDamageMod(this, damageSource);
+                    ApplySteelBootDamageBonus(baseMod);
+                    return baseMod;
+                }
             }
             return damageSource.GetDamageMod(this);
+        }
+
+        /// <summary>
+        /// Returns the BaseDamageMod for a truly-unarmed player attack (no weapon, no hand/foot armor).
+        ///
+        /// When the unarmed_combat_upgrades feature is enabled, base damage scales linearly with the
+        /// player's Light Weapons skill from unarmed_min_base_damage at 0 skill up to
+        /// unarmed_max_base_damage at unarmed_skill_for_max_damage skill. This lets bare-fisted
+        /// players reach roughly tier 5 unarmed weapon damage at high skill.
+        ///
+        /// When the feature is disabled, returns the legacy (2, 0.75) damage.
+        /// </summary>
+        private BaseDamageMod GetTrulyUnarmedBaseDamageMod()
+        {
+            if (!PropertyManager.GetBool("unarmed_combat_upgrades").Item)
+                return new BaseDamageMod(new BaseDamage(2, 0.75f));
+
+            var minDamage = PropertyManager.GetDouble("unarmed_min_base_damage").Item;
+            var maxDamage = PropertyManager.GetDouble("unarmed_max_base_damage").Item;
+            var skillForMax = PropertyManager.GetDouble("unarmed_skill_for_max_damage").Item;
+            var variance = (float)PropertyManager.GetDouble("unarmed_variance").Item;
+
+            if (skillForMax <= 0)
+                skillForMax = 1;
+
+            var lightWeapons = GetCreatureSkill(Skill.LightWeapons).Current;
+            var ratio = Math.Clamp(lightWeapons / skillForMax, 0.0, 1.0);
+            var scaledDamage = minDamage + (maxDamage - minDamage) * ratio;
+
+            var damage = (int)Math.Round(Math.Max(1, scaledDamage));
+            return new BaseDamageMod(new BaseDamage(damage, variance));
+        }
+
+        /// <summary>
+        /// Applies a damage bonus to <paramref name="baseMod"/> when the player is wearing
+        /// Steel-material boots and is striking at high attack power. The bonus scales linearly
+        /// with both the boots' armor level and the player's PowerLevel above the configured threshold.
+        ///
+        /// Disabled when unarmed_combat_upgrades is false.
+        /// </summary>
+        private void ApplySteelBootDamageBonus(BaseDamageMod baseMod)
+        {
+            if (baseMod == null || !PropertyManager.GetBool("unarmed_combat_upgrades").Item)
+                return;
+
+            var boots = FootArmor;
+            if (boots == null || boots.MaterialType != ACE.Entity.Enum.MaterialType.Steel)
+                return;
+
+            var armorLevel = boots.ArmorLevel ?? 0;
+            if (armorLevel <= 0)
+                return;
+
+            var threshold = (float)PropertyManager.GetDouble("unarmed_steel_boot_power_threshold").Item;
+            threshold = Math.Clamp(threshold, 0.0f, 1.0f);
+
+            if (PowerLevel <= threshold)
+                return;
+
+            var powerScale = threshold >= 1.0f ? 1.0f : (PowerLevel - threshold) / (1.0f - threshold);
+            powerScale = Math.Clamp(powerScale, 0.0f, 1.0f);
+
+            var perAl = (float)PropertyManager.GetDouble("unarmed_steel_boot_damage_per_al").Item;
+            var bonus = armorLevel * perAl * powerScale;
+
+            if (bonus > 0)
+                baseMod.DamageBonus += bonus;
         }
 
         public override float GetPowerMod(WorldObject weapon)

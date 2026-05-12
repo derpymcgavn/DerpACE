@@ -514,6 +514,16 @@ namespace ACE.Server.WorldObjects
                     tryBoost = (int)Math.Round(tryBoost * (1.0f + boostPct));
             }
 
+            // DerpACE: Tank mob heal bonus — heals on Tank mobs are 20% more effective
+            if (targetCreature?.GetProperty(PropertyBool.IsTankMob) == true
+                && spell.IsBeneficial
+                && spell.VitalDamageType == DamageType.Health
+                && tryBoost > 0)
+            {
+                var tankHealMult = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.TankMobHealBonus);
+                tryBoost = (int)Math.Round(tryBoost * tankHealMult);
+            }
+
             int boost = tryBoost;
 
             // handle cloak damage proc for harm other

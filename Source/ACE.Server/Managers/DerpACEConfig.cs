@@ -426,6 +426,33 @@ namespace ACE.Server.Managers
         /// <summary>Per-spawn chance (0-1) for the Simulacrum modifier to land on an eligible mob. Default 0.02 (currently 1.0 for testing).</summary>
         public static float SimulacrumMobChance { get; set; } = 1.0f;
 
+        /// <summary>Per-spawn chance (0-1) for the Healer modifier to land on an eligible mob. Default 0.03.</summary>
+        public static float HealerMobChance { get; set; } = 0.03f;
+
+        /// <summary>Maximum range (meters) a Healer mob will look for wounded allies to mend. Default 25.</summary>
+        public static float HealerMobRange { get; set; } = 25.0f;
+
+        /// <summary>Allies whose Health/MaxHealth ratio is below this value are eligible to be healed. Default 0.75.</summary>
+        public static float HealerMobHealThreshold { get; set; } = 0.75f;
+
+        /// <summary>Seconds between Heal Other casts by a Healer mob. Default 8.</summary>
+        public static float HealerMobCooldownSeconds { get; set; } = 8.0f;
+
+        /// <summary>Per-spawn chance (0-1) for the Tank modifier to land on an eligible mob. Default 0.03.</summary>
+        public static float TankMobChance { get; set; } = 0.03f;
+
+        /// <summary>Health multiplier for Tank mobs. Default 2.5 (250%).</summary>
+        public static float TankMobHealthMultiplier { get; set; } = 2.5f;
+
+        /// <summary>Physical damage reduction for Tank mobs (0-1). Default 0.3 (30% reduction).</summary>
+        public static float TankMobPhysicalReduction { get; set; } = 0.3f;
+
+        /// <summary>Healing effectiveness multiplier for Tank mobs. Default 1.2 (20% more effective).</summary>
+        public static float TankMobHealBonus { get; set; } = 1.2f;
+
+        /// <summary>Skill bonus added to Light Weapons and Shield for Tank mobs. Default 200.</summary>
+        public static int TankMobSkillBonus { get; set; } = 200;
+
         // ---------- Ironman Mode (irreversible solo / hardcore character) ----------
 
         /// <summary>Master switch for the Ironman mode opt-in command. Default true.</summary>

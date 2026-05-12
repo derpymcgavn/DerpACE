@@ -36,6 +36,10 @@ namespace ACE.Server.WorldObjects
 
             DamageHistory.TryPrune();
 
+            // DerpACE: Healer mob heartbeat
+            if (IsHealerMob)
+                TryHealerHeartbeat(currentUnixTime);
+
             // delete items when RemainingLifespan <= 0
             foreach (var expireItem in expireItems)
             {

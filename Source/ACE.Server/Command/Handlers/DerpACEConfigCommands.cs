@@ -111,6 +111,10 @@ namespace ACE.Server.Command.Handlers
             "  thiefmob.chestwcid    ThiefChestWcid (uint)\n" +
             "  thiefmob.chestdespawn ThiefChestDespawnSeconds (float, 0=never)\n" +
             "  simulacrum.chance     SimulacrumMobChance (float 0-1)\n" +
+            "  healermob.chance      HealerMobChance (float 0-1)\n" +
+            "  healermob.range       HealerMobRange (float meters)\n" +
+            "  healermob.threshold   HealerMobHealThreshold (float 0-1)\n" +
+            "  healermob.cooldown    HealerMobCooldownSeconds (float)\n" +
             "  ironman.enabled       IronmanEnabled (bool, master switch)")]
         public static void HandleLootConfig(Session session, params string[] parameters)
         {
@@ -217,6 +221,15 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  thiefmob.chestwcid   = {DerpACEConfig.ThiefChestWcid}");
                 sb.AppendLine($"  thiefmob.chestdespawn= {DerpACEConfig.ThiefChestDespawnSeconds}s");
                 sb.AppendLine($"  simulacrum.chance    = {DerpACEConfig.SimulacrumMobChance:P1}  ({DerpACEConfig.SimulacrumMobChance})");
+                sb.AppendLine($"  healermob.chance     = {DerpACEConfig.HealerMobChance:P1}  ({DerpACEConfig.HealerMobChance})");
+                sb.AppendLine($"  healermob.range      = {DerpACEConfig.HealerMobRange}m");
+                sb.AppendLine($"  healermob.threshold  = {DerpACEConfig.HealerMobHealThreshold:P0}  ({DerpACEConfig.HealerMobHealThreshold})");
+                sb.AppendLine($"  healermob.cooldown   = {DerpACEConfig.HealerMobCooldownSeconds}s");
+                sb.AppendLine($"  tankmob.chance       = {DerpACEConfig.TankMobChance:P1}  ({DerpACEConfig.TankMobChance})");
+                sb.AppendLine($"  tankmob.hpmult       = {DerpACEConfig.TankMobHealthMultiplier}x");
+                sb.AppendLine($"  tankmob.physreduction= {DerpACEConfig.TankMobPhysicalReduction:P0}  ({DerpACEConfig.TankMobPhysicalReduction})");
+                sb.AppendLine($"  tankmob.healbonus    = {DerpACEConfig.TankMobHealBonus}x");
+                sb.AppendLine($"  tankmob.skillbonus   = +{DerpACEConfig.TankMobSkillBonus}");
                 sb.AppendLine($"  ironman.enabled      = {DerpACEConfig.IronmanEnabled}");
                 CommandHandlerHelper.WriteOutputInfo(session, sb.ToString().TrimEnd(), ChatMessageType.Broadcast);
                 return;
@@ -637,6 +650,42 @@ namespace ACE.Server.Command.Handlers
                     case "simulacrum.chance":
                         if (!TryFloat(out var smc)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.SimulacrumMobChance = smc;
+                        break;
+                    case "healermob.chance":
+                        if (!TryFloat(out var hmc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HealerMobChance = hmc;
+                        break;
+                    case "healermob.range":
+                        if (!TryFloat(out var hmr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HealerMobRange = hmr;
+                        break;
+                    case "healermob.threshold":
+                        if (!TryFloat(out var hmt)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HealerMobHealThreshold = hmt;
+                        break;
+                    case "healermob.cooldown":
+                        if (!TryFloat(out var hmcd)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HealerMobCooldownSeconds = hmcd;
+                        break;
+                    case "tankmob.chance":
+                        if (!TryFloat(out var tmc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.TankMobChance = tmc;
+                        break;
+                    case "tankmob.hpmult":
+                        if (!TryFloat(out var tmhm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.TankMobHealthMultiplier = tmhm;
+                        break;
+                    case "tankmob.physreduction":
+                        if (!TryFloat(out var tmpr)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.TankMobPhysicalReduction = tmpr;
+                        break;
+                    case "tankmob.healbonus":
+                        if (!TryFloat(out var tmhb)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.TankMobHealBonus = tmhb;
+                        break;
+                    case "tankmob.skillbonus":
+                        if (!TryInt(out var tmsb)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.TankMobSkillBonus = tmsb;
                         break;
                     case "ironman.enabled":
                         if (!bool.TryParse(raw, out var ime)) { BadValue(session, key, "bool"); return; }
