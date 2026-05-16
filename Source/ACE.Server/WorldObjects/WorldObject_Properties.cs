@@ -3270,6 +3270,33 @@ namespace ACE.Server.WorldObjects
             set { if (!value.HasValue) RemoveProperty(PropertyFloat.ArmorVitalProcChance); else SetProperty(PropertyFloat.ArmorVitalProcChance, value.Value); }
         }
 
+        /// <summary>
+        /// DerpACE: Base damage for unarmed strikes when wearing this gauntlet/boot (no weapon equipped)
+        /// </summary>
+        public int? UnarmedBaseDamage
+        {
+            get => GetProperty(PropertyInt.UnarmedBaseDamage);
+            set { if (!value.HasValue) RemoveProperty(PropertyInt.UnarmedBaseDamage); else SetProperty(PropertyInt.UnarmedBaseDamage, value.Value); }
+        }
+
+        /// <summary>
+        /// DerpACE: Damage type (element) for unarmed strikes when wearing this gauntlet/boot (no weapon equipped)
+        /// </summary>
+        public int? UnarmedDamageType
+        {
+            get => GetProperty(PropertyInt.UnarmedDamageType);
+            set { if (!value.HasValue) RemoveProperty(PropertyInt.UnarmedDamageType); else SetProperty(PropertyInt.UnarmedDamageType, value.Value); }
+        }
+
+        /// <summary>
+        /// DerpACE: Damage variance for unarmed strikes when wearing this gauntlet/boot (no weapon equipped)
+        /// </summary>
+        public double? UnarmedDamageVariance
+        {
+            get => GetProperty(PropertyFloat.UnarmedDamageVariance);
+            set { if (!value.HasValue) RemoveProperty(PropertyFloat.UnarmedDamageVariance); else SetProperty(PropertyFloat.UnarmedDamageVariance, value.Value); }
+        }
+
         public int? GearPKDamageRating
         {
             get => GetProperty(PropertyInt.GearPKDamageRating);

@@ -499,6 +499,17 @@ namespace ACE.Server.Pathfinding
             return builtAny;
         }
 
+        /// <summary>
+        /// Loads or generates a navmesh for the landblock containing the given position.
+        /// This is the core on-demand pathfinding method that:
+        /// 1. Checks if a cached .mesh file exists on disk
+        /// 2. If found, loads it instantly (fast path)
+        /// 3. If not found, dynamically generates navmesh from geometry using Recast/Detour
+        /// 4. Saves the generated navmesh to disk for future use
+        /// 
+        /// This means pathfinding works without any prebuilding - navmeshes are created
+        /// the first time a mob needs pathfinding in a landblock, then cached for subsequent uses.
+        /// </summary>
         public static void TryLoadMesh(Position pos, bool rebuildMesh = false)
         {
             try
@@ -575,6 +586,7 @@ namespace ACE.Server.Pathfinding
                         }
                     }
 
+                    log.Info($"Generating navmesh on-demand for landblock {meshId:X8} ({(isIndoors ? "indoor" : "outdoor")}, {agentWidth} agent)...");
                     var builder = new NavMeshBuilder();
                     var settings = isIndoors ? GetMeshSettings(agentWidth) : GetOutdoorMeshSettings(agentWidth);
                     var res = builder.Build(geom, settings);
@@ -590,6 +602,7 @@ namespace ACE.Server.Pathfinding
                     {
                         meshWriter.Write(writer, res, RcByteOrder.LITTLE_ENDIAN, false);
                     }
+                    log.Info($"Navmesh generated and cached to {Path.GetFileName(meshPath)}");
 
                     var meshNew = new DtNavMesh();
                     meshNew.Init(res, VERTS_PER_POLY, 0);

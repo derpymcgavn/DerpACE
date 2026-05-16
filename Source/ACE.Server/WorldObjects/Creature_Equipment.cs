@@ -607,6 +607,27 @@ namespace ACE.Server.WorldObjects
         {
             Children.Clear();
 
+            // DerpACE: Skip all equipment rendering for players in morphic form
+            if (this is Player player && player.GetProperty(PropertyBool.IsMorphicForm) == true)
+            {
+                // Only show weapons in hands, no armor
+                foreach (var item in EquippedObjects.Values)
+                {
+                    if (item.CurrentWieldedLocation != null)
+                    {
+                        var loc = (EquipMask)item.CurrentWieldedLocation;
+                        // Only render hand-held weapons
+                        if (loc == EquipMask.MeleeWeapon || loc == EquipMask.Held || 
+                            loc == EquipMask.TwoHanded || loc == EquipMask.Shield || 
+                            loc == EquipMask.MissileWeapon)
+                        {
+                            TrySetChild(item);
+                        }
+                    }
+                }
+                return;
+            }
+
             foreach (var item in EquippedObjects.Values)
             {
                 if (item.CurrentWieldedLocation != null)

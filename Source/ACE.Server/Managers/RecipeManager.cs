@@ -771,6 +771,17 @@ namespace ACE.Server.Managers
             if (!VerifyUse(player, source, target))
                 return false;
 
+            // DerpACE: Allow iron tinkering, imbues, and rending salvages on boots/gauntlets with unarmed damage properties
+            // This enables elemental/physical damage customization on unarmed combat gear
+            if (recipe.IsTinkering() && IsUnarmedArmorPiece(target))
+            {
+                // Unarmed boots/gauntlets can receive tinkering/imbues just like weapons
+                // Skip the normal target type restrictions (which would normally block armor from weapon-only salvages)
+                if (!VerifyRequirements(recipe, player, source, RequirementType.Source)) return false;
+                if (!VerifyRequirements(recipe, player, player, RequirementType.Player)) return false;
+                return true;
+            }
+
             if (!VerifyRequirements(recipe, player, target, RequirementType.Target)) return false;
 
             if (!VerifyRequirements(recipe, player, source, RequirementType.Source)) return false;
@@ -1559,6 +1570,23 @@ namespace ACE.Server.Managers
             WeenieClassName.W_MATERIALACE36635FOOLPROOFYELLOWTOPAZ,
             WeenieClassName.W_MATERIALACE36636FOOLPROOFZIRCON,
         };
+
+        /// <summary>
+        /// DerpACE: Checks if a WorldObject is a boot or gauntlet with unarmed damage properties
+        /// </summary>
+        private static bool IsUnarmedArmorPiece(WorldObject obj)
+        {
+            if (obj == null)
+                return false;
+
+            // Check if it has unarmed damage properties
+            if ((obj.UnarmedBaseDamage ?? 0) <= 0)
+                return false;
+
+            // Check if it's a boot or gauntlet
+            var validLocs = (EquipMask)(obj.ValidLocations ?? 0);
+            return validLocs.HasFlag(EquipMask.HandWear) || validLocs.HasFlag(EquipMask.FootWear);
+        }
     }
 
     public static class RecipeExtensions

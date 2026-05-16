@@ -37,6 +37,18 @@ namespace ACE.Server.WorldObjects
         public uint LastPolebreakerTargetGuid { get; set; } = 0;
         public int PolebreakerStackCount { get; set; } = 0;
 
+        // DerpACE: Unarmed combo system for tracking punch/kick combos
+        private UnarmedComboSystem _unarmedComboSystem;
+        public UnarmedComboSystem UnarmedComboSystem
+        {
+            get
+            {
+                if (_unarmedComboSystem == null)
+                    _unarmedComboSystem = new UnarmedComboSystem(this);
+                return _unarmedComboSystem;
+            }
+        }
+
         public DateTime NextRefillTime;
 
         public double LastPkAttackTimestamp
@@ -107,6 +119,34 @@ namespace ACE.Server.WorldObjects
             return maxMelee.Skill;
         }
 
+        /// <summary>
+        /// Returns TRUE if the weapon is one of the specified weapon types
+        /// </summary>
+        private bool WeaponIsType(WorldObject weapon, params WeaponType[] types)
+        {
+            if (weapon == null)
+                return false;
+
+            var weaponType = weapon.W_WeaponType;
+            return types.Contains(weaponType);
+        }
+
+        /// <summary>
+        /// Returns TRUE if the weapon name contains any of the specified substrings (case-insensitive)
+        /// </summary>
+        private bool WeaponNameContains(WorldObject weapon, params string[] substrings)
+        {
+            if (weapon?.Name == null)
+                return false;
+
+            foreach (var substring in substrings)
+            {
+                if (weapon.Name.IndexOf(substring, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
         public override CombatType GetCombatType()
         {
             // this is an unsafe function, move away from this
@@ -137,11 +177,27 @@ namespace ACE.Server.WorldObjects
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
 
+            // DerpACE: Unarmed Combo System - check for combos and apply bonuses
+            ComboResult comboResult = null;
+            if (damageEvent.HasDamage && damageSource == this && (AttackType == AttackType.Punch || AttackType == AttackType.Kick))
+            {
+                comboResult = UnarmedComboSystem.RecordAttack(AttackType, target.Guid.Full);
+
+                // Apply combo damage multiplier
+                if (comboResult.DamageMultiplier > 1.0f)
+                {
+                    var comboBonus = damageEvent.Damage * (comboResult.DamageMultiplier - 1.0f);
+                    damageEvent.Damage += comboBonus;
+                }
+            }
+
             // Thief's Dagger: configurable proc chance / bonus on sneak attacks (see @lootconfig)
+            // Only applies to Dagger weapon type
             uint thievesDaggerBonus = 0;
             if (damageEvent.HasDamage
                 && damageEvent.SneakAttackMod > 1.0f
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger)
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance)
             {
                 var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;
@@ -150,9 +206,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Fencer's Blade: armor pierce proc — deals a portion of what armor blocked as bonus damage
+            // Only applies to Sword weapon type with names: epee, schlager, rapier
             uint fencerPierceBonus = 0;
             if (damageEvent.HasDamage
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword)
+                && WeaponNameContains(damageEvent.Weapon, "epee", "schlager", "rapier"))
             {
                 var pierceProc = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < pierceProc)
@@ -168,10 +227,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Sentinel's Spear: configurable proc/drain/return (see @lootconfig)
+            // Only applies to Spear weapon type
             uint sentinelStaminaDrained = 0;
             uint sentinelStaminaReturned = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Spear)
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.SentinelSpearProcChance
                 && target.Stamina.Current > 0)
             {
@@ -188,13 +249,15 @@ namespace ACE.Server.WorldObjects
             }
 
             // Ravager's Axe: configurable proc to apply a bleed DoT (see @lootconfig)
+            // Only applies to Axe weapon type (or Mace types with 'hammer' in name)
             uint ravagerBleedTotal = 0;
             uint ravagerCrushBonus = 0;
             uint ravagerStaminaDrained = 0;
             uint ravagerCleaveHits = 0;
             uint ravagerCleaveTotal = 0;
             if (damageEvent.HasDamage
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe) == true
+                && (WeaponIsType(damageEvent.Weapon, WeaponType.Axe) || (WeaponIsType(damageEvent.Weapon, WeaponType.Mace) && WeaponNameContains(damageEvent.Weapon, "hammer"))))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -307,10 +370,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Warden's Maul: configurable proc to apply a flat defense-skill debuff (see @lootconfig)
+            // Only applies to Mace weapon type (hammers/mauls)
             uint wardenPenaltyApplied = 0;
             int wardenDurationApplied = 0;
             if (damageEvent.HasDamage
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsWardensMaul) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsWardensMaul) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Mace))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -336,10 +401,13 @@ namespace ACE.Server.WorldObjects
             }
 
             // Resolute Blade: heal-on-critical proc (see @lootconfig)
+            // Only applies to Sword weapon type with names: tachi, ken
             uint resoluteHealApplied = 0;
             if (damageEvent.HasDamage
                 && damageEvent.IsCritical
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword)
+                && WeaponNameContains(damageEvent.Weapon, "tachi", "ken"))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -355,9 +423,11 @@ namespace ACE.Server.WorldObjects
             }
 
             // Breacher's Crossbow: proc chance to ignore all armor on a shot (see @lootconfig)
+            // Only applies to Crossbow weapon type
             uint breacherArmorIgnored = 0;
             if (damageEvent.HasDamage
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Crossbow))
             {
                 var ignoreChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance) ?? 0.0;
                 if (ignoreChance > 0 && ThreadSafeRandom.Next(0.0f, 1.0f) < ignoreChance)
@@ -370,9 +440,11 @@ namespace ACE.Server.WorldObjects
             }
 
             // Stalker's Bow: opening-shot proc - first time this attacker hits a target, roll a chance for bonus damage (see @lootconfig)
+            // Only applies to Bow weapon type
             uint stalkerBonusApplied = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStalkersBow) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Bow)
                 && !target.DamageHistory.TotalDamage.ContainsKey(this.Guid))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc) ?? 0.0;
@@ -435,10 +507,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Polebreaker Staff: consecutive-hit escalation against the same target (see @lootconfig)
+            // Only applies to Staff or TwoHanded weapon types (includes staff, tetsuba, etc.)
             uint polebreakerBonus = 0;
             int polebreakerStacks = 0;
             if (damageEvent.HasDamage
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Staff, WeaponType.TwoHanded))
             {
                 var stackPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerStackBonus) ?? 0.0;
                 var maxStacks = (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks) ?? 0.0);
@@ -476,6 +550,67 @@ namespace ACE.Server.WorldObjects
             uint vampiricJewelryHealed = 0;
             if (damageEvent.HasDamage)
                 vampiricJewelryHealed = TryProcVampiricJewelryOnHit();
+
+            // DerpACE: Apply combo effects
+            if (comboResult != null && comboResult.ComboType != ComboType.None)
+            {
+                // Apply special combo effects
+                switch (comboResult.BonusEffect)
+                {
+                    case ComboEffect.Stun:
+                        // 50% chance to briefly stun the target
+                        if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.5f)
+                        {
+                            target.EnqueueBroadcastMotion(new Motion(target.CurrentMotionState?.Stance ?? MotionStance.NonCombat, MotionCommand.Knock));
+                            target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillUpYellow);
+                        }
+                        break;
+
+                    case ComboEffect.ElementalSurge:
+                        // Add bonus elemental damage based on gauntlet/boot element
+                        var surgeDamage = damageEvent.Damage * 0.25f;
+                        damageEvent.Damage += surgeDamage;
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.BreatheFlame);
+                        break;
+
+                    case ComboEffect.Cleave:
+                        // Mini cleave effect - hit nearby enemies for 30% damage
+                        if (CurrentLandblock != null && target.Location != null)
+                        {
+                            var cleaveDamage = damageEvent.Damage * 0.3f;
+                            var splashTargets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
+                                .OfType<Creature>()
+                                .Where(c => c != null && c != target && c != this && c.IsAlive && c.Attackable
+                                            && c.IsMonster && !c.Teleporting && c.Location != null
+                                            && target.Location.SquaredDistanceTo(c.Location) <= 25.0f) // 5 meter radius
+                                .OrderBy(c => target.Location.SquaredDistanceTo(c.Location))
+                                .Take(2)
+                                .ToList();
+
+                            foreach (var splash in splashTargets)
+                            {
+                                splash.TakeDamage(this, damageEvent.DamageType, cleaveDamage, false);
+                                splash.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.WeddingBliss);
+                            }
+                        }
+                        break;
+
+                    case ComboEffect.CriticalBoost:
+                        // Next attack has increased crit chance (tracked separately if needed)
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+                        break;
+
+                    case ComboEffect.ArmorPierce:
+                        // Bonus damage based on armor ignored
+                        var pierceBonus = Math.Max(0.0f, damageEvent.DamageMitigated) * 0.3f;
+                        if (pierceBonus > 1.0f)
+                        {
+                            damageEvent.Damage += pierceBonus;
+                            target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
+                        }
+                        break;
+                }
+            }
 
             if (damageEvent.HasDamage)
             {
@@ -520,6 +655,36 @@ namespace ACE.Server.WorldObjects
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
                         $"+{vampiricJewelryHealed} health drained from {target.Name} [Vampiric Jewelry]",
                         ChatMessageType.Combat));
+                }
+
+                // DerpACE: Unarmed Combo notification
+                if (comboResult != null)
+                {
+                    // Show combo counter for all attacks
+                    if (comboResult.HitCount > 0 && comboResult.ComboType == ComboType.None)
+                    {
+                        var comboChain = UnarmedComboSystem.GetComboChainDisplay();
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"{comboChain} {comboResult.HitCount} hit combo",
+                            ChatMessageType.CombatSelf));
+                    }
+
+                    // Show completed combo message
+                    if (comboResult.ComboType != ComboType.None && !string.IsNullOrEmpty(comboResult.Message))
+                    {
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            comboResult.Message,
+                            ChatMessageType.Broadcast));
+
+                        var bonusDamage = (uint)Math.Round(damageEvent.Damage * (comboResult.DamageMultiplier - 1.0f));
+                        if (bonusDamage > 0)
+                        {
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"+{bonusDamage} combo damage (x{comboResult.DamageMultiplier:F1})",
+                                ChatMessageType.CombatSelf));
+                        }
+                    }
                 }
 
                 // Fencer's Blade: show pierce bonus when armor-pierce proc fired
@@ -633,7 +798,9 @@ namespace ACE.Server.WorldObjects
             if (damageEvent.HasDamage
                 && !target.IsAlive
                 && targetPlayer == null
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword)
+                && WeaponNameContains(damageEvent.Weapon, "tachi", "ken"))
             {
                 var burstPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct) ?? 0.0;
                 if (burstPct > 0)
@@ -651,10 +818,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Reaper's Atlatl: kill-fed self-heal proc on killing blow (see @lootconfig)
+            // Only applies to Thrown weapon type (atlatls)
             if (damageEvent.HasDamage
                 && !target.IsAlive
                 && targetPlayer == null
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl) == true)
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Thrown))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc) ?? 0.0;
 
@@ -864,7 +1033,18 @@ namespace ACE.Server.WorldObjects
                 else if (AttackType == AttackType.Kick)
                     damageSource = FootArmor;
 
-                // no weapon, no hand or foot armor
+                // Check if the armor piece has unarmed damage properties (DerpACE feature)
+                if (damageSource != null && (damageSource.UnarmedBaseDamage ?? 0) > 0)
+                {
+                    var damage = damageSource.UnarmedBaseDamage.Value;
+                    var variance = (float)(damageSource.UnarmedDamageVariance ?? 0.7);
+                    // DerpACE: Apply enchantments (Blood Drinker, etc.) to unarmed armor damage
+                    var baseMod = new BaseDamageMod(new BaseDamage(damage, variance), this, damageSource);
+                    ApplySteelBootDamageBonus(baseMod);
+                    return baseMod;
+                }
+
+                // no weapon, no hand or foot armor (or armor has no unarmed damage)
                 if (damageSource?.Damage == null)
                 {
                     var baseMod = HeritageGroup == HeritageGroup.Olthoi
@@ -876,6 +1056,7 @@ namespace ACE.Server.WorldObjects
                 }
                 else
                 {
+                    // armor has traditional weapon damage (cestus, katar, etc)
                     var baseMod = damageSource.GetDamageMod(this, damageSource);
                     ApplySteelBootDamageBonus(baseMod);
                     return baseMod;
@@ -1144,6 +1325,77 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
+        /// DerpACE: Check all equipped armor for vital-replenish procs (health/stam/mana) when hit.
+        /// Called after the player's HP has been updated and damage history recorded.
+        /// </summary>
+        private void TryProcArmorVitalOnHit()
+        {
+            if (EquippedObjects == null)
+                return;
+
+            foreach (var (_, armorItem) in EquippedObjects)
+            {
+                if (armorItem == null)
+                    continue;
+
+                var procAmount = armorItem.ArmorVitalProcAmount ?? 0;
+                var procChance = armorItem.ArmorVitalProcChance ?? 0.0;
+
+                if (procAmount <= 0 || procChance <= 0.0)
+                    continue;
+
+                // Roll for proc
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                    continue;
+
+                // Determine which vital to replenish based on armor's gear bonus type
+                var vital = (Entity.CreatureVital)null;
+                string vitalName = "";
+
+                if ((armorItem.GearMaxHealth ?? 0) > 0)
+                {
+                    vital = Health;
+                    vitalName = "health";
+                }
+                else if ((armorItem.GearMaxStamina ?? 0) > 0)
+                {
+                    vital = Stamina;
+                    vitalName = "stamina";
+                }
+                else if ((armorItem.GearMaxMana ?? 0) > 0)
+                {
+                    vital = Mana;
+                    vitalName = "mana";
+                }
+
+                if (vital == null || vital.Current >= vital.MaxValue)
+                    continue;
+
+                // Apply replenish
+                var actualAmount = (int)Math.Min(procAmount, vital.MaxValue - vital.Current);
+                if (actualAmount >= 1)
+                {
+                    UpdateVitalDelta(vital, actualAmount);
+
+                    // Visual feedback
+                    if (vitalName == "health")
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpBlue);
+                    else if (vitalName == "stamina")
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+                    else if (vitalName == "mana")
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpBlue);
+
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"Your {armorItem.NameWithMaterial} replenishes {actualAmount} {vitalName}!",
+                        ChatMessageType.Craft));
+                }
+
+                // Only proc one armor piece per hit
+                break;
+            }
+        }
+
+        /// <summary>
         /// Applies damages to a player from a physical damage source
         /// </summary>
         public int TakeDamage(WorldObject source, DamageType damageType, float _amount, BodyPart bodyPart, bool crit = false, AttackConditions attackConditions = AttackConditions.None)
@@ -1188,6 +1440,10 @@ namespace ACE.Server.WorldObjects
             // DerpACE: Mob Modifier on-hit procs (Vampiric lifesteal, Thief pickpocket)
             if (source is Creature mobAttacker && damageTaken > 0)
                 TryProcMobModifiers(mobAttacker, damageTaken);
+
+            // DerpACE: Armor Vital Proc (replenish health/stamina/mana when hit)
+            if (damageTaken > 0)
+                TryProcArmorVitalOnHit();
 
             // update stamina
             if (CombatMode != CombatMode.NonCombat)
@@ -1806,6 +2062,10 @@ namespace ACE.Server.WorldObjects
                     log.Warn($"{Name}.GetDamageType(): no weapon, AttackType={AttackType}");
                     return DamageType.Undef;
                 }
+
+                // DerpACE: check for unarmed damage type property
+                if (weapon != null && (weapon.UnarmedDamageType ?? 0) > 0)
+                    return (DamageType)weapon.UnarmedDamageType.Value;
 
                 if (weapon != null && weapon.W_DamageType == DamageType.Undef)
                     return DamageType.Bludgeon;

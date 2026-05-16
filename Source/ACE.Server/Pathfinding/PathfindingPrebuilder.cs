@@ -14,11 +14,18 @@ using System.Threading.Tasks;
 namespace ACE.Server.Pathfinding
 {
     /// <summary>
-    /// On first server boot, scans the AC dat files for every landblock that has terrain
-    /// (CellLandblock, suffix 0xFFFF) or dungeon info (LandblockInfo, suffix 0xFFFE) and
-    /// asks <see cref="Pathfinder"/> to build and persist its navmesh files to disk.
-    /// On subsequent boots, the cached .mesh files are detected and the prebuild becomes
-    /// a no-op for those landblocks.
+    /// OPTIONAL performance optimization tool for pre-caching navmesh files.
+    /// 
+    /// The pathfinding system works fully on-demand: when a mob needs pathfinding for a landblock,
+    /// the system dynamically generates a navmesh from the geometry (using Recast/Detour) and caches
+    /// it to disk. On subsequent uses, the cached .mesh file is loaded instantly.
+    /// 
+    /// This prebuilder simply pre-generates all navmeshes at once (via /pathfind prebuild command or
+    /// on boot if pathfinding_prebuild_on_boot=true) to avoid the small delay when each landblock is
+    /// first visited. It scans AC dat files for every landblock with terrain or dungeon info and asks
+    /// <see cref="Pathfinder"/> to build and persist navmesh files to disk.
+    /// 
+    /// TL;DR: Pathfinding works without prebuilding. This just pre-warms the cache.
     /// </summary>
     public static class PathfindingPrebuilder
     {
@@ -51,10 +58,11 @@ namespace ACE.Server.Pathfinding
 
             if (!PropertyManager.GetBool("pathfinding_prebuild_on_boot").Item)
             {
-                log.Info("Pathfinding prebuild on boot is disabled (pathfinding_prebuild_on_boot=false). Skipping.");
+                log.Info("Pathfinding prebuild on boot is disabled (pathfinding_prebuild_on_boot=false). Navmeshes will be generated on-demand as needed.");
                 return;
             }
 
+            log.Info("Pathfinding prebuild on boot is enabled. Pre-generating all navmeshes...");
             Start();
         }
 

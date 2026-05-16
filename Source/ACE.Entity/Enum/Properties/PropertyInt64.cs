@@ -29,5 +29,7 @@ namespace ACE.Entity.Enum.Properties
         AllegianceXPGenerated = 9001,
         AllegianceXPReceived  = 9002,
         VerifyXp              = 9003,
+        // DerpACE: unarmed combo system - bitfield tracking which combos the player has discovered
+        UnarmedCombosDiscovered = 9004,
     }
 }

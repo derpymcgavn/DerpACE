@@ -253,9 +253,10 @@ namespace ACE.Server.WorldObjects
 
                 if (AttackTarget != null && AttackTarget != prevAttackTarget)
                 {
-                    // Simulacrum mobs copy the first player they target
+                    // Simulacrum mobs copy a player when they acquire their first target
+                    // If the mutator flag is set, they pick a random nearby player; otherwise they copy the attack target
                     if (IsSimulacrum && AttackTarget is Player simTarget)
-                        TryCopyFromPlayer(simTarget);
+                        TryCopyFromPlayerOrRandom(simTarget);
 
                     EmoteManager.OnNewEnemy(AttackTarget);
 

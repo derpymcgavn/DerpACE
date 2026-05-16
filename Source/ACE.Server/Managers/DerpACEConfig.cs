@@ -381,14 +381,14 @@ namespace ACE.Server.Managers
         /// <summary>Master switch for the mob modifier system. Default true.</summary>
         public static bool MobModifierEnabled { get; set; } = true;
 
-        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 3.</summary>
-        public static int MobModifierMinTier { get; set; } = 3;
+        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 2 (starts at tier 2).</summary>
+        public static int MobModifierMinTier { get; set; } = 2;
 
-        /// <summary>Per-spawn chance (0-1) for the Nocturnal modifier to land on an eligible mob (only at night). Default 0.05.</summary>
-        public static float NocturnalMobChance { get; set; } = 0.05f;
+        /// <summary>Per-spawn chance (0-1) for the Nocturnal modifier to land on an eligible mob (only at night). Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float NocturnalMobChance { get; set; } = 0.01f;
 
-        /// <summary>Per-spawn chance (0-1) for the Exploding modifier to land on an eligible mob. Default 0.02.</summary>
-        public static float ExplodingMobChance { get; set; } = 0.02f;
+        /// <summary>Per-spawn chance (0-1) for the Exploding modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float ExplodingMobChance { get; set; } = 0.01f;
 
         /// <summary>Radius (meters) of the Exploding modifier's on-death AoE. Default 6.</summary>
         public static float ExplodingMobRadius { get; set; } = 6.0f;
@@ -396,8 +396,8 @@ namespace ACE.Server.Managers
         /// <summary>Fraction of the mob's MaxHealth dealt as on-death AoE damage. Default 0.25.</summary>
         public static float ExplodingMobDamageScale { get; set; } = 0.25f;
 
-        /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.02.</summary>
-        public static float VampiricMobChance { get; set; } = 0.02f;
+        /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float VampiricMobChance { get; set; } = 0.01f;
 
         /// <summary>Minimum vampiric lifesteal % rolled at spawn (integer). Default 5.</summary>
         public static int VampiricLifestealMin { get; set; } = 5;
@@ -405,11 +405,11 @@ namespace ACE.Server.Managers
         /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 15.</summary>
         public static int VampiricLifestealMax { get; set; } = 15;
 
-        /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.02.</summary>
-        public static float ThiefMobChance { get; set; } = 0.02f;
+        /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float ThiefMobChance { get; set; } = 0.01f;
 
-        /// <summary>Per-spawn chance (0-1) for the Scout modifier to land on an eligible mob. Default 0.02.</summary>
-        public static float ScoutMobChance { get; set; } = 0.02f;
+        /// <summary>Per-spawn chance (0-1) for the Scout modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float ScoutMobChance { get; set; } = 0.01f;
 
         /// <summary>Per-hit chance (0-1) the Thief modifier steals a tradenote stack from a player. Default 0.10.</summary>
         public static float ThiefStealProc { get; set; } = 0.10f;
@@ -423,11 +423,11 @@ namespace ACE.Server.Managers
         /// <summary>Seconds before the spawned Thief chest auto-despawns. Default 30.</summary>
         public static float ThiefChestDespawnSeconds { get; set; } = 30.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Simulacrum modifier to land on an eligible mob. Default 0.02 (currently 1.0 for testing).</summary>
-        public static float SimulacrumMobChance { get; set; } = 1.0f;
+        /// <summary>Per-spawn chance (0-1) for the Simulacrum modifier to land on eligible mobs (only CreatureType.Simulacrum). Default 0 (disabled - only applied via /cimob spawn command).</summary>
+        public static float SimulacrumMobChance { get; set; } = 0.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Healer modifier to land on an eligible mob. Default 0.03.</summary>
-        public static float HealerMobChance { get; set; } = 0.03f;
+        /// <summary>Per-spawn chance (0-1) for the Healer modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float HealerMobChance { get; set; } = 0.01f;
 
         /// <summary>Maximum range (meters) a Healer mob will look for wounded allies to mend. Default 25.</summary>
         public static float HealerMobRange { get; set; } = 25.0f;
@@ -438,8 +438,8 @@ namespace ACE.Server.Managers
         /// <summary>Seconds between Heal Other casts by a Healer mob. Default 8.</summary>
         public static float HealerMobCooldownSeconds { get; set; } = 8.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Tank modifier to land on an eligible mob. Default 0.03.</summary>
-        public static float TankMobChance { get; set; } = 0.03f;
+        /// <summary>Per-spawn chance (0-1) for the Tank modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float TankMobChance { get; set; } = 0.01f;
 
         /// <summary>Health multiplier for Tank mobs. Default 2.5 (250%).</summary>
         public static float TankMobHealthMultiplier { get; set; } = 2.5f;
@@ -452,6 +452,20 @@ namespace ACE.Server.Managers
 
         /// <summary>Skill bonus added to Light Weapons and Shield for Tank mobs. Default 200.</summary>
         public static int TankMobSkillBonus { get; set; } = 200;
+
+        // ---------- Mutator Derpcoin Reward System ----------
+
+        /// <summary>WCID of the Derpcoin item. Default 7000011.</summary>
+        public static uint DerpcoinWcid { get; set; } = 7000011;
+
+        /// <summary>Base chance (0-1) for a mutator mob to drop a derpcoin at MinTier (tier 2). Default 0.001 (0.1%).</summary>
+        public static float DerpcoinBaseChance { get; set; } = 0.001f;
+
+        /// <summary>Maximum derpcoin drop chance (0-1) at MaxTier (tier 8). Default 0.06 (6%).</summary>
+        public static float DerpcoinMaxChance { get; set; } = 0.06f;
+
+        /// <summary>Multiplier applied per additional mutator stacked beyond the first. Default 1.5 (50% increase per stack).</summary>
+        public static float DerpcoinStackMultiplier { get; set; } = 1.5f;
 
         // ---------- Ironman Mode (irreversible solo / hardcore character) ----------
 

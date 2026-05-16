@@ -267,5 +267,8 @@ namespace ACE.Entity.Enum.Properties
         HierophantHealBoostPct         = 9022,  // multiplier added to beneficial-Health spells cast by the wielder (0.01-0.10)
         HierophantHotPct               = 9023,  // fraction of fellowship pool granted as a regen HoT on heal-cast proc (0.01-0.25)
         HierophantFellowEchoPct        = 9024,  // bonus fellowship heal applied on each direct heal cast (0.0-1.0)
+
+        /* DerpACE Unarmed — damage variance for gauntlets/boots when no weapon equipped */
+        UnarmedDamageVariance          = 9025,  // variance for unarmed damage rolls (0.0-1.0)
     }
 }

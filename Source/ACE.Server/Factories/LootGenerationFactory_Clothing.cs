@@ -17,10 +17,6 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
-    private const float ArmorVitalProcRollChance = 0.10f;
-    private const int ArmorVitalProcChanceMinPct = 2;
-    private const int ArmorVitalProcChanceMaxPct = 5;
-
         /// <summary>
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
@@ -103,16 +99,15 @@ namespace ACE.Server.Factories
                 TryMutateGearRating(wo, profile, roll);
 
             if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
-                TryMutateArmorVitalBonus(wo, profile);
+            {
+                TryMutateUnarmedDamage(wo, profile);
+            }
 
             // item value
             //if (wo.HasMutateFilter(MutateFilter.Value))   // fixme: data
                 MutateValue(wo, profile.Tier, roll);
 
             wo.LongDesc = GetLongDesc(wo);
-
-            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
-                AppendArmorVitalBonusLongDesc(wo);
 
             // Defender's shield: configurable chance on any T6+ shield drop (see @lootconfig)
             if (wo.IsShield && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
@@ -125,92 +120,122 @@ namespace ACE.Server.Factories
             }
         }
 
-        private static void TryMutateArmorVitalBonus(WorldObject wo, TreasureDeath profile)
+
+
+        /// <summary>
+        /// DerpACE: Rolls unarmed damage properties on gauntlets and boots.
+        /// These properties only apply when the player has no weapon equipped (truly unarmed).
+        /// </summary>
+        private static void TryMutateUnarmedDamage(WorldObject wo, TreasureDeath profile)
         {
             if (wo == null || profile == null)
                 return;
 
-            // Keep drop gating/chance aligned with Aetheria: tiers 5+, using aetheria_drop_rate.
+            // Only applies to gauntlets (HandWear) and boots (FootWear)
+            var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
+            var isGauntlet = validLocs.HasFlag(EquipMask.HandWear);
+            var isBoot = validLocs.HasFlag(EquipMask.FootWear);
+
+            if (!isGauntlet && !isBoot)
+                return;
+
+            // Only T5+ can roll unarmed damage (keep it rare/high-tier)
             if (profile.Tier < 5)
                 return;
 
-            var aetheriaDropRate = (float)PropertyManager.GetDouble("aetheria_drop_rate").Item;
-            if (aetheriaDropRate <= 0.0f)
+            // 15% chance to roll unarmed damage properties
+            var rollChance = 0.15f;
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
                 return;
 
-            var dropRateMod = 1.0f / aetheriaDropRate;
-            var rng = ThreadSafeRandom.Next(0.0f, 1.0f * dropRateMod);
-            if (rng >= 0.02f)
-                return;
-
-            var bonus = ThreadSafeRandom.Next(1, 5);
-            var roll = ThreadSafeRandom.Next(0, 2);
-            string suffix;
-            if (roll == 0)
+            // Base damage scales with tier: T5=8-12, T6=12-18, T7=18-25, T8=25-35
+            int minDamage, maxDamage;
+            switch (profile.Tier)
             {
-                wo.GearMaxHealth = bonus;
-                suffix = "HP";
-                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostHealth;
-            }
-            else if (roll == 1)
-            {
-                wo.GearMaxStamina = bonus;
-                suffix = "Stam";
-                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostStamina;
-            }
-            else
-            {
-                wo.GearMaxMana = bonus;
-                suffix = "Mana";
-                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostMana;
+                case 5:
+                    minDamage = 8;
+                    maxDamage = 12;
+                    break;
+                case 6:
+                    minDamage = 12;
+                    maxDamage = 18;
+                    break;
+                case 7:
+                    minDamage = 18;
+                    maxDamage = 25;
+                    break;
+                case 8:
+                default:
+                    minDamage = 25;
+                    maxDamage = 35;
+                    break;
             }
 
-            wo.IconOverlaySecondary = bonus switch
+            var baseDamage = ThreadSafeRandom.Next(minDamage, maxDamage);
+            wo.UnarmedBaseDamage = baseDamage;
+
+            // Variance: 0.6-0.8 (fairly tight, like quality weapons)
+            var variance = ThreadSafeRandom.Next(0.6f, 0.8f);
+            wo.UnarmedDamageVariance = variance;
+
+            // Roll a damage type for unarmed combat
+            // All 7 melee damage types available: Fire, Cold, Acid, Electric, Pierce, Bludgeon, Slash
+            var damageRoll = ThreadSafeRandom.Next(0, 7);
+            DamageType damageType;
+            string damageTypeName;
+
+            switch (damageRoll)
             {
-                1 => 0x06006C20,
-                2 => 0x06006C21,
-                3 => 0x06006C22,
-                4 => 0x06006C23,
-                _ => 0x06006C24,
-            };
-
-            wo.Name = $"{wo.Name} + {bonus} {suffix}";
-
-            // Rare secondary roll: on-hit replenish proc tied to the same stat family.
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < ArmorVitalProcRollChance)
-            {
-                var procAmount = ThreadSafeRandom.Next(1, 5);
-                var procChancePct = ThreadSafeRandom.Next(ArmorVitalProcChanceMinPct, ArmorVitalProcChanceMaxPct);
-
-                wo.ArmorVitalProcAmount = procAmount;
-                wo.ArmorVitalProcChance = procChancePct / 100.0;
+                case 0:
+                    damageType = DamageType.Fire;
+                    damageTypeName = "Fire";
+                    wo.UiEffects = UiEffects.Fire;
+                    break;
+                case 1:
+                    damageType = DamageType.Cold;
+                    damageTypeName = "Frost";
+                    wo.UiEffects = UiEffects.Frost;
+                    break;
+                case 2:
+                    damageType = DamageType.Acid;
+                    damageTypeName = "Acid";
+                    wo.UiEffects = UiEffects.Acid;
+                    break;
+                case 3:
+                    damageType = DamageType.Electric;
+                    damageTypeName = "Lightning";
+                    wo.UiEffects = UiEffects.Lightning;
+                    break;
+                case 4:
+                    damageType = DamageType.Pierce;
+                    damageTypeName = "Pierce";
+                    wo.UiEffects = UiEffects.Piercing;
+                    break;
+                case 5:
+                    damageType = DamageType.Bludgeon;
+                    damageTypeName = "Bludgeon";
+                    wo.UiEffects = UiEffects.Bludgeoning;
+                    break;
+                case 6:
+                default:
+                    damageType = DamageType.Slash;
+                    damageTypeName = "Slash";
+                    wo.UiEffects = UiEffects.Slashing;
+                    break;
             }
-        }
 
-        private static void AppendArmorVitalBonusLongDesc(WorldObject wo)
-        {
-            if (wo == null)
-                return;
+            wo.UnarmedDamageType = (int)damageType;
 
-            if ((wo.GearMaxHealth ?? 0) > 0)
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis armor grants +{wo.GearMaxHealth.Value} HP while worn.";
-            else if ((wo.GearMaxStamina ?? 0) > 0)
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis armor grants +{wo.GearMaxStamina.Value} Stam while worn.";
-            else if ((wo.GearMaxMana ?? 0) > 0)
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis armor grants +{wo.GearMaxMana.Value} Mana while worn.";
+            // Update item name and description
+            var slotType = isGauntlet ? "Gauntlets" : "Boots";
+            var attackName = isGauntlet ? "Punches" : "Kicks";
+            var attackStyle = isGauntlet ? "light" : "heavy";
+            wo.Name = $"{wo.Name} of {damageTypeName} {attackName}";
 
-            var procAmount = wo.ArmorVitalProcAmount ?? 0;
-            var procChance = wo.ArmorVitalProcChance ?? 0.0;
-            if (procAmount <= 0 || procChance <= 0)
-                return;
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThese {slotType.ToLower()} grant {baseDamage} {damageTypeName} damage for {attackStyle} unarmed attacks (no weapon equipped).";
 
-            var procPct = Math.Max(1, (int)Math.Round(procChance * 100.0));
-            if ((wo.GearMaxHealth ?? 0) > 0)
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRarely on hit ({procPct}% chance), this armor replenishes {procAmount} health.";
-            else if ((wo.GearMaxStamina ?? 0) > 0)
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRarely on hit ({procPct}% chance), this armor replenishes {procAmount} stamina.";
-            else if ((wo.GearMaxMana ?? 0) > 0)
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRarely on hit ({procPct}% chance), this armor replenishes {procAmount} mana.";
+            // Add visual overlay for unarmed-enabled items
+            wo.IconOverlayId = 0x06006C1F; // Special marker icon
         }
 
         private static bool AssignArmorLevel(WorldObject wo, TreasureDeath profile, TreasureRoll roll)

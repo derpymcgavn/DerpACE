@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using log4net;
 
@@ -7,13 +8,18 @@ using ACE.Common;
 using ACE.Database;
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
+using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Factories;
 using ACE.Server.Managers;
 using ACE.Server.Network;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
+
+using WeenieTypeEnum = ACE.Entity.Enum.WeenieType;
 
 
 namespace ACE.Server.Command.Handlers
@@ -523,5 +529,161 @@ namespace ACE.Server.Command.Handlers
 
             session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.AdminTell));
         }
+
+        // morphic - Olthoi morphic transformation system
+        [CommandHandler("morphic", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
+            "Transform into your locked creature form (Olthoi only). Creates a new morphed character at level 1 with Ironman-style stats/skills.",
+            "[creature wcid or name] - Required on first use to lock your morphic form\n" +
+            "Examples:\n" +
+            "/morphic 7 (lock to Drudge Skulker and morph)\n" +
+            "/morphic (morph into locked creature)")]
+        public static void HandleMorphic(Session session, params string[] parameters)
+        {
+            var player = session.Player;
+
+            // Check if player is Olthoi
+            if (player.Heritage != (int)HeritageGroup.Olthoi && player.Heritage != (int)HeritageGroup.OlthoiAcid)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat("Only Olthoi can use the morphic transformation ability.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            // Check if player has a locked creature - if not, they need to specify one
+            var lockedCreatureWCID = player.GetProperty(PropertyInt.MorphicLockedCreatureWCID);
+            Weenie weenie = null;
+
+            if (lockedCreatureWCID == null)
+            {
+                // First time morphing - need to specify a creature to lock to
+                if (parameters.Length == 0)
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat("First-time morphic transformation: Please specify a creature WCID or name to lock to.", ChatMessageType.Broadcast));
+                    session.Network.EnqueueSend(new GameMessageSystemChat("Usage: /morphic <wcid or name>", ChatMessageType.Broadcast));
+                    session.Network.EnqueueSend(new GameMessageSystemChat("Warning: This will create a NEW CHARACTER and log you out. Once locked, you cannot change!", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                var weenieDesc = parameters[0];
+
+                if (uint.TryParse(weenieDesc, out var wcid))
+                    weenie = DatabaseManager.World.GetCachedWeenie(wcid);
+                else
+                    weenie = DatabaseManager.World.GetCachedWeenie(weenieDesc);
+
+                if (weenie == null)
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat($"Creature '{weenieDesc}' not found in database.", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                // Lock this creature permanently for this player
+                player.SetProperty(PropertyInt.MorphicLockedCreatureWCID, (int)weenie.WeenieClassId);
+
+                var creatureName = weenie.GetProperty(PropertyString.Name) ?? weenie.ClassName;
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Locking you to the {creatureName} morphic form...", ChatMessageType.Magic));
+            }
+            else
+            {
+                // Player already has a locked creature - load it
+                weenie = DatabaseManager.World.GetCachedWeenie((uint)lockedCreatureWCID.Value);
+
+                if (weenie == null)
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat($"Error: Your locked creature (WCID {lockedCreatureWCID}) could not be loaded.", ChatMessageType.Broadcast));
+                    return;
+                }
+            }
+
+            // Create morphed character (similar to /morph admin command)
+            session.Network.EnqueueSend(new GameMessageSystemChat($"Morphing you into {weenie.GetProperty(PropertyString.Name)} ({weenie.WeenieClassId})... You will be logged out.", ChatMessageType.Broadcast));
+
+            var guid = GuidManager.NewPlayerGuid();
+            var morphedPlayer = new Player(weenie, guid, session.AccountId);
+
+            // Preserve original player type
+            morphedPlayer.Biota.WeenieType = session.Player.WeenieType;
+
+            // Generate character name
+            var name = $"{session.Player.Name}-Morphed";
+            morphedPlayer.Name = name;
+            morphedPlayer.Character.Name = name;
+
+            DatabaseManager.Shard.IsCharacterNameAvailable(name, isAvailable =>
+            {
+                if (!isAvailable)
+                {
+                    // Try with timestamp
+                    name = $"{session.Player.Name}-Morphed-{DateTime.UtcNow.Ticks}";
+                    morphedPlayer.Name = name;
+                    morphedPlayer.Character.Name = name;
+                }
+
+                morphedPlayer.Location = session.Player.Location;
+                morphedPlayer.Character.CharacterOptions1 = session.Player.Character.CharacterOptions1;
+                morphedPlayer.Character.CharacterOptions2 = session.Player.Character.CharacterOptions2;
+
+                // Equip creature's default wearables
+                if (weenie.PropertiesCreateList != null)
+                {
+                    var wearables = weenie.PropertiesCreateList.Where(x => x.DestinationType == DestinationType.Wield || x.DestinationType == DestinationType.WieldTreasure).ToList();
+                    foreach (var wearable in wearables)
+                    {
+                        var weenieOfWearable = DatabaseManager.World.GetCachedWeenie(wearable.WeenieClassId);
+                        if (weenieOfWearable == null) continue;
+
+                        var worldObject = WorldObjectFactory.CreateNewWorldObject(weenieOfWearable);
+                        if (worldObject == null) continue;
+
+                        if (wearable.Palette > 0)
+                            worldObject.PaletteTemplate = wearable.Palette;
+                        if (wearable.Shade > 0)
+                            worldObject.Shade = wearable.Shade;
+
+                        worldObject.CalculateObjDesc();
+                        morphedPlayer.TryEquipObject(worldObject, worldObject.ValidLocations ?? 0);
+                    }
+                }
+
+                // Set to level 1
+                morphedPlayer.Level = 1;
+
+                // Apply Ironman-style stat and skill rolls
+                IronmanFactory.RollAttributes(morphedPlayer);
+                IronmanFactory.RollSkills(morphedPlayer);
+
+                // Set PK-free status
+                morphedPlayer.PlayerKillerStatus = PlayerKillerStatus.Free;
+
+                // Mark as morphic form
+                morphedPlayer.SetProperty(PropertyBool.IsMorphicForm, true);
+                morphedPlayer.SetProperty(PropertyInt.MorphicCreatureWCID, (int)weenie.WeenieClassId);
+                morphedPlayer.SetProperty(PropertyInt.MorphicLockedCreatureWCID, (int)weenie.WeenieClassId);
+
+                morphedPlayer.GenerateNewFace();
+
+                var possessions = morphedPlayer.GetAllPossessions();
+                var possessedBiotas = new System.Collections.ObjectModel.Collection<(Biota biota, System.Threading.ReaderWriterLockSlim rwLock)>();
+                foreach (var possession in possessions)
+                    possessedBiotas.Add((possession.Biota, possession.BiotaDatabaseLock));
+
+                DatabaseManager.Shard.AddCharacterInParallel(morphedPlayer.Biota, morphedPlayer.BiotaDatabaseLock, possessedBiotas, morphedPlayer.Character, morphedPlayer.CharacterDatabaseLock, saveSuccess =>
+                {
+                    if (!saveSuccess)
+                    {
+                        session.Network.EnqueueSend(new GameMessageSystemChat($"Failed to create morphed character!", ChatMessageType.Broadcast));
+                        return;
+                    }
+
+                    PlayerManager.AddOfflinePlayer(morphedPlayer);
+                    session.Characters.Add(morphedPlayer.Character);
+
+                    var msg = $"Successfully created morphed character \"{morphedPlayer.Name}\" at level 1 with Ironman stats/skills!";
+                    session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.Broadcast));
+
+                    session.LogOffPlayer();
+                });
+            });
+        }
     }
 }
+

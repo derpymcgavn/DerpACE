@@ -70,6 +70,43 @@ namespace ACE.Server.WorldObjects
             }
         }
 
+        /// <summary>
+        /// If this simulacrum has the SimulacrumMutator flag, picks a random nearby player to copy.
+        /// Otherwise, copies the specified target player.
+        /// </summary>
+        public void TryCopyFromPlayerOrRandom(Player targetPlayer)
+        {
+            if (_simulacrumCopied || !IsSimulacrum)
+                return;
+
+            // Check if this simulacrum has the mutator flag for random player selection
+            var hasMutator = GetProperty(PropertyBool.IsSimulacrumMob) == true;
+
+            if (hasMutator)
+            {
+                // Get all visible creatures (includes players)
+                var visibleCreatures = PhysicsObj.ObjMaint.GetVisibleTargetsValuesOfTypeCreature();
+                var nearbyPlayers = visibleCreatures.OfType<Player>().ToList();
+
+                if (nearbyPlayers.Count > 0)
+                {
+                    // Pick a random player
+                    var randomPlayer = nearbyPlayers[ACE.Common.ThreadSafeRandom.Next(0, nearbyPlayers.Count - 1)];
+                    TryCopyFromPlayer(randomPlayer);
+                }
+                else if (targetPlayer != null)
+                {
+                    // Fallback to target if no other players nearby
+                    TryCopyFromPlayer(targetPlayer);
+                }
+            }
+            else
+            {
+                // Standard behavior: copy the attack target
+                TryCopyFromPlayer(targetPlayer);
+            }
+        }
+
         // --- copy helpers -------------------------------------------------------------------
 
         private void CopyAppearanceFromPlayer(Player p)

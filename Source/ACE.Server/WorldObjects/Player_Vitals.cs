@@ -232,16 +232,18 @@ namespace ACE.Server.WorldObjects
             Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.GearMaxStamina, gearMaxStamina));
             Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.GearMaxMana, gearMaxMana));
 
+            // Send full vital updates to force client to recalculate max values
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdateVital(this, Health));
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdateVital(this, Stamina));
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdateVital(this, Mana));
+
+            // Clamp current values to new max
             if (Health.Current > Health.MaxValue)
                 Health.Current = Health.MaxValue;
             if (Stamina.Current > Stamina.MaxValue)
                 Stamina.Current = Stamina.MaxValue;
             if (Mana.Current > Mana.MaxValue)
                 Mana.Current = Mana.MaxValue;
-
-            Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute2ndLevel(this, Vital.Health, Health.Current));
-            Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute2ndLevel(this, Vital.Stamina, Stamina.Current));
-            Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute2ndLevel(this, Vital.Mana, Mana.Current));
         }
     }
 }

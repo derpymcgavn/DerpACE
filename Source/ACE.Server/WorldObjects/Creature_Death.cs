@@ -830,6 +830,37 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
+            // DerpACE Mutator Derpcoin Reward: chance for mutator mobs to drop derpcoins
+            var mutatorCount = GetProperty(PropertyInt.MutatorCount) ?? 0;
+            if (mutatorCount > 0 && corpse != null && DeathTreasure != null)
+            {
+                int tier = DeathTreasure.Tier;
+                if (tier < 2) tier = 2; // Minimum tier 2
+
+                // Calculate tier-scaled base chance (0.1% at tier 2, 6% at tier 8)
+                float baseChance = ACE.Server.Managers.DerpACEConfig.DerpcoinBaseChance;
+                float maxChance = ACE.Server.Managers.DerpACEConfig.DerpcoinMaxChance;
+                float tierRange = 8 - 2; // tier 2 to tier 8
+                float tierProgress = Math.Min(1.0f, Math.Max(0.0f, (tier - 2) / tierRange));
+                float tierScaledChance = baseChance + (maxChance - baseChance) * tierProgress;
+
+                // Apply stacking multiplier for each mutator beyond the first
+                float stackMultiplier = ACE.Server.Managers.DerpACEConfig.DerpcoinStackMultiplier;
+                float finalChance = tierScaledChance * (float)Math.Pow(stackMultiplier, mutatorCount - 1);
+
+                // Cap at 100%
+                finalChance = Math.Min(1.0f, finalChance);
+
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < finalChance)
+                {
+                    var derpcoin = WorldObjectFactory.CreateNewWorldObject(ACE.Server.Managers.DerpACEConfig.DerpcoinWcid);
+                    if (derpcoin != null)
+                    {
+                        corpse.TryAddToInventory(derpcoin);
+                    }
+                }
+            }
+
             // move wielded treasure over, which also should include Wielded objects not marked for destroy on death.
             // allow server operators to configure this behavior due to errors in createlist post 16py data
             var dropFlags = PropertyManager.GetBool("creatures_drop_createlist_wield").Item ? DestinationType.WieldTreasure : DestinationType.Treasure;

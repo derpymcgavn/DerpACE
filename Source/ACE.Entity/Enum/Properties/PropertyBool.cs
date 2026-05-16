@@ -223,5 +223,8 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Tank mob — high HP, physical damage reduction, bonus to heals received */
         IsTankMob                        = 9037,
+
+        /* DerpACE Olthoi morphic system — flag indicating player is morphed into a creature */
+        IsMorphicForm                    = 9038,
     }
 }

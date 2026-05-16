@@ -30,8 +30,25 @@ namespace ACE.Server.Factories
 
         /// <summary>
         /// Per-spawn chance (0-1) that this mutator applies to an eligible creature.
+        /// This is the BASE chance at MinTier; scales with tier if UseTierScaling is true.
         /// </summary>
         public virtual float Chance { get; set; } = 0.02f;
+
+        /// <summary>
+        /// If true, mutator chance scales from Chance at MinTier to MaxChance at MaxTier.
+        /// Default true to match new DerpACE tier-scaling behavior.
+        /// </summary>
+        public virtual bool UseTierScaling { get; set; } = true;
+
+        /// <summary>
+        /// Maximum chance at MaxTier when UseTierScaling is true. Default 0.04 (4%).
+        /// </summary>
+        public virtual float MaxChance { get; set; } = 0.04f;
+
+        /// <summary>
+        /// Maximum tier for scaling. Default 8.
+        /// </summary>
+        public virtual int MaxTier { get; set; } = 8;
 
         /// <summary>
         /// If true, this mutator is active and will roll on eligible spawns.
@@ -74,13 +91,29 @@ namespace ACE.Server.Factories
         }
 
         /// <summary>
-        /// Rolls the configured chance. Returns true if the mutator should apply.
+        /// Rolls the configured chance for the given tier. Returns true if the mutator should apply.
+        /// If UseTierScaling is true, scales from Chance at MinTier to MaxChance at MaxTier.
         /// </summary>
-        public virtual bool RollChance()
+        public virtual bool RollChance(int tier)
         {
-            if (Chance <= 0) return false;
-            if (Chance >= 1.0f) return true;
-            return ThreadSafeRandom.Next(0.0f, 1.0f) < Chance;
+            float effectiveChance = Chance;
+
+            if (UseTierScaling && tier >= MinTier)
+            {
+                if (tier >= MaxTier)
+                    effectiveChance = MaxChance;
+                else
+                {
+                    // Linear interpolation from Chance at MinTier to MaxChance at MaxTier
+                    float tierRange = MaxTier - MinTier;
+                    float tierProgress = (tier - MinTier) / tierRange;
+                    effectiveChance = Chance + (MaxChance - Chance) * tierProgress;
+                }
+            }
+
+            if (effectiveChance <= 0) return false;
+            if (effectiveChance >= 1.0f) return true;
+            return ThreadSafeRandom.Next(0.0f, 1.0f) < effectiveChance;
         }
 
         /// <summary>
@@ -89,7 +122,7 @@ namespace ACE.Server.Factories
         public bool TryApply(Creature creature, int tier)
         {
             if (!CanApply(creature, tier)) return false;
-            if (!RollChance()) return false;
+            if (!RollChance(tier)) return false;
 
             ApplyInternal(creature, tier);
             return true;
@@ -131,6 +164,10 @@ namespace ACE.Server.Factories
 
             if (!string.IsNullOrEmpty(NamePrefix))
                 PrependPrefix(creature, NamePrefix);
+
+            // Increment mutator count for derpcoin drop tracking
+            var currentCount = creature.GetProperty(PropertyInt.MutatorCount) ?? 0;
+            creature.SetProperty(PropertyInt.MutatorCount, currentCount + 1);
         }
 
         /// <summary>

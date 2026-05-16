@@ -134,12 +134,13 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Simulacrum mob mutator (summons duplicate on low HP).
+    /// DerpACE: Simulacrum mob mutator - only applies to CreatureType.Simulacrum creatures.
+    /// When applied, causes the simulacrum to copy a random nearby player instead of the first attacker.
     /// </summary>
     public class SimulacrumMutator : CreatureMutator
     {
         public override string Name => "Simulacrum";
-        public override string Description => "Summons a weaker duplicate when HP drops below 50%.";
+        public override string Description => "Copies a random nearby player when spawned (only applies to Simulacrum creature type).";
         public override PropertyBool? MutatorFlag => PropertyBool.IsSimulacrumMob;
         public override string NamePrefix => "Simulacrum";
 
@@ -150,9 +151,17 @@ namespace ACE.Server.Factories
             Enabled = DerpACEConfig.MobModifierEnabled;
         }
 
+        public override bool CanApply(Creature creature, int tier)
+        {
+            if (!base.CanApply(creature, tier)) return false;
+
+            // Only apply to creatures that are already CreatureType.Simulacrum
+            return creature.CreatureType == ACE.Entity.Enum.CreatureType.Simulacrum;
+        }
+
         protected override void Apply(Creature creature, int tier)
         {
-            // Boost HP to compensate for summon mechanic
+            // Boost HP to compensate for being a player clone
             if (creature.Health.Current > 0)
             {
                 var currentMax = creature.Health.MaxValue;
@@ -161,7 +170,9 @@ namespace ACE.Server.Factories
                 creature.Health.Current = creature.Health.MaxValue;
             }
 
-            // TODO: Hook TakeDamage or low-HP event to spawn duplicate
+            // The PropertyBool.IsSimulacrumMob flag is set by ApplyInternal in the base class.
+            // When the creature acquires its first target, TryCopyFromPlayerOrRandom() will check
+            // this flag and pick a random nearby player instead of copying the attack target.
         }
     }
 

@@ -146,13 +146,18 @@ namespace ACE.Server.Factories
             new IronmanPrimarySkillOption(Skill.ManaConversion, 6, 6),
             new IronmanPrimarySkillOption(Skill.SneakAttack, 4, 2),
             new IronmanPrimarySkillOption(Skill.Summoning, 8, 4),
+        };
 
-            // Website "pretrained" entries
-            new IronmanPrimarySkillOption(Skill.ArcaneLore, 0, 2),
-            new IronmanPrimarySkillOption(Skill.Jump, 0, 4),
-            new IronmanPrimarySkillOption(Skill.Loyalty, 0, 2),
-            new IronmanPrimarySkillOption(Skill.MagicDefense, 0, 12),
-            new IronmanPrimarySkillOption(Skill.Run, 0, 4),
+        // Base skills that are pre-trained at level 1 and should not be rolled
+        // These start auto-trained for all races: Arcane Lore, Jump, Loyalty, Magic Defense, Run, Salvaging
+        private static readonly Skill[] BaseSkillsPreTrained =
+        {
+            Skill.ArcaneLore,
+            Skill.Jump,
+            Skill.Loyalty,
+            Skill.MagicDefense,
+            Skill.Run,
+            Skill.Salvaging,
         };
 
         private static readonly SpellId[] DefaultSpells =
@@ -177,17 +182,9 @@ namespace ACE.Server.Factories
             SpellId.ForceBolt1,
         };
 
-        // wcid + optional " amount" stack-size (matches aquafir's "20631 100" syntax)
-        private static readonly Dictionary<Skill, string[]> SkillStarterItems = new Dictionary<Skill, string[]>
-        {
-            [Skill.WarMagic]       = new[] { "12748", "20631 100", "691 10" },
-            [Skill.VoidMagic]      = new[] { "12748", "20631 100", "691 10" },
-            [Skill.LightWeapons]   = new[] { "12739" },               // Training Dirk
-            [Skill.HeavyWeapons]   = new[] { "12740" },               // Training Battle Axe
-            [Skill.FinesseWeapons] = new[] { "12739" },               // Training Dirk
-            [Skill.TwoHandedCombat] = new[] { "41512" },              // Training Spadone
-            [Skill.MissileWeapons] = new[] { "300", "302 50" },        // training bow + arrows
-        };
+        // Starter items are now granted exclusively via GiveStarterGear, which uses
+        // StarterGearFactory and the starterGear.json configuration to properly map
+        // racial weapons (e.g., Aluvian Light → Training Dagger, Sho Light → Training Knuckles).
 
         // ---------- Public entry point ----------
 
@@ -256,7 +253,8 @@ namespace ACE.Server.Factories
             chain.AddAction(player, () =>
             {
                 player.SendMessage("Ironman step 6/6: granting starter gear...");
-                GiveStarterItems(player, rolledPrimary);
+                // GiveStarterGear uses StarterGearFactory which correctly maps racial weapons
+                // and all other skill-based starter items from starterGear.json
                 GiveStarterGear(player);
 
                 // Final pass after all conversion actions so every remaining item is correctly tagged.
@@ -285,7 +283,7 @@ namespace ACE.Server.Factories
 
         // ---------- Attribute reroll ----------
 
-        private static void RollAttributes(Player player)
+        public static void RollAttributes(Player player)
         {
             // Pick one primary attribute to set to 100; others go to 46 (matches mod)
             var primary = (PropertyAttribute)ThreadSafeRandom.Next(1, 6);
@@ -296,7 +294,8 @@ namespace ACE.Server.Factories
                 var pAttr = player.Attributes[attr];
                 pAttr.StartingValue = attr == primary ? 100u : 46u;
 
-                player.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(player, pAttr));
+                if (player.Session != null)
+                    player.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(player, pAttr));
             }
         }
 
@@ -310,6 +309,20 @@ namespace ACE.Server.Factories
             120, 125, 130, 140, 150, 160, 180, 200, 225, 250, 275,
         };
 
+        // Skill credits earned per level (cumulative AFTER the initial 52 at level 1)
+        // Key = level, Value = total new credits earned from levels 2-X
+        private static readonly Dictionary<int, int> SkillCreditsPerLevel = new Dictionary<int, int>
+        {
+            { 2, 1 }, { 3, 2 }, { 4, 3 }, { 5, 4 }, { 6, 5 }, { 7, 6 }, { 8, 7 }, { 9, 8 },
+            { 10, 9 }, { 12, 10 }, { 14, 11 }, { 16, 12 }, { 18, 13 }, { 20, 14 },
+            { 23, 15 }, { 26, 16 }, { 29, 17 }, { 32, 18 }, { 35, 19 }, { 40, 20 },
+            { 45, 21 }, { 50, 22 }, { 55, 23 }, { 60, 24 }, { 65, 25 }, { 70, 26 },
+            { 75, 27 }, { 80, 28 }, { 85, 29 }, { 90, 30 }, { 95, 31 }, { 100, 32 },
+            { 105, 33 }, { 110, 34 }, { 115, 35 }, { 120, 36 }, { 125, 37 }, { 130, 38 },
+            { 140, 39 }, { 150, 40 }, { 160, 41 }, { 180, 42 }, { 200, 43 }, { 225, 44 },
+            { 250, 45 }, { 275, 46 },
+        };
+
         // Extra hardcore life milestones between levels 1-275.
         private static readonly int[] HardcoreLifeMilestones = { 75, 150, 225 };
         private const int IronmanMaxHardcoreLives = 3;
@@ -318,21 +331,100 @@ namespace ACE.Server.Factories
         /// Resets all skills, builds a level-milestone plan, and immediately applies any skills
         /// due at the character's current level.  Returns the rolled primary skill.
         /// </summary>
-        private static Skill RollSkills(Player player)
+        public static Skill RollSkills(Player player)
         {
-            // Reset every skill (refunds credits + xp for trained/spec'd skills)
+            // Reset every skill to Untrained (refunds credits + xp for trained/spec'd skills)
             foreach (Skill skill in System.Enum.GetValues(typeof(Skill)))
             {
                 if (skill == Skill.None) continue;
-                player.ResetSkill(skill, true);
+
+                var cs = player.GetCreatureSkill(skill);
+                if (cs == null) continue;
+
+                // Reset ALL skills to Untrained first (including base skills)
+                if (cs.AdvancementClass >= SkillAdvancementClass.Trained)
+                {
+                    player.ResetSkill(skill, true);
+
+                    // ResetSkill might only bring specialized skills down to trained
+                    // Force to untrained
+                    cs.AdvancementClass = SkillAdvancementClass.Untrained;
+                    cs.InitLevel = 0;
+                    cs.Ranks = 0;
+                    cs.ExperienceSpent = 0;
+                }
+            }
+
+            // Set starting skill credits to 52 for level 1 Ironman
+            player.AvailableSkillCredits = 52;
+
+            if (player.Session != null)
+                player.SendMessage($"[Ironman Debug] Starting with {player.AvailableSkillCredits} skill credits", ChatMessageType.System);
+
+            // Now train base skills at no cost (they're pre-trained at level 1)
+            foreach (var baseSkill in BaseSkillsPreTrained)
+            {
+                var cs = player.GetCreatureSkill(baseSkill);
+                if (cs != null && cs.AdvancementClass < SkillAdvancementClass.Trained)
+                {
+                    player.TrainSkill(baseSkill, 0); // 0 cost for base skills - DO NOT SPECIALIZE
+
+                    if (player.Session != null)
+                        player.SendMessage($"[Ironman Debug] Pre-trained {baseSkill} (0 credits, TRAINED only)", ChatMessageType.System);
+                }
             }
 
             var plan = new Dictionary<Skill, int>();
 
-            // Roll the weapon skill from website-equivalent list, then freely train+spec it.
+            // Roll the weapon skill from website-equivalent list, then train+spec it with proper credit costs.
             var rolledWeapon = WeaponSkillPool[ThreadSafeRandom.Next(0, WeaponSkillPool.Length - 1)];
-            player.TrainSkill(rolledWeapon.Skill, 0);
-            player.SpecializeSkill(rolledWeapon.Skill, 0, false);
+
+            // Get actual costs from DAT instead of hardcoded values
+            if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)rolledWeapon.Skill, out var weaponSkillBase))
+            {
+                var trainCost = weaponSkillBase.TrainedCost;
+                var specCost = weaponSkillBase.UpgradeCostFromTrainedToSpecialized;
+
+                // Verify we have enough credits for train + spec
+                var totalWeaponCost = trainCost + specCost;
+
+                if (player.Session != null)
+                    player.SendMessage($"[Ironman Debug] Attempting weapon {rolledWeapon.Skill}: train ({trainCost}) + spec ({specCost}) = {totalWeaponCost} total. Available: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+
+                if ((player.AvailableSkillCredits ?? 0) >= totalWeaponCost)
+                {
+                    bool trainSuccess = player.TrainSkill(rolledWeapon.Skill, trainCost);
+                    if (trainSuccess)
+                    {
+                        bool specSuccess = player.SpecializeSkill(rolledWeapon.Skill, specCost, false);
+
+                        if (player.Session != null)
+                            player.SendMessage($"[Ironman Debug] Weapon {rolledWeapon.Skill}: train={trainSuccess}, spec={specSuccess}. Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                    }
+                    else
+                    {
+                        if (player.Session != null)
+                            player.SendMessage($"[Ironman Debug] FAILED to train weapon {rolledWeapon.Skill}! Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                    }
+                }
+                else
+                {
+                    // Fallback: just train without spec if we can't afford both
+                    if ((player.AvailableSkillCredits ?? 0) >= trainCost)
+                    {
+                        bool trainSuccess = player.TrainSkill(rolledWeapon.Skill, trainCost);
+
+                        if (player.Session != null)
+                            player.SendMessage($"[Ironman Debug] Weapon {rolledWeapon.Skill}: trained only ({trainCost}), train={trainSuccess}. Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                    }
+                    else
+                    {
+                        if (player.Session != null)
+                            player.SendMessage($"[Ironman Debug] Cannot afford weapon {rolledWeapon.Skill} train cost ({trainCost}). Available: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                    }
+                }
+            }
+
             plan[rolledWeapon.Skill] = 0;
             SendIronmanSkillUpdate(player, rolledWeapon.Skill);
 
@@ -347,49 +439,139 @@ namespace ACE.Server.Factories
             if (rolledWeapon.Skill == Skill.LifeMagic)
                 primaryPool.RemoveAll(x => x.Skill == Skill.LifeMagic);
 
-            // Shuffle until first option has a non-zero specialization cost,
-            // mirroring the website's while(primary[0][2] == 0) guard.
-            do
-            {
-                Shuffle(primaryPool);
-            }
-            while (primaryPool.Count > 0 && primaryPool[0].SpecCost == 0);
-
             // For magic weapon builds, force Mana Conversion to the front (trained only).
             if (rolledWeapon.IsMagic)
                 primaryPool.Insert(0, new IronmanPrimarySkillOption(Skill.ManaConversion, 6, 6));
 
-            // Apply first primary option immediately:
-            // - magic builds: trained only (website treats Mana Conversion as auto-trained)
-            // - non-magic builds: train + spec first rolled primary option
-            if (primaryPool.Count > 0)
+            // Shuffle the primary pool to randomize training order
+            Shuffle(primaryPool);
+
+            // Keep training random skills from the pool until we run out of credits (or nearly run out)
+            // This ensures the 52 starting credits are mostly/fully spent at level 1
+            var trainedAtCreation = new List<Skill> { rolledWeapon.Skill };
+
+            foreach (var primaryOption in primaryPool)
             {
-                var firstPrimary = primaryPool[0];
-                if (!plan.ContainsKey(firstPrimary.Skill))
+                if (plan.ContainsKey(primaryOption.Skill))
+                    continue;
+
+                if (trainedAtCreation.Contains(primaryOption.Skill))
+                    continue;
+
+                var cs = player.GetCreatureSkill(primaryOption.Skill);
+                if (cs?.AdvancementClass >= SkillAdvancementClass.Trained)
+                    continue; // already trained
+
+                // Check if we have enough credits to train this skill
+                if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)primaryOption.Skill, out var skillBase))
                 {
-                    if (player.GetCreatureSkill(firstPrimary.Skill)?.AdvancementClass < SkillAdvancementClass.Trained)
-                        player.TrainSkill(firstPrimary.Skill, 0);
+                    var trainCost = skillBase.TrainedCost;
 
-                    if (!rolledWeapon.IsMagic && firstPrimary.SpecCost > 0)
-                        player.SpecializeSkill(firstPrimary.Skill, 0, false);
+                    if ((player.AvailableSkillCredits ?? 0) >= trainCost)
+                    {
+                        // Try to train the skill, checking if it actually succeeds
+                        bool trainSuccess = player.TrainSkill(primaryOption.Skill, trainCost);
 
-                    plan[firstPrimary.Skill] = 0;
-                    SendIronmanSkillUpdate(player, firstPrimary.Skill);
+                        if (trainSuccess)
+                        {
+                            plan[primaryOption.Skill] = 0; // Mark as trained at creation (level 0)
+                            trainedAtCreation.Add(primaryOption.Skill);
+                            SendIronmanSkillUpdate(player, primaryOption.Skill);
+
+                            if (player.Session != null)
+                                player.SendMessage($"[Ironman Debug] Trained {primaryOption.Skill} ({trainCost} credits). Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                        }
+                        else
+                        {
+                            if (player.Session != null)
+                                player.SendMessage($"[Ironman Debug] FAILED to train {primaryOption.Skill} (tried {trainCost} credits, have {player.AvailableSkillCredits ?? 0})", ChatMessageType.System);
+                        }
+                    }
+                    else
+                    {
+                        // Not enough credits left, this skill will be assigned to a milestone
+                        // Don't break - keep checking other skills that might be cheaper
+                        if (player.Session != null)
+                            player.SendMessage($"[Ironman Debug] Skipped {primaryOption.Skill} (need {trainCost}, have {player.AvailableSkillCredits ?? 0})", ChatMessageType.System);
+                    }
                 }
             }
 
-            // Remaining primary options unlock by milestone levels.
-            int milestoneIndex = 0;
-            for (int i = 1; i < primaryPool.Count; i++)
-            {
-                var skill = primaryPool[i].Skill;
-                if (plan.ContainsKey(skill))
-                    continue;
+            // Any skills not trained at creation get assigned to milestone levels
+            // We need to track cumulative credits earned and ensure skills can actually be trained
+            var untrainedSkills = new List<(Skill skill, int trainCost)>();
 
-                if (milestoneIndex < SkillMilestones.Length)
-                    plan[skill] = SkillMilestones[milestoneIndex++];
-                else
-                    plan[skill] = -2;
+            foreach (var primaryOption in primaryPool)
+            {
+                if (plan.ContainsKey(primaryOption.Skill))
+                    continue; // already trained
+
+                // Get the train cost for this skill
+                if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)primaryOption.Skill, out var skillBase))
+                {
+                    untrainedSkills.Add((primaryOption.Skill, skillBase.TrainedCost));
+                }
+            }
+
+            // Sort untrained skills by cost (cheapest first) so we can fit more skills into early milestones
+            untrainedSkills.Sort((a, b) => a.trainCost.CompareTo(b.trainCost));
+
+            // Track cumulative credits spent across ALL milestones
+            int totalCreditsAllocated = 0;
+            int currentMilestoneIndex = 0;
+
+            if (player.Session != null)
+                player.SendMessage($"[Ironman Debug] Assigning {untrainedSkills.Count} untrained skills to milestones...", ChatMessageType.System);
+
+            foreach (var (skill, trainCost) in untrainedSkills)
+            {
+                bool assigned = false;
+
+                // Try to find a milestone where we'll have enough cumulative credits
+                for (int i = currentMilestoneIndex; i < SkillMilestones.Length; i++)
+                {
+                    var milestoneLevel = SkillMilestones[i];
+
+                    // Get total NEW credits earned by this level (beyond the initial 52)
+                    if (!SkillCreditsPerLevel.TryGetValue(milestoneLevel, out var cumulativeCreditsAtLevel))
+                    {
+                        // If not in table, find the closest lower level
+                        cumulativeCreditsAtLevel = 0;
+                        foreach (var kvp in SkillCreditsPerLevel.OrderByDescending(x => x.Key))
+                        {
+                            if (kvp.Key <= milestoneLevel)
+                            {
+                                cumulativeCreditsAtLevel = kvp.Value;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Check if we have enough credits left after all previous milestone assignments
+                    var remainingCredits = cumulativeCreditsAtLevel - totalCreditsAllocated;
+
+                    if (remainingCredits >= trainCost)
+                    {
+                        // We can assign this skill to this milestone
+                        plan[skill] = milestoneLevel;
+                        totalCreditsAllocated += trainCost;
+                        assigned = true;
+
+                        if (player.Session != null)
+                            player.SendMessage($"[Ironman Debug] Assigned {skill} to level {milestoneLevel} (cost {trainCost}, remaining {remainingCredits - trainCost}/{cumulativeCreditsAtLevel})", ChatMessageType.System);
+
+                        break;
+                    }
+                }
+
+                if (!assigned)
+                {
+                    // Could not find any milestone with enough credits
+                    plan[skill] = -2; // never unlock
+
+                    if (player.Session != null)
+                        player.SendMessage($"[Ironman Debug] {skill} marked as UNOBTAINABLE (cost {trainCost}, max credits {SkillCreditsPerLevel[SkillMilestones[SkillMilestones.Length - 1]]})", ChatMessageType.System);
+                }
             }
 
             // Serialize and store the plan — at-creation grants will be applied by the delayed chain.
@@ -568,9 +750,12 @@ namespace ACE.Server.Factories
 
         private static void SendIronmanSkillUpdate(Player player, Skill skill)
         {
-            player.Session.Network.EnqueueSend(
-                new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(skill)),
-                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, 0));
+            if (player.Session != null)
+            {
+                player.Session.Network.EnqueueSend(
+                    new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(skill)),
+                    new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, player.AvailableSkillCredits ?? 0));
+            }
         }
 
         /// <summary>
@@ -611,14 +796,40 @@ namespace ACE.Server.Factories
                 if (cs == null || cs.AdvancementClass >= SkillAdvancementClass.Trained)
                     continue; // already trained somehow, just mark done
 
-                player.TrainSkill(skill, 0); // free grant — no credit cost
+                // Get the actual train cost from DAT and check if player has enough credits
+                if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)skill, out var skillBase))
+                {
+                    var trainCost = skillBase.TrainedCost;
+
+                    // Check if player has enough credits
+                    if ((player.AvailableSkillCredits ?? 0) < trainCost)
+                    {
+                        // Not enough credits yet - don't mark as done, let it try again next level
+                        plan[skill] = milestone; // reset to original milestone
+                        anyChanged = true; // still need to save the plan
+
+                        if (announceGrants && milestone > 0)
+                            messages.Add($"[Ironman] Not enough credits to unlock {skill.ToSentence()} (need {trainCost}, have {player.AvailableSkillCredits ?? 0})");
+
+                        continue;
+                    }
+
+                    // We have enough credits, train the skill
+                    player.TrainSkill(skill, trainCost);
+                }
+                else
+                {
+                    player.TrainSkill(skill, 0); // fallback to 0 if we can't find cost
+                }
 
                 // Push the updated skill and credit count to the client immediately
                 // so the skill panel reflects the change without a relog.
-                // Always show 0 credits for Ironman — skills are granted by the plan, not purchased.
-                player.Session.Network.EnqueueSend(
-                    new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(skill)),
-                    new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, 0));
+                if (player.Session != null)
+                {
+                    player.Session.Network.EnqueueSend(
+                        new GameMessagePrivateUpdateSkill(player, player.GetCreatureSkill(skill)),
+                        new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, player.AvailableSkillCredits ?? 0));
+                }
 
                 if (announceGrants && milestone > 0)
                     messages.Add($"[Ironman] Your plan unlocks: {skill.ToSentence()} (Level {milestone} unlock)");
@@ -681,37 +892,7 @@ namespace ACE.Server.Factories
             }
         }
 
-        // ---------- Starter items ----------
-
-        private static void GiveStarterItems(Player player, Skill primary)
-        {
-            if (!SkillStarterItems.TryGetValue(primary, out var items)) return;
-
-            foreach (var entry in items)
-            {
-                var parts = entry.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length == 0) continue;
-                if (!uint.TryParse(parts[0], out var wcid)) continue;
-                int amount = 1;
-                if (parts.Length > 1) int.TryParse(parts[1], out amount);
-
-                try
-                {
-                    var wo = WorldObjectFactory.CreateNewWorldObject(wcid);
-                    if (wo == null) continue;
-                    if (amount > 1 && wo.MaxStackSize.HasValue && wo.MaxStackSize > 1)
-                        wo.SetStackSize(amount);
-
-                    // Pre-tag so it survives the IsIronman-flag check at the end of init
-                    wo.SetProperty(PropertyBool.IsIronmanItem, true);
-                    player.TryCreateInInventoryWithNetworking(wo);
-                }
-                catch
-                {
-                    // Skip bad wcids silently
-                }
-            }
-        }
+        // ---------- Starter gear ----------
 
         /// <summary>
         /// Grants the standard new-character starter gear based on the player's current trained/specialized skills,
@@ -733,6 +914,7 @@ namespace ACE.Server.Factories
                 if (!player.Skills.TryGetValue((Skill)skillGear.SkillId, out var charSkill)) continue;
                 if (charSkill.AdvancementClass < SkillAdvancementClass.Trained) continue;
 
+                // Grant universal skill-based gear (not heritage-specific)
                 foreach (var item in skillGear.Gear)
                 {
                     if (grantedWeenies.Contains(item.WeenieId))
@@ -750,9 +932,7 @@ namespace ACE.Server.Factories
                     if (wo.StackSize.HasValue && wo.MaxStackSize.HasValue)
                         wo.SetStackSize(Math.Min(item.StackSize, wo.MaxStackSize.Value));
 
-                    // Pre-tag so wield check passes immediately (TryCreateInInventoryWithNetworking also tags)
-                    wo.SetProperty(PropertyBool.IsIronmanItem, true);
-
+                    // TryCreateInInventoryWithNetworking will auto-tag IsIronmanItem for Ironman players
                     if (player.TryCreateInInventoryWithNetworking(wo))
                         grantedWeenies.Add(item.WeenieId);
 
@@ -762,8 +942,44 @@ namespace ACE.Server.Factories
                         var dw2 = WorldObjectFactory.CreateNewWorldObject(item.WeenieId);
                         if (dw2 != null)
                         {
-                            dw2.SetProperty(PropertyBool.IsIronmanItem, true);
+                            // TryCreateInInventoryWithNetworking will auto-tag IsIronmanItem
                             player.TryCreateInInventoryWithNetworking(dw2);
+                        }
+                    }
+                }
+
+                // Grant heritage-specific gear (e.g., racial starter weapons)
+                var heritageLoot = skillGear.Heritage.FirstOrDefault(i => i.HeritageId == (ushort)player.HeritageGroup);
+                if (heritageLoot != null)
+                {
+                    foreach (var item in heritageLoot.Gear)
+                    {
+                        if (grantedWeenies.Contains(item.WeenieId))
+                        {
+                            var existing = player.Inventory.Values.FirstOrDefault(i => i.WeenieClassId == item.WeenieId);
+                            if (existing != null && (existing.MaxStackSize ?? 1) > 1)
+                                existing.SetStackSize(existing.StackSize + item.StackSize);
+                            continue;
+                        }
+
+                        var wo = WorldObjectFactory.CreateNewWorldObject(item.WeenieId);
+                        if (wo == null) continue;
+
+                        if (wo.StackSize.HasValue && wo.MaxStackSize.HasValue)
+                            wo.SetStackSize(Math.Min(item.StackSize, wo.MaxStackSize.Value));
+
+                        // TryCreateInInventoryWithNetworking will auto-tag IsIronmanItem for Ironman players
+                        if (player.TryCreateInInventoryWithNetworking(wo))
+                            grantedWeenies.Add(item.WeenieId);
+
+                        if (isDualWield && wo.WeenieType == WeenieType.MeleeWeapon)
+                        {
+                            var dw2 = WorldObjectFactory.CreateNewWorldObject(item.WeenieId);
+                            if (dw2 != null)
+                            {
+                                // TryCreateInInventoryWithNetworking will auto-tag IsIronmanItem
+                                player.TryCreateInInventoryWithNetworking(dw2);
+                            }
                         }
                     }
                 }

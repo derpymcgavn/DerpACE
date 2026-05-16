@@ -99,6 +99,18 @@ namespace ACE.Entity.Enum.Properties
         PCAPRecordedTimestamp9           = 8029,
         PCAPRecordedMaxVelocityEstimated = 8030,
         PCAPPhysicsDIDDataTemplatedFrom  = 8044,
+
+        // DerpACE: Olthoi morphic system - stores original visual/animation data before morphing
+        MorphicOriginalMotionTable       = 9001,
+        MorphicOriginalSoundTable        = 9002,
+        MorphicOriginalPaletteBase       = 9003,
+        MorphicOriginalClothingBase      = 9004,
+        MorphicOriginalEyesTexture       = 9005,
+        MorphicOriginalNoseTexture       = 9006,
+        MorphicOriginalMouthTexture      = 9007,
+        MorphicOriginalHairPalette       = 9008,
+        MorphicOriginalEyesPalette       = 9009,
+        MorphicOriginalSkinPalette       = 9010,
     }
 
     public static class PropertyDataIdExtensions

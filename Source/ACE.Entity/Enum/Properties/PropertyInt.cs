@@ -665,6 +665,19 @@ namespace ACE.Entity.Enum.Properties
         VampiricJewelryVital                     = 9021,
         // DerpACE: stores DamageType for exploding mobs (Fire=0x10, Cold=0x08, Acid=0x20, Electric=0x40)
         ExplodingMobElement                      = 9022,
+        // DerpACE: tracks number of mutators applied to a creature (for derpcoin drop chance stacking)
+        MutatorCount                             = 9023,
+        // DerpACE: unarmed damage properties for gauntlets/boots (only active when no weapon equipped)
+        UnarmedBaseDamage                        = 9024,
+        UnarmedDamageType                        = 9025, // stores DamageType enum value
+        // DerpACE: unarmed combo system - stores the random seed for each player's unique combo mapping
+        UnarmedComboSeed                         = 9026,
+        // DerpACE: Olthoi morphic system - stores the original SetupTableId before morphing
+        MorphicOriginalSetup                     = 9027,
+        // DerpACE: Olthoi morphic system - stores the morphed creature WCID
+        MorphicCreatureWCID                      = 9028,
+        // DerpACE: Olthoi morphic system - stores the locked creature WCID for first-time morphic transformation
+        MorphicLockedCreatureWCID                = 9029
     }
 
     public static class PropertyIntExtensions

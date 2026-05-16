@@ -112,7 +112,11 @@ namespace ACE.Server.Network.Structure
             if (wo is Creature creature)
                 BuildCreature(creature);
 
-            if (wo.Damage != null && !(wo is Clothing) || wo is MeleeWeapon || wo is Missile || wo is MissileLauncher || wo is Ammunition || wo is Caster)
+            // DerpACE: Include boots/gauntlets with unarmed damage in weapon profile display
+            var isUnarmedArmorPiece = wo is Clothing && (wo.UnarmedBaseDamage ?? 0) > 0 &&
+                                      (wo.ValidLocations & (EquipMask.HandWear | EquipMask.FootWear)) != 0;
+
+            if (wo.Damage != null && !(wo is Clothing) || wo is MeleeWeapon || wo is Missile || wo is MissileLauncher || wo is Ammunition || wo is Caster || isUnarmedArmorPiece)
                 BuildWeapon(wo);
 
             // TODO: Resolve this issue a better way?
