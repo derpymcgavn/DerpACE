@@ -70,8 +70,42 @@ namespace ACE.Server.WorldObjects
                             chain.AddAction(this, () =>
                             {
                                 Session?.LogOffPlayer(true);
-                                ACE.Server.Managers.PlayerManager.HandlePlayerDelete(charId);
-                                ACE.Server.Managers.PlayerManager.ProcessDeletedPlayer(charId);
+
+                                // DerpACE Ironman: purge biota (player + possessions) AFTER the
+                                // player has fully logged out. If we purge too early,
+                                // SwitchPlayerFromOnlineToOffline / FinalizeLogout will NRE on the
+                                // missing biota rows and the autosave will fail with
+                                // "0 row(s) affected". Poll for the online entry to disappear,
+                                // then call HandlePlayerDelete / ProcessDeletedPlayer / PurgeCharacter.
+                                System.Threading.Tasks.Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        // Wait up to ~30s for FinalizeLogout to complete.
+                                        for (int i = 0; i < 60; i++)
+                                        {
+                                            await System.Threading.Tasks.Task.Delay(500);
+                                            if (ACE.Server.Managers.PlayerManager.GetOnlinePlayer(charId) == null)
+                                                break;
+                                        }
+
+                                        ACE.Server.Managers.PlayerManager.HandlePlayerDelete(charId);
+                                        ACE.Server.Managers.PlayerManager.ProcessDeletedPlayer(charId);
+
+                                        ACE.Database.ShardDatabaseOfflineTools.PurgeCharacter(
+                                            charId,
+                                            out var charsPurged,
+                                            out var biotasPurged,
+                                            out var possessionsPurged,
+                                            "Ironman/Hardcore final death");
+
+                                        log.Info($"[IRONMAN][PURGE] 0x{charId:X8}: characters={charsPurged}, biotas={biotasPurged}, possessions={possessionsPurged}");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        log.Error($"[IRONMAN][PURGE] 0x{charId:X8} failed: {ex}");
+                                    }
+                                });
                             });
                             chain.EnqueueChain();
                         }

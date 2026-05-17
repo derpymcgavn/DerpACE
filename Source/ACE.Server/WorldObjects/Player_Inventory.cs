@@ -2125,6 +2125,18 @@ namespace ACE.Server.WorldObjects
                 && item.GetProperty(PropertyInt.ItemWorkmanship) != null)
                 return WeenieError.YouCannotUseThatItem;
 
+            // DerpACE Ironman Nomad: cannot wield weapons or casters of any kind.
+            // Nomads fight unarmed; elemental damage comes from their gauntlets and shoes.
+            if (GetProperty(PropertyBool.IsIronmanNomad) == true)
+            {
+                var itemType = item.ItemType;
+                if ((itemType & (ItemType.MeleeWeapon | ItemType.MissileWeapon | ItemType.Caster | ItemType.MagicWieldable)) != 0)
+                {
+                    Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Nomads cannot wield weapons or casters."));
+                    return WeenieError.YouCannotUseThatItem;
+                }
+            }
+
             if (!PropertyManager.GetBool("use_wield_requirements").Item)
                 return WeenieError.None;
 

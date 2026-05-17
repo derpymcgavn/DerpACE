@@ -155,22 +155,7 @@ namespace ACE.Database
                     rwLock.ExitReadLock();
                 }
 
-                if (DoSaveBiota(cachedBiota.Context, cachedBiota.CachedObject))
-                    return true;
-
-                // DerpACE: A failed save on a long-lived cached ShardDbContext leaves EF's change tracker
-                // in a poisoned state (e.g. an Added entity that violates the (ObjectId, Type) PK), which
-                // makes every subsequent save retry the same broken INSERT and disconnects the player with
-                // BiotaSaveFailed. Evict the cache entry so the next save reloads fresh state.
-                lock (biotaCacheMutex)
-                {
-                    if (biotaCache.TryGetValue(biota.Id, out var current) && ReferenceEquals(current, cachedBiota))
-                        biotaCache.Remove(biota.Id);
-                }
-
-                try { cachedBiota.Context?.Dispose(); } catch { /* ignore */ }
-
-                return false;
+                return DoSaveBiota(cachedBiota.Context, cachedBiota.CachedObject);
             }
 
             // Biota does not exist in the cache
@@ -184,6 +169,10 @@ namespace ACE.Database
             {
                 if (existingBiota == null)
                 {
+                    // DerpACE: clear any orphan child rows left from a crashed/non-cascaded
+                    // delete (or recycled dynamic GUID) before inserting fresh property rows.
+                    PurgeOrphanBiotaProperties(context, biota.Id);
+
                     existingBiota = ACE.Database.Adapter.BiotaConverter.ConvertFromEntityBiota(biota);
 
                     context.Biota.Add(existingBiota);

@@ -56,11 +56,14 @@ namespace ACE.Server.Command.Handlers
         // GUID -> UTC time at which the pending /ironman on request expires.
         // 30-second confirm window matches the IronmanConfirmationSeconds intent.
         private static readonly ConcurrentDictionary<uint, DateTime> PendingConfirms = new ConcurrentDictionary<uint, DateTime>();
+        // GUID -> pending mode ("standard" or "nomad"). Defaults to standard if missing.
+        private static readonly ConcurrentDictionary<uint, string> PendingModes = new ConcurrentDictionary<uint, string>();
         private const int ConfirmWindowSeconds = 30;
 
         [CommandHandler("ironman", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Ironman mode (IRREVERSIBLE).",
             "on        - begin Ironman commitment (you must then run /ironman confirm within 30 seconds)\n" +
+            "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 450 in clothes)\n" +
             "confirm   - finalize Ironman conversion. Cannot be undone.\n" +
             "char      - view your character progression milestones\n" +
             "top       - show the Ironman leaderboard\n" +
@@ -142,34 +145,55 @@ namespace ACE.Server.Command.Handlers
 
                 case "on":
                     PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
+                    PendingModes[player.Guid.Full] = "standard";
                     player.SendMessage(
                         $"WARNING: Ironman mode is permanent and will wipe your inventory, spellbook, " +
                         $"and reroll your attributes/skills. Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
 
+                case "nomad":
+                    PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
+                    PendingModes[player.Guid.Full] = "nomad";
+                    player.SendMessage(
+                        $"WARNING: Ironman NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
+                        $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
+                        $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
+                        $"AL of 450 (average); worn armor is only half effective. " +
+                        $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
+                        ChatMessageType.System);
+                    break;
+
                 case "confirm":
                     if (!PendingConfirms.TryRemove(player.Guid.Full, out var expires))
                     {
-                        player.SendMessage("You have no pending Ironman commitment. Type /ironman on first.");
+                        player.SendMessage("You have no pending Ironman commitment. Type /ironman on or /ironman nomad first.");
                         return;
                     }
                     if (DateTime.UtcNow > expires)
                     {
-                        player.SendMessage("Your Ironman commitment window has expired. Type /ironman on again.");
+                        PendingModes.TryRemove(player.Guid.Full, out _);
+                        player.SendMessage("Your Ironman commitment window has expired. Type /ironman on or /ironman nomad again.");
                         return;
                     }
-                    IronmanFactory.InitializeIronman(player);
-                    
+                    PendingModes.TryRemove(player.Guid.Full, out var pendingMode);
+                    var isNomad = string.Equals(pendingMode, "nomad", StringComparison.OrdinalIgnoreCase);
+
+                    if (isNomad)
+                        IronmanFactory.InitializeIronmanNomad(player);
+                    else
+                        IronmanFactory.InitializeIronman(player);
+
                     // Global announcement for Ironman activation
-                    var ironmanMsg = $"[IRONMAN] {player.Name} has taken the Ironman path. There is no turning back!";
+                    var pathLabel = isNomad ? "NOMAD Ironman" : "Ironman";
+                    var ironmanMsg = $"[IRONMAN] {player.Name} has taken the {pathLabel} path. There is no turning back!";
                     var ironmanBroadcast = new GameMessageSystemChat(ironmanMsg, ChatMessageType.WorldBroadcast);
                     PlayerManager.BroadcastToAll(ironmanBroadcast);
                     PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, ironmanMsg);
                     break;
 
                 default:
-                    player.SendMessage("Usage: /ironman on | confirm");
+                    player.SendMessage("Usage: /ironman on | nomad | confirm");
                     break;
             }
         }
@@ -437,7 +461,9 @@ namespace ACE.Server.Command.Handlers
                 .Select(p => (
                     Name:   p.Name,
                     Level:  p.Level ?? 0,
-                    Kills:  p.GetProperty(PropertyInt.CreatureKills) ?? 0
+                    Kills:  p.GetProperty(PropertyInt.CreatureKills) ?? 0,
+                    Lives:  p.GetProperty(PropertyInt.HardcoreLives) ?? 0,
+                    Nomad:  p.GetProperty(PropertyBool.IsIronmanNomad) == true
                 ))
                 .OrderByDescending(e => e.Kills)
                 .ThenByDescending(e => e.Level)
@@ -446,8 +472,8 @@ namespace ACE.Server.Command.Handlers
 
             var sb = new StringBuilder();
             sb.AppendLine($"=== Ironman Leaderboard (Top {LeaderboardSize}) ===");
-            sb.AppendLine($"  {"#",-3} {"Name",-28} {"Level",5}  {"Kills",7}");
-            sb.AppendLine($"  {new string('-', 48)}");
+            sb.AppendLine($"  {"#",-3} {"Name",-28} {"Lives",5} {"Status",-6} {"Level",5}  {"Kills",7}");
+            sb.AppendLine($"  {new string('-', 62)}");
 
             if (entries.Count == 0)
             {
@@ -458,7 +484,8 @@ namespace ACE.Server.Command.Handlers
                 for (int i = 0; i < entries.Count; i++)
                 {
                     var e = entries[i];
-                    sb.AppendLine($"  {i + 1,-3} {e.Name,-28} {e.Level,5}  {e.Kills,7:N0}");
+                    var status = e.Lives <= 0 ? "DEAD" : (e.Nomad ? "NOMAD" : "ALIVE");
+                    sb.AppendLine($"  {i + 1,-3} {e.Name,-28} {e.Lives,5} {status,-6} {e.Level,5}  {e.Kills,7:N0}");
                 }
             }
 

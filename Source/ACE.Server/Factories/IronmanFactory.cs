@@ -281,6 +281,174 @@ namespace ACE.Server.Factories
             ApplyIronmanFlag(player);
         }
 
+        // ---------- Nomad public entry point ----------
+
+        /// <summary>
+        /// Nomad Ironman initialization. Identical staging to InitializeIronman with these
+        /// differences:
+        ///   * Attributes roll randomly between 10 and 100 per stat.
+        ///   * Weapon skill is forced to Light Weapons (trained + specialized).
+        ///   * Arcane Lore is specialized in addition to being pre-trained.
+        ///   * Player is flagged IsIronmanNomad — wielding any weapon/caster is blocked.
+        ///   * Natural body AL is 450 in clothes only; worn armor is half effective.
+        /// Starter gear still flows through GiveStarterGear (the equip restrictions block
+        /// nomads from actually wielding weapons granted to the Light Weapons skill).
+        /// </summary>
+        public static void InitializeIronmanNomad(Player player)
+        {
+            if (player == null) return;
+
+            if (player.GetProperty(PropertyBool.IsIronman) == true)
+            {
+                player.SendMessage("You are already an Ironman.");
+                return;
+            }
+
+            player.SendMotionAsCommands(MotionCommand.EnterPortal, MotionStance.NonCombat);
+
+            var chain = new ActionChain();
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Nomad step 1/6: rerolling heritage, appearance, random attributes, and skills...");
+                RollHeritageAndAppearance(player);
+                RollAttributesRandom(player);
+                RollSkills(player, forcedWeaponSkill: Skill.LightWeapons, forcedWeaponIsMagic: false, specializeArcaneLore: true);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Nomad step 2/6: wiping inventory...");
+                WipeInventory(player);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Nomad step 3/6: wiping known spells...");
+                WipeKnownSpells(player);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Nomad step 4/6: applying ironman skill milestones...");
+                ApplyIronmanPlanForLevel(player, player.Level ?? 1, announceGrants: false);
+            });
+
+            chain.AddDelaySeconds(1.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Nomad step 5/6: teaching starter spells...");
+                foreach (var spellId in DefaultSpells)
+                    player.LearnSpellWithNetworking((uint)spellId, false);
+                player.SendMessage("You have been taught the basic spells available to all Ironmen.");
+            });
+
+            chain.AddAction(player, () => player.SendMotionAsCommands(MotionCommand.ExitPortal, MotionStance.NonCombat));
+
+            chain.AddDelaySeconds(3.0);
+            chain.AddAction(player, () =>
+            {
+                player.SendMessage("Nomad step 6/6: granting starter gear...");
+                GiveStarterGear(player);
+                GiveNomadGauntletsAndShoes(player);
+                TagAllPossessions(player);
+
+                player.SendMessage("As a Nomad, you cannot wield weapons or casters. Your damage will come from elemental gauntlets and shoes.");
+                player.SendMessage(DerpACEConfig.IronmanWelcomeMessage);
+                for (var i = 0; i < 6; i++)
+                    player.PlayParticleEffect(PlayScript.SkillUpPurple, player.Guid);
+            });
+
+            chain.AddAction(player, () => player.SendMotionAsCommands(MotionCommand.Cheer, MotionStance.NonCombat));
+            chain.AddAction(player, () => player.SendMotionAsCommands(MotionCommand.Wave, MotionStance.NonCombat));
+
+            chain.AddDelaySeconds(2.0);
+            chain.AddAction(player, () =>
+            {
+                const string relogMsg = "finalizing nomad ironman mode - Relog!";
+                player.Session.Terminate(SessionTerminationReason.ForcedLogOffRequested, new GameMessageBootAccount($" - {relogMsg}"));
+            });
+            chain.EnqueueChain();
+
+            ApplyHardcore(player);
+            ApplyIronmanFlag(player);
+            ApplyIronmanNomadFlag(player);
+        }
+
+        private static void ApplyIronmanNomadFlag(Player player)
+        {
+            player.SetProperty(PropertyBool.IsIronmanNomad, true);
+            player.SetModeTitle("NOMAD");
+        }
+
+        // Weenie class ids used to create the nomad's elemental gauntlets and shoes.
+        private const uint NomadGauntletWcid = 56;  // W_GAUNTLETSLEATHER_CLASS
+        private const uint NomadBootWcid     = 115; // W_BOOTSLEATHER_CLASS
+
+        // Damage type -> friendly name used in the inscription.
+        // Includes physical (Slash/Pierce/Bludgeon) and elemental (Fire/Cold/Acid/Electric).
+        private static readonly (DamageType Type, string Name)[] NomadElements =
+        {
+            (DamageType.Slash,    "Slashing"),
+            (DamageType.Pierce,   "Piercing"),
+            (DamageType.Bludgeon, "Bludgeoning"),
+            (DamageType.Fire,     "Flame"),
+            (DamageType.Cold,     "Frost"),
+            (DamageType.Acid,     "Acid"),
+            (DamageType.Electric, "Lightning"),
+        };
+
+        /// <summary>
+        /// Grants a nomad their starting elemental gauntlets and shoes. Each pair rolls a
+        /// random element (Fire / Cold / Acid / Electric) and is inscribed by "M. Stranger"
+        /// with the unarmed damage stats stamped onto the inscription so the player can read
+        /// exactly what the item does.
+        /// </summary>
+        private static void GiveNomadGauntletsAndShoes(Player player)
+        {
+            // Roll independent elements for hands and feet to keep things interesting.
+            var hand = NomadElements[ThreadSafeRandom.Next(0, NomadElements.Length - 1)];
+            var foot = NomadElements[ThreadSafeRandom.Next(0, NomadElements.Length - 1)];
+
+            CreateAndGrantNomadUnarmedItem(player, NomadGauntletWcid, "Gauntlets",  hand.Type, hand.Name, baseDamage: 12, variance: 0.50f);
+            CreateAndGrantNomadUnarmedItem(player, NomadBootWcid,     "Shoes",      foot.Type, foot.Name, baseDamage: 10, variance: 0.55f);
+        }
+
+        private static void CreateAndGrantNomadUnarmedItem(Player player, uint wcid, string slotLabel,
+            DamageType damageType, string elementName, int baseDamage, float variance)
+        {
+            var wo = WorldObjectFactory.CreateNewWorldObject(wcid);
+            if (wo == null)
+            {
+                player.SendMessage($"[Nomad] Failed to create starter {slotLabel} (wcid {wcid}).");
+                return;
+            }
+
+            // Stamp unarmed damage properties read by Player.GetBaseDamageMod / GetDamageType.
+            wo.SetProperty(PropertyInt.UnarmedBaseDamage, baseDamage);
+            wo.SetProperty(PropertyInt.UnarmedDamageType, (int)damageType);
+            wo.SetProperty(PropertyFloat.UnarmedDamageVariance, variance);
+
+            // Rename so the element is visible at a glance.
+            wo.SetProperty(PropertyString.Name, $"{elementName} Nomad {slotLabel}");
+
+            // Inscription by M. Stranger documenting the damage.
+            var inscription =
+                $"Inscribed by M. Stranger:\n" +
+                $"These {slotLabel.ToLowerInvariant()} channel {elementName.ToLowerInvariant()} when struck unarmed.\n" +
+                $"Base Damage: {baseDamage}  Variance: {variance:0.00}  Element: {elementName} ({damageType})";
+
+            wo.SetProperty(PropertyString.Inscription, inscription);
+            wo.SetProperty(PropertyString.ScribeName, "M. Stranger");
+            wo.SetProperty(PropertyBool.Inscribable, false);
+
+            if (!player.TryCreateInInventoryWithNetworking(wo))
+                player.SendMessage($"[Nomad] Could not place {slotLabel} in inventory.");
+        }
+
         // ---------- Attribute reroll ----------
 
         public static void RollAttributes(Player player)
@@ -293,6 +461,23 @@ namespace ACE.Server.Factories
 
                 var pAttr = player.Attributes[attr];
                 pAttr.StartingValue = attr == primary ? 100u : 46u;
+
+                if (player.Session != null)
+                    player.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(player, pAttr));
+            }
+        }
+
+        /// <summary>
+        /// Nomad-style attribute reroll: every attribute rolls randomly between 10 and 100.
+        /// </summary>
+        public static void RollAttributesRandom(Player player)
+        {
+            foreach (PropertyAttribute attr in System.Enum.GetValues(typeof(PropertyAttribute)))
+            {
+                if (attr == PropertyAttribute.Undef) continue;
+
+                var pAttr = player.Attributes[attr];
+                pAttr.StartingValue = (uint)ThreadSafeRandom.Next(10, 100);
 
                 if (player.Session != null)
                     player.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(player, pAttr));
@@ -331,7 +516,7 @@ namespace ACE.Server.Factories
         /// Resets all skills, builds a level-milestone plan, and immediately applies any skills
         /// due at the character's current level.  Returns the rolled primary skill.
         /// </summary>
-        public static Skill RollSkills(Player player)
+        public static Skill RollSkills(Player player, Skill forcedWeaponSkill = Skill.None, bool forcedWeaponIsMagic = false, bool specializeArcaneLore = false)
         {
             // Reset every skill to Untrained (refunds credits + xp for trained/spec'd skills)
             foreach (Skill skill in System.Enum.GetValues(typeof(Skill)))
@@ -374,10 +559,29 @@ namespace ACE.Server.Factories
                 }
             }
 
+            // Nomad: specialize Arcane Lore (already trained above at 0 cost) using credits.
+            if (specializeArcaneLore)
+            {
+                if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)Skill.ArcaneLore, out var arcaneBase))
+                {
+                    var specCost = arcaneBase.UpgradeCostFromTrainedToSpecialized;
+                    if ((player.AvailableSkillCredits ?? 0) >= specCost)
+                    {
+                        player.SpecializeSkill(Skill.ArcaneLore, specCost, false);
+                        SendIronmanSkillUpdate(player, Skill.ArcaneLore);
+
+                        if (player.Session != null)
+                            player.SendMessage($"[Nomad Debug] Specialized Arcane Lore ({specCost} credits). Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                    }
+                }
+            }
+
             var plan = new Dictionary<Skill, int>();
 
             // Roll the weapon skill from website-equivalent list, then train+spec it with proper credit costs.
-            var rolledWeapon = WeaponSkillPool[ThreadSafeRandom.Next(0, WeaponSkillPool.Length - 1)];
+            var rolledWeapon = forcedWeaponSkill != Skill.None
+                ? new IronmanWeaponOption(forcedWeaponSkill, 0, forcedWeaponIsMagic)
+                : WeaponSkillPool[ThreadSafeRandom.Next(0, WeaponSkillPool.Length - 1)];
 
             // Get actual costs from DAT instead of hardcoded values
             if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)rolledWeapon.Skill, out var weaponSkillBase))

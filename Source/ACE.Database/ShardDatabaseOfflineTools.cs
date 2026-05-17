@@ -182,6 +182,131 @@ namespace ACE.Database
                 PurgeCharactersInParallel(context, daysLimiter, out charactersPurged, out playerBiotasPurged, out possessionsPurged);
         }
 
+        // DerpACE: tables keyed by object_Id whose orphan rows (rows with no matching parent
+        // `biota` row) can cause duplicate-PK failures when a recycled dynamic GUID is reused.
+        // Kept here so the startup sweep covers the same tables as the per-insert purge in
+        // ShardDatabase.PurgeOrphanBiotaProperties.
+        private static readonly string[] OrphanSweepTables =
+        {
+            "biota_properties_bool",
+            "biota_properties_d_i_d",
+            "biota_properties_float",
+            "biota_properties_i_i_d",
+            "biota_properties_int",
+            "biota_properties_int64",
+            "biota_properties_string",
+            "biota_properties_position",
+            "biota_properties_attribute",
+            "biota_properties_attribute_2nd",
+            "biota_properties_skill",
+            "biota_properties_body_part",
+            "biota_properties_spell_book",
+            "biota_properties_event_filter",
+            "biota_properties_anim_part",
+            "biota_properties_palette",
+            "biota_properties_texture_map",
+            "biota_properties_book",
+            "biota_properties_book_page_data",
+            "biota_properties_create_list",
+            "biota_properties_generator",
+            "biota_properties_enchantment_registry",
+        };
+
+        /// <summary>
+        /// DerpACE: scans every biota_properties_* table at startup and deletes rows whose
+        /// `object_Id` has no matching parent `biota` row. Returns total rows removed.
+        /// Intended to be called once during server startup to clean up orphans left by
+        /// crashes, non-cascading deletes, or recycled dynamic GUIDs.
+        /// </summary>
+        public static int PurgeOrphanedBiotaProperties()
+        {
+            int totalRemoved = 0;
+
+            using (var context = new ShardDbContext())
+            {
+                foreach (var table in OrphanSweepTables)
+                {
+                    try
+                    {
+                        var sql = $"DELETE p FROM `{table}` p LEFT JOIN `biota` b ON b.`id` = p.`object_Id` WHERE b.`id` IS NULL;";
+                        var removed = context.Database.ExecuteSqlRaw(sql);
+                        if (removed > 0)
+                        {
+                            log.Info($"[STARTUP][ORPHAN-PURGE] {table}: removed {removed} orphan row(s).");
+                            totalRemoved += removed;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Warn($"[STARTUP][ORPHAN-PURGE] {table} failed: {ex.Message}");
+                    }
+                }
+            }
+
+            return totalRemoved;
+        }
+
+        /// <summary>
+        /// DerpACE: startup sweep that (1) finishes purging any characters that were flagged
+        /// IsDeleted but never fully cleaned (e.g. Ironman final death whose post-logoff
+        /// purge task was interrupted by a shutdown), and (2) removes any leftover orphan
+        /// biota_properties_* rows. Safe to call once at server start.
+        /// </summary>
+        public static void RunStartupCleanup()
+        {
+            try
+            {
+                using (var context = new ShardDbContext())
+                {
+                    // Pick up any characters that are flagged deleted (IsDeleted == true)
+                    // regardless of DeleteTime, so post-crash Ironman corpses still get purged.
+                    var pending = context.Character
+                        .Where(r => r.IsDeleted)
+                        .AsNoTracking()
+                        .Select(r => r.Id)
+                        .ToList();
+
+                    if (pending.Count > 0)
+                    {
+                        log.Info($"[STARTUP][PURGE] Found {pending.Count} character(s) flagged deleted; purging biotas.");
+
+                        int totalChars = 0, totalBiotas = 0, totalPossessions = 0;
+
+                        foreach (var id in pending)
+                        {
+                            try
+                            {
+                                PurgeCharacter(id, out var c, out var b, out var p, "Startup cleanup of IsDeleted character");
+                                totalChars += c;
+                                totalBiotas += b;
+                                totalPossessions += p;
+                            }
+                            catch (Exception ex)
+                            {
+                                log.Warn($"[STARTUP][PURGE] PurgeCharacter 0x{id:X8} failed: {ex.Message}");
+                            }
+                        }
+
+                        log.Info($"[STARTUP][PURGE] Done. characters={totalChars}, biotas={totalBiotas}, possessions={totalPossessions}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[STARTUP][PURGE] character sweep failed: {ex}");
+            }
+
+            try
+            {
+                var orphans = PurgeOrphanedBiotaProperties();
+                log.Info($"[STARTUP][ORPHAN-PURGE] Done. Total orphan rows removed: {orphans}.");
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[STARTUP][ORPHAN-PURGE] orphan sweep failed: {ex}");
+            }
+        }
+
 
         public static void PurgePlayer(ShardDbContext context, uint playerId, out int charactersPurged, out int playerBiotasPurged, out int possessionsPurged, string reason = null)
         {

@@ -41,6 +41,26 @@ namespace ACE.Server.WorldObjects
             // get base AL / RL
             var armorVsType = Biota.Value.BaseArmor * (float)Creature.GetArmorVsType(damageType);
 
+            // DerpACE Ironman Nomad — natural AL 450 with only clothes (no Armor layers),
+            // averaged across all damage types (resist 1.0). When wearing any armor, the
+            // armor's contribution is halved because nomads don't know how to wear armor.
+            var isNomad = Creature is Player nomadPlayer && nomadPlayer.GetProperty(PropertyBool.IsIronmanNomad) == true;
+            var hasArmorLayer = false;
+            if (isNomad)
+            {
+                foreach (var layer in armorLayers)
+                {
+                    if ((layer.ItemType & ItemType.Armor) != 0)
+                    {
+                        hasArmorLayer = true;
+                        break;
+                    }
+                }
+
+                if (!hasArmorLayer)
+                    armorVsType = 450.0f;
+            }
+
             // additive enchantments:
             // imperil / armor
             var enchantmentMod = ignoreMagicResist ? 0 : EnchantmentManager.GetBodyArmorMod();
@@ -49,7 +69,14 @@ namespace ACE.Server.WorldObjects
 
             // handle monsters w/ multiple layers of armor
             foreach (var armorLayer in armorLayers)
-                effectiveAL += GetArmorMod(armorLayer, damageType, ignoreMagicArmor);
+            {
+                var layerAL = GetArmorMod(armorLayer, damageType, ignoreMagicArmor);
+
+                if (isNomad && (armorLayer.ItemType & ItemType.Armor) != 0)
+                    layerAL *= 0.5f; // nomads don't know how to wear armor
+
+                effectiveAL += layerAL;
+            }
 
             // armor rending reduces base armor + all physical armor too?
             if (effectiveAL > 0)

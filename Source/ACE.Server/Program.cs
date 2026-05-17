@@ -263,6 +263,11 @@ namespace ACE.Server
             log.Info("Starting DatabaseManager...");
             DatabaseManager.Start();
 
+            // DerpACE: clean up any IsDeleted characters that never finished purging and
+            // any orphan biota_properties_* rows before GuidManager hands out dynamic ids.
+            log.Info("Running shard startup cleanup (deleted characters + orphan biota properties)...");
+            ShardDatabaseOfflineTools.RunStartupCleanup();
+
             log.Info("Starting PropertyManager...");
             PropertyManager.Initialize();
 

@@ -69,44 +69,9 @@ namespace ACE.Database.Models.Shard
         // Bool, DID, Float, IID, Int, Int64, String, Position
         // =====================================
 
-        // DerpACE: collapses pre-existing duplicates in a navigation collection (which would otherwise
-        // cause "Duplicate entry ... for key 'PRIMARY'" failures on save against the composite (ObjectId, Type) key)
-        // and returns the surviving entry (or null if none).
-        private static T CollapseDuplicates<T>(System.Collections.Generic.ICollection<T> collection, System.Func<T, bool> predicate, uint biotaId, string propertyKind, object propertyName) where T : class
-        {
-            T survivor = null;
-            System.Collections.Generic.List<T> extras = null;
-
-            foreach (var item in collection)
-            {
-                if (!predicate(item))
-                    continue;
-
-                if (survivor == null)
-                    survivor = item;
-                else
-                {
-                    if (extras == null)
-                        extras = new System.Collections.Generic.List<T>();
-                    extras.Add(item);
-                }
-            }
-
-            if (extras != null)
-            {
-                foreach (var dup in extras)
-                    collection.Remove(dup);
-
-                var log = log4net.LogManager.GetLogger(typeof(BiotaExtensions));
-                log.Warn($"[BIOTA] Collapsed {extras.Count} duplicate {propertyKind} entries for biota 0x{biotaId:X8}, property {propertyName}");
-            }
-
-            return survivor;
-        }
-
         public static void SetProperty(this Biota biota, PropertyBool property, bool value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesBool, x => x.Type == (uint)property, biota.Id, "PropertyBool", property);
+            var result = biota.BiotaPropertiesBool.FirstOrDefault(x => x.Type == (uint)property);
 
             if (result != null)
                 result.Value = value;
@@ -120,7 +85,7 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyDataId property, uint value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesDID, x => x.Type == (uint)property, biota.Id, "PropertyDID", property);
+            var result = biota.BiotaPropertiesDID.FirstOrDefault(x => x.Type == (uint)property);
 
             if (result != null)
                 result.Value = value;
@@ -134,7 +99,7 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyFloat property, double value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesFloat, x => x.Type == (ushort)property, biota.Id, "PropertyFloat", property);
+            var result = biota.BiotaPropertiesFloat.FirstOrDefault(x => x.Type == (ushort)property);
 
             if (result != null)
                 result.Value = value;
@@ -148,7 +113,7 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyInstanceId property, uint value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesIID, x => x.Type == (uint)property, biota.Id, "PropertyIID", property);
+            var result = biota.BiotaPropertiesIID.FirstOrDefault(x => x.Type == (uint)property);
 
             if (result != null)
                 result.Value = value;
@@ -162,7 +127,7 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyInt property, int value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesInt, x => x.Type == (uint)property, biota.Id, "PropertyInt", property);
+            var result = biota.BiotaPropertiesInt.FirstOrDefault(x => x.Type == (uint)property);
 
             if (result != null)
                 result.Value = value;
@@ -176,7 +141,7 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyInt64 property, long value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesInt64, x => x.Type == (uint)property, biota.Id, "PropertyInt64", property);
+            var result = biota.BiotaPropertiesInt64.FirstOrDefault(x => x.Type == (uint)property);
 
             if (result != null)
                 result.Value = value;
@@ -190,7 +155,7 @@ namespace ACE.Database.Models.Shard
 
         public static void SetProperty(this Biota biota, PropertyString property, string value)
         {
-            var result = CollapseDuplicates(biota.BiotaPropertiesString, x => x.Type == (uint)property, biota.Id, "PropertyString", property);
+            var result = biota.BiotaPropertiesString.FirstOrDefault(x => x.Type == (uint)property);
 
             if (result != null)
                 result.Value = value;

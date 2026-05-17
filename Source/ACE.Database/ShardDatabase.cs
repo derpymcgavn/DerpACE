@@ -308,6 +308,54 @@ namespace ACE.Database
             }
         }
 
+        // DerpACE: tables keyed by object_Id that can cause duplicate-PK insert failures
+        // if orphan rows are left behind (e.g. crash before parent biota row was saved,
+        // or non-cascading delete) and the id is later reallocated. Cleaned only when we
+        // are about to insert a brand-new parent biota row for that id.
+        private static readonly string[] BiotaPropertyOrphanTables =
+        {
+            "biota_properties_bool",
+            "biota_properties_d_i_d",
+            "biota_properties_float",
+            "biota_properties_i_i_d",
+            "biota_properties_int",
+            "biota_properties_int64",
+            "biota_properties_string",
+            "biota_properties_position",
+            "biota_properties_attribute",
+            "biota_properties_attribute_2nd",
+            "biota_properties_skill",
+            "biota_properties_body_part",
+            "biota_properties_spell_book",
+            "biota_properties_event_filter",
+            "biota_properties_anim_part",
+            "biota_properties_palette",
+            "biota_properties_texture_map",
+            "biota_properties_book",
+            "biota_properties_book_page_data",
+            "biota_properties_create_list",
+            "biota_properties_generator",
+            "biota_properties_enchantment_registry",
+        };
+
+        /// <summary>
+        /// DerpACE: deletes any orphan biota_properties_* rows that exist for the given
+        /// object id but have no corresponding parent biota row. Called immediately before
+        /// inserting a brand-new biota so that EF's child inserts do not collide on PK.
+        /// </summary>
+        protected static void PurgeOrphanBiotaProperties(ShardDbContext context, uint id)
+        {
+            try
+            {
+                foreach (var table in BiotaPropertyOrphanTables)
+                    context.Database.ExecuteSqlRaw($"DELETE FROM `{table}` WHERE `object_Id` = {{0}};", id);
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"[DATABASE] PurgeOrphanBiotaProperties 0x{id:X8} failed: {ex.GetFullMessage()}");
+            }
+        }
+
         protected bool DoSaveBiota(ShardDbContext context, Biota biota)
         {
             SetBiotaPopulatedCollections(biota);
@@ -350,6 +398,10 @@ namespace ACE.Database
                 {
                     if (existingBiota == null)
                     {
+                        // DerpACE: clear any orphan child rows left from a crashed/non-cascaded
+                        // delete (or recycled dynamic GUID) before inserting fresh property rows.
+                        PurgeOrphanBiotaProperties(context, biota.Id);
+
                         existingBiota = ACE.Database.Adapter.BiotaConverter.ConvertFromEntityBiota(biota);
 
                         context.Biota.Add(existingBiota);

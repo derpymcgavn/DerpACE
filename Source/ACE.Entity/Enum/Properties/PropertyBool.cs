@@ -226,5 +226,8 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Olthoi morphic system — flag indicating player is morphed into a creature */
         IsMorphicForm                    = 9038,
+
+        /* DerpACE Ironman Nomad submode — no weapons/casters, unarmed via gauntlets/shoes, natural AL 450 in clothes */
+        IsIronmanNomad                   = 9039,
     }
 }
