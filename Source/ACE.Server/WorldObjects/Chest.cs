@@ -177,6 +177,10 @@ namespace ACE.Server.WorldObjects
             if (!(wo is Player player))
                 return;
 
+            // DerpACE: gate stranger-spawned chests by per-player opens-remaining
+            if (MysteriousStranger.TryConsumeChestOpen(this, player))
+                return;
+
             // open chest
             Open(player);
         }

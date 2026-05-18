@@ -43,6 +43,84 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
+### Recent Patch Notes (Expansion Hybrid — Nomad Unarmed, Procs, Bonus Stats, Pet QoL)
+Adapted from selected features in [ACE.BaseMod / Samples / Expansion / Features](https://github.com/aquafir/ACE.BaseMod/tree/master/Samples/Expansion/Features) and integrated directly into the DerpACE server (no runtime Harmony patches). Every feature is **toggleable at runtime** via `PropertyManager` and tuned for the Nomad/unarmed playstyle.
+
+#### New PropertyManager toggles & balance knob (`Source/ACE.Server/Managers/PropertyManager.cs`)
+| Property | Default | Purpose |
+| --- | --- | --- |
+| `unarmed_weapon_surrogate_enabled` | `true` | When the player is truly unarmed, the relevant glove or boot acts as the swing's weapon (stats, imbues, slayer/crit/resistance mods, and proc spell all flow through `DamageEvent`). |
+| `unarmed_combo_streaks_enabled` | `true` | Adds an additive hit/kill-streak damage layer on top of the existing combo system. |
+| `bonus_stats_enabled` | `true` | Enables in-memory bonus stat storage on `Creature` (attributes, vitals, skills). |
+| `proc_on_attack_enabled` | `true` | Every attacker-equipped proc-bearing item rolls on attack (not just the swing weapon + aetheria). |
+| `proc_on_hit_enabled` | `true` | Every defender-equipped proc-bearing item rolls when hit (not just the cloak). |
+| `pet_attack_selected_enabled` | `true` | The combat pet biases `FindNextTarget` to the owner's currently selected target. |
+| `pet_message_damage_enabled` | `true` | Pet hits are echoed to the owner: `[Pet] Fluffy hits Drudge for 47 Slash damage.` |
+| `pet_auto_recover_enabled` | `true` | After the pet's target dies/becomes invalid, the pet waits a short cooldown before re-acquiring (less twitchy mid-animation snap-to-next-mob). |
+| `unarmed_damage_scalar` (double) | `0.75` | Scales the **bonus portion** of combo + streak damage. Tuned slightly below finesse overall while keeping the combo loop fun. |
+
+#### Nomad-style true unarmed (`Source/ACE.Server/WorldObjects/Player_Unarmed.cs` — new)
+* `IsNomadUnarmed` — returns `true` only when the player has nothing in `MeleeWeapon | MissileWeapon | TwoHanded | Held` slots. **Shields are explicitly allowed** for blocking / tank mechanics.
+* `GetUnarmedSurrogateWeapon()` — returns the equipped boot when `PowerLevel >= KickThreshold` (kick zone) or the equipped glove otherwise. Mirrors the boundary `Player_Melee.GetSwingAnimation()` already uses, so the surrogate stays perfectly in sync with the resolved `AttackType`.
+
+#### Surrogate weapon integration into combat
+* `Source/ACE.Server/Entity/DamageEvent.cs` — when the swing has no real weapon and the attacker is a player, the surrogate is promoted to `Weapon` so its slayer mod, crit mods, imbues, resistance mods, and `IgnoreMagicArmor` / `IgnoreMagicResist` all flow through damage calc naturally.
+* `Source/ACE.Server/WorldObjects/Player_Melee.cs` — `Attack()` falls back to the surrogate when `GetEquippedMeleeWeapon()` returns `null`, so proc rolls (`TryProcEquippedItems`) use the surrogate's `ProcSpell` on the swing.
+
+#### Combo system hybrid (`Source/ACE.Server/Entity/UnarmedComboSystem.cs` + `Source/ACE.Server/WorldObjects/Player_Combat.cs`)
+* **Strict nomad gate**: `RecordAttack` is only called when `IsNomadUnarmed` is true. Equipping any disqualifying weapon instantly stops combo tracking.
+* **Damage scalar**: combo bonus damage (`damage * (multiplier - 1)`) is multiplied by `unarmed_damage_scalar` before being applied. Combos still fire all their flavor/effects; only the bonus damage is tuned.
+* **New streak layer** (adapted from `FakeCombo`):
+  * `OnUnarmedHit(bool killed)` — increments hit streak (cap 10) and, on kill, kill streak (cap 10).
+  * `OnUnarmedMiss()` — resets hit streak on evade / lifestone protection. Kill streak decays on its own 30-second timer.
+  * `GetStreakDamageBonus()` — returns `(hitStreak * 0.02) + (killStreak * 0.05)`, scaled by `unarmed_damage_scalar`. Applied additively on top of combo damage.
+
+#### In-memory bonus stats (`Source/ACE.Server/WorldObjects/Creature_BonusStats.cs` — new)
+* Lazily allocated per-creature dictionaries for `PropertyAttribute`, `PropertyAttribute2nd`, and `Skill` bonuses.
+* `GetBonus(...)`, `SetBonus(...)`, `IncBonus(...)`, `ClearBonusStats()`.
+* Wired into:
+  * `CreatureAttribute.StartingValue` — adds `GetBonus(Attribute)` (clamped at 0).
+  * `CreatureVital.StartingValue` — adds `GetBonus(Vital)` (clamped at 0).
+  * `CreatureSkill.InitLevel` — adds `GetBonus(Skill)` (clamped at 0).
+* **Logout-resetting by design**: storage is instance-local on the `Creature`, so bonuses naturally vanish on logout / despawn (matches the "fun temporary buffs" intent without persisting power creep).
+
+#### Proc expansion
+* `Source/ACE.Server/WorldObjects/WorldObject_Combat.cs` — `TryProcEquippedItems` now, when `proc_on_attack_enabled` is true, iterates every equipped item with a proc spell on the attacker and rolls each (excluding items already rolled: `this`, the swing weapon, and the attacker itself). When toggled off, retail behavior (weapon + aetheria) is preserved exactly.
+* `Source/ACE.Server/Entity/Cloak.cs` — new helper `Cloak.TryProcAllEquipped(defender, attacker, equippedCloak, damage_percent)`:
+  * Always runs the original cloak proc path (vanilla behavior preserved).
+  * When `proc_on_hit_enabled` is true, iterates every other equipped item on the defender and runs `RollProc` + `HandleProcSpell` for each one with a proc spell. Items without an `ItemLevel` fail `RollProc` naturally, so generic jewelry/armor is a safe no-op.
+* All four `Cloak.TryProcSpell` call sites have been routed through the new helper: `Player_Combat.cs`, `SpellProjectile.cs`, and two paths in `WorldObject_Magic.cs` (boost + drain).
+
+#### Pet quality of life (`Source/ACE.Server/WorldObjects/CombatPet.cs` + `Source/ACE.Server/WorldObjects/Monster_Melee.cs`)
+* **1-pet limit**: already enforced by retail `CurrentActivePet` logic — no additional change needed; passive/combat pet stowing rules continue to work.
+* **PetAttackSelected**: `FindNextTarget` checks the owner's `HealthQueryTarget`; if that GUID is in the nearby-attackable set, the pet targets it instead of the nearest mob. Falls back to nearest when no valid selection exists.
+* **PetMessageDamage**: when the attacker is a `CombatPet` with a `Player` owner, the owner receives a `CombatSelf` chat line each time the pet deals damage, including target name, damage amount, and damage type.
+* **PetAutoRecover (less twitchy)**: `HandleFindTarget` defers re-acquisition by 0.75 s after the current target dies / becomes invalid. The first tick noticing the loss arms the cooldown and clears `AttackTarget`; subsequent ticks wait out the timer before calling `FindNextTarget()`. Prevents the pet from instantly whipping to the next mob mid-animation.
+
+### Recent Patch Notes (May 17, 2026 — ClothingMod wiring & content pipeline)
+* **CustomClothingManager — startup wiring hardened** (`Source/ACE.Server/Managers/CustomClothingManager.cs`):
+  * `Initialize()` now registers `DatDatabase.ClothingTableMergeHook = MergeCustom` **before** calling `LoadAll()`, so any `ReadFromDat<ClothingTable>` racing with init still goes through the merge.
+  * After loading, `Initialize()` calls `ClearCache()` once to flush any `ClothingTable` entries cached during DAT preload, guaranteeing the override is applied on the first post-init read.
+  * `LoadAll()` now logs:
+    * a warning if `Data/CustomClothingBase/` is missing,
+    * an info line if zero JSON files are present,
+    * a debug line per loaded `ClothingTable` id,
+    * a final `Loaded N/M custom clothing table(s) from <path>` summary.
+* **CustomClothingBase content now copies to the build output** (`Source/ACE.Server/ACE.Server.csproj`):
+  * Added `<None Include="Data\CustomClothingBase\**\*.json" CopyToOutputDirectory="PreserveNewest" />`.
+  * JSON overrides dropped into `Source/ACE.Server/Data/CustomClothingBase/` are now copied to `bin/x64/<cfg>/net10.0/Data/CustomClothingBase/` automatically on build, so they're visible to the running server.
+* **Developer commands for the clothing override pipeline** (`Source/ACE.Server/Command/Handlers/DerpACEClothingBaseCommands.cs`):
+  * `@cbexport <id> [label]` — exports a `ClothingBase` entry from `portal.dat` to `Data/CustomClothingBase/<id>[_label].json`. ID accepts hex (`0x10001234`) or decimal. Example: `@cbexport 0x10001234 male plate` → `10001234_male_plate.json`.
+  * `@cbreload` — reloads every JSON file from `Data/CustomClothingBase/` and flushes the `ClothingTable` cache so edits take effect without a server restart.
+  * `@cbclear` — clears only the `ClothingTable` entries from the portal.dat file cache, forcing a fresh re-read on next use.
+  * All three commands require `AccessLevel.Developer`.
+* **Authoring workflow**:
+  1. Export an existing entry with `@cbexport 0x10001234`, or hand-author a JSON file (must contain `Id`, plus the `ClothingBaseEffects` and/or `ClothingSubPalEffects` you want to override).
+  2. Save it under `Source/ACE.Server/Data/CustomClothingBase/<id>.json`.
+  3. Rebuild (or copy to the running server's `bin/.../Data/CustomClothingBase/`).
+  4. Run `@cbreload` in-game, or restart the server. Look for `CustomClothingManager: Loaded N/M custom clothing table(s)` in the server log.
+* **Merge semantics** (`MergeCustom`): the override upserts into the live `ClothingTable` — entries present in the JSON replace the portal.dat values, entries omitted from the JSON are left alone. Brand-new `Id`s that don't exist in `portal.dat` are returned as fresh `ClothingTable` instances so completely custom items can be added.
+
 ### Recent Patch Notes (May 17, 2026)
 * **Standard Ironman — Mana Conversion auto-train for magic primaries** (`IronmanFactory.RollSkills`):
   * When the rolled primary weapon skill is **Life Magic, Void Magic, or War Magic**, `ManaConversion` is now auto-trained **immediately after the weapon train/spec step**, before the rest of the primary pool is shuffled and rolled.

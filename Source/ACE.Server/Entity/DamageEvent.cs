@@ -177,6 +177,16 @@ namespace ACE.Server.Entity
 
             Weapon = damageSource.ProjectileSource == null ? attacker.GetEquippedMeleeWeapon() : (damageSource.ProjectileLauncher ?? damageSource.ProjectileAmmo);
 
+            // DerpACE unarmed surrogate: if a player is fighting truly unarmed (no weapon/wand/2h/missile),
+            // promote the relevant glove or boot to act as the swing weapon so its stats, imbues,
+            // slayer mods, crit/resistance mods, and proc spell all flow through DamageEvent naturally.
+            if (Weapon == null && playerAttacker != null)
+            {
+                var surrogate = playerAttacker.GetUnarmedSurrogateWeapon();
+                if (surrogate != null)
+                    Weapon = surrogate;
+            }
+
             AttackType = attacker.AttackType;
             AttackHeight = attacker.AttackHeight ?? AttackHeight.Medium;
 

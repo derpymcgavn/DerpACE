@@ -180,18 +180,60 @@ namespace ACE.Server.WorldObjects
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
 
-            // DerpACE: Unarmed Combo System - check for combos and apply bonuses
+            // DerpACE: an unarmed swing is either a bare-fisted hit (damageSource == this) OR a
+            // surrogate-weapon hit where Player_Melee promoted the equipped glove/boot into the
+            // weapon slot. Both must count as "unarmed" for combos, streaks, and nomad procs.
+            var isUnarmedAttack = (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
+                && IsNomadUnarmed
+                && (damageSource == this
+                    || (damageSource is Clothing
+                        && damageSource.CurrentWieldedLocation is EquipMask wieldLoc
+                        && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0));
+
+            // DerpACE: Unarmed Combo System - check for combos and apply bonuses.
+            // Strict nomad-style gate: combos only track when the player has no weapon/missile/2h/wand equipped (shield is fine).
             ComboResult comboResult = null;
-            if (damageEvent.HasDamage && damageSource == this && (AttackType == AttackType.Punch || AttackType == AttackType.Kick))
+            uint comboBonusApplied = 0;
+            uint streakBonusApplied = 0;
+            int hitStreakAfter = 0;
+            int killStreakAfter = 0;
+            if (damageEvent.HasDamage && isUnarmedAttack)
             {
                 comboResult = UnarmedComboSystem.RecordAttack(AttackType, target.Guid.Full);
 
-                // Apply combo damage multiplier
+                // Apply combo damage multiplier, scaled by unarmed_damage_scalar so the bonus portion can be tuned.
                 if (comboResult.DamageMultiplier > 1.0f)
                 {
-                    var comboBonus = damageEvent.Damage * (comboResult.DamageMultiplier - 1.0f);
+                    var scalar = (float)PropertyManager.GetDouble("unarmed_damage_scalar").Item;
+                    var comboBonus = damageEvent.Damage * (comboResult.DamageMultiplier - 1.0f) * scalar;
                     damageEvent.Damage += comboBonus;
+                    comboBonusApplied = (uint)Math.Round(comboBonus);
                 }
+
+                // Hybrid streak layer (FakeCombo-inspired). Toggleable; additive on top of combos.
+                if (PropertyManager.GetBool("unarmed_combo_streaks_enabled").Item)
+                {
+                    var willKill = damageEvent.Damage >= target.Health.Current;
+                    UnarmedComboSystem.OnUnarmedHit(willKill);
+
+                    var streakBonus = UnarmedComboSystem.GetStreakDamageBonus();
+                    if (streakBonus > 0.0f)
+                    {
+                        var streakAmount = damageEvent.Damage * streakBonus;
+                        damageEvent.Damage += streakAmount;
+                        streakBonusApplied = (uint)Math.Round(streakAmount);
+                    }
+
+                    hitStreakAfter = UnarmedComboSystem.HitStreak;
+                    killStreakAfter = UnarmedComboSystem.KillStreak;
+                }
+            }
+            else if (isUnarmedAttack
+                && PropertyManager.GetBool("unarmed_combo_streaks_enabled").Item
+                && (damageEvent.Evaded || damageEvent.LifestoneProtection))
+            {
+                // Missed / evaded an unarmed strike — break the hit streak.
+                UnarmedComboSystem.OnUnarmedMiss();
             }
 
             // DerpACE Nomad: custom unarmed procs stamped onto gauntlets/shoes (Cleave Flurry / Healing Strike).
@@ -201,8 +243,8 @@ namespace ACE.Server.WorldObjects
             uint nomadHealApplied = 0;
             if (!_nomadProcInProgress
                 && damageEvent.HasDamage
-                && damageSource == this
-                && (AttackType == AttackType.Punch || AttackType == AttackType.Kick))
+                && (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
+                && (damageSource == this || isUnarmedAttack))
             {
                 var procSource = AttackType == AttackType.Punch ? HandArmor : FootArmor;
                 var procType = procSource?.GetProperty(PropertyInt.NomadProcType) ?? 0;
@@ -736,30 +778,48 @@ namespace ACE.Server.WorldObjects
                 // DerpACE: Unarmed Combo notification
                 if (comboResult != null)
                 {
-                    // Show combo counter for all attacks
+                    // Show running combo chain (every unarmed hit, even before a combo matches)
                     if (comboResult.HitCount > 0 && comboResult.ComboType == ComboType.None)
                     {
                         var comboChain = UnarmedComboSystem.GetComboChainDisplay();
-                        Session.Network.EnqueueSend(new GameMessageSystemChat(
-                            $"{comboChain} {comboResult.HitCount} hit combo",
-                            ChatMessageType.CombatSelf));
+                        var streakSuffix = "";
+                        if (hitStreakAfter > 1 || killStreakAfter > 0)
+                            streakSuffix = $"  •  streak {hitStreakAfter}{(killStreakAfter > 0 ? $"/k{killStreakAfter}" : "")}";
+
+                        var counterMsg = $"{comboChain} {comboResult.HitCount} hit combo{streakSuffix}";
+                        if (streakBonusApplied > 0)
+                            counterMsg += $"  (+{streakBonusApplied} streak)";
+
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(counterMsg, ChatMessageType.CombatSelf));
                     }
 
                     // Show completed combo message
                     if (comboResult.ComboType != ComboType.None && !string.IsNullOrEmpty(comboResult.Message))
                     {
                         ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+
+                        // Audible cue so finishers are unmissable
+                        EnqueueBroadcast(new GameMessageSound(Guid, Sound.TriggerActivated, 1.0f));
+
+                        // Combo banner — broadcast to self in the loud Broadcast channel
                         Session.Network.EnqueueSend(new GameMessageSystemChat(
                             comboResult.Message,
                             ChatMessageType.Broadcast));
 
-                        var bonusDamage = (uint)Math.Round(damageEvent.Damage * (comboResult.DamageMultiplier - 1.0f));
-                        if (bonusDamage > 0)
-                        {
+                        if (!string.IsNullOrEmpty(comboResult.FlavorText))
                             Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"+{bonusDamage} combo damage (x{comboResult.DamageMultiplier:F1})",
+                                comboResult.FlavorText,
                                 ChatMessageType.CombatSelf));
-                        }
+
+                        if (comboBonusApplied > 0)
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"+{comboBonusApplied} combo damage (x{comboResult.DamageMultiplier:F2}) [{target.Name}]",
+                                ChatMessageType.CombatSelf));
+
+                        if (streakBonusApplied > 0)
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"+{streakBonusApplied} streak bonus (hit {hitStreakAfter}{(killStreakAfter > 0 ? $"/kill {killStreakAfter}" : "")})",
+                                ChatMessageType.CombatSelf));
                     }
                 }
 
@@ -1102,12 +1162,29 @@ namespace ACE.Server.WorldObjects
 
         public BaseDamageMod GetBaseDamageMod(WorldObject damageSource)
         {
-            if (damageSource == this)
+            // DerpACE unarmed surrogate: when Player_Melee/DamageEvent promote a glove or boot
+            // into the swing's "weapon" for a truly-unarmed Punch/Kick, DamageSource will be
+            // the armor piece rather than `this`. Treat that as the equivalent unarmed path so
+            // base damage still resolves through UnarmedBaseDamage / truly-unarmed math instead
+            // of falling through to damageSource.GetDamageMod (which reads PropertyInt.Damage
+            // and is 0 for armor pieces that only carry UnarmedBaseDamage).
+            var isUnarmedSurrogate = damageSource != null
+                && damageSource != this
+                && IsNomadUnarmed
+                && (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
+                && damageSource is Clothing
+                && damageSource.CurrentWieldedLocation is EquipMask wieldLoc
+                && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0;
+
+            if (damageSource == this || isUnarmedSurrogate)
             {
-                if (AttackType == AttackType.Punch)
-                    damageSource = HandArmor;
-                else if (AttackType == AttackType.Kick)
-                    damageSource = FootArmor;
+                if (damageSource == this)
+                {
+                    if (AttackType == AttackType.Punch)
+                        damageSource = HandArmor;
+                    else if (AttackType == AttackType.Kick)
+                        damageSource = FootArmor;
+                }
 
                 // Check if the armor piece has unarmed damage properties (DerpACE feature)
                 if (damageSource != null && (damageSource.UnarmedBaseDamage ?? 0) > 0)
@@ -1576,8 +1653,8 @@ namespace ACE.Server.WorldObjects
                 EnqueueBroadcast(new GameMessageSound(Guid, woundSound, 1.0f));
             }
 
-            if (equippedCloak != null && Cloak.HasProcSpell(equippedCloak))
-                Cloak.TryProcSpell(this, source, equippedCloak, percent);
+            // DerpACE: helper handles cloak + (when proc_on_hit_enabled) every other equipped proc item.
+            Cloak.TryProcAllEquipped(this, source, equippedCloak, percent);
 
             // Fencer's Blade: deflect proc — reflects 10% of incoming damage back at the attacker
             if (source is Creature fencerAttacker && fencerAttacker.IsAlive && damageTaken > 0)

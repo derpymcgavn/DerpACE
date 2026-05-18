@@ -43,6 +43,15 @@ namespace ACE.Server.Factories
 
             mutationFilter.TryMutate(wo, profile.Tier);
 
+            // Apply elemental UI outline (Fire/Cold/Acid/Lightning/Slashing/Piercing/Bludgeoning/Nether)
+            // for elemental missile weapons — covers dartflingers (atlatls), bows, and crossbows alike.
+            if (isElemental)
+            {
+                var ui = IronmanFactory.GetElementalUiEffect(wo.W_DamageType);
+                if (ui != UiEffects.Undef)
+                    wo.UiEffects = ui;
+            }
+
             // weapon speed
             if (wo.WeaponTime != null)
             {

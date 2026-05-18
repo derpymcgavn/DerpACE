@@ -453,6 +453,53 @@ namespace ACE.Server.Managers
         /// <summary>Skill bonus added to Light Weapons and Shield for Tank mobs. Default 200.</summary>
         public static int TankMobSkillBonus { get; set; } = 200;
 
+        // ---------- Creature Affixes (ported from ACE.BaseMod Expansion) ----------
+
+        /// <summary>Per-spawn chance (0-1) for the Reaper affix. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
+        public static float ReaperMobChance { get; set; } = 0.01f;
+
+        /// <summary>Bonus damage multiplier applied to a Reaper's outgoing melee hits (on top of its base damage). Default 1.35.</summary>
+        public static float ReaperDamageBonus { get; set; } = 1.35f;
+
+        /// <summary>Fraction (0-1) of damage dealt that a Reaper drains back as health. Default 0.25.</summary>
+        public static float ReaperLifedrainPct { get; set; } = 0.25f;
+
+        /// <summary>Per-spawn chance (0-1) for the Necromancer affix. Default 0.01.</summary>
+        public static float NecromancerMobChance { get; set; } = 0.01f;
+
+        /// <summary>Per-hit chance (0-1) a Necromancer applies a nether DoT to its target. Default 0.30.</summary>
+        public static float NecromancerDotChance { get; set; } = 0.30f;
+
+        /// <summary>Total nether DoT damage dealt over its duration (split across ticks). Default 60.</summary>
+        public static float NecromancerDotTotal { get; set; } = 60.0f;
+
+        /// <summary>Per-spawn chance (0-1) for the Merger affix. Default 0.01.</summary>
+        public static float MergerMobChance { get; set; } = 0.01f;
+
+        /// <summary>Max times a single Merger may absorb a same-WCID neighbor. Default 5.</summary>
+        public static int MergerMaxMerges { get; set; } = 5;
+
+        /// <summary>Radius (meters) a Merger searches for a same-WCID neighbor on heartbeat. Default 10.</summary>
+        public static float MergerSearchRange { get; set; } = 10.0f;
+
+        /// <summary>Seconds between Merger absorb attempts. Default 12.</summary>
+        public static float MergerCooldownSeconds { get; set; } = 12.0f;
+
+        /// <summary>Per-spawn chance (0-1) for the Horde affix. Default 0.01.</summary>
+        public static float HordeMobChance { get; set; } = 0.01f;
+
+        /// <summary>Minimum starting swarm size for a Horde. Default 3.</summary>
+        public static int HordeMinSize { get; set; } = 3;
+
+        /// <summary>Maximum starting swarm size for a Horde. Default 6.</summary>
+        public static int HordeMaxSize { get; set; } = 6;
+
+        /// <summary>Per-spawn chance (0-1) for the Warder affix. Default 0.01.</summary>
+        public static float WarderMobChance { get; set; } = 0.01f;
+
+        /// <summary>Radius (meters) a Warder's ward extends to nearby creatures. Default 8.</summary>
+        public static float WarderRange { get; set; } = 8.0f;
+
         // ---------- Mutator Derpcoin Reward System ----------
 
         /// <summary>WCID of the Derpcoin item. Default 7000011.</summary>

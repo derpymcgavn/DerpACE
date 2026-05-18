@@ -220,4 +220,72 @@ A: Yes! Blood Drinker, damage enchantments, and all buffs apply to the final com
 
 ---
 
+## Operator / Admin Cheat Sheet — DerpACE Expansion Toggles
+
+All DerpACE Expansion features (combo streak layer, surrogate weapon, bonus stats, proc expansion, pet QoL) live behind runtime `PropertyManager` flags. Use the standard `/modifybool`, `/modifydouble`, and `/showprops` commands to inspect and change them live — no restart required.
+
+### Toggle reference
+
+| Property | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `unarmed_weapon_surrogate_enabled` | bool | `true` | While the player is truly unarmed, the relevant glove/boot is promoted to the swing's weapon (stats, imbues, slayer/crit/resistance mods, proc spell). |
+| `unarmed_combo_streaks_enabled` | bool | `true` | Adds the additive hit/kill-streak damage layer on top of the existing combo system. |
+| `unarmed_damage_scalar` | double | `0.75` | Scales the **bonus portion** of combo + streak damage. Lower = closer to vanilla unarmed; higher = closer to finesse. |
+| `bonus_stats_enabled` | bool | `true` | Enables in-memory bonus stat storage on `Creature` (attributes, vitals, skills). Resets on logout/despawn by design. |
+| `proc_on_attack_enabled` | bool | `true` | Every attacker-equipped proc-bearing item rolls on attack (not just swing weapon + aetheria). |
+| `proc_on_hit_enabled` | bool | `true` | Every defender-equipped proc-bearing item rolls when hit (not just the cloak). |
+| `pet_attack_selected_enabled` | bool | `true` | Combat pet biases `FindNextTarget` to the owner's currently selected target. |
+| `pet_message_damage_enabled` | bool | `true` | Pet hits are echoed to the owner: `[Pet] <name> hits <target> for <n> <type> damage.` |
+| `pet_auto_recover_enabled` | bool | `true` | After the pet's target dies/becomes invalid, the pet waits ~0.75 s before re-acquiring (less twitchy). |
+
+### Quick-look commands
+
+```text
+/showprops bool unarmed                  # show all unarmed_* toggles
+/showprops bool proc                     # show all proc_* toggles
+/showprops bool pet                      # show all pet_* toggles
+/showprops double unarmed_damage_scalar  # current scalar value
+```
+
+### Common operations
+
+```text
+# Disable the streak bonus globally (keep base combos)
+/modifybool unarmed_combo_streaks_enabled false
+
+# Tune the combo bonus damage closer to finesse parity
+/modifydouble unarmed_damage_scalar 0.90
+
+# Disable the unarmed surrogate (forces vanilla bare-fist behavior)
+/modifybool unarmed_weapon_surrogate_enabled false
+
+# Roll back to retail proc behavior (cloak-only on hit, weapon+aetheria on attack)
+/modifybool proc_on_attack_enabled false
+/modifybool proc_on_hit_enabled  false
+
+# Stop the chat spam from pet damage echoes
+/modifybool pet_message_damage_enabled false
+```
+
+### Nomad / true-unarmed rule (for support tickets)
+
+A player is **Nomad-unarmed** (and therefore eligible for combos, streaks, and the surrogate weapon) when **none** of the following slots are filled:
+
+* `MeleeWeapon`
+* `MissileWeapon`
+* `TwoHanded`
+* `Held` (held casters / wands)
+
+**Shields are explicitly allowed.** A shield-only loadout still counts as unarmed for combo/surrogate purposes — this is intentional for tank/block play.
+
+### Streak math (quick reference)
+
+* `hitStreak` — +1 per successful unarmed hit; resets on evade / lifestone proc.
+* `killStreak` — +1 per killing blow; decays to 0 after **30 s** without a fresh kill.
+* Both capped at **10**.
+* Bonus damage = `(hitStreak × 0.02 + killStreak × 0.05) × unarmed_damage_scalar`, applied additively to the swing's final damage.
+* Streak layer is fully suppressed when `unarmed_combo_streaks_enabled = false`.
+
+---
+
 **Have fun mastering the martial arts!** 🥋✨

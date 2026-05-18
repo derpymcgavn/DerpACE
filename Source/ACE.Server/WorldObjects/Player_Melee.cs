@@ -290,6 +290,12 @@ namespace ACE.Server.WorldObjects
             }
 
             var weapon = GetEquippedMeleeWeapon();
+
+            // DerpACE unarmed surrogate: when truly unarmed, route proc calls and weapon-typed
+            // logic through the relevant glove/boot so its proc spell rolls on the swing.
+            if (weapon == null)
+                weapon = GetUnarmedSurrogateWeapon();
+
             var attackType = GetWeaponAttackType(weapon);
             var numStrikes = GetNumStrikes(attackType);
             var swingTime = animLength / numStrikes / 1.5f;

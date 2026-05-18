@@ -94,6 +94,37 @@ namespace ACE.Server.Entity
         }
 
         /// <summary>
+        /// DerpACE proc_on_hit_enabled: in addition to the cloak proc roll, every other
+        /// equipped item on the defender with a proc spell gets its own independent
+        /// roll using the same cloak-style machinery (per-item UseTimestamp cooldown,
+        /// item level gate). Items without an ItemLevel naturally fail RollProc and are
+        /// no-ops, so this stays safe for jewelry/armor with no proc-by-design.
+        /// </summary>
+        public static void TryProcAllEquipped(Creature defender, WorldObject attacker, WorldObject equippedCloak, float damage_percent)
+        {
+            // original cloak path (preserves vanilla behavior and broadcast messaging)
+            if (equippedCloak != null && HasProcSpell(equippedCloak))
+                TryProcSpell(defender, attacker, equippedCloak, damage_percent);
+
+            if (!PropertyManager.GetBool("proc_on_hit_enabled").Item)
+                return;
+
+            foreach (var item in defender.EquippedObjects.Values)
+            {
+                if (item == equippedCloak)
+                    continue;
+
+                if (!HasProcSpell(item))
+                    continue;
+
+                if (!RollProc(item, damage_percent))
+                    continue;
+
+                HandleProcSpell(defender, attacker, item);
+            }
+        }
+
+        /// <summary>
         /// Rolls for a chance at procing a cloak spell
         /// </summary>
         /// <param name="damage_percent">The percent of MaxHealth inflicted by an enemy's hit</param>

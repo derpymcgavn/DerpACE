@@ -44,6 +44,11 @@ namespace ACE.Server.Factories
                 RegisterMutator(new ExplodingMutator());
                 RegisterMutator(new HealerMutator());
                 RegisterMutator(new TankMutator());
+                RegisterMutator(new ReaperMutator());
+                RegisterMutator(new NecromancerMutator());
+                RegisterMutator(new MergerMutator());
+                RegisterMutator(new HordeMutator());
+                RegisterMutator(new WarderMutator());
 
                 // TODO: Port Expansion creature types
                 // RegisterMutator(new DrainerMutator());
@@ -217,6 +222,24 @@ namespace ACE.Server.Factories
                 case "guardian":
                 case "defender":
                     return "Tank";
+                case "reap":
+                case "reaper":
+                    return "Reaper";
+                case "necro":
+                case "necromancer":
+                    return "Necromancer";
+                case "merge":
+                case "merger":
+                case "assimilating":
+                    return "Merger";
+                case "horde":
+                case "swarm":
+                case "swarming":
+                    return "Horde";
+                case "ward":
+                case "warder":
+                case "warding":
+                    return "Warder";
                 default:
                     return name;
             }

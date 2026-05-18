@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Entity
@@ -415,6 +416,69 @@ namespace ACE.Server.Entity
         {
             _comboChain.Clear();
             _lastTargetGuid = 0;
+        }
+
+        // --------------------------------------------------------------------
+        // DerpACE hybrid streak layer (adapted from ACE.BaseMod FakeCombo).
+        // - HitStreak ticks up on every successful unarmed strike against the locked target.
+        // - KillStreak ticks up only when the target dies from the strike (decays over time).
+        // - Streaks are *additive* on top of the combo multiplier, scaled by unarmed_damage_scalar.
+        // - Any evade, resist, or target swap resets the hit streak so it stays "twitchy" enough
+        //   to feel earned but, per design, not as punishing as raw combo loss.
+        // --------------------------------------------------------------------
+        private int _hitStreak;
+        private int _killStreak;
+        private DateTime _lastKillTime = DateTime.MinValue;
+        private const double KillStreakDecaySeconds = 30.0;
+        private const int MaxStreakCount = 10;
+        private const float PerHitStreakBonus = 0.02f;   // +2% per consecutive hit
+        private const float PerKillStreakBonus = 0.05f;  // +5% per recent kill
+
+        public int HitStreak => _hitStreak;
+        public int KillStreak
+        {
+            get
+            {
+                if (_killStreak > 0 && (DateTime.UtcNow - _lastKillTime).TotalSeconds > KillStreakDecaySeconds)
+                    _killStreak = 0;
+                return _killStreak;
+            }
+        }
+
+        /// <summary>
+        /// Called once per successful unarmed hit. Increments the hit streak and (optionally) the kill streak.
+        /// </summary>
+        public void OnUnarmedHit(bool killed)
+        {
+            if (_hitStreak < MaxStreakCount)
+                _hitStreak++;
+
+            if (killed)
+            {
+                if (_killStreak < MaxStreakCount)
+                    _killStreak++;
+                _lastKillTime = DateTime.UtcNow;
+            }
+        }
+
+        /// <summary>
+        /// Called when the swing missed/was evaded/resisted, breaking the consecutive-hit streak.
+        /// Kill streak is unaffected (it decays on its own timer).
+        /// </summary>
+        public void OnUnarmedMiss()
+        {
+            _hitStreak = 0;
+        }
+
+        /// <summary>
+        /// Returns the additive damage bonus from the current hit/kill streaks.
+        /// Already scaled by unarmed_damage_scalar so the caller just multiplies base damage by it.
+        /// </summary>
+        public float GetStreakDamageBonus()
+        {
+            var raw = (_hitStreak * PerHitStreakBonus) + (KillStreak * PerKillStreakBonus);
+            var scalar = (float)Managers.PropertyManager.GetDouble("unarmed_damage_scalar").Item;
+            return raw * scalar;
         }
 
         /// <summary>

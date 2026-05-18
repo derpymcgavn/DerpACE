@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Models;
+using ACE.Server.Managers;
 
 namespace ACE.Server.WorldObjects
 {
@@ -62,12 +63,38 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
+        // DerpACE pet_auto_recover_enabled: when the current target dies or becomes invalid,
+        // wait a brief cooldown before re-acquiring so the pet doesn't immediately whip around
+        // to the next mob mid-animation. Configurable via PropertyManager double if needed; the
+        // hard-coded value keeps the pet feeling steady without dropping aggro responsiveness.
+        private const double AutoRecoverCooldownSeconds = 0.75;
+        private double _nextAcquireTime;
+
         public override void HandleFindTarget()
         {
             var creature = AttackTarget as Creature;
 
-            if (creature == null || creature.IsDead || !IsVisibleTarget(creature))
-                FindNextTarget();
+            var lostTarget = creature == null || creature.IsDead || !IsVisibleTarget(creature);
+
+            if (!lostTarget)
+                return;
+
+            if (PropertyManager.GetBool("pet_auto_recover_enabled").Item)
+            {
+                var now = Common.Time.GetUnixTime();
+                if (creature != null && AttackTarget != null)
+                {
+                    // first tick noticing the loss — arm the cooldown and don't re-target yet.
+                    _nextAcquireTime = now + AutoRecoverCooldownSeconds;
+                    AttackTarget = null;
+                    return;
+                }
+
+                if (now < _nextAcquireTime)
+                    return;
+            }
+
+            FindNextTarget();
         }
 
         public override bool FindNextTarget()

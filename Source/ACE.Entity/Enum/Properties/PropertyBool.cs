@@ -229,5 +229,12 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Ironman Nomad submode — no weapons/casters, unarmed via gauntlets/shoes, natural AL 450 in clothes */
         IsIronmanNomad                   = 9039,
+
+        /* DerpACE Creature Affixes (ported from ACE.BaseMod Expansion) */
+        IsReaperMob                      = 9040,
+        IsNecromancerMob                 = 9041,
+        IsMergerMob                      = 9042,
+        IsHordeMob                       = 9043,
+        IsWarderMob                      = 9044,
     }
 }

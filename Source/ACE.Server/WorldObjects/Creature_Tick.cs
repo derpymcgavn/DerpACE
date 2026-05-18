@@ -40,6 +40,10 @@ namespace ACE.Server.WorldObjects
             if (IsHealerMob)
                 TryHealerHeartbeat(currentUnixTime);
 
+            // DerpACE: Merger mob heartbeat (absorbs nearby same-WCID creatures)
+            if (IsMergerMob)
+                TryMergerHeartbeat(currentUnixTime);
+
             // delete items when RemainingLifespan <= 0
             foreach (var expireItem in expireItems)
             {

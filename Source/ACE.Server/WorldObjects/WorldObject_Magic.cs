@@ -610,15 +610,14 @@ namespace ACE.Server.WorldObjects
 
             if (targetCreature != this && targetCreature.IsAlive && spell.VitalDamageType == DamageType.Health && boost < 0)
             {
-                // handle cloak spell proc
-                if (equippedCloak != null && Cloak.HasProcSpell(equippedCloak))
+                // DerpACE: helper handles cloak + (when proc_on_hit_enabled) every other equipped proc item.
                 {
                     var pct = (float)-boost / targetCreature.Health.MaxValue;
 
                     // ensure message is sent after enchantment.Message
                     var actionChain = new ActionChain();
                     actionChain.AddDelayForOneTick();
-                    actionChain.AddAction(this, () => Cloak.TryProcSpell(targetCreature, this, equippedCloak, pct));
+                    actionChain.AddAction(this, () => Cloak.TryProcAllEquipped(targetCreature, this, equippedCloak, pct));
                     actionChain.EnqueueChain();
                 }
 
@@ -981,15 +980,14 @@ namespace ACE.Server.WorldObjects
 
             if (isDrain && targetCreature.IsAlive && spell.Source == PropertyAttribute2nd.Health)
             {
-                // handle cloak spell proc
-                if (equippedCloak != null && Cloak.HasProcSpell(equippedCloak))
+                // DerpACE: helper handles cloak + (when proc_on_hit_enabled) every other equipped proc item.
                 {
                     var pct = (float)srcVitalChange / targetCreature.Health.MaxValue;
 
                     // ensure message is sent after enchantment.Message
                     var actionChain = new ActionChain();
                     actionChain.AddDelayForOneTick();
-                    actionChain.AddAction(this, () => Cloak.TryProcSpell(targetCreature, this, equippedCloak, pct));
+                    actionChain.AddAction(this, () => Cloak.TryProcAllEquipped(targetCreature, this, equippedCloak, pct));
                     actionChain.EnqueueChain();
                 }
 

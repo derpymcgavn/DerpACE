@@ -1,5 +1,33 @@
 # ACEmulator Change Log
 
+### DerpACE — Expansion Hybrid (Nomad Unarmed, Procs, Bonus Stats, Pet QoL)
+[DerpACE] Adapted selected features from ACE.BaseMod Expansion samples directly into the server (no Harmony patches). All toggleable via `PropertyManager`.
+
+* PropertyManager: added `unarmed_weapon_surrogate_enabled`, `unarmed_combo_streaks_enabled`, `bonus_stats_enabled`, `proc_on_attack_enabled`, `proc_on_hit_enabled`, `pet_attack_selected_enabled`, `pet_message_damage_enabled`, `pet_auto_recover_enabled`, and `unarmed_damage_scalar` (default 0.75).
+* Nomad unarmed (new `Player_Unarmed.cs`):
+  * `IsNomadUnarmed` — true only when no melee/missile/2H/wand is equipped; shields are allowed.
+  * `GetUnarmedSurrogateWeapon()` — returns the equipped boot (PowerLevel ≥ KickThreshold) or glove, mirroring `Player_Melee` punch/kick classification.
+* Surrogate weapon hooked into combat:
+  * `DamageEvent.DoCalculateDamage` promotes the surrogate to `Weapon` when a player swing has no real weapon.
+  * `Player_Melee.Attack` falls back to the surrogate for proc rolls (`TryProcEquippedItems`).
+* Combo system hybrid:
+  * `Player_Combat` gates `RecordAttack` behind `IsNomadUnarmed`.
+  * Combo bonus damage scaled by `unarmed_damage_scalar`.
+  * `UnarmedComboSystem` gains `OnUnarmedHit`/`OnUnarmedMiss`/`GetStreakDamageBonus` with +2%/hit, +5%/kill, cap 10, 30s kill-streak decay, and evade-resets-hit-streak rules.
+* In-memory bonus stats (new `Creature_BonusStats.cs`):
+  * Lazy per-creature dictionaries for `PropertyAttribute`, `PropertyAttribute2nd`, `Skill`.
+  * Wired into `CreatureAttribute.StartingValue`, `CreatureVital.StartingValue`, `CreatureSkill.InitLevel`.
+  * Resets on logout/despawn naturally (instance-local, not persisted).
+* Proc expansion:
+  * `WorldObject_Combat.TryProcEquippedItems` rolls every attacker-equipped proc item when `proc_on_attack_enabled` is true (excludes already-rolled `this`/weapon/attacker).
+  * New `Cloak.TryProcAllEquipped` helper preserves the vanilla cloak path and, when `proc_on_hit_enabled`, rolls every other defender-equipped item with a proc spell.
+  * All four `Cloak.TryProcSpell` call sites (`Player_Combat`, `SpellProjectile`, `WorldObject_Magic` ×2) routed through the helper.
+* Pet QoL (`CombatPet.cs`, `Monster_Melee.cs`):
+  * Single-pet limit already enforced by retail `CurrentActivePet` (no change needed).
+  * `FindNextTarget` biases to owner's `HealthQueryTarget` when valid.
+  * Pet damage messages echoed to owner: `[Pet] <name> hits <target> for <n> <type> damage.`
+  * `HandleFindTarget` defers re-acquisition by 0.75 s after target loss to remove twitchy mid-animation re-targeting.
+
 ### 2020-06-04
 [OptimShi]
 * Corrected colors for PFID_CUSTOM_LSCAPE_R8G8B8 type textures

@@ -3,6 +3,7 @@ using System.Linq;
 
 using ACE.Entity.Enum;
 using ACE.Server.Entity;
+using ACE.Server.Managers;
 
 namespace ACE.Server.WorldObjects
 {
@@ -48,14 +49,32 @@ namespace ACE.Server.WorldObjects
                 attacker.TryProcItem(attacker, target, selfTarget);
             }
 
-            // handle aetheria procs
             if (attacker is Creature wielder)
             {
-                var equippedAetheria = wielder.EquippedObjects.Values.Where(i => Aetheria.IsAetheria(i.WeenieClassId) && i.HasProc && i.ProcSpellSelfTargeted == selfTarget);
+                // DerpACE proc_on_attack_enabled: roll *every* equipped proc-bearing item on attack,
+                // not just the swing weapon + aetheria. Excludes items we've already rolled above
+                // (this, weapon, attacker) and the defender cloak (handled on proc-on-hit).
+                if (PropertyManager.GetBool("proc_on_attack_enabled").Item)
+                {
+                    foreach (var item in wielder.EquippedObjects.Values)
+                    {
+                        if (item == this || item == weapon || item == attacker)
+                            continue;
 
-                // aetheria
-                foreach (var aetheria in equippedAetheria)
-                    aetheria.TryProcItem(attacker, target, selfTarget);
+                        if (!item.HasProc || item.ProcSpellSelfTargeted != selfTarget)
+                            continue;
+
+                        item.TryProcItem(attacker, target, selfTarget);
+                    }
+                }
+                else
+                {
+                    // retail-style: only aetheria gets the bonus on-attack proc roll
+                    var equippedAetheria = wielder.EquippedObjects.Values.Where(i => Aetheria.IsAetheria(i.WeenieClassId) && i.HasProc && i.ProcSpellSelfTargeted == selfTarget);
+
+                    foreach (var aetheria in equippedAetheria)
+                        aetheria.TryProcItem(attacker, target, selfTarget);
+                }
             }
         }
     }

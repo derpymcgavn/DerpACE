@@ -37,7 +37,17 @@ namespace ACE.Server.WorldObjects.Entity
         /// </summary>
         public uint StartingValue
         {
-            get => propertiesAttribute.InitLevel;
+            get
+            {
+                // DerpACE BonusStats: in-memory additive bonus, no-op when disabled or unset.
+                var bonus = creature.GetBonus(Attribute);
+                var baseValue = propertiesAttribute.InitLevel;
+                if (bonus == 0)
+                    return baseValue;
+
+                var adjusted = (long)baseValue + bonus;
+                return adjusted < 0 ? 0u : (uint)adjusted;
+            }
             set => propertiesAttribute.InitLevel = value;
         }
 

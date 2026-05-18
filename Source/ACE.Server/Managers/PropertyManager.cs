@@ -613,7 +613,17 @@ namespace ACE.Server.Managers
                 ("world_closed", new Property<bool>(false, "enable this to startup world as a closed to players world")),
                 ("pathfinding", new Property<bool>(true, "Allows creatures to use pathfinding to navigate dungeons")),
                 ("pathfinding_prebuild_on_boot", new Property<bool>(true, "If TRUE, the server will scan all landblocks on startup and pre-build any missing navmesh files in the background. Once the on-disk cache is populated, subsequent boots are nearly instant.")),
-                ("pathfinding_fast_outdoor_mesh", new Property<bool>(true, "If TRUE, outdoor navmeshes are built with the MONOTONE partition algorithm, larger voxels, and no detail-mesh sampling. Several times faster to build with slightly chunkier polygons. Set FALSE for higher-fidelity meshes."))
+                ("pathfinding_fast_outdoor_mesh", new Property<bool>(true, "If TRUE, outdoor navmeshes are built with the MONOTONE partition algorithm, larger voxels, and no detail-mesh sampling. Several times faster to build with slightly chunkier polygons. Set FALSE for higher-fidelity meshes.")),
+
+                // ===== DerpACE Expansion features (adapted from ACE.BaseMod / Expansion) =====
+                ("unarmed_weapon_surrogate_enabled", new Property<bool>(true, "DerpACE: when a truly-unarmed player swings, the equipped gloves (low power) or boots (high power) act as the swing's weapon for stats, mods, imbues, and procs.")),
+                ("unarmed_combo_streaks_enabled", new Property<bool>(true, "DerpACE: adds in-memory hit/kill/evade/resist streak bonuses on top of the named combo system. Streaks reset on death and on miss (hit-streak only).")),
+                ("bonus_stats_enabled", new Property<bool>(true, "DerpACE: enables in-memory bonus stats on creatures (added to attribute/vital/skill starting values). Cleared on logout / destroy.")),
+                ("proc_on_attack_enabled", new Property<bool>(true, "DerpACE: expands TryProcEquippedItems so every equipped proc-bearing item rolls on attack, not just the weapon and aetheria.")),
+                ("proc_on_hit_enabled", new Property<bool>(true, "DerpACE: expands Cloak.TryProcSpell so every defender-equipped proc-bearing item rolls when hit, not just the cloak.")),
+                ("pet_attack_selected_enabled", new Property<bool>(true, "DerpACE: clicking an enemy targets it with your active pet; clicking yourself returns the pet to follow.")),
+                ("pet_message_damage_enabled", new Property<bool>(true, "DerpACE: sends chat feedback to the pet owner when their pet hits, kills, or is hit.")),
+                ("pet_auto_recover_enabled", new Property<bool>(true, "DerpACE: idle pets warp to their owner if too far (and on the same landblock), are destroyed if very far away, and destroyed if orphaned."))
                 );
 
         public static readonly ReadOnlyDictionary<string, Property<long>> DefaultLongProperties =

@@ -125,6 +125,14 @@ namespace ACE.Server.WorldObjects
 
                             EmitSplatter(target, damageEvent.Damage);
 
+                            // DerpACE pet_message_damage_enabled: relay pet hits to the owner so they can see what their pet is doing.
+                            if (PropertyManager.GetBool("pet_message_damage_enabled").Item && combatPet?.P_PetOwner is Player petOwner)
+                            {
+                                petOwner.Session.Network.EnqueueSend(new Network.GameMessages.Messages.GameMessageSystemChat(
+                                    $"[Pet] {Name} hits {target.Name} for {(uint)Math.Round(damageEvent.Damage)} {damageEvent.DamageType} damage.",
+                                    ChatMessageType.CombatSelf));
+                            }
+
                             // handle Dirty Fighting
                             if (GetCreatureSkill(Skill.DirtyFighting).AdvancementClass >= SkillAdvancementClass.Trained)
                                 FightDirty(target, damageEvent.Weapon);

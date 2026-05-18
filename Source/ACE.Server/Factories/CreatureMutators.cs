@@ -354,4 +354,208 @@ namespace ACE.Server.Factories
             creature.Shade = 0.85;
         }
     }
+
+    /// <summary>
+    /// DerpACE: Reaper affix — death-aspected: bonus melee damage and life-drain on hit.
+    /// On-hit lifedrain handled in Player_Combat.TryProcMobModifiers.
+    /// </summary>
+    public class ReaperMutator : CreatureMutator
+    {
+        public override string Name => "Reaper";
+        public override string Description => "Death-aspected: deals bonus damage and drains health on every hit.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsReaperMob;
+        public override string NamePrefix => "Reaping";
+
+        public ReaperMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.ReaperMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Modest HP boost
+            if (creature.Health != null && creature.Health.MaxValue > 0)
+            {
+                var hpBoost = (uint)(creature.Health.MaxValue * 0.20);
+                creature.Health.StartingValue += hpBoost;
+                creature.Health.Current = creature.Health.MaxValue;
+            }
+
+            // Damage rating bump so even non-modified attacks bite harder
+            creature.DamageRating = (creature.DamageRating ?? 0) + 25;
+
+            // Visual tell: gaunt dark-purple, slightly larger
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.25f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Purple;
+            creature.Shade = 0.9;
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Necromancer affix — applies a nether damage-over-time on hit.
+    /// DoT roll handled in Player_Combat.TryProcMobModifiers.
+    /// </summary>
+    public class NecromancerMutator : CreatureMutator
+    {
+        public override string Name => "Necromancer";
+        public override string Description => "Curses victims with a lingering nether damage-over-time on hit.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsNecromancerMob;
+        public override string NamePrefix => "Necrotic";
+
+        public NecromancerMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.NecromancerMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Mana boost (cosmetically tied to its nether casting flavor)
+            if (creature.Mana != null && creature.Mana.MaxValue > 0)
+            {
+                var manaBoost = (uint)(creature.Mana.MaxValue * 0.4);
+                creature.Mana.StartingValue += manaBoost;
+                creature.Mana.Current = creature.Mana.MaxValue;
+            }
+
+            // Improve nether resistance — a necromancer shrugs off the same stuff it casts
+            creature.SetProperty(PropertyFloat.ResistNether, 0.5f);
+
+            // Visual tell: dark/black tint, slightly larger
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.15f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Black;
+            creature.Shade = 1.0;
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Merger affix — periodically absorbs a nearby same-WCID creature, growing larger and stronger.
+    /// Heartbeat logic is in Creature_Affixes.cs.
+    /// </summary>
+    public class MergerMutator : CreatureMutator
+    {
+        public override string Name => "Merger";
+        public override string Description => "Absorbs nearby same-type creatures, growing larger and stronger with each merge.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsMergerMob;
+        public override string NamePrefix => "Assimilating";
+
+        public MergerMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.MergerMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Start a bit beefier so it survives long enough to merge
+            if (creature.Health != null && creature.Health.MaxValue > 0)
+            {
+                var hpBoost = (uint)(creature.Health.MaxValue * 0.25);
+                creature.Health.StartingValue += hpBoost;
+                creature.Health.Current = creature.Health.MaxValue;
+            }
+
+            // Visual tell: yellow-green and a touch larger; will grow further per merge
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.15f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Yellow;
+            creature.Shade = 0.5;
+
+            creature.SetProperty(PropertyInt.MergerMergeCount, 0);
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Horde affix — represents a small swarm; takes multiple kills to bring down
+    /// and announces shrinkage in combat chat. Per-hit "swarm member" tracking is in Creature_Affixes.cs.
+    /// </summary>
+    public class HordeMutator : CreatureMutator
+    {
+        public override string Name => "Horde";
+        public override string Description => "A swarm — multiple members must be killed to defeat it.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsHordeMob;
+        public override string NamePrefix => "Swarming";
+
+        public HordeMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.HordeMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            var minSize = Math.Max(2, DerpACEConfig.HordeMinSize);
+            var maxSize = Math.Max(minSize, DerpACEConfig.HordeMaxSize);
+            var size = ThreadSafeRandom.Next(minSize, maxSize);
+
+            creature.SetProperty(PropertyInt.HordeSwarmCount, size);
+
+            // Multiply HP by swarm size so each "member" is roughly the original creature
+            if (creature.Health != null && creature.Health.MaxValue > 0)
+            {
+                var baseMax = creature.Health.MaxValue;
+                var newMax = (uint)(baseMax * size);
+                creature.Health.StartingValue += (newMax - baseMax);
+                creature.Health.Current = creature.Health.MaxValue;
+            }
+
+            // XP bonus reflects the additional bodies
+            var xpOverride = creature.GetProperty(PropertyInt.XpOverride) ?? 0;
+            if (xpOverride > 0)
+                creature.SetProperty(PropertyInt.XpOverride, xpOverride * size);
+
+            // Visual tell: orange tint and noticeably larger
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.5f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Orange;
+            creature.Shade = 0.6;
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Warder affix — wards nearby creatures, blocking offensive spells cast against them.
+    /// Spell-cast block is enforced in Player_Magic.CreatePlayerSpell.
+    /// </summary>
+    public class WarderMutator : CreatureMutator
+    {
+        public override string Name => "Warder";
+        public override string Description => "Wards nearby creatures, blocking offensive spells cast against them.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsWarderMob;
+        public override string NamePrefix => "Warding";
+
+        public WarderMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.WarderMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Wardens favor magic defense
+            var magicDef = creature.GetCreatureSkill(Skill.MagicDefense);
+            if (magicDef != null && magicDef.AdvancementClass >= SkillAdvancementClass.Trained)
+            {
+                magicDef.Ranks += 100;
+                magicDef.InitLevel += 100;
+                creature.Skills[Skill.MagicDefense] = magicDef;
+            }
+
+            // Mana boost so the visual feels supported
+            if (creature.Mana != null && creature.Mana.MaxValue > 0)
+            {
+                var manaBoost = (uint)(creature.Mana.MaxValue * 0.5);
+                creature.Mana.StartingValue += manaBoost;
+                creature.Mana.Current = creature.Mana.MaxValue;
+            }
+
+            // Visual tell: bright blue and slightly larger — telegraph that they buff allies
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
+            creature.PaletteTemplate = (int)PaletteTemplate.Blue;
+            creature.Shade = 0.4;
+        }
+    }
 }

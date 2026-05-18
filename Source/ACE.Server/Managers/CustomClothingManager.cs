@@ -98,16 +98,44 @@ namespace ACE.Server.Managers
                 {
                     var json = File.ReadAllText(path);
                     var table = ParseJson(json);
-                    if (table != null)
-                    {
-                        _custom[table.Id] = table;
-                        loaded++;
-                        log.Debug($"CustomClothingManager: Loaded 0x{table.Id:X8} from {Path.GetFileName(path)}");
-                    }
-                    else
+                    if (table == null)
                     {
                         log.Warn($"CustomClothingManager: '{path}' parsed to null table.");
+                        continue;
                     }
+
+                    // Resolve the table Id from the filename if the JSON didn't supply one,
+                    // and reconcile decimal-vs-hex filename forms (e.g. "268437777.json" and
+                    // "10004611.json" both resolve to 0x10004611 — same uint). The filename
+                    // accepts: "<id>.json" or "<id>_label.json", and <id> may be:
+                    //   * hex with 0x prefix:    0x10004611
+                    //   * 8-char hex (no prefix): 10004611
+                    //   * pure decimal:          268437777
+                    // ClothingBase IDs always fall in [0x10000000, 0x10FFFFFF], which is
+                    // used to disambiguate "pure decimal in the hex range" from "hex digits".
+                    var fileNameId = TryParseIdFromFileName(path);
+
+                    if (table.Id == 0 && fileNameId != 0)
+                    {
+                        table.Id = fileNameId;
+                    }
+                    else if (table.Id != 0 && fileNameId != 0 && table.Id != fileNameId)
+                    {
+                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' filename id 0x{fileNameId:X8} ({fileNameId}) does not match JSON Id 0x{table.Id:X8} ({table.Id}). Using JSON Id.");
+                    }
+
+                    if (table.Id == 0)
+                    {
+                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' has no Id field and the filename could not be parsed as a ClothingBase id. Skipped.");
+                        continue;
+                    }
+
+                    if (table.Id < 0x10000000 || table.Id > 0x10FFFFFF)
+                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' Id 0x{table.Id:X8} ({table.Id}) is outside the ClothingBase range [0x10000000, 0x10FFFFFF]; loading anyway.");
+
+                    _custom[table.Id] = table;
+                    loaded++;
+                    log.Debug($"CustomClothingManager: Loaded 0x{table.Id:X8} ({table.Id}) from {Path.GetFileName(path)}");
                 }
                 catch (Exception ex)
                 {
@@ -116,6 +144,70 @@ namespace ACE.Server.Managers
             }
 
             log.Info($"CustomClothingManager: Loaded {loaded}/{files.Length} custom clothing table(s) from {ContentDir}");
+        }
+
+        /// <summary>
+        /// Parses a ClothingBase id from a file name. Supports "0x10004611", "10004611"
+        /// (8-char hex), and "268437777" (decimal). Any "_label" suffix is ignored.
+        /// Returns 0 when the leading token can't be parsed as either form.
+        /// </summary>
+        private static uint TryParseIdFromFileName(string path)
+        {
+            var stem = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+
+            // Take everything up to the first '_' or '-' so "10004611_male_plate" works.
+            var sepIdx = stem.IndexOfAny(new[] { '_', '-', ' ' });
+            var idToken = sepIdx >= 0 ? stem.Substring(0, sepIdx) : stem;
+
+            if (string.IsNullOrEmpty(idToken))
+                return 0;
+
+            // Explicit hex prefix wins.
+            if (idToken.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return uint.TryParse(idToken.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
+                    ? hexId : 0u;
+            }
+
+            // Heuristic: 8 hex digits with at least one non-decimal digit → hex.
+            // Otherwise try decimal first, then 8-char hex as a fallback so plain "10004611"
+            // (which is also a valid decimal) resolves to the hex value 0x10004611 — the form
+            // weenies usually store the reference as a uint.
+            bool hasNonDecimal = false;
+            foreach (var c in idToken)
+            {
+                if (!char.IsDigit(c))
+                {
+                    hasNonDecimal = true;
+                    break;
+                }
+            }
+
+            if (hasNonDecimal)
+            {
+                return uint.TryParse(idToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
+                    ? hexId : 0u;
+            }
+
+            if (uint.TryParse(idToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decId))
+            {
+                // If decimal parse lands in the ClothingBase range, take it as-is.
+                if (decId >= 0x10000000 && decId <= 0x10FFFFFF)
+                    return decId;
+
+                // Otherwise, if the token is exactly 8 digits, prefer the hex interpretation
+                // since that's the canonical 0x1________ ClothingBase form.
+                if (idToken.Length == 8 &&
+                    uint.TryParse(idToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId8) &&
+                    hexId8 >= 0x10000000 && hexId8 <= 0x10FFFFFF)
+                {
+                    return hexId8;
+                }
+
+                return decId;
+            }
+
+            return 0;
         }
 
         // ──────────────────────────────────────────────────────────────────────

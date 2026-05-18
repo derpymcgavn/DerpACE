@@ -402,6 +402,23 @@ namespace ACE.Server.Factories
         };
 
         /// <summary>
+        /// Maps a DamageType to its matching <see cref="UiEffects"/> outline flag so
+        /// elemental/physical items glow with the correct color in the UI.
+        /// </summary>
+        internal static UiEffects GetElementalUiEffect(DamageType damageType) => damageType switch
+        {
+            DamageType.Fire     => UiEffects.Fire,
+            DamageType.Cold     => UiEffects.Frost,
+            DamageType.Acid     => UiEffects.Acid,
+            DamageType.Electric => UiEffects.Lightning,
+            DamageType.Slash    => UiEffects.Slashing,
+            DamageType.Pierce   => UiEffects.Piercing,
+            DamageType.Bludgeon => UiEffects.Bludgeoning,
+            DamageType.Nether   => UiEffects.Nether,
+            _                   => UiEffects.Undef,
+        };
+
+        /// <summary>
         /// Grants a nomad their starting elemental gauntlets and shoes. Each pair rolls a
         /// random element (Fire / Cold / Acid / Electric) and is inscribed by "M. Stranger"
         /// with the unarmed damage stats stamped onto the inscription so the player can read
@@ -460,6 +477,14 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyInt.UnarmedBaseDamage, baseDamage);
             wo.SetProperty(PropertyInt.UnarmedDamageType, (int)damageType);
             wo.SetProperty(PropertyFloat.UnarmedDamageVariance, variance);
+
+            // Apply the matching UiEffects outline so the item glows with its element in the UI.
+            // Stamp W_DamageType too so any downstream code that keys off it (e.g. ArmorLevel display
+            // or elemental visuals) sees the matched type.
+            wo.W_DamageType = damageType;
+            var ui = GetElementalUiEffect(damageType);
+            if (ui != UiEffects.Undef)
+                wo.UiEffects = ui;
 
             // Roll a custom nomad proc onto the item — handled in Player_Combat.DamageTarget.
             // 1 = Cleave Flurry, 2 = Healing Strike. Roughly even odds.

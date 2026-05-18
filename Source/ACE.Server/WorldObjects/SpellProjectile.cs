@@ -845,8 +845,8 @@ namespace ACE.Server.WorldObjects
 
                 if (!nonHealth)
                 {
-                    if (equippedCloak != null && Cloak.HasProcSpell(equippedCloak))
-                        Cloak.TryProcSpell(target, ProjectileSource, equippedCloak, percent);
+                    // DerpACE: helper handles cloak + (when proc_on_hit_enabled) every other equipped proc item.
+                    Cloak.TryProcAllEquipped(target, ProjectileSource, equippedCloak, percent);
 
                     target.EmoteManager.OnDamage(sourcePlayer);
 

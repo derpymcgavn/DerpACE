@@ -680,7 +680,11 @@ namespace ACE.Entity.Enum.Properties
         MorphicLockedCreatureWCID                = 9029,
         // DerpACE: Nomad unarmed proc type stamped onto gauntlets/shoes
         // 0 = none, 1 = Cleave Flurry (2-4 extra fast strikes), 2 = Healing Strike (dmg + self-heal)
-        NomadProcType                            = 9030
+        NomadProcType                            = 9030,
+        // DerpACE: number of times a Merger mob has absorbed a same-WCID neighbor
+        MergerMergeCount                         = 9031,
+        // DerpACE: current Horde swarm population (number of "members" remaining)
+        HordeSwarmCount                          = 9032
     }
 
     public static class PropertyIntExtensions

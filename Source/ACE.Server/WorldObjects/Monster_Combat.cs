@@ -394,6 +394,11 @@ namespace ACE.Server.WorldObjects
 
                 Die();
             }
+            else if (IsHordeMob && damage > 0)
+            {
+                // DerpACE: Horde affix — report swarm-member casualties from this damage chunk
+                OnHordeDamageTaken(source, (uint)damage);
+            }
             return (uint)Math.Max(0, damage);
         }
 

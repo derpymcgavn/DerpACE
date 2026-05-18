@@ -333,6 +333,13 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public override void ActOnUse(WorldObject worldObject)
         {
+            // DerpACE: Mysterious Stranger NPC -- vitae-for-chests gambling encounter
+            if (WeenieClassId == MysteriousStranger.WeenieClassId && worldObject is Player mystPlayer)
+            {
+                MysteriousStranger.OnUse(this, mystPlayer);
+                return;
+            }
+
             // handled in base.OnActivate -> EmoteManager.OnUse()
         }
 
