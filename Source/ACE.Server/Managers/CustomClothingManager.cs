@@ -49,12 +49,18 @@ namespace ACE.Server.Managers
                 ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "CustomClothingBase");
 
             Directory.CreateDirectory(ContentDir);
-            LoadAll();
 
-            // Wire the hook — fires inside DatDatabase.ReadFromDat<ClothingTable> before caching
+            // Wire the hook BEFORE loading so any concurrent ReadFromDat<ClothingTable> call
+            // that races with us still goes through MergeCustom.
             DatDatabase.ClothingTableMergeHook = MergeCustom;
 
-            log.Info($"CustomClothingManager: Initialized. Watching {ContentDir}");
+            LoadAll();
+
+            // Flush any ClothingTable entries that may already have been cached by an earlier
+            // ReadFromDat<ClothingTable> call (e.g. CharGen warmup) so the merge is applied.
+            var flushed = ClearCache();
+
+            log.Info($"CustomClothingManager: Initialized. Loaded {_custom.Count} custom clothing table(s) from {ContentDir} (flushed {flushed} cached entries).");
         }
 
         /// <summary>Reload all JSON files from disk and flush the ClothingTable cache.</summary>
@@ -62,8 +68,8 @@ namespace ACE.Server.Managers
         {
             _custom.Clear();
             LoadAll();
-            ClearCache();
-            log.Info($"CustomClothingManager: Reloaded {_custom.Count} custom clothing table(s).");
+            var flushed = ClearCache();
+            log.Info($"CustomClothingManager: Reloaded {_custom.Count} custom clothing table(s) (flushed {flushed} cached entries).");
         }
 
         // ──────────────────────────────────────────────────────────────────────
@@ -73,10 +79,20 @@ namespace ACE.Server.Managers
         private static void LoadAll()
         {
             if (!Directory.Exists(ContentDir))
+            {
+                log.Warn($"CustomClothingManager: Content directory does not exist: {ContentDir}");
                 return;
+            }
+
+            var files = Directory.GetFiles(ContentDir, "*.json");
+            if (files.Length == 0)
+            {
+                log.Info($"CustomClothingManager: No *.json overrides found in {ContentDir}");
+                return;
+            }
 
             int loaded = 0;
-            foreach (var path in Directory.GetFiles(ContentDir, "*.json"))
+            foreach (var path in files)
             {
                 try
                 {
@@ -86,6 +102,11 @@ namespace ACE.Server.Managers
                     {
                         _custom[table.Id] = table;
                         loaded++;
+                        log.Debug($"CustomClothingManager: Loaded 0x{table.Id:X8} from {Path.GetFileName(path)}");
+                    }
+                    else
+                    {
+                        log.Warn($"CustomClothingManager: '{path}' parsed to null table.");
                     }
                 }
                 catch (Exception ex)
@@ -94,8 +115,7 @@ namespace ACE.Server.Managers
                 }
             }
 
-            if (loaded > 0)
-                log.Info($"CustomClothingManager: Loaded {loaded} custom clothing table(s) from {ContentDir}");
+            log.Info($"CustomClothingManager: Loaded {loaded}/{files.Length} custom clothing table(s) from {ContentDir}");
         }
 
         // ──────────────────────────────────────────────────────────────────────

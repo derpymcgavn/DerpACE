@@ -43,7 +43,26 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Recent Patch Notes (November 2026)
+### Recent Patch Notes (May 17, 2026)
+* **Standard Ironman — Mana Conversion auto-train for magic primaries** (`IronmanFactory.RollSkills`):
+  * When the rolled primary weapon skill is **Life Magic, Void Magic, or War Magic**, `ManaConversion` is now auto-trained **immediately after the weapon train/spec step**, before the rest of the primary pool is shuffled and rolled.
+  * Its credit cost is pulled from `SkillBase.TrainedCost` and deducted via `Player.TrainSkill(...)` so the remaining shuffled rolls work off the **reduced** credit pool.
+  * Mana Conversion is then removed from the shuffled primary pool to prevent a double spend. If credits are insufficient (very rare), the player is notified and the rest of the plan continues without MC.
+* **Ironman Nomad — element progression** (`IronmanFactory.GrantNextNomadElement`):
+  * Starter gauntlets and shoes now **share a single element** instead of rolling independently, so element collection is clean.
+  * Hooked into `CheckIronmanLevelGrants`: on every **even level from 2 through 14**, a nomad is granted a matched gauntlet/shoe pair of a random element they don't yet own.
+  * By **level 14** a nomad has collected **all 7 non-void elements** (Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric). The grant no-ops once the full set is collected.
+  * Each new pair sends a `[Nomad] You have unlocked a new element: <Name>!` broadcast message.
+* **Ironman Nomad — gauntlet/shoe inscription visibility fix**:
+  * `PropertyBool.Inscribable` is now set to **`true`** on nomad gauntlets and shoes. With `false` the client was hiding the inscription text and the player couldn't see the stamped damage stats and proc info.
+* **Ironman Nomad — custom unarmed procs (Cleave Flurry / Healing Strike)**:
+  * Every nomad gauntlet/shoe now rolls one of two custom procs at creation time, stamped onto the item as `PropertyInt.NomadProcType` + `PropertyFloat.NomadProcChance` + `PropertyFloat.NomadProcMagnitude`. The proc description is appended to the M. Stranger inscription so the player can read exactly what the item does.
+  * **Cleave Flurry** (type 1): ~8–15% chance on Punch/Kick hit to unleash **2–4 fast extra strikes** at 30–45% damage each, using the item's stamped damage type. Uses a `_nomadProcInProgress` recursion guard so the extra strikes don't recursively proc themselves. Splatter VFX per hit and a `Cleave Flurry! N extra strikes for X damage` combat-self message.
+  * **Healing Strike** (type 2): ~8–15% chance on Punch/Kick hit to heal the wielder for **100–110% of damage dealt** (1–10% above the damage you hit for). Uses `UpdateVitalDelta(Health, ...)` (caps at MaxHealth), records via `DamageHistory.OnHeal`, plays `HealthUpRed` VFX, and sends a `Healing Strike! +X health from <target>` combat-self message.
+  * Proc evaluation runs in `Player_Combat.DamageTarget`, gated on `AttackType == Punch || Kick` and pulled from `HandArmor` for Punch / `FootArmor` for Kick — only the nomad's stamped gauntlets/shoes trigger.
+  * New persistent properties added: `PropertyInt.NomadProcType = 9030`, `PropertyFloat.NomadProcChance = 9026`, `PropertyFloat.NomadProcMagnitude = 9027`.
+
+### Recent Patch Notes (May 2026 — Ironman Nomad)
 * **Ironman Nomad submode** (`/ironman nomad`):
   * Players cannot wield weapons or casters of any kind. Wield attempts are rejected with *"Nomads cannot wield weapons or casters."*
   * Attributes roll **randomly between 10 and 100** per stat (instead of the standard 100/46 split).
@@ -457,14 +476,20 @@ A stricter Ironman submode for players who want a "monk-like" no-weapons playsty
   * Remaining milestone planning runs through the standard Ironman skill plan.
 * **Unarmed damage (elemental gauntlets & shoes)**
   * On commit, the player is granted **leather gauntlets (WCID 56)** and **leather boots (WCID 115)** rerolled into unarmed damage sources.
-  * Each piece independently rolls one damage type from: **Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric**.
-  * The rolled values are stored on the WO as:
+  * The starter pair **share a single rolled damage type** from: **Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric** — so a nomad cleanly collects one new element per level-up grant.
+  * On every **even level from 2 through 14**, the nomad is automatically granted a matched gauntlet/shoe pair of a random element they don't yet own (`IronmanFactory.GrantNextNomadElement`). By **level 14** all 7 elements are collected.
+  * The rolled values are stored on each WO as:
     * `PropertyInt.UnarmedBaseDamage` (12 gauntlets / 10 shoes)
     * `PropertyInt.UnarmedDamageType` (= rolled `DamageType`)
     * `PropertyFloat.UnarmedDamageVariance` (0.50 gauntlets / 0.55 shoes)
   * The existing unarmed-armor pipeline (`Player.GetBaseDamageMod` + `Player.GetDamageType`) reads these properties automatically — Punch attacks pull from the gauntlets and Kick attacks pull from the shoes.
   * Renamed to surface the element (e.g. *Flame Nomad Gauntlets*, *Lightning Nomad Shoes*).
-  * **Inscribed by M. Stranger** — `PropertyString.Inscription` lists the base damage, variance, and element; `PropertyString.ScribeName = "M. Stranger"`; `PropertyBool.Inscribable = false` so the text cannot be overwritten.
+  * **Inscribed by M. Stranger** — `PropertyString.Inscription` lists the base damage, variance, element, and proc; `PropertyString.ScribeName = "M. Stranger"`; `PropertyBool.Inscribable = true` (required, otherwise the client hides the inscription text).
+* **Unarmed procs (custom)**
+  * Each gauntlet/shoe rolls one of two custom procs at creation time, stored on the WO as `PropertyInt.NomadProcType` + `PropertyFloat.NomadProcChance` + `PropertyFloat.NomadProcMagnitude`. The proc description is appended to the M. Stranger inscription.
+  * **Cleave Flurry** (type 1): ~8–15% chance on Punch/Kick hit to unleash **2–4 fast extra strikes** at 30–45% damage each. Uses a recursion guard so the extra strikes don't fire their own procs. Splatter VFX per hit + `Cleave Flurry! N extra strikes for X damage [target]` message.
+  * **Healing Strike** (type 2): ~8–15% chance on Punch/Kick hit to heal the wielder for **100–110% of damage dealt** (1–10% above the damage you hit for). Uses `UpdateVitalDelta(Health, ...)` (caps at MaxHealth) + `DamageHistory.OnHeal` + `HealthUpRed` VFX + combat-self message.
+  * Evaluation lives in `Player_Combat.DamageTarget`, gated on `AttackType == Punch || Kick`, pulling proc properties from `HandArmor` for Punch and `FootArmor` for Kick.
 * **Armor calculation** (`Creature_BodyPart.GetEffectiveArmorVsType`)
   * If the nomad has **no `ItemType.Armor` layers** equipped on a body part (clothes only or bare), the base AL for that body part is overridden to **450** with resistance `1.0` (average across all damage types).
   * If any armor layer is worn, that layer's effective AL contribution is multiplied by **0.5** — nomads don't know how to wear armor.

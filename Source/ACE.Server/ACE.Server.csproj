@@ -294,6 +294,8 @@
     <None Include="..\..\Database\Base\**" CopyToOutputDirectory="PreserveNewest" LinkBase="DatabaseSetupScripts\Base\" />
     <None Include="..\..\Database\Updates\**" CopyToOutputDirectory="PreserveNewest" LinkBase="DatabaseSetupScripts\Updates\" />
     <None Include="..\..\Database\Optional\**" CopyToOutputDirectory="PreserveNewest" LinkBase="DatabaseSetupScripts\Optional\" />
+    <!-- DerpACE: CustomClothingBase JSON overrides — copied to bin/.../Data/CustomClothingBase/ so CustomClothingManager.Initialize() can find them. -->
+    <None Include="Data\CustomClothingBase\**\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\CustomClothingBase\" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
