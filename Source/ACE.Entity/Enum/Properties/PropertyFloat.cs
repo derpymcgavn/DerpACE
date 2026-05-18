@@ -270,5 +270,9 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Unarmed — damage variance for gauntlets/boots when no weapon equipped */
         UnarmedDamageVariance          = 9025,  // variance for unarmed damage rolls (0.0-1.0)
+
+        /* DerpACE Nomad — proc chance/magnitude stamped onto gauntlets/shoes */
+        NomadProcChance                = 9026,  // 0.0-1.0 chance to fire the stamped proc on a Punch/Kick hit
+        NomadProcMagnitude             = 9027,  // proc-type specific magnitude (e.g. heal % of damage, cleave dmg %)
     }
 }

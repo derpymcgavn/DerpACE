@@ -409,12 +409,41 @@ namespace ACE.Server.Factories
         /// </summary>
         private static void GiveNomadGauntletsAndShoes(Player player)
         {
-            // Roll independent elements for hands and feet to keep things interesting.
-            var hand = NomadElements[ThreadSafeRandom.Next(0, NomadElements.Length - 1)];
-            var foot = NomadElements[ThreadSafeRandom.Next(0, NomadElements.Length - 1)];
+            // Starter pair shares a single element so nomads cleanly collect one new element
+            // every other level (2, 4, 6, ...) and have all 7 by level 14.
+            var element = NomadElements[ThreadSafeRandom.Next(0, NomadElements.Length - 1)];
 
-            CreateAndGrantNomadUnarmedItem(player, NomadGauntletWcid, "Gauntlets",  hand.Type, hand.Name, baseDamage: 12, variance: 0.50f);
-            CreateAndGrantNomadUnarmedItem(player, NomadBootWcid,     "Shoes",      foot.Type, foot.Name, baseDamage: 10, variance: 0.55f);
+            CreateAndGrantNomadUnarmedItem(player, NomadGauntletWcid, "Gauntlets",  element.Type, element.Name, baseDamage: 12, variance: 0.50f);
+            CreateAndGrantNomadUnarmedItem(player, NomadBootWcid,     "Shoes",      element.Type, element.Name, baseDamage: 10, variance: 0.55f);
+        }
+
+        /// <summary>
+        /// Grants a nomad a matched gauntlet/shoe pair of a random element they don't already
+        /// own. Called on every even level (2,4,6,...,14) so a nomad collects all 7 elements
+        /// by level 14. No-ops once every element has been granted.
+        /// </summary>
+        private static void GrantNextNomadElement(Player player)
+        {
+            var have = new HashSet<DamageType>();
+            foreach (var wo in player.GetAllPossessions())
+            {
+                var name = wo.GetProperty(PropertyString.Name);
+                var dt = wo.GetProperty(PropertyInt.UnarmedDamageType);
+                if (dt != null && name != null && name.Contains("Nomad"))
+                    have.Add((DamageType)dt.Value);
+            }
+
+            var remaining = NomadElements.Where(e => !have.Contains(e.Type)).ToList();
+            if (remaining.Count == 0)
+                return;
+
+            var pick = remaining[ThreadSafeRandom.Next(0, remaining.Count - 1)];
+
+            CreateAndGrantNomadUnarmedItem(player, NomadGauntletWcid, "Gauntlets", pick.Type, pick.Name, baseDamage: 12, variance: 0.50f);
+            CreateAndGrantNomadUnarmedItem(player, NomadBootWcid,     "Shoes",     pick.Type, pick.Name, baseDamage: 10, variance: 0.55f);
+
+            if (player.Session != null)
+                player.SendMessage($"[Nomad] You have unlocked a new element: {pick.Name}!", ChatMessageType.Broadcast);
         }
 
         private static void CreateAndGrantNomadUnarmedItem(Player player, uint wcid, string slotLabel,
@@ -432,18 +461,47 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyInt.UnarmedDamageType, (int)damageType);
             wo.SetProperty(PropertyFloat.UnarmedDamageVariance, variance);
 
+            // Roll a custom nomad proc onto the item — handled in Player_Combat.DamageTarget.
+            // 1 = Cleave Flurry, 2 = Healing Strike. Roughly even odds.
+            var procRoll = ThreadSafeRandom.Next(1, 2);
+            string procDescription;
+            if (procRoll == 1)
+            {
+                // Cleave Flurry: chance to unleash 2-4 fast extra strikes on hit.
+                var chance = (float)ThreadSafeRandom.Next(0.08f, 0.15f);
+                // Magnitude encodes per-extra-strike damage scale (0.35 = 35% of the original hit).
+                var magnitude = (float)ThreadSafeRandom.Next(0.30f, 0.45f);
+                wo.SetProperty(PropertyInt.NomadProcType, 1);
+                wo.SetProperty(PropertyFloat.NomadProcChance, chance);
+                wo.SetProperty(PropertyFloat.NomadProcMagnitude, magnitude);
+                procDescription = $"Cleave Flurry: {chance * 100:0.#}% chance on hit to unleash 2-4 fast extra strikes at {magnitude * 100:0.#}% damage each.";
+            }
+            else
+            {
+                // Healing Strike: chance to do bonus damage and heal the wielder for a chunk of it.
+                var chance = (float)ThreadSafeRandom.Next(0.08f, 0.15f);
+                // Magnitude encodes self-heal as a fraction of damage dealt (1.00 = +100%, with 1-10% extra).
+                var magnitude = (float)ThreadSafeRandom.Next(1.01f, 1.10f);
+                wo.SetProperty(PropertyInt.NomadProcType, 2);
+                wo.SetProperty(PropertyFloat.NomadProcChance, chance);
+                wo.SetProperty(PropertyFloat.NomadProcMagnitude, magnitude);
+                procDescription = $"Healing Strike: {chance * 100:0.#}% chance on hit to heal {magnitude * 100:0.#}% of damage dealt back to the wielder.";
+            }
+
             // Rename so the element is visible at a glance.
             wo.SetProperty(PropertyString.Name, $"{elementName} Nomad {slotLabel}");
 
-            // Inscription by M. Stranger documenting the damage.
+            // Inscription by M. Stranger documenting the damage and proc.
             var inscription =
                 $"Inscribed by M. Stranger:\n" +
                 $"These {slotLabel.ToLowerInvariant()} channel {elementName.ToLowerInvariant()} when struck unarmed.\n" +
-                $"Base Damage: {baseDamage}  Variance: {variance:0.00}  Element: {elementName} ({damageType})";
+                $"Base Damage: {baseDamage}  Variance: {variance:0.00}  Element: {elementName} ({damageType})\n" +
+                $"{procDescription}";
 
             wo.SetProperty(PropertyString.Inscription, inscription);
             wo.SetProperty(PropertyString.ScribeName, "M. Stranger");
-            wo.SetProperty(PropertyBool.Inscribable, false);
+            // Must be true — Inscribable=false hides the inscription text on the client.
+            wo.SetProperty(PropertyBool.Inscribable, true);
 
             if (!player.TryCreateInInventoryWithNetworking(wo))
                 player.SendMessage($"[Nomad] Could not place {slotLabel} in inventory.");
@@ -632,20 +690,47 @@ namespace ACE.Server.Factories
             plan[rolledWeapon.Skill] = 0;
             SendIronmanSkillUpdate(player, rolledWeapon.Skill);
 
+            // Magic weapon specs (Life / Void / War) MUST auto-train Mana Conversion immediately,
+            // BEFORE we shuffle the rest of the primary pool. Otherwise the shuffled iteration can
+            // run out of credits before reaching MC, leaving a magic build with no mana sustain.
+            if (rolledWeapon.IsMagic)
+            {
+                if (DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)Skill.ManaConversion, out var mcBase))
+                {
+                    var mcCs = player.GetCreatureSkill(Skill.ManaConversion);
+                    if (mcCs == null || mcCs.AdvancementClass < SkillAdvancementClass.Trained)
+                    {
+                        var mcTrainCost = mcBase.TrainedCost;
+                        if ((player.AvailableSkillCredits ?? 0) >= mcTrainCost)
+                        {
+                            if (player.TrainSkill(Skill.ManaConversion, mcTrainCost))
+                            {
+                                plan[Skill.ManaConversion] = 0;
+                                SendIronmanSkillUpdate(player, Skill.ManaConversion);
+
+                                if (player.Session != null)
+                                    player.SendMessage($"[Ironman Debug] Auto-trained Mana Conversion for magic spec ({mcTrainCost} credits). Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
+                            }
+                        }
+                        else if (player.Session != null)
+                        {
+                            player.SendMessage($"[Ironman Debug] Cannot afford Mana Conversion ({mcTrainCost} credits, have {player.AvailableSkillCredits ?? 0}); magic spec will be mana-starved.", ChatMessageType.System);
+                        }
+                    }
+                }
+            }
+
             // Build mutable primary list from website-equivalent list.
             var primaryPool = new List<IronmanPrimarySkillOption>(PrimarySkillPool);
 
-            // Magic primaries auto-train Mana Conversion (handled by prepending below).
+            // Magic primaries already auto-trained Mana Conversion above — drop it from the pool
+            // so the shuffled loop doesn't try to spend credits on it again.
             if (rolledWeapon.IsMagic)
                 primaryPool.RemoveAll(x => x.Skill == Skill.ManaConversion);
 
             // If weapon is Life Magic, remove Life Magic from the primary pool.
             if (rolledWeapon.Skill == Skill.LifeMagic)
                 primaryPool.RemoveAll(x => x.Skill == Skill.LifeMagic);
-
-            // For magic weapon builds, force Mana Conversion to the front (trained only).
-            if (rolledWeapon.IsMagic)
-                primaryPool.Insert(0, new IronmanPrimarySkillOption(Skill.ManaConversion, 6, 6));
 
             // Shuffle the primary pool to randomize training order
             Shuffle(primaryPool);
@@ -1054,8 +1139,13 @@ namespace ACE.Server.Factories
         public static void CheckIronmanLevelGrants(Player player)
         {
             if (player.GetProperty(PropertyBool.IsIronman) != true) return;
-            ApplyIronmanPlanForLevel(player, player.Level ?? 1, announceGrants: true);
-            ApplyIronmanLifeMilestones(player, player.Level ?? 1);
+            var level = player.Level ?? 1;
+            ApplyIronmanPlanForLevel(player, level, announceGrants: true);
+            ApplyIronmanLifeMilestones(player, level);
+
+            // Nomads collect one new element every other level (2,4,6,...,14 => all 7 elements).
+            if (player.GetProperty(PropertyBool.IsIronmanNomad) == true && level >= 2 && level <= 14 && level % 2 == 0)
+                GrantNextNomadElement(player);
         }
 
         // ---------- Inventory wipe ----------

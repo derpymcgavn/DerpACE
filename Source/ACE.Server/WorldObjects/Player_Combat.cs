@@ -37,6 +37,9 @@ namespace ACE.Server.WorldObjects
         public uint LastPolebreakerTargetGuid { get; set; } = 0;
         public int PolebreakerStackCount { get; set; } = 0;
 
+        // DerpACE Nomad — recursion guard so Cleave Flurry extra strikes don't proc themselves
+        private bool _nomadProcInProgress;
+
         // DerpACE: Unarmed combo system for tracking punch/kick combos
         private UnarmedComboSystem _unarmedComboSystem;
         public UnarmedComboSystem UnarmedComboSystem
@@ -188,6 +191,79 @@ namespace ACE.Server.WorldObjects
                 {
                     var comboBonus = damageEvent.Damage * (comboResult.DamageMultiplier - 1.0f);
                     damageEvent.Damage += comboBonus;
+                }
+            }
+
+            // DerpACE Nomad: custom unarmed procs stamped onto gauntlets/shoes (Cleave Flurry / Healing Strike).
+            // Only fires on direct Punch/Kick from the wielder, and only when not already inside a proc-driven strike.
+            uint nomadFlurryHits = 0;
+            uint nomadFlurryDamage = 0;
+            uint nomadHealApplied = 0;
+            if (!_nomadProcInProgress
+                && damageEvent.HasDamage
+                && damageSource == this
+                && (AttackType == AttackType.Punch || AttackType == AttackType.Kick))
+            {
+                var procSource = AttackType == AttackType.Punch ? HandArmor : FootArmor;
+                var procType = procSource?.GetProperty(PropertyInt.NomadProcType) ?? 0;
+                var procChance = procSource?.GetProperty(PropertyFloat.NomadProcChance) ?? 0.0;
+                var procMagnitude = procSource?.GetProperty(PropertyFloat.NomadProcMagnitude) ?? 0.0;
+
+                if (procType > 0 && procChance > 0 && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    if (procType == 1)
+                    {
+                        // Cleave Flurry: 2-4 extra fast strikes at procMagnitude * base damage each.
+                        var extraStrikes = ThreadSafeRandom.Next(2, 4);
+                        _nomadProcInProgress = true;
+                        try
+                        {
+                            for (var i = 0; i < extraStrikes; i++)
+                            {
+                                if (!target.IsAlive)
+                                    break;
+
+                                var strikeDamage = Math.Max(1.0f, damageEvent.Damage * (float)procMagnitude);
+                                target.TakeDamage(this, damageEvent.DamageType, strikeDamage, false);
+                                target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftBack);
+
+                                nomadFlurryHits++;
+                                nomadFlurryDamage += (uint)Math.Round(strikeDamage);
+                            }
+                        }
+                        finally
+                        {
+                            _nomadProcInProgress = false;
+                        }
+
+                        if (nomadFlurryHits > 0 && !SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"Cleave Flurry! {nomadFlurryHits} extra strikes for {nomadFlurryDamage} damage [{target.Name}]",
+                                ChatMessageType.CombatSelf));
+                    }
+                    else if (procType == 2)
+                    {
+                        // Healing Strike: heal the wielder for procMagnitude * damage dealt (can be >100%).
+                        if (Health.Current < Health.MaxValue)
+                        {
+                            var heal = (int)Math.Round(damageEvent.Damage * (float)procMagnitude);
+                            if (heal >= 1)
+                            {
+                                var restored = UpdateVitalDelta(Health, heal);
+                                if (restored > 0)
+                                {
+                                    nomadHealApplied = (uint)restored;
+                                    DamageHistory.OnHeal((uint)restored);
+                                    ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
+
+                                    if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                            $"Healing Strike! +{nomadHealApplied} health from {target.Name}",
+                                            ChatMessageType.CombatSelf));
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

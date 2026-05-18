@@ -677,7 +677,10 @@ namespace ACE.Entity.Enum.Properties
         // DerpACE: Olthoi morphic system - stores the morphed creature WCID
         MorphicCreatureWCID                      = 9028,
         // DerpACE: Olthoi morphic system - stores the locked creature WCID for first-time morphic transformation
-        MorphicLockedCreatureWCID                = 9029
+        MorphicLockedCreatureWCID                = 9029,
+        // DerpACE: Nomad unarmed proc type stamped onto gauntlets/shoes
+        // 0 = none, 1 = Cleave Flurry (2-4 extra fast strikes), 2 = Healing Strike (dmg + self-heal)
+        NomadProcType                            = 9030
     }
 
     public static class PropertyIntExtensions

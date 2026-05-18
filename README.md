@@ -43,6 +43,28 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
+### Recent Patch Notes (November 2026)
+* **Ironman Nomad submode** (`/ironman nomad`):
+  * Players cannot wield weapons or casters of any kind. Wield attempts are rejected with *"Nomads cannot wield weapons or casters."*
+  * Attributes roll **randomly between 10 and 100** per stat (instead of the standard 100/46 split).
+  * Light Weapons is forced as the rolled primary skill (trained + specialized) and Arcane Lore is specialized.
+  * All damage comes from elemental gauntlets and shoes granted on commit.
+    * Starter pair are leather gauntlets (`WCID 56`) and leather boots (`WCID 115`) rerolled with `UnarmedBaseDamage`, `UnarmedDamageType`, and `UnarmedDamageVariance` so the existing unarmed-armor pipeline picks them up.
+    * Each piece independently rolls one damage type from **Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric**.
+    * Renamed for clarity (e.g. *Flame Nomad Gauntlets*, *Lightning Nomad Shoes*).
+    * **Inscribed by M. Stranger** — the inscription lists the base damage, variance, and element so the player can read exactly what the item does. Marked non-`Inscribable` so the text cannot be overwritten.
+  * Without armor (clothes only), nomads have a **natural body AL of 450** averaged across all damage types.
+  * When a nomad wears `ItemType.Armor`, the armor layer's effective AL contribution is **halved** because nomads don't know how to wear it.
+  * Persisted via `PropertyBool.IsIronmanNomad = 9039`; mode title is set to `NOMAD`.
+  * `/ironman nomad` opens a 30-second confirmation window (same UX as `/ironman on`); `/ironman confirm` finalizes either standard or nomad based on which was requested.
+* **Ironman leaderboard now shows Lives and Status** (`/ironmantop` / `/ironman top`):
+  * New `Lives` column reads `PropertyInt.HardcoreLives` per player.
+  * New `Status` column reads `DEAD` (lives ≤ 0), `NOMAD`, or `ALIVE`.
+* **Biota integrity hardening** — addresses recurring duplicate-key errors (`biota_properties_int.PRIMARY`) caused by orphaned child rows + recycled dynamic GUIDs:
+  * `ShardDatabase.SaveBiota` and `ShardDatabaseWithCaching.SaveBiota` now purge stale `biota_properties_*` rows before inserting a brand-new biota.
+  * `ShardDatabaseOfflineTools.RunStartupCleanup()` runs at server boot (after `DatabaseManager.Start()`, before `GuidManager.Initialize()`) and purges all `IsDeleted` characters plus orphan rows across every `biota_properties_*` table.
+  * Ironman/Hardcore final-death cleanup now waits for `PlayerManager.GetOnlinePlayer(charId) == null` before calling `PurgeCharacter(...)`, eliminating the logout-finalization race that NRE'd in `SwitchPlayerFromOnlineToOffline`.
+
 ### Recent Patch Notes (May 2026)
 * Added server-wide activation broadcasts when players commit to modes:
   * Ironman: `[IRONMAN] <name> has taken the Ironman path. There is no turning back!`
@@ -370,6 +392,7 @@ A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.B
 |---|---|---|
 | `/ironman` | Player | If already an Ironman: show skill plan status. Otherwise: show usage. |
 | `/ironman on` | Player | Begin commitment — prints a warning and opens a 30-second confirmation window. Only available at level 10 or below. |
+| `/ironman nomad` | Player | Begin **NOMAD Ironman** commitment — no weapons or casters, unarmed damage via elemental gauntlets/shoes, natural AL 450 in clothes. Same 30-second confirm window. |
 | `/ironman confirm` | Player | Finalize the conversion within the window. **Cannot be undone.** |
 | `/ironman char` | Player | Show Ironman character progression milestones and unlocked skills. |
 | `/ironman top` | Player | Show the Ironman leaderboard (top 10 players by creature kills). |
@@ -420,6 +443,38 @@ A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.B
 * Global announcements:
   * Ironman activation and Hardcore activation both broadcast server-wide.
   * Ironman and Hardcore deaths broadcast server-wide with killer + victim level context.
+
+#### Ironman Nomad
+A stricter Ironman submode for players who want a "monk-like" no-weapons playstyle. Entered with `/ironman nomad` + `/ironman confirm`. Stacks on top of standard Ironman + Hardcore — all of the base Ironman restrictions still apply.
+
+* **Equipment**
+  * Cannot wield any `MeleeWeapon`, `MissileWeapon`, `Caster`, or `MagicWieldable`. `Player_Inventory.CheckWieldRequirements` rejects them with *"Nomads cannot wield weapons or casters."*
+  * Can wear armor and clothing, but armor effective AL is halved (see Armor below).
+* **Attributes & skills**
+  * `RollAttributesRandom(player)` — every attribute rolls 10–100 (instead of the standard 100/46 split).
+  * Weapon skill is forced to **Light Weapons** (trained + specialized) — useful for the unarmed fist/foot attack skill check.
+  * **Arcane Lore** is specialized in addition to being pre-trained.
+  * Remaining milestone planning runs through the standard Ironman skill plan.
+* **Unarmed damage (elemental gauntlets & shoes)**
+  * On commit, the player is granted **leather gauntlets (WCID 56)** and **leather boots (WCID 115)** rerolled into unarmed damage sources.
+  * Each piece independently rolls one damage type from: **Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric**.
+  * The rolled values are stored on the WO as:
+    * `PropertyInt.UnarmedBaseDamage` (12 gauntlets / 10 shoes)
+    * `PropertyInt.UnarmedDamageType` (= rolled `DamageType`)
+    * `PropertyFloat.UnarmedDamageVariance` (0.50 gauntlets / 0.55 shoes)
+  * The existing unarmed-armor pipeline (`Player.GetBaseDamageMod` + `Player.GetDamageType`) reads these properties automatically — Punch attacks pull from the gauntlets and Kick attacks pull from the shoes.
+  * Renamed to surface the element (e.g. *Flame Nomad Gauntlets*, *Lightning Nomad Shoes*).
+  * **Inscribed by M. Stranger** — `PropertyString.Inscription` lists the base damage, variance, and element; `PropertyString.ScribeName = "M. Stranger"`; `PropertyBool.Inscribable = false` so the text cannot be overwritten.
+* **Armor calculation** (`Creature_BodyPart.GetEffectiveArmorVsType`)
+  * If the nomad has **no `ItemType.Armor` layers** equipped on a body part (clothes only or bare), the base AL for that body part is overridden to **450** with resistance `1.0` (average across all damage types).
+  * If any armor layer is worn, that layer's effective AL contribution is multiplied by **0.5** — nomads don't know how to wear armor.
+* **Persistent state**
+  * `PropertyBool.IsIronmanNomad = 9039` is set on the player.
+  * Mode title is set to `NOMAD` via `SetModeTitle`.
+  * `IsHardcore` and `IsIronman` are also applied (nomad mode is a strict superset of standard Ironman).
+* **Leaderboard integration**
+  * `/ironmantop` shows a `Status` column reading `NOMAD` for nomad players, `DEAD` for any Ironman whose lives are exhausted, or `ALIVE` otherwise.
+  * `Lives` column reads `PropertyInt.HardcoreLives` directly.
 
 ### Global Kill Quest
 Server-wide rotating kill quest that gives all online players the same timed objective.
