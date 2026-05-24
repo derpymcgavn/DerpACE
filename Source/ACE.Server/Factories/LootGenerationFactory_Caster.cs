@@ -179,6 +179,9 @@ namespace ACE.Server.Factories
                     + $"\nWhen you heal yourself or an ally, there is a {ACE.Server.Managers.DerpACEConfig.HierophantHotProcChance:P0} chance to bless the target with a regenerating ward restoring up to {hotPct:P0} of their health over {ACE.Server.Managers.DerpACEConfig.HierophantHotDurationSeconds:0}s."
                     + $"\nEach heal also echoes a {fellowEcho:P0} bonus heal to nearby fellowship members within {ACE.Server.Managers.DerpACEConfig.HierophantFellowEchoRange:0}m.";
             }
+
+            // Universal blast-on-strike: rare chance for any elemental caster T5+ to proc a level-3 blast.
+            TryRollWeaponBlastProc(wo, profile);
         }
 
         private static void MutateCaster_SpellDID(WorldObject wo, TreasureDeath profile)

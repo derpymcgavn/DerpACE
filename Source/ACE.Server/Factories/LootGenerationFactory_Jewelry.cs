@@ -68,9 +68,8 @@ namespace ACE.Server.Factories
             if (profile.Tier == 8)
                 TryMutateGearRating(wo, profile, roll);
 
-            // Vampiric Jewelry affix: small per-piece vital-steal that ticks passively (with diminishing returns across pieces)
-            // and offers a tiny on-hit vital burst. Rolls one of three flavors: Health (vampiric), Stamina (leech), Mana (siphon).
-            // See @lootconfig.
+            // Vampiric Jewelry affix: on-hit chance to restore vitals with diminishing returns across stacked pieces.
+            // Rolls one of three flavors: Health (vampiric), Stamina (leech), Mana (siphon). See @lootconfig.
             var rolledVampiric = false;
             var vampPts = 0;
             var vampVitalRoll = 0;
@@ -124,38 +123,34 @@ namespace ACE.Server.Factories
             // Append the Vampiric jewelry description AFTER GetLongDesc so it survives the spell-name overwrite.
             if (rolledVampiric)
             {
-                var interval = ACE.Server.Managers.DerpACEConfig.VampiricJewelryRegenIntervalSeconds;
                 var procChancePct = (int)System.Math.Round(ACE.Server.Managers.DerpACEConfig.VampiricJewelryOnHitProcChance * 100.0);
                 var burst = (int)System.Math.Round(vampPts * ACE.Server.Managers.DerpACEConfig.VampiricJewelryOnHitMultiplier);
                 if (burst < 1) burst = 1;
 
-                // Build a per-piece-count diminishing returns breakdown so wearers can see exactly what stacking does.
+                // Build a per-piece-count diminishing returns breakdown.
                 var dr = ACE.Server.Managers.DerpACEConfig.VampiricJewelryDiminishingReturns;
-                string drBreakdown;
+                string drNote;
                 if (dr == null || dr.Length <= 1)
                 {
-                    drBreakdown = $"each piece grants its full {vampPts} {vampVitalLabel} per tick.";
+                    drNote = $"Stacking multiple pieces does not reduce the per-piece proc.";
                 }
                 else
                 {
                     var parts = new System.Collections.Generic.List<string>();
-                    // dr[0] is unused (0 pieces), start at 1.
                     for (var i = 1; i < dr.Length; i++)
                     {
-                        var perTick = (int)System.Math.Round(vampPts * i * dr[i]);
-                        if (perTick < 1) perTick = 1;
-                        parts.Add($"{i} pc \u2192 {perTick}");
+                        var scaled = (int)System.Math.Round(burst * dr[i]);
+                        if (scaled < 1) scaled = 1;
+                        parts.Add($"{i}pc: {scaled}");
                     }
-                    drBreakdown = "stacking with diminishing returns (assuming all pieces match this one): " + string.Join(", ", parts) + $" {vampVitalLabel} per tick.";
+                    drNote = "Diminishing returns when stacking " + string.Join(", ", parts) + " " + vampVitalLabel + " per proc.";
                 }
 
                 wo.LongDesc = (wo.LongDesc ?? wo.Name)
-                    + $"\n\nVampiric Jewelry ({vampVitalLabel}): while equipped, restores {vampPts} {vampVitalLabel} every {interval:0.#}s; "
-                    + drBreakdown
-                    + $" Each strike also has a {procChancePct}% chance to drain {burst} {vampVitalLabel} from your foe.";
+                    + $"\n\nVampiric ({vampVitalLabel}): Each strike has a {procChancePct}% chance to drain {burst} {vampVitalLabel} from your target. "
+                    + drNote;
 
-                // Inscription on the item itself, signed M.S., so the bonus is visible from the appraisal Inscription tab too.
-                wo.Inscription = $"+{vampPts} {vampVitalLabel} regen / {interval:0.#}s\nOn hit: {procChancePct}% to drain {burst} {vampVitalLabel}\nStacks with diminishing returns.";
+                wo.Inscription = $"On hit: {procChancePct}% chance to drain {burst} {vampVitalLabel}.\n" + drNote;
                 wo.ScribeName = "M.S.";
             }
         }

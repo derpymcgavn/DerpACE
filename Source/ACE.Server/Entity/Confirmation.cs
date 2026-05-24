@@ -226,19 +226,25 @@ namespace ACE.Server.Entity
     public class Confirmation_Custom: Confirmation
     {
         public Action Action;
+        public Action OnDecline;
 
-        public Confirmation_Custom(ObjectGuid playerGuid, Action action)
+        public Confirmation_Custom(ObjectGuid playerGuid, Action action, Action onDecline = null)
             : base(playerGuid, ConfirmationType.Yes_No)
         {
             Action = action;
+            OnDecline = onDecline;
         }
 
         public override void ProcessConfirmation(bool response, bool timeout = false)
         {
-            if (!response) return;
-
             var player = Player;
             if (player == null) return;
+
+            if (!response)
+            {
+                OnDecline?.Invoke();
+                return;
+            }
 
             Action();
         }

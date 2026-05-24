@@ -684,7 +684,14 @@ namespace ACE.Entity.Enum.Properties
         // DerpACE: number of times a Merger mob has absorbed a same-WCID neighbor
         MergerMergeCount                         = 9031,
         // DerpACE: current Horde swarm population (number of "members" remaining)
-        HordeSwarmCount                          = 9032
+        HordeSwarmCount                          = 9032,
+        // DerpACE: number of illusionist copies currently alive (tracked on the original)
+        IllusionistCopyCount                     = 9033,
+        // DerpACE: Aura system - up to 3 looping PlayScript particle effect slots.
+        // A missing or zero value means the slot is inactive.
+        AuraPlayScript1                          = 9034,
+        AuraPlayScript2                          = 9035,
+        AuraPlayScript3                          = 9036,
     }
 
     public static class PropertyIntExtensions

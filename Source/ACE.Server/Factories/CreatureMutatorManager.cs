@@ -49,6 +49,7 @@ namespace ACE.Server.Factories
                 RegisterMutator(new MergerMutator());
                 RegisterMutator(new HordeMutator());
                 RegisterMutator(new WarderMutator());
+                RegisterMutator(new IllusionistMutator());
 
                 // TODO: Port Expansion creature types
                 // RegisterMutator(new DrainerMutator());
@@ -240,6 +241,10 @@ namespace ACE.Server.Factories
                 case "warder":
                 case "warding":
                     return "Warder";
+                case "illusion":
+                case "illusionist":
+                case "illusory":
+                    return "Illusionist";
                 default:
                     return name;
             }

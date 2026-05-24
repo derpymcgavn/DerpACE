@@ -370,8 +370,60 @@ namespace ACE.Server.Factories
 
             if (worldObject == null)
                 GuidManager.RecycleDynamicGuid(guid);
+            else
+                TryApplyPrePatchVariant(worldObject);
 
             return worldObject;
+        }
+
+        /// <summary>
+        /// DerpACE: Certain WCIDs (currently 8489) have a small chance to roll as a "pre-patch" visual
+        /// variant on creation. When selected, the world object is retagged with a [PP] suffix in its
+        /// Name and re-skinned with the legacy Setup/ClothingBase/PaletteBase from <see cref="DerpACEConfig"/>,
+        /// then assigned a random valid PaletteTemplate from the dat clothing table.
+        /// </summary>
+        private static void TryApplyPrePatchVariant(WorldObject wo)
+        {
+            if (wo == null) return;
+            if (wo.WeenieClassId != 8489) return;
+
+            var chance = ACE.Server.Managers.DerpACEConfig.PrePatch8489Chance;
+            if (chance <= 0f) return;
+
+            if (ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f) >= chance) return;
+
+            var setupId       = ACE.Server.Managers.DerpACEConfig.PrePatch8489SetupId;
+            var clothingBase  = ACE.Server.Managers.DerpACEConfig.PrePatch8489ClothingBase;
+            var paletteBase   = ACE.Server.Managers.DerpACEConfig.PrePatch8489PaletteBase;
+
+            try
+            {
+                wo.SetupTableId = setupId;
+                wo.ClothingBase = clothingBase;
+                wo.PaletteBaseId = paletteBase;
+
+                // Roll a random PaletteTemplate from the dat-assigned palettes on the legacy ClothingBase
+                var clothingTable = DatLoader.DatManager.PortalDat.ReadFromDat<DatLoader.FileTypes.ClothingTable>(clothingBase);
+                if (clothingTable != null && clothingTable.ClothingSubPalEffects != null && clothingTable.ClothingSubPalEffects.Count > 0)
+                {
+                    var paletteKeys = clothingTable.ClothingSubPalEffects.Keys.ToList();
+                    var picked = paletteKeys[ACE.Common.ThreadSafeRandom.Next(0, paletteKeys.Count - 1)];
+                    var sub = clothingTable.ClothingSubPalEffects[picked];
+
+                    wo.PaletteTemplate = (int)picked;
+                    if (sub != null && sub.Icon > 0)
+                        wo.IconId = sub.Icon;
+
+                    wo.Shade = ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f);
+                }
+
+                if (!string.IsNullOrEmpty(wo.Name) && !wo.Name.EndsWith("[PP]"))
+                    wo.Name = wo.Name + " [PP]";
+            }
+            catch (System.Exception ex)
+            {
+                log.Warn($"TryApplyPrePatchVariant: failed to apply PP variant to {wo.Name} (0x{wo.Guid}:{wo.WeenieClassId}) - {ex.Message}");
+            }
         }
 
         /// <summary>

@@ -369,7 +369,9 @@ namespace ACE.Server.Entity
         }
 
         /// <summary>
-        /// Generates a verbose combo message based on tier and discovery status.
+        /// Generates an immersive single-line combo message.
+        /// Discovery messages get the flavor quote; subsequent uses show a tighter cue.
+        /// Damage is injected by the caller so the value is baked in at the call site.
         /// </summary>
         private string GetComboMessage(ComboDefinition combo, bool isNewDiscovery)
         {
@@ -377,18 +379,18 @@ namespace ACE.Server.Entity
             {
                 return combo.Tier switch
                 {
-                    3 => $"═══════════════════════════\n★★★ LEGENDARY COMBO DISCOVERED! ★★★\n『 {combo.Name.ToUpper()} 』\n═══════════════════════════",
-                    2 => $"━━━━━━━━━━━━━━━━━━━━━━\n⚡⚡ ADVANCED COMBO UNLOCKED! ⚡⚡\n『 {combo.Name} 』\n━━━━━━━━━━━━━━━━━━━━━━",
-                    _ => $"✦✦✦ NEW COMBO LEARNED! ✦✦✦\n『 {combo.Name} 』"
+                    3 => $"★ {combo.Name.ToUpper()} ★  \"{combo.FlavorText}\"",
+                    2 => $"⚡ {combo.Name}  \"{combo.FlavorText}\"",
+                    _ => $"✦ {combo.Name}  \"{combo.FlavorText}\""
                 };
             }
             else
             {
                 return combo.Tier switch
                 {
-                    3 => $"★★★ {combo.Name.ToUpper()} ★★★",
-                    2 => $"⚡⚡ {combo.Name.ToUpper()} ⚡⚡",
-                    _ => $"✦ {combo.Name} ✦"
+                    3 => $"★ {combo.Name.ToUpper()}",
+                    2 => $"⚡ {combo.Name}",
+                    _ => combo.Name
                 };
             }
         }
@@ -487,7 +489,7 @@ namespace ACE.Server.Entity
         public int GetComboCount() => _comboChain.Count;
 
         /// <summary>
-        /// Gets the current combo chain as a string for display.
+        /// Gets the current combo chain as a compact code string, e.g. [PPK].
         /// </summary>
         public string GetComboChainDisplay()
         {
@@ -496,10 +498,23 @@ namespace ACE.Server.Entity
 
             var display = "";
             foreach (var attack in _comboChain)
-            {
                 display += attack == AttackType.Punch ? "P" : "K";
-            }
             return $"[{display}]";
+        }
+
+        /// <summary>
+        /// Gets the current combo chain as a readable attack sequence,
+        /// e.g. "Jab · Jab · Kick" — used for in-combat feedback messages.
+        /// </summary>
+        public string GetComboChainDisplayVerbose()
+        {
+            if (_comboChain.Count == 0)
+                return "";
+
+            var parts = new List<string>();
+            foreach (var attack in _comboChain)
+                parts.Add(attack == AttackType.Punch ? "Jab" : "Kick");
+            return string.Join(" · ", parts);
         }
 
         /// <summary>

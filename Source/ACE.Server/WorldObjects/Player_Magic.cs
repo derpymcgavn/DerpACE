@@ -418,6 +418,18 @@ namespace ACE.Server.WorldObjects
                 SendUseDoneEvent(WeenieError.None);
                 return false;
             }
+
+            // DerpACE: Warder affix — block offensive spells against warded creatures
+            if (spell.IsHarmful && target is Creature && Creature.IsWardedTarget(target))
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"A ward deflects your {spell.Name}! A nearby Warder protects {target.Name}. [Warder]",
+                    ChatMessageType.Magic));
+                ApplyVisualEffects(PlayScript.Fizzle);
+                SendUseDoneEvent(WeenieError.None);
+                return false;
+            }
+
             return true;
         }
 

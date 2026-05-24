@@ -376,6 +376,60 @@ namespace ACE.Server.Managers
         /// <summary>Per-bane roll chance on Covenant armor. Default 0.60 (significant bump).</summary>
         public static float ArmorBaneChanceCovenant { get; set; } = 0.60f;
 
+        /// <summary>
+        /// Flat bonus added to the base tier enchantment roll chance for armor and melee/missile weapons.
+        /// Retail base caps at 0.60 for T6-T8. Setting this to 0.25 means T6 armor goes from 60% to 85% chance for the first critter/life spell.
+        /// Default 0.25.
+        /// </summary>
+        public static float ArmorEnchantmentChanceBonus { get; set; } = 0.25f;
+
+        /// <summary>
+        /// Maximum number of critter/life enchantments that can roll onto a single armor piece.
+        /// Retail cap is 1. Setting this to 2 lets high-tier armor occasionally roll two critter or life spells.
+        /// Default 2.
+        /// </summary>
+        public static int ArmorMaxEnchantments { get; set; } = 2;
+
+        /// <summary>
+        /// For each additional enchantment beyond the first (up to ArmorMaxEnchantments), the base roll chance is
+        /// multiplied by this value. Default 0.50 = 50% of the first-spell chance.
+        /// </summary>
+        public static float ArmorExtraEnchantmentChanceMult { get; set; } = 0.50f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Weapon Elemental Blast-on-Strike (all weapon classes)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Minimum treasure tier before a weapon can roll a cast-on-strike elemental blast proc.
+        /// Default 5 (T5 and above only).
+        /// </summary>
+        public static int WeaponBlastProcMinTier { get; set; } = 5;
+
+        /// <summary>
+        /// Chance (0–1) at the minimum tier for a weapon to receive an elemental blast-on-strike proc.
+        /// Scales linearly up to WeaponBlastProcChanceMax at T8. Default 0.01 (1%).
+        /// </summary>
+        public static float WeaponBlastProcChanceMin { get; set; } = 0.01f;
+
+        /// <summary>
+        /// Chance (0–1) at T8 for a weapon to receive an elemental blast-on-strike proc.
+        /// Default 0.04 (4%).
+        /// </summary>
+        public static float WeaponBlastProcChanceMax { get; set; } = 0.04f;
+
+        /// <summary>
+        /// Minimum ProcSpellRate (0–1) rolled onto the weapon for the blast proc.
+        /// Default 0.00001 (0.001%, effectively a rare per-hit roll).
+        /// </summary>
+        public static float WeaponBlastProcRateMin { get; set; } = 0.00001f;
+
+        /// <summary>
+        /// Maximum ProcSpellRate (0–1) rolled onto the weapon for the blast proc.
+        /// Default 0.001 (0.1%).
+        /// </summary>
+        public static float WeaponBlastProcRateMax { get; set; } = 0.001f;
+
         // ---------- Mob Modifiers (rare spawn affixes) ----------
 
         /// <summary>Master switch for the mob modifier system. Default true.</summary>
@@ -399,11 +453,11 @@ namespace ACE.Server.Managers
         /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
         public static float VampiricMobChance { get; set; } = 0.01f;
 
-        /// <summary>Minimum vampiric lifesteal % rolled at spawn (integer). Default 5.</summary>
-        public static int VampiricLifestealMin { get; set; } = 5;
+        /// <summary>Minimum vampiric lifesteal % rolled at spawn (integer). Default 10.</summary>
+        public static int VampiricLifestealMin { get; set; } = 10;
 
-        /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 15.</summary>
-        public static int VampiricLifestealMax { get; set; } = 15;
+        /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 25.</summary>
+        public static int VampiricLifestealMax { get; set; } = 25;
 
         /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
         public static float ThiefMobChance { get; set; } = 0.01f;
@@ -500,6 +554,18 @@ namespace ACE.Server.Managers
         /// <summary>Radius (meters) a Warder's ward extends to nearby creatures. Default 8.</summary>
         public static float WarderRange { get; set; } = 8.0f;
 
+        /// <summary>Per-spawn chance (0-1) for the Illusionist affix. Default 0.01.</summary>
+        public static float IllusionistMobChance { get; set; } = 0.01f;
+
+        /// <summary>Number of 1-HP copies an Illusionist spawns on first sight of a player. Default 10.</summary>
+        public static int IllusionistCopyCount { get; set; } = 10;
+
+        /// <summary>Radius (meters) around the Illusionist that copies are scattered into. Default 6.</summary>
+        public static float IllusionistCopyRadius { get; set; } = 6.0f;
+
+        /// <summary>Seconds between Illusionist swap attempts. Default 6.</summary>
+        public static float IllusionistSwapCooldownSeconds { get; set; } = 6.0f;
+
         // ---------- Mutator Derpcoin Reward System ----------
 
         /// <summary>WCID of the Derpcoin item. Default 7000011.</summary>
@@ -557,6 +623,22 @@ namespace ACE.Server.Managers
 
         /// <summary>Multiplier applied to the piece's points value to compute the on-hit heal. Default 2.0 (1–3 points => 2–6 hp burst).</summary>
         public static float VampiricJewelryOnHitMultiplier { get; set; } = 2.0f;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Pre-Patch (PP) Variants — WCID 8489
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Chance (0–1) that a freshly-created WCID 8489 rolls as the legacy "pre-patch" visual. Default 0.10 (10%).</summary>
+        public static float PrePatch8489Chance { get; set; } = 0.10f;
+
+        /// <summary>SetupTableId applied to a [PP] WCID 8489 variant. Default 33555248.</summary>
+        public static uint PrePatch8489SetupId { get; set; } = 33555248u;
+
+        /// <summary>ClothingBase applied to a [PP] WCID 8489 variant. Default 268435629.</summary>
+        public static uint PrePatch8489ClothingBase { get; set; } = 268435629u;
+
+        /// <summary>PaletteBase applied to a [PP] WCID 8489 variant. Default 67108990.</summary>
+        public static uint PrePatch8489PaletteBase { get; set; } = 67108990u;
     }
 }
 

@@ -119,7 +119,7 @@ namespace ACE.Server.WorldObjects
         /// Returns the current equipped active melee weapon
         /// This will normally be the primary melee weapon, but if dual wielding, this will be the weapon for the next attack
         /// </summary>
-        public WorldObject GetEquippedMeleeWeapon(bool forceMainHand = false)
+        public virtual WorldObject GetEquippedMeleeWeapon(bool forceMainHand = false)
         {
             if (!IsDualWieldAttack || DualWieldAlternate || forceMainHand)
                 return EquippedObjects.Values.FirstOrDefault(e => e.ParentLocation == ACE.Entity.Enum.ParentLocation.RightHand && (e.CurrentWieldedLocation == EquipMask.MeleeWeapon || e.CurrentWieldedLocation == EquipMask.TwoHanded));

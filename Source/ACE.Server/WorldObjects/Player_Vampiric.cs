@@ -12,77 +12,9 @@ namespace ACE.Server.WorldObjects
     partial class Player
     {
         /// <summary>
-        /// Last unix time (seconds) the Vampiric jewelry passive regen ticked for this player.
+        /// Passive vital-steal tick — disabled. Vampiric jewelry now uses on-hit proc only.
         /// </summary>
-        private double _lastVampiricJewelryTick;
-
-        /// <summary>
-        /// Per-heartbeat passive vital-steal from equipped Vampiric jewelry (rings/necklaces/bracelets).
-        /// Buckets pieces by their rolled vital flavor (Health/Stamina/Mana), then applies the
-        /// diminishing-returns curve based on equipped piece count within each flavor.
-        /// </summary>
-        private void TickVampiricJewelry(double currentUnixTime)
-        {
-            if (!IsAlive)
-                return;
-
-            var interval = DerpACEConfig.VampiricJewelryRegenIntervalSeconds;
-            if (interval <= 0)
-                return;
-
-            if (_lastVampiricJewelryTick != 0 && (currentUnixTime - _lastVampiricJewelryTick) < interval)
-                return;
-
-            _lastVampiricJewelryTick = currentUnixTime;
-
-            // [0]=Health, [1]=Stamina, [2]=Mana
-            var pointsByVital = new int[3];
-            var countByVital = new int[3];
-
-            foreach (var item in EquippedObjects.Values)
-            {
-                if (item.GetProperty(PropertyBool.IsVampiricJewelry) != true)
-                    continue;
-
-                var pts = item.GetProperty(PropertyInt.VampiricJewelryPoints) ?? 0;
-                if (pts <= 0)
-                    continue;
-
-                var vital = item.GetProperty(PropertyInt.VampiricJewelryVital) ?? 0;
-                if (vital < 0 || vital > 2)
-                    vital = 0;
-
-                pointsByVital[vital] += pts;
-                countByVital[vital]++;
-            }
-
-            var dr = DerpACEConfig.VampiricJewelryDiminishingReturns;
-            for (var v = 0; v < 3; v++)
-            {
-                if (pointsByVital[v] <= 0)
-                    continue;
-
-                var vital = GetVampiricVital(v);
-                if (vital == null || vital.Current >= vital.MaxValue)
-                    continue;
-
-                float drMult;
-                if (dr == null || dr.Length == 0)
-                    drMult = 1.0f;
-                else if (countByVital[v] >= dr.Length)
-                    drMult = dr[dr.Length - 1];
-                else
-                    drMult = dr[countByVital[v]];
-
-                var amount = (int)Math.Round(pointsByVital[v] * drMult);
-                if (amount < 1)
-                    amount = 1;
-
-                var applied = UpdateVitalDelta(vital, amount);
-                if (v == 0 && applied > 0)
-                    DamageHistory.OnHeal((uint)applied);
-            }
-        }
+        private void TickVampiricJewelry(double currentUnixTime) { }
 
         /// <summary>
         /// Called from on-hit damage resolution. For each equipped Vampiric jewelry piece, rolls a small chance

@@ -125,7 +125,10 @@ namespace ACE.Server.WorldObjects
 
             PhysicsObj.ObjMaint.DestroyObjects();
 
-            TickVampiricJewelry(currentUnixTime);
+            // TickVampiricJewelry removed — passive tick disabled; on-hit proc only.
+
+            // DerpACE: tick persistent aura particle effects.
+            AuraManager.Tick(this, currentUnixTime);
 
             // Check if we're due for our periodic SavePlayer
             if (LastRequestedDatabaseSave == DateTime.MinValue)

@@ -75,6 +75,9 @@ namespace ACE.Server.WorldObjects
             // SendSelf will trigger the entrance into portal space
             SendSelf();
 
+            // DerpACE: fire any active aura effects immediately so they appear on load-in.
+            AuraManager.FireAuras(this);
+
             // Update or override certain properties sent to client.
 
             // bugged: do not send this here, or else a freshly loaded acclient will overrwrite the values

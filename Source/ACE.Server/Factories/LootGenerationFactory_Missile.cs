@@ -135,7 +135,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus, bonusPct / 100.0);
                 wo.IconOverlayId = 0x06002699u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards the patient hunter \u2014 the *first* shot loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets or letting the target drop resets the opportunity.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards the patient hunter -- the *first* shot loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets resets the opportunity.";
             }
 
             // Breacher's Crossbow: configurable chance on T6+ crossbows for an always-on armor pierce % (see @lootconfig)
@@ -192,6 +192,9 @@ namespace ACE.Server.Factories
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} feasts on the slain \u2014 a killing blow has a {procPct}% chance to instantly restore {healPct}% of your maximum health.";
             }
+
+            // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.
+            TryRollWeaponBlastProc(wo, profile);
         }
 
         private static string GetMissileScript(TreasureWeaponType weaponType, bool isElemental = false)

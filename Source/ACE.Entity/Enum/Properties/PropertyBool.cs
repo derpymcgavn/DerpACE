@@ -236,5 +236,7 @@ namespace ACE.Entity.Enum.Properties
         IsMergerMob                      = 9042,
         IsHordeMob                       = 9043,
         IsWarderMob                      = 9044,
+        IsIllusionistMob                 = 9045,
+        IsIllusionistCopy                = 9046,
     }
 }

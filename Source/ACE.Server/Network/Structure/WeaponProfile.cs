@@ -44,15 +44,7 @@ namespace ACE.Server.Network.Structure
             if (weapon is Caster)
                 return;
 
-            // DerpACE: Check if this is an unarmed armor piece (boot/gauntlet with unarmed damage)
-            var isUnarmedArmorPiece = weapon is Clothing && (weapon.UnarmedBaseDamage ?? 0) > 0 &&
-                                      (weapon.ValidLocations & (EquipMask.HandWear | EquipMask.FootWear)) != 0;
-
-            // For unarmed armor pieces, use UnarmedDamageType, otherwise use regular DamageType
-            if (isUnarmedArmorPiece)
-                DamageType = (DamageType)(weapon.GetProperty(PropertyInt.UnarmedDamageType) ?? 0);
-            else
-                DamageType = (DamageType)(weapon.GetProperty(PropertyInt.DamageType) ?? 0);
+            DamageType = (DamageType)(weapon.GetProperty(PropertyInt.DamageType) ?? 0);
             //if (DamageType == 0)
                 //Console.WriteLine($"Warning: WeaponProfile undefined damage type for {weapon.Name} ({weapon.Guid})");
 
@@ -72,14 +64,7 @@ namespace ACE.Server.Network.Structure
         /// </summary>
         public uint GetDamage(WorldObject weapon)
         {
-            // DerpACE: Check if this is an unarmed armor piece (boot/gauntlet with unarmed damage)
-            var isUnarmedArmorPiece = weapon is Clothing && (weapon.UnarmedBaseDamage ?? 0) > 0 &&
-                                      (weapon.ValidLocations & (EquipMask.HandWear | EquipMask.FootWear)) != 0;
-
-            // For unarmed armor pieces, use UnarmedBaseDamage, otherwise use regular Damage
-            var baseDamage = isUnarmedArmorPiece
-                ? weapon.GetProperty(PropertyInt.UnarmedBaseDamage) ?? 0
-                : weapon.GetProperty(PropertyInt.Damage) ?? 0;
+            var baseDamage = weapon.GetProperty(PropertyInt.Damage) ?? 0;
 
             var damageBonus = weapon.EnchantmentManager.GetDamageBonus();
             var auraDamageBonus = weapon.Wielder != null && (weapon.WeenieType != WeenieType.Ammunition || PropertyManager.GetBool("show_ammo_buff").Item) ? weapon.Wielder.EnchantmentManager.GetDamageBonus() : 0;
@@ -104,14 +89,7 @@ namespace ACE.Server.Network.Structure
         /// </summary>
         public float GetDamageVariance(WorldObject weapon)
         {
-            // DerpACE: Check if this is an unarmed armor piece (boot/gauntlet with unarmed damage)
-            var isUnarmedArmorPiece = weapon is Clothing && (weapon.UnarmedBaseDamage ?? 0) > 0 &&
-                                      (weapon.ValidLocations & (EquipMask.HandWear | EquipMask.FootWear)) != 0;
-
-            // For unarmed armor pieces, use UnarmedDamageVariance, otherwise use regular DamageVariance
-            var baseVariance = isUnarmedArmorPiece
-                ? weapon.GetProperty(PropertyFloat.UnarmedDamageVariance) ?? 0.0f
-                : weapon.GetProperty(PropertyFloat.DamageVariance) ?? 0.0f;
+            var baseVariance = weapon.GetProperty(PropertyFloat.DamageVariance) ?? 0.0f;
 
             // are there any spells which modify damage variance?
             var varianceMod = weapon.EnchantmentManager.GetVarianceMod();

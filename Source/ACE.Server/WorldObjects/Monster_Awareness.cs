@@ -39,6 +39,10 @@ namespace ACE.Server.WorldObjects
             if (IsScoutMob && AttackTarget is Player playerTarget)
                 BroadcastScoutAlert(playerTarget);
 
+            // DerpACE: Illusionist spawns its decoy copies on first aggro
+            if (IsIllusionistMob && !IsIllusionistCopy)
+                TryIllusionistOnAggro();
+
             //DoAttackStance();
             EmoteManager.OnWakeUp(AttackTarget as Creature);
             EmoteManager.OnNewEnemy(AttackTarget as Creature);

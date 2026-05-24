@@ -195,14 +195,32 @@ namespace ACE.Server.Factories
         {
             var tierChances = roll.IsCaster ? EnchantmentChances_Caster : EnchantmentChances_Armor_MeleeMissileWeapon;
 
-            var chance = tierChances[profile.Tier - 1];
+            var baseChance = tierChances[profile.Tier - 1];
+
+            // DerpACE: add configurable flat bonus to make critter/life spells more common on armor/weapons.
+            // Casters keep their own table; only armor and melee/missile weapons get the bonus.
+            if (!roll.IsCaster)
+                baseChance = Math.Min(1.0f, baseChance + ACE.Server.Managers.DerpACEConfig.ArmorEnchantmentChanceBonus);
 
             var rng = ThreadSafeRandom.NextInterval(profile.LootQualityMod);
-
-            if (rng < chance)
-                return 1;
-            else
+            if (rng >= baseChance)
                 return 0;
+
+            // First spell always lands. Try for additional spells up to ArmorMaxEnchantments.
+            if (roll.IsCaster)
+                return 1;   // casters keep the original single-spell behaviour
+
+            var maxExtra = Math.Max(0, ACE.Server.Managers.DerpACEConfig.ArmorMaxEnchantments - 1);
+            var extraChance = baseChance * ACE.Server.Managers.DerpACEConfig.ArmorExtraEnchantmentChanceMult;
+            var count = 1;
+            for (var i = 0; i < maxExtra; i++)
+            {
+                if (ThreadSafeRandom.NextInterval(profile.LootQualityMod) < extraChance)
+                    count++;
+                else
+                    break;
+            }
+            return count;
         }
 
         private static int RollNumEnchantments_Clothing_Jewelry_Dinnerware(WorldObject wo, TreasureDeath profile, TreasureRoll roll)

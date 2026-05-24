@@ -5079,5 +5079,138 @@ namespace ACE.Server.Command.Handlers
 
             session.Player.Teleport(MoveHorizontal(session.Player.Location, dist, -90f));
         }
+
+        // =====================================================================
+        //  DerpACE – Aura Commands
+        //  Usage:
+        //    @aura info [playerName]
+        //    @aura set  <slot 1-3> <scriptId> [playerName]
+        //    @aura clear <slot 1-3 | all> [playerName]
+        //    @aura list
+        // =====================================================================
+        [CommandHandler("aura", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 1,
+            "Manage pseudo-aura particle effects on a player.",
+            "<info|set|clear|list> [args] [playerName]")]
+        public static void HandleAura(Session session, params string[] parameters)
+        {
+            var sub = parameters[0].ToLower();
+
+            // ------------------------------------------------------------------
+            // @aura list  — print all valid PlayScript ids
+            // ------------------------------------------------------------------
+            if (sub == "list")
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    AuraManager.GetScriptList(), ChatMessageType.Broadcast));
+                return;
+            }
+
+            // ------------------------------------------------------------------
+            // Helper: resolve optional trailing player name.
+            // All sub-commands share this pattern.
+            // ------------------------------------------------------------------
+            Player target = session.Player;
+
+            if (sub == "info")
+            {
+                // @aura info [playerName]
+                if (parameters.Length >= 2)
+                {
+                    target = PlayerManager.GetOnlinePlayer(parameters[1]);
+                    if (target == null)
+                    {
+                        session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"Player '{parameters[1]}' not found or not online.", ChatMessageType.Broadcast));
+                        return;
+                    }
+                }
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    AuraManager.GetAuraInfo(target), ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (sub == "set")
+            {
+                // @aura set <slot> <scriptId> [playerName]
+                if (parameters.Length < 3)
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "Usage: @aura set <slot 1-3> <scriptId> [playerName]", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                if (!int.TryParse(parameters[1], out int slot))
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "Slot must be a number 1-3.", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                if (!uint.TryParse(parameters[2], out uint scriptId))
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "scriptId must be a positive integer. Use '@aura list' to see valid ids.", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                if (parameters.Length >= 4)
+                {
+                    target = PlayerManager.GetOnlinePlayer(parameters[3]);
+                    if (target == null)
+                    {
+                        session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"Player '{parameters[3]}' not found or not online.", ChatMessageType.Broadcast));
+                        return;
+                    }
+                }
+
+                var err = AuraManager.SetAura(target, slot, scriptId);
+                var msg = err ?? $"Aura slot {slot} on {target.Name} set to {(ACE.Entity.Enum.PlayScript)scriptId} ({scriptId}).";
+                session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (sub == "clear")
+            {
+                // @aura clear <slot|all> [playerName]
+                if (parameters.Length < 2)
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "Usage: @aura clear <slot 1-3 | all> [playerName]", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                if (parameters.Length >= 3)
+                {
+                    target = PlayerManager.GetOnlinePlayer(parameters[2]);
+                    if (target == null)
+                    {
+                        session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"Player '{parameters[2]}' not found or not online.", ChatMessageType.Broadcast));
+                        return;
+                    }
+                }
+
+                int clearSlot;
+                if (parameters[1].ToLower() == "all")
+                    clearSlot = 0;
+                else if (!int.TryParse(parameters[1], out clearSlot))
+                {
+                    session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "Slot must be a number 1-3 or 'all'.", ChatMessageType.Broadcast));
+                    return;
+                }
+
+                var err = AuraManager.ClearAura(target, clearSlot);
+                var msg = err ?? (clearSlot == 0
+                    ? $"All auras cleared on {target.Name}."
+                    : $"Aura slot {clearSlot} cleared on {target.Name}.");
+                session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.Broadcast));
+                return;
+            }
+
+            session.Network.EnqueueSend(new GameMessageSystemChat(
+                "Usage: @aura <info|set|clear|list> [args] [playerName]", ChatMessageType.Broadcast));
+        }
     }
 }

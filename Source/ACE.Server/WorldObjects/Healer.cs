@@ -261,7 +261,7 @@ namespace ACE.Server.WorldObjects
         {
             // factors: healing skill, healing kit bonus, stamina, critical chance
             var healingSkill = healer.GetCreatureSkill(Skill.Healing).Current;
-            var healBase = healingSkill * (float)HealkitMod.Value;
+            var healBase = healingSkill * (float)(HealkitMod ?? 1.0);
 
             // todo: determine applicable range from pcaps
             var healMin = healBase * 0.2f;      // ??

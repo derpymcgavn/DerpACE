@@ -123,6 +123,67 @@ namespace ACE.Server.Factories
             return Math.Clamp(adjusted, 0.0f, 1.0f);
         }
 
+        /// <summary>
+        /// Attempts to roll a cast-on-strike elemental blast proc onto a weapon.
+        /// Only fires when the weapon has an elemental damage type, no ProcSpell is already set,
+        /// and the tier/chance check passes.  Can stack on top of any named modifier because the
+        /// proc is handled via the engine's existing ProcSpell/ProcSpellRate fields.
+        /// </summary>
+        private static void TryRollWeaponBlastProc(WorldObject wo, TreasureDeath profile)
+        {
+            var minTier = ACE.Server.Managers.DerpACEConfig.WeaponBlastProcMinTier;
+            if (profile == null || profile.Tier < minTier)
+                return;
+
+            // Don't overwrite an existing proc (Archmagi, unarmed elemental, etc.)
+            if (wo.ProcSpell.HasValue && wo.ProcSpell.Value != 0)
+                return;
+
+            // Tier-scaled drop chance: lerps from ChanceMin at minTier to ChanceMax at T8.
+            var chanceMin = ACE.Server.Managers.DerpACEConfig.WeaponBlastProcChanceMin;
+            var chanceMax = ACE.Server.Managers.DerpACEConfig.WeaponBlastProcChanceMax;
+            var t = Math.Clamp((profile.Tier - minTier) / (float)(8 - minTier), 0f, 1f);
+            var rollChance = chanceMin + (chanceMax - chanceMin) * t;
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
+                return;
+
+            // Map damage type to a level-3 blast spell ID.
+            ACE.Entity.Enum.SpellId? blastSpell = wo.W_DamageType switch
+            {
+                DamageType.Fire     => ACE.Entity.Enum.SpellId.FlameBlast3,
+                DamageType.Cold     => ACE.Entity.Enum.SpellId.FrostBolt3,
+                DamageType.Acid     => ACE.Entity.Enum.SpellId.AcidBlast3,
+                DamageType.Electric => ACE.Entity.Enum.SpellId.LightningBlast3,
+                DamageType.Nether   => ACE.Entity.Enum.SpellId.NetherBlast3,
+                _                   => null
+            };
+
+            if (blastSpell == null)
+                return;
+
+            var procRate = ThreadSafeRandom.Next(
+                ACE.Server.Managers.DerpACEConfig.WeaponBlastProcRateMin,
+                ACE.Server.Managers.DerpACEConfig.WeaponBlastProcRateMax);
+
+            wo.ProcSpell = (uint)blastSpell.Value;
+            wo.ProcSpellRate = procRate;
+            wo.ProcSpellSelfTargeted = false;
+
+            var elemName = wo.W_DamageType switch
+            {
+                DamageType.Fire     => "flame",
+                DamageType.Cold     => "frost",
+                DamageType.Acid     => "acid",
+                DamageType.Electric => "lightning",
+                DamageType.Nether   => "nether",
+                _                   => "elemental"
+            };
+
+            var pctDisplay = (procRate * 100.0).ToString("0.###");
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis weapon occasionally releases a burst of {elemName} — each strike carries a {pctDisplay}% chance to discharge a level 3 {elemName} blast.";
+        }
+
         private static bool TryRollWeaponModifier(TreasureDeath profile, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible, bool interchangeableEligible = false)
         {
             if (profile == null || profile.Tier < minTier)
@@ -542,6 +603,9 @@ namespace ACE.Server.Factories
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} hums with a guardian's resolve — each strike has a 10% chance to drain 10% of the target's stamina, returning a quarter of it to the wielder.";
             }
+
+            // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.
+            TryRollWeaponBlastProc(wo, profile);
         }
 
         private static string GetDamageScript(MeleeWeaponSkill weaponSkill, TreasureWeaponType weaponType)

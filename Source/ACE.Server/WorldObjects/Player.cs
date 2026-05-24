@@ -528,6 +528,9 @@ namespace ACE.Server.WorldObjects
             IsBusy = true;
             IsLoggingOut = true;
 
+            // DerpACE: clean up aura tick state.
+            AuraManager.OnPlayerLogout(this);
+
             PlayerManager.AddPlayerToFinalLogoffQueue(this);
 
             if (Fellowship != null)

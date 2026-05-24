@@ -224,6 +224,9 @@ namespace ACE.Server.WorldObjects
         {
             base.FinishClose(player);
 
+            // DerpACE: let the Mysterious Stranger heckle the player after they close one of his chests
+            MysteriousStranger.OnStrangerChestClosed(this, player);
+
             if (ChestClearedWhenClosed && InitCreate > 0)
             {
                 if (CurrentCreate == 0)

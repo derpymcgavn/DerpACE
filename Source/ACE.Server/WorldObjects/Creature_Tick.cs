@@ -44,6 +44,10 @@ namespace ACE.Server.WorldObjects
             if (IsMergerMob)
                 TryMergerHeartbeat(currentUnixTime);
 
+            // DerpACE: Illusionist mob heartbeat (swap positions with a random copy)
+            if (IsIllusionistMob && !IsIllusionistCopy)
+                TryIllusionistSwap(currentUnixTime);
+
             // delete items when RemainingLifespan <= 0
             foreach (var expireItem in expireItems)
             {

@@ -328,8 +328,7 @@ namespace ACE.Server.WorldObjects
             uint fencerPierceBonus = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword)
-                && WeaponNameContains(damageEvent.Weapon, "epee", "schlager", "rapier"))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword))
             {
                 var pierceProc = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < pierceProc)
@@ -524,8 +523,7 @@ namespace ACE.Server.WorldObjects
             if (damageEvent.HasDamage
                 && damageEvent.IsCritical
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword)
-                && WeaponNameContains(damageEvent.Weapon, "tachi", "ken"))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -762,7 +760,7 @@ namespace ACE.Server.WorldObjects
                 // Thief's Dagger: show bonus when the 10% proc fired
                 if (thievesDaggerBonus > 0)
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{thievesDaggerBonus} [Thief's Dagger]",
+                        $"+{thievesDaggerBonus} sneak bonus [{target.Name}] ({intDamage} total) [Thief's Dagger]",
                         ChatMessageType.CombatSelf));
 
                 // Vampiric Jewelry: announce the on-hit drink when any health-flavor piece proc'd.
@@ -778,56 +776,48 @@ namespace ACE.Server.WorldObjects
                 // DerpACE: Unarmed Combo notification
                 if (comboResult != null)
                 {
-                    // Show running combo chain (every unarmed hit, even before a combo matches)
+                    // Building combo — show the running chain as readable attacks (e.g. "Jab · Jab ·  2 hits")
                     if (comboResult.HitCount > 0 && comboResult.ComboType == ComboType.None)
                     {
-                        var comboChain = UnarmedComboSystem.GetComboChainDisplay();
-                        var streakSuffix = "";
-                        if (hitStreakAfter > 1 || killStreakAfter > 0)
-                            streakSuffix = $"  •  streak {hitStreakAfter}{(killStreakAfter > 0 ? $"/k{killStreakAfter}" : "")}";
+                        var chain = UnarmedComboSystem.GetComboChainDisplayVerbose();
+                        var streakPart = "";
+                        if (hitStreakAfter > 1) streakPart = $"  (streak ×{hitStreakAfter})";
+                        if (killStreakAfter > 0) streakPart += $"  (killing spree ×{killStreakAfter})";
 
-                        var counterMsg = $"{comboChain} {comboResult.HitCount} hit combo{streakSuffix}";
-                        if (streakBonusApplied > 0)
-                            counterMsg += $"  (+{streakBonusApplied} streak)";
-
-                        Session.Network.EnqueueSend(new GameMessageSystemChat(counterMsg, ChatMessageType.CombatSelf));
+                        var msg = $"{chain}  •  {comboResult.HitCount} hit{(comboResult.HitCount != 1 ? "s" : "")} building{streakPart}";
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.CombatSelf));
                     }
 
-                    // Show completed combo message
+                    // Completed combo — one punchy line per tier, damage baked in
                     if (comboResult.ComboType != ComboType.None && !string.IsNullOrEmpty(comboResult.Message))
                     {
-                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+                        // No particle effect — the chat line is the cue
 
-                        // Audible cue so finishers are unmissable
-                        EnqueueBroadcast(new GameMessageSound(Guid, Sound.TriggerActivated, 1.0f));
+                        // Tier 3: broadcast channel (loud, gold), Tier 1-2: CombatSelf (quieter)
+                        var channel = comboResult.Tier >= 3 ? ChatMessageType.Broadcast : ChatMessageType.CombatSelf;
 
-                        // Combo banner — broadcast to self in the loud Broadcast channel
-                        Session.Network.EnqueueSend(new GameMessageSystemChat(
-                            comboResult.Message,
-                            ChatMessageType.Broadcast));
+                        // E.g. "★ DEMOLISHER  →  +247 combo damage on Skeleton Warrior"
+                        // Or on first discovery: "★ DEMOLISHER  "Three punches..."  →  +247 combo damage on..."
+                        var damageStr = comboBonusApplied > 0 ? $"  →  +{comboBonusApplied} on {target.Name}" : $"  →  {intDamage} total on {target.Name}";
+                        var streakStr = streakBonusApplied > 0 ? $"  +{streakBonusApplied} streak" : "";
+                        var fullMsg = comboResult.Message + damageStr + streakStr;
 
-                        if (!string.IsNullOrEmpty(comboResult.FlavorText))
-                            Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                comboResult.FlavorText,
-                                ChatMessageType.CombatSelf));
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(fullMsg, channel));
 
-                        if (comboBonusApplied > 0)
-                            Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"+{comboBonusApplied} combo damage (x{comboResult.DamageMultiplier:F2}) [{target.Name}]",
-                                ChatMessageType.CombatSelf));
-
-                        if (streakBonusApplied > 0)
-                            Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"+{streakBonusApplied} streak bonus (hit {hitStreakAfter}{(killStreakAfter > 0 ? $"/kill {killStreakAfter}" : "")})",
-                                ChatMessageType.CombatSelf));
+                        // On new discovery only, append the flavor text as a follow-up whisper in CombatSelf
+                        // (GetComboMessage already bakes it in for discovery; this is a no-op but kept
+                        //  as a safety net for future separation of message vs flavor)
                     }
                 }
 
                 // Fencer's Blade: show pierce bonus when armor-pierce proc fired
                 if (fencerPierceBonus > 0)
+                {
+                    target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{fencerPierceBonus} pierce [Fencer's Blade]",
+                        $"+{fencerPierceBonus} armor pierce [{target.Name}] ({intDamage} total) [Fencer's Blade]",
                         ChatMessageType.CombatSelf));
+                }
 
                 // Sentinel's Spear: show stamina drain/return when proc fired
                 if (sentinelStaminaDrained > 0)
@@ -835,7 +825,7 @@ namespace ACE.Server.WorldObjects
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpYellow);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"-{sentinelStaminaDrained} stamina [{target.Name}] +{sentinelStaminaReturned} [Sentinel's Spear]",
+                        $"Stamina siphon: -{sentinelStaminaDrained} from {target.Name}, +{sentinelStaminaReturned} returned to you [Sentinel's Spear]",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -866,7 +856,7 @@ namespace ACE.Server.WorldObjects
                 if (wardenPenaltyApplied > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"crushes {target.Name}'s guard — -{wardenPenaltyApplied} defense skill for {wardenDurationApplied} sec [Warden's Maul]",
+                        $"Concussion! {target.Name} loses {wardenPenaltyApplied} defense skill for {wardenDurationApplied}s [Warden's Maul]",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -874,7 +864,7 @@ namespace ACE.Server.WorldObjects
                 if (polebreakerStacks > 1 && polebreakerBonus > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"[Polebreaker] +{polebreakerBonus} (x{polebreakerStacks})",
+                        $"[Polebreaker] x{polebreakerStacks} stack -- +{polebreakerBonus} bonus ({intDamage} total) [{target.Name}]",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -882,15 +872,16 @@ namespace ACE.Server.WorldObjects
                 if (stalkerBonusApplied > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{stalkerBonusApplied} [Stalker's Bow] first strike",
+                        $"+{stalkerBonusApplied} first-strike bonus [{target.Name}] ({intDamage} total) [Stalker's Bow]",
                         ChatMessageType.CombatSelf));
                 }
 
                 // Breacher's Crossbow: announce armor bypass proc
                 if (breacherArmorIgnored > 0)
                 {
+                    target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{breacherArmorIgnored} armor bypass [Breacher's Crossbow]",
+                        $"+{breacherArmorIgnored} armor bypassed [{target.Name}] ({intDamage} total) [Breacher's Crossbow]",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -935,8 +926,7 @@ namespace ACE.Server.WorldObjects
                 && !target.IsAlive
                 && targetPlayer == null
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword)
-                && WeaponNameContains(damageEvent.Weapon, "tachi", "ken"))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword))
             {
                 var burstPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct) ?? 0.0;
                 if (burstPct > 0)
@@ -948,7 +938,7 @@ namespace ACE.Server.WorldObjects
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
                     if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                         Session.Network.EnqueueSend(new GameMessageSystemChat(
-                            $"Bloodthirst! +{(uint)Math.Max(0, hpBurst)} health, +{(uint)Math.Max(0, stamBurst)} stamina [Resolute Blade]",
+                            $"Bloodthirst! +{(uint)Math.Max(0, hpBurst)} health, +{(uint)Math.Max(0, stamBurst)} stamina restored on kill [Resolute Blade]",
                             ChatMessageType.CombatSelf));
                 }
             }
@@ -1189,10 +1179,9 @@ namespace ACE.Server.WorldObjects
                 // Check if the armor piece has unarmed damage properties (DerpACE feature)
                 if (damageSource != null && (damageSource.UnarmedBaseDamage ?? 0) > 0)
                 {
-                    var damage = damageSource.UnarmedBaseDamage.Value;
-                    var variance = (float)(damageSource.UnarmedDamageVariance ?? 0.7);
-                    // DerpACE: Apply enchantments (Blood Drinker, etc.) to unarmed armor damage
-                    var baseMod = new BaseDamageMod(new BaseDamage(damage, variance), this, damageSource);
+                    // Damage/DamageVariance/DamageType are now set on the item at loot-gen time,
+                    // so the normal GetDamageMod path handles them correctly.
+                    var baseMod = damageSource.GetDamageMod(this, damageSource);
                     ApplySteelBootDamageBonus(baseMod);
                     return baseMod;
                 }
@@ -1381,7 +1370,7 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
-        /// DerpACE: handles Mob-Modifier on-hit procs (Vampiric lifesteal, Thief pickpocket).
+        /// DerpACE: handles Mob-Modifier on-hit procs (Vampiric lifesteal, Thief pickpocket, Reaper lifedrain, Necromancer DoT).
         /// Thief steal targets any item with ItemType.PromissoryNote (tradenote / MMD), covering all denominations including custom ones.
         /// Called from <see cref="TakeDamage(WorldObject, DamageType, float, BodyPart, bool, AttackConditions)"/>
         /// after the player's HP has been updated and damage history recorded.
@@ -1474,6 +1463,67 @@ namespace ACE.Server.WorldObjects
                                 ChatMessageType.CombatEnemy));
                     }
                 }
+            }
+
+            // Reaper: deal bonus damage and lifedrain a fraction of it back to the attacker
+            if (attacker.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReaperMob) == true && damageDealt > 0)
+            {
+                var bonusMult = (float)(ACE.Server.Managers.DerpACEConfig.ReaperDamageBonus - 1.0f);
+                var bonusDmg = (uint)System.Math.Max(1, System.Math.Round(damageDealt * bonusMult));
+
+                // Apply the extra damage to the player
+                var bonusTaken = (uint)-UpdateVitalDelta(Health, -(int)bonusDmg);
+                DamageHistory.Add(attacker, ACE.Entity.Enum.DamageType.Slash, bonusTaken);
+
+                // Drain a fraction of total damage dealt (base + bonus) back to attacker
+                var drainPct = ACE.Server.Managers.DerpACEConfig.ReaperLifedrainPct;
+                var drainAmt = (int)System.Math.Round((damageDealt + bonusTaken) * drainPct);
+                if (drainAmt >= 1 && attacker.Health != null)
+                {
+                    attacker.UpdateVitalDelta(attacker.Health, drainAmt);
+                    attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
+                }
+
+                if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"{attacker.Name} reaps your life essence for {bonusTaken} additional damage and drains {drainAmt} health! [Reaper]",
+                        ChatMessageType.CombatEnemy));
+            }
+
+            // Necromancer: chance to apply a nether damage-over-time
+            if (attacker.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsNecromancerMob) == true
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.NecromancerDotChance)
+            {
+                var dotTotal = ACE.Server.Managers.DerpACEConfig.NecromancerDotTotal;
+                const int dotTicks = 4;
+                const double dotInterval = 3.0;
+                var tickDmg = (int)System.Math.Max(1, System.Math.Round(dotTotal / dotTicks));
+
+                ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownVoid);
+                if (!SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"{attacker.Name} curses you with necrotic decay! [Necromancer]",
+                        ChatMessageType.CombatEnemy));
+
+                var dotChain = new ACE.Server.Entity.Actions.ActionChain();
+                for (int tick = 0; tick < dotTicks; tick++)
+                {
+                    dotChain.AddDelaySeconds(dotInterval);
+                    dotChain.AddAction(this, () =>
+                    {
+                        if (IsDead || Session == null) return;
+                        var taken = (uint)-UpdateVitalDelta(Health, -tickDmg);
+                        DamageHistory.Add(attacker, ACE.Entity.Enum.DamageType.Nether, taken);
+                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownVoid);
+                        if (taken > 0 && !SquelchManager.Squelches.Contains(attacker, ChatMessageType.CombatEnemy))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"The necrotic curse burns you for {taken} nether damage. [Necromancer]",
+                                ChatMessageType.CombatEnemy));
+                        if (Health.Current == 0)
+                            OnDeath(new ACE.Server.Entity.DamageHistoryInfo(attacker), ACE.Entity.Enum.DamageType.Nether, false);
+                    });
+                }
+                dotChain.EnqueueChain();
             }
         }
 
@@ -1669,9 +1719,12 @@ namespace ACE.Server.WorldObjects
                         if (reflectAmount >= 1.0f)
                         {
                             fencerAttacker.TakeDamage(this, DamageType.Pierce, reflectAmount);
-                            Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"[Fencer's Blade] Deflected! -{(uint)reflectAmount} [{fencerAttacker.Name}]",
-                                ChatMessageType.CombatSelf));
+                            fencerAttacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
+                            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+                            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                    $"Deflected! {(uint)reflectAmount} damage redirected at {fencerAttacker.Name} [Fencer's Blade]",
+                                    ChatMessageType.CombatSelf));
                         }
                     }
                 }

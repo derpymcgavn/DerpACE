@@ -75,6 +75,13 @@ namespace ACE.Server.WorldObjects
             if (weapon == null)
                 weapon = wielder.GetEquippedWand();
 
+            // DerpACE: for nomad-unarmed players, fall back to the surrogate gauntlet/boot
+            // so all weapon-property helpers (offense, defense, speed, etc.) read its stats.
+            // This is intentionally NOT wired through GetEquippedMeleeWeapon so that combat-
+            // stance and combat-mode logic (which also calls GetEquippedWeapon) is unaffected.
+            if (weapon == null && wielder is Player player)
+                weapon = player.GetUnarmedSurrogateWeapon();
+
             return weapon;
         }
 

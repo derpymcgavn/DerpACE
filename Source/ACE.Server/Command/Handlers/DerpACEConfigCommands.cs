@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.Text;
 using ACE.Entity.Enum;
@@ -99,6 +100,9 @@ namespace ACE.Server.Command.Handlers
             "  lootmod.interchangetier LootModifierInterchangeableMinTier (int)\n" +
             "  armor.banenormal      ArmorBaneChanceNormal (float 0-1, per-bane chance on normal armor)\n" +
             "  armor.banecovenant    ArmorBaneChanceCovenant (float 0-1, per-bane chance on Covenant armor)\n" +
+            "  armor.enchbonus       ArmorEnchantmentChanceBonus (float 0-1, flat bonus to critter/life chance)\n" +
+            "  armor.enchmax         ArmorMaxEnchantments (int, max critter/life spells per armor piece)\n" +
+            "  armor.enchmult        ArmorExtraEnchantmentChanceMult (float 0-1, per-extra-spell chance mult)\n" +
             "  mobmod.enabled        MobModifierEnabled (bool, master switch)\n" +
             "  mobmod.tier           MobModifierMinTier (int)\n" +
             "  vampiric.chance       VampiricMobChance (float 0-1)\n" +
@@ -209,6 +213,14 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  lootmod.interchangetier = {DerpACEConfig.LootModifierInterchangeableMinTier}");
                 sb.AppendLine($"  armor.banenormal     = {DerpACEConfig.ArmorBaneChanceNormal:P0}  ({DerpACEConfig.ArmorBaneChanceNormal})");
                 sb.AppendLine($"  armor.banecovenant   = {DerpACEConfig.ArmorBaneChanceCovenant:P0}  ({DerpACEConfig.ArmorBaneChanceCovenant})");
+                sb.AppendLine($"  armor.enchbonus      = {DerpACEConfig.ArmorEnchantmentChanceBonus:P0}  ({DerpACEConfig.ArmorEnchantmentChanceBonus}) flat critter/life chance bonus");
+                sb.AppendLine($"  armor.enchmax        = {DerpACEConfig.ArmorMaxEnchantments} max critter/life spells per armor piece");
+                sb.AppendLine($"  armor.enchmult       = {DerpACEConfig.ArmorExtraEnchantmentChanceMult:P0}  ({DerpACEConfig.ArmorExtraEnchantmentChanceMult}) extra-spell chance multiplier");
+                sb.AppendLine($"  blast.mintier        = {DerpACEConfig.WeaponBlastProcMinTier} min tier for weapon blast proc");
+                sb.AppendLine($"  blast.chancemin      = {DerpACEConfig.WeaponBlastProcChanceMin:P1}  ({DerpACEConfig.WeaponBlastProcChanceMin}) blast proc roll chance at min tier");
+                sb.AppendLine($"  blast.chancemax      = {DerpACEConfig.WeaponBlastProcChanceMax:P1}  ({DerpACEConfig.WeaponBlastProcChanceMax}) blast proc roll chance at T8");
+                sb.AppendLine($"  blast.ratemin        = {DerpACEConfig.WeaponBlastProcRateMin:G4} per-hit blast fire rate min");
+                sb.AppendLine($"  blast.ratemax        = {DerpACEConfig.WeaponBlastProcRateMax:G4} per-hit blast fire rate max");
                 sb.AppendLine($"  mobmod.enabled       = {DerpACEConfig.MobModifierEnabled}");
                 sb.AppendLine($"  mobmod.tier          = {DerpACEConfig.MobModifierMinTier}");
                 sb.AppendLine($"  vampiric.chance      = {DerpACEConfig.VampiricMobChance:P1}  ({DerpACEConfig.VampiricMobChance})");
@@ -601,6 +613,39 @@ namespace ACE.Server.Command.Handlers
                     case "armor.banecovenant":
                         if (!TryFloat(out var abc)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.ArmorBaneChanceCovenant = abc;
+                        break;
+                    case "armor.enchbonus":
+                        if (!TryFloat(out var aeb)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.ArmorEnchantmentChanceBonus = Math.Clamp(aeb, 0f, 1f);
+                        break;
+                    case "armor.enchmax":
+                        if (!TryInt(out var aem)) { BadValue(session, key, "int >= 1"); return; }
+                        DerpACEConfig.ArmorMaxEnchantments = Math.Max(1, aem);
+                        break;
+                    case "armor.enchmult":
+                        if (!TryFloat(out var aeml)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.ArmorExtraEnchantmentChanceMult = Math.Clamp(aeml, 0f, 1f);
+                        break;
+
+                    case "blast.mintier":
+                        if (!TryInt(out var bmt)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.WeaponBlastProcMinTier = Math.Max(1, bmt);
+                        break;
+                    case "blast.chancemin":
+                        if (!TryFloat(out var bcmin2)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.WeaponBlastProcChanceMin = Math.Clamp(bcmin2, 0f, 1f);
+                        break;
+                    case "blast.chancemax":
+                        if (!TryFloat(out var bcmax2)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.WeaponBlastProcChanceMax = Math.Clamp(bcmax2, 0f, 1f);
+                        break;
+                    case "blast.ratemin":
+                        if (!TryFloat(out var brmin)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.WeaponBlastProcRateMin = Math.Clamp(brmin, 0f, 1f);
+                        break;
+                    case "blast.ratemax":
+                        if (!TryFloat(out var brmax)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.WeaponBlastProcRateMax = Math.Clamp(brmax, 0f, 1f);
                         break;
 
                     case "mobmod.enabled":

@@ -172,11 +172,15 @@ namespace ACE.Server.Factories
             }
 
             var baseDamage = ThreadSafeRandom.Next(minDamage, maxDamage);
+            // Store in both the custom property (used as a detection flag) and the standard
+            // Damage/DamageVariance/DamageType that the client weapon-panel reads natively.
             wo.UnarmedBaseDamage = baseDamage;
+            wo.Damage = baseDamage;
 
             // Variance: 0.6-0.8 (fairly tight, like quality weapons)
             var variance = ThreadSafeRandom.Next(0.6f, 0.8f);
             wo.UnarmedDamageVariance = variance;
+            wo.DamageVariance = variance;
 
             // Roll a damage type for unarmed combat
             // All 7 melee damage types available: Fire, Cold, Acid, Electric, Pierce, Bludgeon, Slash
@@ -225,6 +229,38 @@ namespace ACE.Server.Factories
             }
 
             wo.UnarmedDamageType = (int)damageType;
+            // Also store in standard DamageType so WeaponProfile and client panel pick it up
+            wo.SetProperty(PropertyInt.DamageType, (int)damageType);
+
+            // WeaponSkill must be set so the appraisal panel shows the correct skill line
+            wo.WeaponSkill = Skill.UnarmedCombat;
+
+            // ── Weapon combat properties so the surrogate reads identically to a melee weapon ──
+            // WeaponOffense / WeaponDefense (same ranges as heavy unarmed mutation scripts)
+            // T5: ~1.01-1.03  T6: ~1.02-1.05  T7: ~1.04-1.08  T8: ~1.06-1.12
+            float offMin, offMax, defMin, defMax;
+            switch (profile.Tier)
+            {
+                case 5:  offMin = 1.01f; offMax = 1.03f; defMin = 1.01f; defMax = 1.03f; break;
+                case 6:  offMin = 1.02f; offMax = 1.05f; defMin = 1.02f; defMax = 1.05f; break;
+                case 7:  offMin = 1.04f; offMax = 1.08f; defMin = 1.04f; defMax = 1.08f; break;
+                default: offMin = 1.06f; offMax = 1.12f; defMin = 1.06f; defMax = 1.12f; break;
+            }
+            wo.WeaponOffense = ThreadSafeRandom.Next(offMin, offMax);
+            wo.WeaponDefense = ThreadSafeRandom.Next(defMin, defMax);
+
+            // WeaponTime (attack speed): T5=60, T6=50, T7=40, T8=30 (lower = faster, same as a fast unarmed weapon)
+            wo.WeaponTime = profile.Tier switch
+            {
+                5 => ThreadSafeRandom.Next(55, 65),
+                6 => ThreadSafeRandom.Next(45, 55),
+                7 => ThreadSafeRandom.Next(35, 45),
+                _ => ThreadSafeRandom.Next(25, 35),
+            };
+
+            // Missile / Magic defense (same as MissileMagicDefense.Roll for the tier)
+            wo.WeaponMissileDefense = MissileMagicDefense.Roll(profile.Tier);
+            wo.WeaponMagicDefense   = MissileMagicDefense.Roll(profile.Tier);
 
             // Update item name and description
             var slotType = isGauntlet ? "Gauntlets" : "Boots";
@@ -232,7 +268,8 @@ namespace ACE.Server.Factories
             var attackStyle = isGauntlet ? "light" : "heavy";
             wo.Name = $"{wo.Name} of {damageTypeName} {attackName}";
 
-            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThese {slotType.ToLower()} grant {baseDamage} {damageTypeName} damage for {attackStyle} unarmed attacks (no weapon equipped).";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThese {slotType.ToLower()} grant {baseDamage} {damageTypeName} damage for {attackStyle} unarmed attacks (no weapon equipped)."
+                + $"\nOffense: {wo.WeaponOffense:F3}  Defense: {wo.WeaponDefense:F3}  Speed: {wo.WeaponTime}";
 
             // Add visual overlay for unarmed-enabled items
             wo.IconOverlayId = 0x06006C1F; // Special marker icon

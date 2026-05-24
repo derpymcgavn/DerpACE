@@ -168,6 +168,55 @@ namespace ACE.Server.Factories
             // Increment mutator count for derpcoin drop tracking
             var currentCount = creature.GetProperty(PropertyInt.MutatorCount) ?? 0;
             creature.SetProperty(PropertyInt.MutatorCount, currentCount + 1);
+
+            // DerpACE: per-modifier stat scaling.
+            //   * +50% to every attribute and vital StartingValue (multiplicative, 1.5x)
+            //   * +0.1 to ObjScale
+            //   * +50% to XpOverride
+            // Stacks per mutator so a creature with N mutators ends up at 1.5^N stats
+            // and +0.1*N scale.
+            ApplyDerpAceStatBoost(creature);
+        }
+
+        private static void ApplyDerpAceStatBoost(Creature creature)
+        {
+            if (creature == null) return;
+
+            const float statMult = 1.5f;
+            const float scaleAdd = 0.1f;
+
+            // Attributes
+            foreach (var attr in creature.Attributes.Values)
+            {
+                if (attr == null) continue;
+                var boosted = (uint)Math.Min(uint.MaxValue, Math.Round(attr.StartingValue * statMult));
+                attr.StartingValue = boosted;
+            }
+
+            // Vitals (health/stamina/mana). Boost StartingValue then refill.
+            BoostVital(creature.Health, statMult);
+            BoostVital(creature.Stamina, statMult);
+            BoostVital(creature.Mana, statMult);
+
+            // Visual scale
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + scaleAdd;
+
+            // XP reward
+            var xp = creature.XpOverride ?? 0;
+            if (xp > 0)
+            {
+                long scaled = (long)Math.Round(xp * statMult);
+                if (scaled > int.MaxValue) scaled = int.MaxValue;
+                creature.XpOverride = (int)scaled;
+            }
+        }
+
+        private static void BoostVital(ACE.Server.WorldObjects.Entity.CreatureVital vital, float mult)
+        {
+            if (vital == null) return;
+            var boosted = (uint)Math.Min(uint.MaxValue, Math.Round(vital.StartingValue * mult));
+            vital.StartingValue = boosted;
+            vital.Current = vital.MaxValue;
         }
 
         /// <summary>

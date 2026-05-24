@@ -558,4 +558,35 @@ namespace ACE.Server.Factories
             creature.Shade = 0.4;
         }
     }
+
+    /// <summary>
+    /// DerpACE: Illusionist affix — on first sight of a player, spawns N 1-HP copies of itself.
+    /// Periodically swaps positions with a random surviving copy, making the real one hard to pin down.
+    /// Copy spawning + swap logic lives in Creature_Affixes.cs (TryIllusionistOnAggro / TryIllusionistSwap).
+    /// </summary>
+    public class IllusionistMutator : CreatureMutator
+    {
+        public override string Name => "Illusionist";
+        public override string Description => "Spawns 1-HP copies of itself and periodically swaps places with one.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsIllusionistMob;
+        public override string NamePrefix => "Illusory";
+
+        public IllusionistMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.IllusionistMobChance;
+            Enabled = DerpACEConfig.MobModifierEnabled;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            // Visual tell: purple shimmer, slightly translucent feel via shade
+            creature.PaletteTemplate = (int)PaletteTemplate.Purple;
+            creature.Shade = 0.7;
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.05f;
+
+            // Reset copy bookkeeping so a fresh spawn re-summons its illusions on first aggro
+            creature.SetProperty(PropertyInt.IllusionistCopyCount, 0);
+        }
+    }
 }
