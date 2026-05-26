@@ -238,5 +238,6 @@ namespace ACE.Entity.Enum.Properties
         IsWarderMob                      = 9044,
         IsIllusionistMob                 = 9045,
         IsIllusionistCopy                = 9046,
+        IsHordeMember                    = 9047,
     }
 }

@@ -388,16 +388,20 @@ namespace ACE.Server.WorldObjects
                     DamageHistory.OnHeal((uint)-damage);
             }
 
+            if ((IsHordeMob || IsHordeMember) && damage > 0)
+            {
+                // DerpACE: Horde affix — shared health pool damage routing.
+                // Members forward damage to the leader; the leader applies it to the shared pool
+                // and triggers member-death cascade. Returns true = damage already consumed.
+                if (TryHordeDamageTaken(source, (uint)damage))
+                    return (uint)Math.Max(0, damage);
+            }
+
             if (Health.Current <= 0)
             {
                 OnDeath(DamageHistory.LastDamager, damageType, crit);
 
                 Die();
-            }
-            else if (IsHordeMob && damage > 0)
-            {
-                // DerpACE: Horde affix — report swarm-member casualties from this damage chunk
-                OnHordeDamageTaken(source, (uint)damage);
             }
             return (uint)Math.Max(0, damage);
         }

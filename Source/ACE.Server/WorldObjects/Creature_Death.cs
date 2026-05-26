@@ -64,7 +64,8 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
-        /// DerpACE: Exploding mob death AoE — casts an elemental ring spell based on the mob's assigned element.
+        /// DerpACE: Exploding mob death AoE — deals elemental damage to all creatures in radius
+        /// and plays the matching ring spell visual effect.
         /// </summary>
         private void TryExplodeOnDeath()
         {
@@ -76,38 +77,38 @@ namespace ACE.Server.WorldObjects
             var elementInt = GetProperty(PropertyInt.ExplodingMobElement);
             var element = elementInt.HasValue ? (DamageType)elementInt.Value : DamageType.Fire;
 
-            // Choose the appropriate ring spell based on element
-            SpellId ringSpell;
-            PlayScript explosionEffect;
+            // Visual ring effect and element label per element
+            PlayScript ringEffect;
             string elementName;
 
             switch (element)
             {
                 case DamageType.Cold:
-                    ringSpell = SpellId.FrostWave;
-                    explosionEffect = PlayScript.BreatheFrost;
+                    ringEffect = PlayScript.BreatheFrost;
                     elementName = "cold";
                     break;
                 case DamageType.Acid:
-                    ringSpell = SpellId.AcidWave;
-                    explosionEffect = PlayScript.BreatheAcid;
+                    ringEffect = PlayScript.BreatheAcid;
                     elementName = "acid";
                     break;
                 case DamageType.Electric:
-                    ringSpell = SpellId.LightningWave;
-                    explosionEffect = PlayScript.BreatheLightning;
+                    ringEffect = PlayScript.BreatheLightning;
                     elementName = "lightning";
                     break;
                 case DamageType.Fire:
                 default:
-                    ringSpell = SpellId.FlameWave;
-                    explosionEffect = PlayScript.Explode;
+                    ringEffect = PlayScript.Explode;
                     elementName = "flame";
                     break;
             }
 
-            // Play visual effect
-            ApplyVisualEffects(explosionEffect);
+            // Broadcast visual on the exploding mob itself
+            EnqueueBroadcast(new GameMessageScript(Guid, ringEffect, 2.0f));
+
+            // Damage scale: base = MaxHealth * DamageScale, capped to prevent one-shots
+            var dmgScale = ACE.Server.Managers.DerpACEConfig.ExplodingMobDamageScale;
+            var baseDamage = (int)Math.Round(Health.MaxValue * dmgScale);
+            baseDamage = Math.Max(1, baseDamage);
 
             var radiusSq = radius * radius;
             var targets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
@@ -121,21 +122,49 @@ namespace ACE.Server.WorldObjects
 
             if (targets.Count == 0) return;
 
-            // Load the spell and cast it on all targets in range
-            var spell = new ACE.Server.Entity.Spell(ringSpell);
-            if (spell == null || spell.NotFound) return;
-
             foreach (var target in targets)
             {
-                // Cast the ring spell on each target
-                target.HandleCastSpell(spell, target, this);
+                // Random variance ±25%
+                var variance = ThreadSafeRandom.Next(0.75f, 1.25f);
+                var dmg = (int)Math.Max(1, Math.Round(baseDamage * variance));
 
-                // Send combat message to players
-                if (target is Player player)
+                // Apply resists: players have elemental ward, creatures have natural resist
+                if (target is Player playerTarget)
                 {
-                    player.Session?.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"{Name} explodes in a burst of {elementName}! [Exploding]",
-                        ChatMessageType.CombatEnemy));
+                    var resistMod = playerTarget.GetResistanceMod(element, this, null);
+                    dmg = (int)Math.Max(1, Math.Round(dmg * resistMod));
+
+                    var taken = (uint)(-playerTarget.UpdateVitalDelta(playerTarget.Health, -dmg));
+                    playerTarget.DamageHistory.Add(this, element, taken);
+
+                    // Ring effect on the player too
+                    playerTarget.EnqueueBroadcast(new GameMessageScript(playerTarget.Guid, ringEffect, 1.0f));
+
+                    if (taken > 0)
+                    {
+                        playerTarget.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"{Name} explodes in a burst of {elementName} for {taken} damage! [Exploding]",
+                            ChatMessageType.CombatEnemy));
+
+                        if (playerTarget.Health.Current == 0)
+                            playerTarget.OnDeath(new ACE.Server.Entity.DamageHistoryInfo(this), element, false);
+                    }
+                }
+                else
+                {
+                    // Creature target — apply resist and direct vital damage
+                    var resistMod = target.GetResistanceMod(element, this, null);
+                    dmg = (int)Math.Max(1, Math.Round(dmg * resistMod));
+
+                    var taken = (uint)Math.Max(0, -(target.UpdateVitalDelta(target.Health, -dmg)));
+                    if (taken > 0)
+                    {
+                        target.DamageHistory.Add(this, element, taken);
+                        target.EnqueueBroadcast(new GameMessageScript(target.Guid, ringEffect, 1.0f));
+
+                        if (target.Health.Current == 0)
+                            target.OnDeath(new ACE.Server.Entity.DamageHistoryInfo(this), element, false);
+                    }
                 }
             }
         }

@@ -82,7 +82,7 @@ namespace ACE.Server.WorldObjects
         /// <summary>
         /// Starts the process of monster turning towards target
         /// </summary>
-        public void StartTurn()
+        public virtual void StartTurn()
         {
             //if (Timers.RunningTime < NextMoveTime)
             //return;
@@ -131,6 +131,7 @@ namespace ACE.Server.WorldObjects
             lastStuckSampleTargetDist = float.MaxValue;
             nextStuckSampleTime = 0;
             stuckStrikeCount = 0;
+            courseCorrectionAttemptCount = 0;
         }
 
         private bool TrySmartCourseCorrection(bool escalate = false)
@@ -142,7 +143,7 @@ namespace ACE.Server.WorldObjects
             if (!escalate && now < nextCourseCorrectionTime)
                 return false;
 
-            if (PathfindingEnabled && Location.Indoors)
+            if (PathfindingEnabled && Location != null)
             {
                 TryRoute();
                 if (IsRouteStartPending || IsRouting)

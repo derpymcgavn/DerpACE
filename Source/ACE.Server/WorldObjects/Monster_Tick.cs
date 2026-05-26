@@ -212,7 +212,7 @@ namespace ACE.Server.WorldObjects
                                             TryWandering(100, 260, 7);
                                     }
 
-                                    if (PathfindingEnabled && Location != null && Location.Indoors)
+                                    if (PathfindingEnabled && Location != null && !LastRouteStartAttemptWasNullRoute)
                                         TryRoute();
                                 }
                             }

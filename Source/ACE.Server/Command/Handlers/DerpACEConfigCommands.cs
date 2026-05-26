@@ -2,8 +2,11 @@ using System;
 using System.Globalization;
 using System.Text;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
+using ACE.Server.Factories.Tables;
 using ACE.Server.Managers;
 using ACE.Server.Network;
+using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Command.Handlers
 {
@@ -103,6 +106,11 @@ namespace ACE.Server.Command.Handlers
             "  armor.enchbonus       ArmorEnchantmentChanceBonus (float 0-1, flat bonus to critter/life chance)\n" +
             "  armor.enchmax         ArmorMaxEnchantments (int, max critter/life spells per armor piece)\n" +
             "  armor.enchmult        ArmorExtraEnchantmentChanceMult (float 0-1, per-extra-spell chance mult)\n" +
+            "  blast.mintier         WeaponBlastProcMinTier (int, min tier for elemental blast proc)\n" +
+            "  blast.chancemin       WeaponBlastProcChanceMin (float 0-1, roll chance at min tier)\n" +
+            "  blast.chancemax       WeaponBlastProcChanceMax (float 0-1, roll chance at T8)\n" +
+            "  blast.ratemin         WeaponBlastProcRateMin (float, per-hit fire rate min)\n" +
+            "  blast.ratemax         WeaponBlastProcRateMax (float, per-hit fire rate max)\n" +
             "  mobmod.enabled        MobModifierEnabled (bool, master switch)\n" +
             "  mobmod.tier           MobModifierMinTier (int)\n" +
             "  vampiric.chance       VampiricMobChance (float 0-1)\n" +
@@ -119,7 +127,10 @@ namespace ACE.Server.Command.Handlers
             "  healermob.range       HealerMobRange (float meters)\n" +
             "  healermob.threshold   HealerMobHealThreshold (float 0-1)\n" +
             "  healermob.cooldown    HealerMobCooldownSeconds (float)\n" +
-            "  ironman.enabled       IronmanEnabled (bool, master switch)")]
+            "  ironman.enabled       IronmanEnabled (bool, master switch)\n" +
+            "  vendor.loot           VendorRandomLootEnabled (bool, master switch)\n" +
+            "  vendor.lootmin        VendorRandomLootMinItems (int, min items per category)\n" +
+            "  vendor.lootmax        VendorRandomLootMaxItems (int, max items per category)")]
         public static void HandleLootConfig(Session session, params string[] parameters)
         {
             var sub = parameters[0].ToLower();
@@ -243,6 +254,9 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  tankmob.healbonus    = {DerpACEConfig.TankMobHealBonus}x");
                 sb.AppendLine($"  tankmob.skillbonus   = +{DerpACEConfig.TankMobSkillBonus}");
                 sb.AppendLine($"  ironman.enabled      = {DerpACEConfig.IronmanEnabled}");
+                sb.AppendLine($"  vendor.loot          = {DerpACEConfig.VendorRandomLootEnabled}");
+                sb.AppendLine($"  vendor.lootmin       = {DerpACEConfig.VendorRandomLootMinItems}");
+                sb.AppendLine($"  vendor.lootmax       = {DerpACEConfig.VendorRandomLootMaxItems}");
                 CommandHandlerHelper.WriteOutputInfo(session, sb.ToString().TrimEnd(), ChatMessageType.Broadcast);
                 return;
             }
@@ -737,6 +751,21 @@ namespace ACE.Server.Command.Handlers
                         DerpACEConfig.IronmanEnabled = ime;
                         break;
 
+                    case "vendor.loot":
+                        if (!bool.TryParse(raw, out var vle)) { BadValue(session, key, "bool"); return; }
+                        DerpACEConfig.VendorRandomLootEnabled = vle;
+                        break;
+
+                    case "vendor.lootmin":
+                        if (!int.TryParse(raw, out var vlmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.VendorRandomLootMinItems = Math.Max(0, vlmin);
+                        break;
+
+                    case "vendor.lootmax":
+                        if (!int.TryParse(raw, out var vlmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.VendorRandomLootMaxItems = Math.Max(1, vlmax);
+                        break;
+
                     default:
                         CommandHandlerHelper.WriteOutputInfo(session,
                             $"Unknown key '{key}'. Use @lootconfig list to see all keys.",
@@ -759,6 +788,91 @@ namespace ACE.Server.Command.Handlers
         {
             CommandHandlerHelper.WriteOutputInfo(session,
                 $"Invalid value for '{key}' — expected a {type}.",
+                ChatMessageType.Broadcast);
+        }
+
+        // ── @vendortier ────────────────────────────────────────────────────────
+        // Usage:
+        //   @vendortier              — show tier for the vendor you are targeting
+        //   @vendortier <1-8>        — set explicit tier override on targeted vendor
+        //   @vendortier clear        — remove explicit tier override (revert to auto)
+        // ─────────────────────────────────────────────────────────────────────
+        [CommandHandler("vendortier", AccessLevel.Developer, CommandHandlerFlag.None, 0,
+            "View or set the random-loot tier on the vendor you are currently targeting.",
+            "<1-8>    — force a specific tier\n" +
+            "clear    — remove the override (vendor will auto-detect from town location)\n" +
+            "(no arg) — report the current tier and auto-detected town")]
+        public static void HandleVendorTier(Session session, params string[] parameters)
+        {
+            var player = session.Player;
+            if (player == null) return;
+
+            // Resolve the targeted vendor.
+            var target = player.CurrentAppraisalTarget.HasValue
+                ? player.CurrentLandblock?.GetObject(player.CurrentAppraisalTarget.Value) as Vendor
+                : null;
+
+            // Also accept the last opened vendor.
+            if (target == null && player.LastOpenedContainerId != default)
+                target = player.CurrentLandblock?.GetObject(player.LastOpenedContainerId) as Vendor;
+
+            if (target == null)
+            {
+                CommandHandlerHelper.WriteOutputInfo(session,
+                    "No vendor targeted. Approach and appraise a vendor first.",
+                    ChatMessageType.Broadcast);
+                return;
+            }
+
+            var lbX = (int)target.Location.LandblockX;
+            var lbY = (int)target.Location.LandblockY;
+            var autoTier = VendorTownTier.GetTierForVendor(target);
+            var townName = VendorTownTier.GetTownName(lbX, lbY) ?? $"unknown (LB {lbX:X2},{lbY:X2})";
+            var explicitTier = target.GetProperty(PropertyInt.VendorLootTier);
+
+            if (parameters.Length == 0)
+            {
+                var tierLine = explicitTier.HasValue && explicitTier.Value > 0
+                    ? $"Explicit override: T{explicitTier.Value}  |  Auto-detected: T{autoTier} ({townName})"
+                    : $"No override set  |  Auto-detected: T{autoTier} ({townName})";
+
+                CommandHandlerHelper.WriteOutputInfo(session,
+                    $"[VendorTier] {target.Name} ({target.WeenieClassId})\n  {tierLine}",
+                    ChatMessageType.Broadcast);
+                return;
+            }
+
+            var arg = parameters[0].Trim().ToLower();
+
+            if (arg == "clear")
+            {
+                target.RemoveProperty(PropertyInt.VendorLootTier);
+                // Reset inventory so it re-stocks on next approach.
+                target.DefaultItemsForSale.Clear();
+                target.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.Open, false); // force reload flag
+                CommandHandlerHelper.WriteOutputInfo(session,
+                    $"[VendorTier] Explicit tier cleared from {target.Name}. Will auto-detect as T{autoTier} ({townName}) on next approach.",
+                    ChatMessageType.Broadcast);
+                return;
+            }
+
+            if (!int.TryParse(arg, out var newTier) || newTier < 1 || newTier > 8)
+            {
+                CommandHandlerHelper.WriteOutputInfo(session,
+                    "Usage: @vendortier <1-8>  |  @vendortier clear",
+                    ChatMessageType.Broadcast);
+                return;
+            }
+
+            target.SetProperty(PropertyInt.VendorLootTier, newTier);
+            // Clear cached inventory so it regenerates on next approach.
+            target.DefaultItemsForSale.Clear();
+            var field = typeof(Vendor).GetField("inventoryloaded",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            field?.SetValue(target, false);
+
+            CommandHandlerHelper.WriteOutputInfo(session,
+                $"[VendorTier] {target.Name} ({target.WeenieClassId}) set to T{newTier}. Re-approach the vendor to reload stock.",
                 ChatMessageType.Broadcast);
         }
     }

@@ -512,17 +512,19 @@ namespace ACE.Server.Pathfinding
         /// </summary>
         public static void TryLoadMesh(Position pos, bool rebuildMesh = false)
         {
+            if (rebuildMesh)
+                TryUnloadMesh(pos);
+
+            var isIndoors = pos.Indoors;
+            var meshDir = isIndoors ? InsideMeshDirectory : OutsideMeshDirectory;
+
+            foreach (var agentWidth in Enum.GetValues(typeof(AgentWidth)).Cast<AgentWidth>())
+            {
+                var meshId = (pos.Cell & 0xFFFF0000) + (uint)agentWidth;
+                // The raw landblock ID without the agent-width offset, used for geometry lookups.
+                var baseLandblockId = pos.Cell & 0xFFFF0000;
             try
             {
-                if (rebuildMesh)
-                    TryUnloadMesh(pos);
-
-                var isIndoors = pos.Indoors;
-                var meshDir = isIndoors ? InsideMeshDirectory : OutsideMeshDirectory;
-
-                foreach (var agentWidth in Enum.GetValues(typeof(AgentWidth)).Cast<AgentWidth>())
-                {
-                    var meshId = (pos.Cell & 0xFFFF0000) + (uint)agentWidth;
 
                     if (!Meshes.TryAdd(meshId, null))
                         continue;
@@ -531,11 +533,12 @@ namespace ACE.Server.Pathfinding
                     List<CellGeometry> cells = null;
                     if (isIndoors)
                     {
-                        geometry = new LandblockGeometry(meshId);
+                        geometry = new LandblockGeometry(baseLandblockId);
                         if (!geometry.DungeonCells.TryGetValue(pos.Cell, out var cellGeometry))
                         {
                             log.Warn($"Could not load cell geometry! {pos} cellGeometry:{cellGeometry}");
-                            return;
+                            // continue so the other agentWidth still gets a chance
+                            continue;
                         }
                         cells = geometry.DungeonCells.Values.ToList();
                     }
@@ -558,7 +561,7 @@ namespace ACE.Server.Pathfinding
                                     var mesh = new DtNavMesh();
                                     mesh.Init(meshData, VERTS_PER_POLY, 0);
                                     Meshes.TryUpdate(meshId, mesh, null);
-                                    return;
+                                    continue;
                                 }
                             }
                         }
@@ -573,27 +576,39 @@ namespace ACE.Server.Pathfinding
                         if (geom is null)
                         {
                             log.Warn($"Could not load cell geometry provider! {pos} neighbors:{string.Join(",", cells.Select(n => $"{n.CellId:X8}"))}");
-                            return;
+                            continue;
                         }
                     }
                     else
                     {
-                        geom = TerrainGeometryProvider.LoadGeometry(meshId);
+                        geom = TerrainGeometryProvider.LoadGeometry(baseLandblockId);
                         if (geom is null)
                         {
-                            log.Warn($"Could not load terrain geometry provider for outdoor landblock {meshId:X8}");
-                            return;
+                            log.Warn($"Could not load terrain geometry provider for outdoor landblock {baseLandblockId:X8}");
+                            continue;
                         }
                     }
 
-                    log.Info($"Generating navmesh on-demand for landblock {meshId:X8} ({(isIndoors ? "indoor" : "outdoor")}, {agentWidth} agent)...");
+                    if (isIndoors)
+                        log.Info($"Generating navmesh on-demand for landblock {meshId:X8} ({(isIndoors ? "indoor" : "outdoor")}, {agentWidth} agent)...");
+                    else
+                        log.Debug($"Generating navmesh on-demand for landblock {meshId:X8} (outdoor, {agentWidth} agent)...");
                     var builder = new NavMeshBuilder();
                     var settings = isIndoors ? GetMeshSettings(agentWidth) : GetOutdoorMeshSettings(agentWidth);
-                    var res = builder.Build(geom, settings);
+                    DtMeshData res;
+                    try { res = builder.Build(geom, settings); }
+                    catch (Exception buildEx)
+                    {
+                        log.Warn($"NavMeshBuilder.Build threw for {meshId:X8} ({agentWidth}): {buildEx}");
+                        continue;
+                    }
                     if (res is null)
                     {
-                        log.Warn($"Could not build the nav mesh! {pos} indoors:{isIndoors}");
-                        return;
+                        if (isIndoors)
+                            log.Warn($"Could not build the nav mesh for {meshId:X8} ({agentWidth}) — builder returned null. Outdoor:{!isIndoors}");
+                        else
+                            log.Debug($"Could not build the nav mesh for {meshId:X8} ({agentWidth}) — builder returned null (outdoor, expected).");
+                        continue;
                     }
 
                     var meshWriter = new DtMeshDataWriter();
@@ -607,15 +622,15 @@ namespace ACE.Server.Pathfinding
                     var meshNew = new DtNavMesh();
                     meshNew.Init(res, VERTS_PER_POLY, 0);
                     Meshes.TryUpdate(meshId, meshNew, null);
-                }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                if (!rebuildMesh)
-                    TryLoadMesh(pos, true);
-                else
-                    log.Warn($"Failed to load mesh for pathfinding at: {pos.ToLOCString()}");
+                // Leave the null already in Meshes[meshId] as a negative cache so this
+                // width is not retried on every tick.  Do NOT call TryUnloadMesh here —
+                // that would remove the key and cause a retry race with other threads.
+                log.Warn($"Exception building navmesh for {meshId:X8} ({agentWidth}): {ex}");
             }
+            } // end foreach
         }
 
         private static RcNavMeshBuildSettings GetMeshSettings(AgentWidth type)
@@ -677,8 +692,13 @@ namespace ACE.Server.Pathfinding
             var partition = fast ? (int)RcPartition.MONOTONE : (int)RcPartition.WATERSHED;
             var cellSize = fast ? 0.75f : 0.5f;
             var cellHeight = fast ? 0.5f : 0.4f;
-            var detailDist = fast ? 0f : 6.0f;
-            var detailErr = fast ? 0f : 1.0f;
+            // Detail mesh sampling is disabled unconditionally for outdoor meshes.
+            // BuildPolyMeshDetail / TriangulateHull has an internal OOB bug in DotRecast
+            // 2024.3.1 that fires on certain AC terrain polygon configurations.
+            // Detail meshes improve sub-polygon height fidelity but provide zero benefit
+            // for navigation routing, so disabling them is safe.
+            var detailDist = 0f;
+            var detailErr = 0f;
             var edgeLen = fast ? 32.0f : 24.0f;
 
             switch (type)
@@ -687,8 +707,8 @@ namespace ACE.Server.Pathfinding
                     return new RcNavMeshBuildSettings()
                     {
                         agentHeight = 2f,
-                        agentMaxClimb = 1.0f,
-                        agentMaxSlope = 45f,
+                        agentMaxClimb = 4.0f,
+                        agentMaxSlope = 65f,
                         cellHeight = cellHeight,
                         cellSize = cellSize,
                         agentRadius = 0.7f,
@@ -696,8 +716,8 @@ namespace ACE.Server.Pathfinding
                         detailSampleMaxError = detailErr,
                         edgeMaxError = 1.3f,
                         edgeMaxLen = edgeLen,
-                        mergedRegionSize = 20,
-                        minRegionSize = 8,
+                        mergedRegionSize = 8,
+                        minRegionSize = 1,
                         vertsPerPoly = VERTS_PER_POLY,
                         partitioning = partition
                     };
@@ -706,8 +726,8 @@ namespace ACE.Server.Pathfinding
                     return new RcNavMeshBuildSettings()
                     {
                         agentHeight = 2f,
-                        agentMaxClimb = 1.0f,
-                        agentMaxSlope = 45f,
+                        agentMaxClimb = 4.0f,
+                        agentMaxSlope = 65f,
                         cellHeight = cellHeight,
                         cellSize = cellSize,
                         agentRadius = 1.4f,
@@ -715,8 +735,8 @@ namespace ACE.Server.Pathfinding
                         detailSampleMaxError = detailErr,
                         edgeMaxError = 1.3f,
                         edgeMaxLen = edgeLen,
-                        mergedRegionSize = 20,
-                        minRegionSize = 8,
+                        mergedRegionSize = 8,
+                        minRegionSize = 1,
                         vertsPerPoly = VERTS_PER_POLY,
                         partitioning = partition
                     };

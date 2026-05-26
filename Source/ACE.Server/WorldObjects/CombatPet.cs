@@ -1,10 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
+using ACE.Common;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Models;
+using ACE.Server.Entity;
 using ACE.Server.Managers;
+using ACE.Server.Pathfinding;
+using ACE.Server.Physics.Animation;
 
 namespace ACE.Server.WorldObjects
 {
@@ -63,28 +68,106 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
-        // DerpACE pet_auto_recover_enabled: when the current target dies or becomes invalid,
-        // wait a brief cooldown before re-acquiring so the pet doesn't immediately whip around
-        // to the next mob mid-animation. Configurable via PropertyManager double if needed; the
-        // hard-coded value keeps the pet feeling steady without dropping aggro responsiveness.
+        // How far (in world units) the pet may stray from its owner while chasing a target.
+        // Beyond this distance the pet drops its target and returns to the owner.
+        private const float PetLeashRange = 30.0f;
+
+        // How far from the owner the pet needs to be before it bothers walking back when idle.
+        private const float PetReturnThreshold = 6.0f;
+
         private const double AutoRecoverCooldownSeconds = 0.75;
         private double _nextAcquireTime;
+
+        // ── Stuck detection ──────────────────────────────────────────────────
+        // If the pet has a live target but hasn't moved at least this far in
+        // StuckCheckSeconds it is considered stuck (wall, terrain, etc.).
+        private const float  StuckMoveThreshold  = 0.5f;   // world units
+        private const double StuckCheckSeconds   = 3.0;    // how long before we decide it's stuck
+
+        private Vector3 _lastPositionForStuck;
+        private double  _stuckCheckTime;        // the Time.GetUnixTime() of the last position snapshot
+        private bool    _stuckCheckPending;     // true once we've armed a stuck-check snapshot
+
+        /// <summary>
+        /// Returns the flat cylinder distance between this pet and its owner, or float.MaxValue if unavailable.
+        /// </summary>
+        private float OwnerDistance => P_PetOwner != null ? GetCylinderDistance(P_PetOwner) : float.MaxValue;
+
+        public override void StartTurn()
+        {
+            // When indoors with a live navmesh, prefer a routed path to the target so
+            // the pet navigates around dungeon walls instead of walking straight through them.
+            // Fall back to the normal straight-line StartTurn if no mesh is available yet.
+            if (PathfindingEnabled && Location != null && Location.Indoors && AttackTarget?.Location != null)
+            {
+                var agentW = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
+                var route = Pathfinder.FindRoute(Location, AttackTarget.Location, agentW);
+                if (route != null && route.Count > 0)
+                {
+                    TryRoute(route);
+                    if (IsRouteStartPending || IsRouting)
+                    {
+                        IsMoving = true;
+                        LastMoveTime = Timers.RunningTime;
+                        return;
+                    }
+                }
+            }
+
+            base.StartTurn();
+        }
 
         public override void HandleFindTarget()
         {
             var creature = AttackTarget as Creature;
-
             var lostTarget = creature == null || creature.IsDead || !IsVisibleTarget(creature);
 
             if (!lostTarget)
+            {
+                // Leash check — drop target if we've strayed too far from the owner.
+                if (OwnerDistance > PetLeashRange)
+                {
+                    DropTargetAndReset();
+                    return;
+                }
+
+                // Stuck check — arm a position snapshot the first time we have a live target,
+                // then evaluate after StuckCheckSeconds have passed.
+                var now = Common.Time.GetUnixTime();
+                var pos = Location?.Pos ?? Vector3.Zero;
+
+                if (!_stuckCheckPending)
+                {
+                    _lastPositionForStuck = pos;
+                    _stuckCheckTime       = now + StuckCheckSeconds;
+                    _stuckCheckPending    = true;
+                }
+                else if (now >= _stuckCheckTime)
+                {
+                    var moved = Vector3.Distance(pos, _lastPositionForStuck);
+                    _lastPositionForStuck = pos;
+                    _stuckCheckTime       = now + StuckCheckSeconds;
+
+                    if (moved < StuckMoveThreshold)
+                    {
+                        // Pet hasn't moved — it's stuck. Drop the target so the mob
+                        // loses aggro on the pet, then walk back to the owner.
+                        DropTargetAndReset();
+                        return;
+                    }
+                }
+
                 return;
+            }
+
+            // We lost the target — clear stuck state.
+            _stuckCheckPending = false;
 
             if (PropertyManager.GetBool("pet_auto_recover_enabled").Item)
             {
                 var now = Common.Time.GetUnixTime();
                 if (creature != null && AttackTarget != null)
                 {
-                    // first tick noticing the loss — arm the cooldown and don't re-target yet.
                     _nextAcquireTime = now + AutoRecoverCooldownSeconds;
                     AttackTarget = null;
                     return;
@@ -94,31 +177,133 @@ namespace ACE.Server.WorldObjects
                     return;
             }
 
+            // Only seek a new target if the owner is currently engaged in combat or
+            // has explicitly targeted something. Until then the pet just follows.
+            if (!IsOwnerEngaged())
+                return;
+
             FindNextTarget();
+        }
+
+        /// <summary>
+        /// Returns true when the owner is in an active combat state or has a selected target,
+        /// i.e. the pet should be allowed to pick its own targets.
+        /// </summary>
+        private bool IsOwnerEngaged()
+        {
+            if (P_PetOwner == null) return false;
+
+            // Owner is directly attacking something.
+            if (P_PetOwner.AttackTarget != null) return true;
+
+            // Owner has moused over / targeted a creature (health bar query).
+            if (P_PetOwner.HealthQueryTarget.HasValue) return true;
+
+            // Owner is in a non-peace combat mode.
+            if (P_PetOwner.CombatMode != CombatMode.NonCombat) return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Drops the current attack target, clears the mob's reference back to this pet
+        /// so it stops actively chasing us, resets stuck state, and walks back to owner.
+        /// </summary>
+        private void DropTargetAndReset()
+        {
+            if (AttackTarget is Creature mob)
+            {
+                // If the mob was actively targeting this pet, clear it so it stops chasing.
+                if (mob.AttackTarget == this)
+                    mob.AttackTarget = null;
+            }
+
+            AttackTarget       = null;
+            _stuckCheckPending = false;
+            ReturnToOwner();
+        }
+
+        /// <summary>
+        /// Moves the pet back toward its owner. Uses navmesh routing when indoors
+        /// so the pet navigates around walls instead of walking straight through them.
+        /// </summary>
+        private void ReturnToOwner()
+        {
+            if (P_PetOwner?.PhysicsObj == null || P_PetOwner.Location == null)
+                return;
+
+            // Prefer navmesh routing in dungeons so the pet doesn't clip through walls.
+            if (PathfindingEnabled && Location != null && Location.Indoors)
+            {
+                // Point the chase target at the owner so TryRoute knows where to go.
+                AttackTarget = null; // clear combat target — we're just going home
+                RouteAttackTarget = null;
+                RoutePositionTarget = P_PetOwner.Location;
+                TryRoute(Pathfinder.FindRoute(Location, P_PetOwner.Location,
+                    (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow));
+                if (IsRouteStartPending || IsRouting)
+                    return;
+                // Fallthrough: no mesh available yet, use direct path
+            }
+
+            var mvp = new MovementParameters();
+            mvp.DistanceToObject = PetReturnThreshold * 0.5f;
+            mvp.WalkRunThreshold = 0.0f;
+
+            MoveTo(P_PetOwner, RunRate);
+            PhysicsObj.MoveToObject(P_PetOwner.PhysicsObj, mvp);
+            PhysicsObj.UpdateTime = Physics.Common.PhysicsTimer.CurrentTime;
         }
 
         public override bool FindNextTarget()
         {
+            // Never autonomously seek targets — the pet only fights when the owner does.
+            if (!IsOwnerEngaged())
+                return false;
+
+            // DerpACE: prefer whatever the owner has selected/targeted so the pet
+            // always assists the owner's fight rather than running off independently.
+            if (PropertyManager.GetBool("pet_attack_selected_enabled").Item && P_PetOwner != null)
+            {
+                // Check the owner's direct attack target first, then health-query target.
+                var ownerTarget = (P_PetOwner.AttackTarget as Creature)
+                    ?? (P_PetOwner.HealthQueryTarget.HasValue
+                        ? P_PetOwner.CurrentLandblock?.GetObject(P_PetOwner.HealthQueryTarget.Value) as Creature
+                        : null);
+
+                if (ownerTarget != null && !ownerTarget.IsDead && ownerTarget.Attackable
+                    && !SameFaction(ownerTarget) && IsVisibleTarget(ownerTarget))
+                {
+                    AttackTarget = ownerTarget;
+                    return true;
+                }
+            }
+
             var nearbyMonsters = GetNearbyMonsters();
             if (nearbyMonsters.Count == 0)
-            {
-                //Console.WriteLine($"{Name}.FindNextTarget(): empty");
                 return false;
+
+            // Sort by distance to owner so the pet attacks whatever is closest to
+            // the owner rather than whatever wandered closest to the pet.
+            if (P_PetOwner != null)
+            {
+                nearbyMonsters.Sort((a, b) =>
+                {
+                    var da = P_PetOwner.GetCylinderDistance(a);
+                    var db = P_PetOwner.GetCylinderDistance(b);
+                    return da.CompareTo(db);
+                });
+
+                AttackTarget = nearbyMonsters[0];
+                return true;
             }
 
-            // get nearest monster
+            // Fallback: nearest to the pet itself.
             var nearest = BuildTargetDistance(nearbyMonsters, true);
-
             if (nearest[0].Distance > VisualAwarenessRangeSq)
-            {
-                //Console.WriteLine($"{Name}.FindNextTarget(): next object out-of-range (dist: {Math.Round(Math.Sqrt(nearest[0].Distance))})");
                 return false;
-            }
 
             AttackTarget = nearest[0].Target;
-
-            //Console.WriteLine($"{Name}.FindNextTarget(): {AttackTarget.Name}");
-
             return true;
         }
 
@@ -154,11 +339,9 @@ namespace ACE.Server.WorldObjects
 
         public override void Sleep()
         {
-            // pets dont really go to sleep, per say
-            // they keep scanning for new targets,
-            // which is the reverse of the current ACE jurassic park model
-
-            return;  // empty by default
+            // When the pet has no target, walk back to the owner if it has drifted.
+            if (OwnerDistance > PetReturnThreshold)
+                ReturnToOwner();
         }
     }
 }

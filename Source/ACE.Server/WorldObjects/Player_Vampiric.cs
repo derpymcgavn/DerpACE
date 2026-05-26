@@ -17,9 +17,27 @@ namespace ACE.Server.WorldObjects
         private void TickVampiricJewelry(double currentUnixTime) { }
 
         /// <summary>
-        /// Called from on-hit damage resolution. For each equipped Vampiric jewelry piece, rolls a small chance
-        /// to immediately restore the wielder's matching vital for points * multiplier. Returns total amount
-        /// restored for the Health flavor only (used for the on-hit chat message and visual).
+        /// Points healed per proc based on number of Vampiric Jewelry pieces equipped (1-based index).
+        /// 1 piece = 3 pts, 2 = 5, 3 = 6, 4 = 7, 5 = 8, 6 = 9, 7+ = 10 (hard cap).
+        /// </summary>
+        private static int GetVampiricProcPoints(int pieceCount)
+        {
+            switch (pieceCount)
+            {
+                case 1:  return 3;
+                case 2:  return 5;
+                case 3:  return 6;
+                case 4:  return 7;
+                case 5:  return 8;
+                case 6:  return 9;
+                default: return 10;  // 7+ pieces — hard cap
+            }
+        }
+
+        /// <summary>
+        /// Called from on-hit damage resolution. Counts all equipped Vampiric jewelry pieces,
+        /// fires a single proc roll, and heals using the piece-count DR table.
+        /// Each piece may target a different vital; all contribute to a single combined proc event.
         /// </summary>
         public uint TryProcVampiricJewelryOnHit()
         {
@@ -30,23 +48,33 @@ namespace ACE.Server.WorldObjects
             if (procChance <= 0)
                 return 0;
 
+            // Collect equipped Vampiric jewelry
+            var pieces = new List<WorldObject>();
+            foreach (var item in EquippedObjects.Values)
+            {
+                if (item.GetProperty(PropertyBool.IsVampiricJewelry) == true)
+                    pieces.Add(item);
+            }
+
+            if (pieces.Count == 0)
+                return 0;
+
+            // Single proc roll for the whole set
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                return 0;
+
+            var totalPts = GetVampiricProcPoints(pieces.Count);
             var mult = DerpACEConfig.VampiricJewelryOnHitMultiplier;
+
             var totalHealthHealed = 0;
             var totalStaminaRestored = 0;
             var totalManaRestored = 0;
 
-            foreach (var item in EquippedObjects.Values)
+            // Distribute points evenly across pieces (each piece contributes its vital type)
+            var ptsPerPiece = Math.Max(1, (int)Math.Round((double)totalPts / pieces.Count));
+
+            foreach (var item in pieces)
             {
-                if (item.GetProperty(PropertyBool.IsVampiricJewelry) != true)
-                    continue;
-
-                var pts = item.GetProperty(PropertyInt.VampiricJewelryPoints) ?? 0;
-                if (pts <= 0)
-                    continue;
-
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
-                    continue;
-
                 var vitalIdx = item.GetProperty(PropertyInt.VampiricJewelryVital) ?? 0;
                 if (vitalIdx < 0 || vitalIdx > 2)
                     vitalIdx = 0;
@@ -55,7 +83,7 @@ namespace ACE.Server.WorldObjects
                 if (vital == null || vital.Current >= vital.MaxValue)
                     continue;
 
-                var amount = (int)Math.Round(pts * mult);
+                var amount = (int)Math.Round(ptsPerPiece * mult);
                 if (amount < 1)
                     amount = 1;
 

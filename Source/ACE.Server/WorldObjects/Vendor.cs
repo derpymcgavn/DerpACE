@@ -13,6 +13,7 @@ using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
+using ACE.Server.Factories.Tables;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Managers;
 
@@ -139,6 +140,9 @@ namespace ACE.Server.WorldObjects
             //}
 
             inventoryloaded = true;
+
+            // Append tier-appropriate random loot if this vendor has VendorLootTier set.
+            LoadRandomLootInventory();
         }
 
         private void LoadInventoryItem(Dictionary<(uint weenieClassId, int paletteTemplate, double shade), uint> itemsForSale,
@@ -169,6 +173,85 @@ namespace ACE.Server.WorldObjects
             wo.VendorShopCreateListStackSize = stackSize ?? -1;
 
             DefaultItemsForSale.Add(wo.Guid, wo);
+        }
+
+        /// <summary>
+        /// If this vendor has <see cref="PropertyInt.VendorLootTier"/> set and vendor random loot is enabled,
+        /// rolls 1–10 (configurable) random items per category and adds them to the default inventory.
+        /// Uses the real TreasureDeath profile whose Tier matches the vendor's VendorLootTier value.
+        /// Falls back to a synthetic profile when no DB entry matches.
+        /// When VendorLootTier is not set explicitly, auto-detects the tier from the vendor's town position.
+        /// </summary>
+        private void LoadRandomLootInventory()
+        {
+            if (!DerpACEConfig.VendorRandomLootEnabled)
+                return;
+
+            // Explicit override takes priority; otherwise auto-detect from town location.
+            var tierProp = GetProperty(PropertyInt.VendorLootTier);
+            int tier;
+
+            if (tierProp.HasValue && tierProp.Value > 0)
+            {
+                tier = Math.Max(1, Math.Min(8, tierProp.Value));
+            }
+            else
+            {
+                tier = VendorTownTier.GetTierForVendor(this);
+                if (tier <= 0)
+                    return; // not in a known town and no manual override — skip
+            }
+
+            // Try to find a matching TreasureDeath profile from the DB (any with the right Tier).
+            // TreasureType IDs for tier-N generic profiles typically start at tier*1000 by convention;
+            // we fall back to building a minimal synthetic profile if nothing is found.
+            var profile = DatabaseManager.World.GetCachedDeathTreasure((uint)(tier * 1000));
+
+            if (profile == null)
+            {
+                // Build a synthetic profile that covers all three categories equally.
+                profile = new Database.Models.World.TreasureDeath
+                {
+                    Tier                                  = tier,
+                    LootQualityMod                        = 0f,
+                    ItemChance                            = 100,
+                    ItemMinAmount                         = 1,
+                    ItemMaxAmount                         = 1,
+                    ItemTreasureTypeSelectionChances      = 8,   // profile8 = equal weapon/armor/scroll/clothing/jewelry/gem/art/pet
+                    MagicItemChance                       = 100,
+                    MagicItemMinAmount                    = 1,
+                    MagicItemMaxAmount                    = 1,
+                    MagicItemTreasureTypeSelectionChances = 8,
+                    MundaneItemChance                     = 100,
+                    MundaneItemMinAmount                  = 1,
+                    MundaneItemMaxAmount                  = 1,
+                    MundaneItemTypeSelectionChances       = 0,
+                };
+            }
+
+            var min = DerpACEConfig.VendorRandomLootMinItems;
+            var max = DerpACEConfig.VendorRandomLootMaxItems;
+            var categories = new[]
+            {
+                ACE.Server.Factories.Enum.TreasureItemCategory.Item,
+                ACE.Server.Factories.Enum.TreasureItemCategory.MagicItem,
+                ACE.Server.Factories.Enum.TreasureItemCategory.MundaneItem,
+            };
+
+            foreach (var cat in categories)
+            {
+                var count = ACE.Common.ThreadSafeRandom.Next(min, max);
+                for (var i = 0; i < count; i++)
+                {
+                    var wo = LootGenerationFactory.CreateRandomLootObjects(profile, cat);
+                    if (wo == null) continue;
+
+                    wo.ContainerId = Guid.Full;
+                    wo.CalculateObjDesc();
+                    wo.VendorShopCreateListStackSize = -1;
+                    DefaultItemsForSale.Add(wo.Guid, wo);
+                }
+            }
         }
 
         public void AddDefaultItem(WorldObject item)

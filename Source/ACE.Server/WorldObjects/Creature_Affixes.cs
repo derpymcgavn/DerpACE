@@ -1,11 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 using ACE.Common;
+using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Factories;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
 
@@ -21,6 +25,7 @@ namespace ACE.Server.WorldObjects
         public bool IsNecromancerMob => GetProperty(PropertyBool.IsNecromancerMob) == true;
         public bool IsMergerMob => GetProperty(PropertyBool.IsMergerMob) == true;
         public bool IsHordeMob => GetProperty(PropertyBool.IsHordeMob) == true;
+        public bool IsHordeMember => GetProperty(PropertyBool.IsHordeMember) == true;
         public bool IsWarderMob => GetProperty(PropertyBool.IsWarderMob) == true;
         public bool IsIllusionistMob => GetProperty(PropertyBool.IsIllusionistMob) == true;
         public bool IsIllusionistCopy => GetProperty(PropertyBool.IsIllusionistCopy) == true;
@@ -52,35 +57,46 @@ namespace ACE.Server.WorldObjects
             var range = Math.Max(2.0f, DerpACEConfig.MergerSearchRange);
             var rangeSq = range * range;
 
-            var visible = PhysicsObj?.ObjMaint?.GetVisibleObjectsValuesOfTypeCreature();
-            if (visible == null || visible.Count == 0) return;
+            // Use the landblock world-object list directly — ObjMaint.GetVisibleObjects is only
+            // populated when a player is nearby, so mobs would never merge in unobserved areas.
+            var lb = CurrentLandblock;
+            if (lb == null) { _lastMergerTime = currentUnixTime; return; }
 
-            var victim = visible
-                .Where(c => c != null && c != this && !c.IsDead && c.Location != null
-                            && c is not Player
-                            && c.WeenieClassId == WeenieClassId
-                            && c.GetProperty(PropertyBool.IsMergerMob) != true
-                            && c.GetProperty(PropertyBool.IsIllusionistCopy) != true
-                            && Location.SquaredDistanceTo(c.Location) <= rangeSq)
-                .FirstOrDefault();
+            Creature victim = null;
+            foreach (var wo in lb.GetAllWorldObjectsForDiagnostics())
+            {
+                if (wo is not Creature c) continue;
+                if (c == this || c.IsDead || c.Location == null) continue;
+                if (c is Player) continue;
+                if (c.WeenieClassId != WeenieClassId) continue;
+                if (c.GetProperty(PropertyBool.IsMergerMob) == true) continue;
+                if (c.GetProperty(PropertyBool.IsIllusionistCopy) == true) continue;
+                if (Location.SquaredDistanceTo(c.Location) > rangeSq) continue;
+                victim = c;
+                break;
+            }
 
             if (victim == null) { _lastMergerTime = currentUnixTime; return; }
 
-            // ---- Absorb victim's full stats (not just current HP) ----
-            // Attributes: add victim StartingValue onto ours.
+            // ---- Absorb 1/4 of victim's stats per merge (flat, no DR) ----
+            // 8 merges × 25% = +200% stats max → effectively 3× base, capped at MergerMaxMerges (8).
+            const float scale = 0.25f;
+
+            // Attributes
             foreach (var kv in victim.Attributes)
             {
                 if (!Attributes.TryGetValue(kv.Key, out var ours) || ours == null || kv.Value == null)
                     continue;
-                var sum = (ulong)ours.StartingValue + kv.Value.StartingValue;
+                var add = (ulong)(kv.Value.StartingValue * scale);
+                var sum = (ulong)ours.StartingValue + add;
                 if (sum > uint.MaxValue) sum = uint.MaxValue;
                 ours.StartingValue = (uint)sum;
             }
 
-            // Vitals: add victim's MaxValue (full pool) onto our StartingValue, then refill.
-            AbsorbVital(Health, victim.Health);
-            AbsorbVital(Stamina, victim.Stamina);
-            AbsorbVital(Mana, victim.Mana);
+            // Vitals
+            AbsorbVital(Health,   victim.Health,   scale);
+            AbsorbVital(Stamina,  victim.Stamina,  scale);
+            AbsorbVital(Mana,     victim.Mana,     scale);
             if (Health != null) Health.Current = Health.MaxValue;
             if (Stamina != null) Stamina.Current = Stamina.MaxValue;
             if (Mana != null) Mana.Current = Mana.MaxValue;
@@ -89,16 +105,17 @@ namespace ACE.Server.WorldObjects
             if (absorbed > 0)
                 DamageHistory.OnHeal((uint)absorbed);
 
-            // XP: add victim's reward onto ours (capped at int.MaxValue).
+            // XP: add 1/4 of victim's reward.
             var theirXp = victim.XpOverride ?? 0;
             if (theirXp > 0)
             {
-                var combined = (long)(XpOverride ?? 0) + theirXp;
+                var gain = (long)(theirXp * scale);
+                var combined = (long)(XpOverride ?? 0) + gain;
                 if (combined > int.MaxValue) combined = int.MaxValue;
                 XpOverride = (int)combined;
             }
 
-            // Visible growth + flashy tell on both bodies
+            // Visible growth + flashy tell
             ObjScale = (ObjScale ?? 1.0f) + 0.1f;
             EnqueueBroadcast(new GameMessageScript(Guid, PlayScript.LevelUp, 1.0f));
             victim.EnqueueBroadcast(new GameMessageScript(victim.Guid, PlayScript.HealthDownVoid, 1.0f));
@@ -106,8 +123,7 @@ namespace ACE.Server.WorldObjects
             merges++;
             SetProperty(PropertyInt.MergerMergeCount, merges);
 
-            // Announce to all nearby players — local broadcast so anyone in range sees the merge
-            var announceMsg = $"{Name} absorbs {victim.Name}! ({merges}/{DerpACEConfig.MergerMaxMerges}) [Merger]";
+            var announceMsg = $"{Name} absorbs {victim.Name}! (+25% stats, {merges}/{DerpACEConfig.MergerMaxMerges}) [Merger]";
             EnqueueBroadcast(new GameMessageSystemChat(announceMsg, ChatMessageType.CombatEnemy));
 
             // Kill the absorbed neighbor cleanly
@@ -117,51 +133,191 @@ namespace ACE.Server.WorldObjects
             _lastMergerTime = currentUnixTime;
         }
 
-        private static void AbsorbVital(ACE.Server.WorldObjects.Entity.CreatureVital ours, ACE.Server.WorldObjects.Entity.CreatureVital theirs)
+        private static void AbsorbVital(ACE.Server.WorldObjects.Entity.CreatureVital ours, ACE.Server.WorldObjects.Entity.CreatureVital theirs, float scale)
         {
             if (ours == null || theirs == null) return;
-            var sum = (ulong)ours.StartingValue + theirs.MaxValue;
+            var add = (ulong)(theirs.MaxValue * scale);
+            var sum = (ulong)ours.StartingValue + add;
             if (sum > uint.MaxValue) sum = uint.MaxValue;
             ours.StartingValue = (uint)sum;
         }
 
-        // ---------- Horde ----------
+        // ---------- Horde (shared-health pack) ----------
 
         /// <summary>
-        /// DerpACE: Horde damage interception — converts incoming damage chunks into discrete
-        /// "swarm member" kills, announces shrinkage, and plays a death blip per member lost.
+        /// DerpACE: Intercept incoming damage for any Horde creature (leader or member).
+        /// All damage is applied to the LEADER's health pool. If the leader is dead the
+        /// member just die normally. When the shared pool is exhausted, all remaining
+        /// pack bodies are killed. Members never individually die from direct combat damage;
+        /// only the leader's pool governs pack survival.
         /// Called from <see cref="Monster_Combat.TakeDamage(WorldObject, DamageType, float, bool)"/>.
+        /// Returns true if this method consumed the damage (caller should not apply it again).
         /// </summary>
-        public void OnHordeDamageTaken(WorldObject source, uint damageTaken)
+        public bool TryHordeDamageTaken(WorldObject source, uint damageTaken)
         {
-            if (!IsHordeMob || damageTaken == 0 || Health == null) return;
-
-            var swarm = GetProperty(PropertyInt.HordeSwarmCount) ?? 1;
-            if (swarm <= 1) return;
-
-            // Members remaining is proportional to remaining health
-            // newMembers = ceil(swarm * remainingFraction)
-            var frac = Math.Clamp((float)Health.Current / Health.MaxValue, 0.0f, 1.0f);
-            var startCount = GetProperty(PropertyInt.HordeSwarmCount) ?? swarm;
-            // Initial fraction at full-spawn corresponds to startCount; recompute current count
-            var currentMembers = Math.Max(1, (int)Math.Ceiling(startCount * frac));
-
-            if (currentMembers >= swarm) return;
-
-            var killed = swarm - currentMembers;
-            SetProperty(PropertyInt.HordeSwarmCount, currentMembers);
-
-            // Visual splatter per member killed (capped to avoid spam)
-            var blips = Math.Min(killed, 3);
-            for (var i = 0; i < blips; i++)
-                EnqueueBroadcast(new GameMessageScript(Guid, PlayScript.SplatterMidLeftBack, 1.0f));
-
-            if (source is Player player)
+            // --- Member: route damage to leader ---
+            if (IsHordeMember)
             {
-                var msg = killed == 1
-                    ? $"You cut down a member of {Name}! ({currentMembers} remain) [Horde]"
-                    : $"You cut down {killed} members of {Name}! ({currentMembers} remain) [Horde]";
-                player.Session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.CombatEnemy));
+                var leaderIid = GetProperty(PropertyInstanceId.HordeLeader);
+                if (leaderIid.HasValue)
+                {
+                    var leader = CurrentLandblock?.GetObject(new ObjectGuid(leaderIid.Value)) as Creature;
+                    if (leader != null && !leader.IsDead)
+                    {
+                        leader.TryHordeDamageTaken(source, damageTaken);
+                        // Give the attacker a visual splatter on this member body
+                        EnqueueBroadcast(new GameMessageScript(Guid, PlayScript.SplatterMidLeftBack, 1.0f));
+                        return true;
+                    }
+                }
+                // Leader gone — fall through and take damage normally (die)
+                return false;
+            }
+
+            // --- Leader: apply to shared pool ---
+            if (!IsHordeMob || damageTaken == 0 || Health == null) return false;
+
+            var currentSwarm = GetProperty(PropertyInt.HordeSwarmCount) ?? 1;
+            var initialCount = GetProperty(PropertyInt.HordeSwarmInitialCount) ?? currentSwarm;
+
+            // Apply damage to our own health pool
+            var newHp = (int)Health.Current - (int)damageTaken;
+            if (newHp < 0) newHp = 0;
+            Health.Current = (uint)newHp;
+
+            var frac = Health.MaxValue > 0 ? (float)Health.Current / Health.MaxValue : 0f;
+            var newMembers = Health.Current <= 0 ? 0 : Math.Max(0, (int)Math.Ceiling(initialCount * frac));
+
+            if (newMembers < currentSwarm)
+            {
+                var killed = currentSwarm - newMembers;
+                SetProperty(PropertyInt.HordeSwarmCount, newMembers);
+
+                // Kill off the appropriate number of member bodies
+                KillHordeMembers(killed, source);
+
+                // Splatter effect on the leader body
+                var blips = Math.Min(killed, 3);
+                for (var i = 0; i < blips; i++)
+                    EnqueueBroadcast(new GameMessageScript(Guid, PlayScript.SplatterMidLeftBack, 1.0f));
+
+                string msg;
+                if (newMembers <= 0)
+                {
+                    msg = killed == 1
+                        ? $"The last member of the {Name} pack falls! [Horde]"
+                        : $"The last {killed} members of the {Name} pack fall! [Horde]";
+                }
+                else if (newMembers == 1)
+                {
+                    msg = $"Only one member of the {Name} pack remains! [Horde]";
+                }
+                else
+                {
+                    msg = killed == 1
+                        ? $"A member of the {Name} pack is cut down! ({newMembers} remain) [Horde]"
+                        : $"{killed} members of the {Name} pack are cut down! ({newMembers} remain) [Horde]";
+                }
+                EnqueueBroadcast(new GameMessageSystemChat(msg, ChatMessageType.CombatEnemy));
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Spawn the swarm member bodies around this Horde leader.
+        /// Called once after the leader is placed in the world.
+        /// </summary>
+        public void SpawnHordeMembers()
+        {
+            if (!IsHordeMob || Location == null) return;
+
+            var count = GetProperty(PropertyInt.HordeSwarmCount) ?? 0;
+            if (count <= 1) return; // leader IS the 1 body; spawn count-1 additional bodies
+
+            var additionalCount = count - 1;
+            var angles = new List<float>();
+            for (int i = 0; i < additionalCount; i++)
+                angles.Add((float)(2 * Math.PI * i / additionalCount));
+
+            const float radius = 3.5f;
+
+            for (int i = 0; i < additionalCount; i++)
+            {
+                try
+                {
+                    var member = WorldObjectFactory.CreateNewWorldObject(WeenieClassId) as Creature;
+                    if (member == null) continue;
+
+                    // Tag as member, point to leader
+                    member.SetProperty(PropertyBool.IsHordeMember, true);
+                    member.SetProperty(PropertyBool.IsHordeMob, false);
+                    member.SetProperty(PropertyInstanceId.HordeLeader, Guid.Full);
+                    member.Name = Name;
+
+                    // Copy visual tell from leader
+                    member.PaletteTemplate = PaletteTemplate;
+                    member.Shade = Shade;
+                    member.ObjScale = ObjScale;
+
+                    // Members have no XP/loot — reward is on the leader
+                    member.SetProperty(PropertyInt.XpOverride, 0);
+                    member.SetProperty(PropertyDataId.DeathTreasureType, 0);
+                    member.SetProperty(PropertyDataId.WieldedTreasureType, 0);
+                    member.SetProperty(PropertyDataId.InventoryTreasureType, 0);
+
+                    // Position offset from leader
+                    float ox = (float)Math.Cos(angles[i]) * radius;
+                    float oy = (float)Math.Sin(angles[i]) * radius;
+                    var pos = new ACE.Entity.Position(Location);
+                    pos.Pos = new System.Numerics.Vector3(Location.Pos.X + ox, Location.Pos.Y + oy, Location.Pos.Z);
+                    member.Location = pos;
+
+                    LandblockManager.AddObject(member);
+                    member.EnterWorld();
+                }
+                catch (Exception ex)
+                {
+                    log.Warn($"[Horde] Failed to spawn member {i} for {Name}: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Kill exactly <paramref name="count"/> live member bodies for this pack.
+        /// If the pool hits zero, kills all remaining members and then also kills the leader.
+        /// </summary>
+        private void KillHordeMembers(int count, WorldObject killer)
+        {
+            var remaining = GetProperty(PropertyInt.HordeSwarmCount) ?? 0;
+            var killAll = remaining <= 0;
+
+            // Enumerate live members on the same landblock
+            var members = new List<Creature>();
+            if (CurrentLandblock != null)
+            {
+                foreach (var wo in CurrentLandblock.GetAllWorldObjectsForDiagnostics())
+                {
+                    if (wo is Creature c && !c.IsDead
+                        && c.GetProperty(PropertyBool.IsHordeMember) == true
+                        && c.GetProperty(PropertyInstanceId.HordeLeader) == Guid.Full)
+                    {
+                        members.Add(c);
+                    }
+                }
+            }
+
+            var toKill = killAll ? members.Count : Math.Min(count, members.Count);
+            for (int i = 0; i < toKill; i++)
+                members[i].Die();
+
+            if (killAll)
+            {
+                // Pool exhausted — kill the leader body too via normal die
+                var chain = new ActionChain();
+                chain.AddDelaySeconds(0.25);
+                chain.AddAction(this, () => Die());
+                chain.EnqueueChain();
             }
         }
 

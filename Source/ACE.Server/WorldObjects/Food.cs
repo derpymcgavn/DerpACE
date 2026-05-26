@@ -102,6 +102,42 @@ namespace ACE.Server.WorldObjects
 
             if (!UnlimitedUse)
                 player.TryConsumeFromInventoryWithNetworking(this, 1);
+
+            // Easter egg: eat 3 cheese wheels → involuntary consequences.
+            TryCheeseWheelEasterEgg(player);
+        }
+
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, int> _cheeseWheelCount
+            = new System.Collections.Concurrent.ConcurrentDictionary<uint, int>();
+
+        private void TryCheeseWheelEasterEgg(Player player)
+        {
+            if (!Name.Equals("Wheel of Cheese", StringComparison.OrdinalIgnoreCase) &&
+                !Name.Equals("Cheese Wheel", StringComparison.OrdinalIgnoreCase) &&
+                !Name.Contains("Cheese", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var count = _cheeseWheelCount.AddOrUpdate(player.Guid.Full, 1, (_, c) => c + 1);
+
+            if (count >= 3)
+            {
+                _cheeseWheelCount[player.Guid.Full] = 0;
+
+                var chain = new ACE.Server.Entity.Actions.ActionChain();
+                chain.AddDelaySeconds(0.6);
+                chain.AddAction(player, () =>
+                {
+                    player.EnqueueBroadcastMotion(new ACE.Server.Entity.Motion(player, MotionCommand.Flatulence));
+                    player.EnqueueBroadcast(new GameMessageSound(player.Guid, Sound.Fizzle, 1.0f));
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "You probably shouldn't have eaten that third wheel of cheese...",
+                        ACE.Entity.Enum.ChatMessageType.System));
+                    player.EnqueueBroadcast(new GameMessageHearSpeech(
+                        "*involuntary trumpet*",
+                        player.Name, player.Guid.Full, ACE.Entity.Enum.ChatMessageType.Emote));
+                });
+                chain.EnqueueChain();
+            }
         }
 
         public void BoostVital(Player player)

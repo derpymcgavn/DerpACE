@@ -1,5 +1,30 @@
 # ACEmulator Change Log
 
+### DerpACE — Vendor Random Loot by Town Tier
+[DerpACE] Vendors now auto-stock tier-appropriate random loot based on the town they inhabit. All behavior is runtime-configurable and can be overridden per-vendor by admins.
+
+* **VendorTownTier** (`ACE.Server/Factories/Tables/VendorTownTier.cs` — new):
+  * `GetTierForVendor(Vendor)` resolves a loot tier (1–8) from the vendor's landblock X/Y coordinates using a ±3-landblock anchor table.
+  * `GetTownName(...)` returns the human-readable town name for admin diagnostics.
+  * Covers 40+ towns and outposts across Dereth: starter towns (Holtburg/Shoushi/Yaraq T1–T2), mid-tier hubs (Rithwic, Hebian-To, Zaikhal T3–T5), advanced cities (Linvak Tukal, Khayyaban, Neftet, Sanamar, Stonehold T5–T6), Candeth Keep (T7), Ayan Baqur (T8), plus Danby's Outpost, Yanshi, Tufa, Xarabydun, Oolutanga's Refuge, Crater Lake Village, Timaru, Silyun, Ahurenga, Via Apt, Neydisa Castle, Zalphos' Retreat, Undercity, and more. Unknown locations default to T4.
+* **Vendor auto-stocking** (`Vendor.cs`):
+  * `LoadInventory()` calls `LoadRandomLootInventory()` after static shop items load.
+  * When `VendorRandomLootEnabled` is true, rolls `VendorRandomLootMinItems`–`VendorRandomLootMaxItems` items per loot category using the resolved town tier and appends them alongside the vendor's regular wares.
+  * Stock is re-rolled each server load — not persisted.
+* **Admin override** (`@vendortier`):
+  * `@vendortier` — prints the auto-resolved tier and town name for the last appraised vendor.
+  * `@vendortier <1–8>` — pins `PropertyInt.VendorLootTier` on the vendor, overriding location-based resolution. Persisted.
+  * `@vendortier clear` — removes the explicit override, reverting to auto-resolution.
+* **Runtime tuning** (`@lootconfig`):
+  * `vendor.loot` (bool, default `true`) — master on/off for vendor random loot generation.
+  * `vendor.lootmin` (int, default `1`) — minimum items per category per vendor load.
+  * `vendor.lootmax` (int, default `5`) — maximum items per category per vendor load.
+* **DerpACEConfig** additions: `VendorRandomLootEnabled`, `VendorRandomLootMinItems`, `VendorRandomLootMaxItems`.
+* **PropertyInt** additions: `VendorLootTier = 9038` — custom per-vendor explicit tier override property.
+* **Balance corrections**: Candeth Keep reclassified from T6 → T7; Ayan Baqur reclassified from T7 → T8 to match their late-game status.
+
+---
+
 ### DerpACE — Expansion Hybrid (Nomad Unarmed, Procs, Bonus Stats, Pet QoL)
 [DerpACE] Adapted selected features from ACE.BaseMod Expansion samples directly into the server (no Harmony patches). All toggleable via `PropertyManager`.
 

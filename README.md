@@ -43,6 +43,35 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
+### Recent Patch Notes (Vendor Random Loot by Town Tier)
+Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.
+
+#### Town Tier Resolution (`Source/ACE.Server/Factories/Tables/VendorTownTier.cs` — new)
+* `VendorTownTier.GetTierForVendor(Vendor)` — resolves the loot tier (1–8) for a vendor from its landblock coordinates using a ±3 landblock radius anchor table.
+* `GetTownName(...)` — returns the human-readable town name for diagnostics and the `@vendortier` command.
+* **Covered towns include** (non-exhaustive): Holtburg, Shoushi, Yaraq, Rithwic, Lytelthorpe, Cragstone, Eastham, Dryreach, Hebian-To, Sawato, Al-Arqas, Zaikhal, Kara, Baishi, Ikeras, Linvak Tukal, Candeth Keep (T7), Ayan Baqur (T8), Danby's Outpost, Yanshi, Tufa, Xarabydun, Crater Lake Village, Oolutanga's Refuge, Khayyaban, Neftet, Sanamar, Timaru, Silyun, Stonehold, Ahurenga, Via Apt, Neydisa Castle, Zalphos' Retreat, Undercity, and more. Unknown locations default to **T4**.
+
+#### Vendor auto-stocking (`Source/ACE.Server/WorldObjects/Vendor.cs`)
+* `LoadInventory()` calls `LoadRandomLootInventory()` after the static shop items load.
+* When `VendorRandomLootEnabled` is `true`, rolls `VendorRandomLootMinItems`–`VendorRandomLootMaxItems` items per loot category (weapons, armor, casters, jewelry, etc.) using the resolved town tier and adds them to `DefaultItemsForSale` alongside the vendor's regular wares.
+* Stock is re-rolled each time the vendor is loaded (server restart / zone reload) — not persisted.
+
+#### Admin override (`@vendortier`)
+| Usage | Effect |
+|---|---|
+| `@vendortier` | Shows the auto-resolved tier and town name for the last appraised vendor. |
+| `@vendortier <1–8>` | Pins `PropertyInt.VendorLootTier` on the vendor, overriding the town-location lookup. Persisted on the world object. |
+| `@vendortier clear` | Removes the explicit override so the vendor reverts to auto-resolution. |
+
+#### Runtime tuning (via `@lootconfig`)
+| Key | Default | Description |
+|---|---|---|
+| `vendor.loot` | `true` | Master on/off for vendor random loot generation. |
+| `vendor.lootmin` | `1` | Minimum items per category rolled per vendor load. |
+| `vendor.lootmax` | `5` | Maximum items per category rolled per vendor load. |
+
+---
+
 ### Recent Patch Notes (Expansion Hybrid — Nomad Unarmed, Procs, Bonus Stats, Pet QoL)
 Adapted from selected features in [ACE.BaseMod / Samples / Expansion / Features](https://github.com/aquafir/ACE.BaseMod/tree/master/Samples/Expansion/Features) and integrated directly into the DerpACE server (no runtime Harmony patches). Every feature is **toggleable at runtime** via `PropertyManager` and tuned for the Nomad/unarmed playstyle.
 
@@ -920,6 +949,8 @@ For deeper documentation of DerpACE-specific systems (Defender's Shield, Ravager
 | `@highres-export` | Export contents of client_highres.dat file. |
 | `@image-export` | Export Texture/Image Files |
 | `@ironmanmode` | Enable or disable Ironman opt-in server-wide. |
+| `@lootconfig` | Runtime-tune loot/proc/vendor knobs (e.g. `@lootconfig set vendor.loot true`). |
+| `@vendortier` | Show or pin the random-loot tier for the last appraised vendor. |
 | `@language-export` | Export contents of client_local_English.dat file. |
 | `@modifyattr` | Adjusts an attribute for the last appraised mob/NPC/player |
 | `@modifybool` | Modifies a server property that is a bool |

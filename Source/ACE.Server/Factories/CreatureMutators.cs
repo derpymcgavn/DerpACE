@@ -493,8 +493,9 @@ namespace ACE.Server.Factories
             var size = ThreadSafeRandom.Next(minSize, maxSize);
 
             creature.SetProperty(PropertyInt.HordeSwarmCount, size);
+            creature.SetProperty(PropertyInt.HordeSwarmInitialCount, size);
 
-            // Multiply HP by swarm size so each "member" is roughly the original creature
+            // Scale the shared health pool: leader's MaxHP = single-body HP × pack size
             if (creature.Health != null && creature.Health.MaxValue > 0)
             {
                 var baseMax = creature.Health.MaxValue;
@@ -503,7 +504,7 @@ namespace ACE.Server.Factories
                 creature.Health.Current = creature.Health.MaxValue;
             }
 
-            // XP bonus reflects the additional bodies
+            // XP bonus reflects the full pack; awarded on leader death only
             var xpOverride = creature.GetProperty(PropertyInt.XpOverride) ?? 0;
             if (xpOverride > 0)
                 creature.SetProperty(PropertyInt.XpOverride, xpOverride * size);

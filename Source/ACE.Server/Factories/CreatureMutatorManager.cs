@@ -142,6 +142,16 @@ namespace ACE.Server.Factories
                         {
                             // Only one mutator per creature for now (matches old behavior)
                             // Future: allow stacking mutators with a priority system
+
+                            // DerpACE: Horde — defer member spawning until the leader is in world
+                            if (creature.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHordeMob) == true)
+                            {
+                                var chain = new ACE.Server.Entity.Actions.ActionChain();
+                                chain.AddDelaySeconds(0.5);
+                                chain.AddAction(creature, () => creature.SpawnHordeMembers());
+                                chain.EnqueueChain();
+                            }
+
                             break;
                         }
                     }

@@ -63,9 +63,9 @@ namespace ACE.Server.WorldObjects
         public static int    ObfuscatedBurdenMax   = 950;
         public static float  DramaticSpawnDelay    = 0.9f; // seconds between each rotate+spawn
         // Distance in meters in front of the stranger to drop each chest. 10 ft ~= 3.048 m.
-        public static float  ChestArcDistance      = 3.048f;
-        // Total arc swept across all 9 chests (degrees). 8 gaps * 22.5deg = 180deg.
-        public static float  ChestArcSweepDegrees  = 180.0f;
+        public static float  ChestArcDistance      = 4.0f;
+        // Total arc swept across all 9 chests (degrees). Full circle = 360deg.
+        public static float  ChestArcSweepDegrees  = 360.0f;
         public static int    DealCooldownSeconds   = 86400; // 24 hours between deals (per player)
         public const  string DealQuestStamp        = "MysteriousStrangerDeal";
 
@@ -117,10 +117,14 @@ namespace ACE.Server.WorldObjects
         }
 
         // Wcids used by pranks. Adjust to taste.
-        private const uint CheeseWcid = 261;   // cheese
-        private const uint MiteWcid   = 10;    // mite (per user request)
-        private const uint RatWcid    = 30;    // small rat
-        private const uint DrudgeWcid = 31;    // drudge skulker (filler creature)
+        private const uint CheeseWcid    = 261;  // cheese
+        private const uint MiteWcid      = 10;   // W_MITESCAMP_CLASS
+        private const uint RatWcid       = 220;  // W_RATBROWN_CLASS
+        private const uint DrudgeWcid    = 31;   // drudge skulker
+        private const uint ChickenWcid   = 262;  // W_CHICKEN_CLASS
+        private const uint ReedsharkWcid = 221;  // W_REEDSHARK_CLASS
+        private const uint RabbitWcid    = 2567; // W_RABBITBROWN_CLASS
+        private const uint ShrethWcid    = 4108; // W_SHRETHGNAWER_CLASS
 
         // 20+ heckles, picked at random whenever the Stranger mocks a junk pull.
         // Mixed insults, puns, and theatrical taunts so it doesn't get stale.
@@ -184,6 +188,62 @@ namespace ACE.Server.WorldObjects
                 Run = (s, p) => DropFromSky(s, p, CheeseWcid, count: 60, heightFt: 80f, durationSeconds: 8f,
                     line: "A modest cheese-shower. For your... troubles."),
             },
+            new Prank
+            {
+                Name = "SkyDrop",
+                Run = (s, p) => LaunchPlayerSkyward(s, p, heightFt: 2000f,
+                    line: "UP, UP, AND AWAAAAY! Do send me a postcard from up there!"),
+            },
+            new Prank
+            {
+                Name = "RandomTeleport",
+                Run = (s, p) => TeleportPlayerRandomly(s, p,
+                    line: "Location? Pfft. Overrated. Enjoy the scenic detour!"),
+            },
+            new Prank
+            {
+                Name = "ReedsharkSwarm",
+                Run = (s, p) => SpawnSwarmAroundPlayer(s, p, ReedsharkWcid, count: 12, radius: 5f,
+                    line: "Nothing says 'welcome' like a dozen reedsharks. You're practically a local delicacy now."),
+            },
+            new Prank
+            {
+                Name = "ChickenParade",
+                Run = (s, p) => SpawnSwarmAroundPlayer(s, p, ChickenWcid, count: 30, radius: 6f,
+                    line: "BWAAAK! The chickens demand tribute. You have none. This is their revenge."),
+            },
+            new Prank
+            {
+                Name = "RabbitFlood",
+                Run = (s, p) => SpawnSwarmAroundPlayer(s, p, RabbitWcid, count: 40, radius: 7f,
+                    line: "Fluffy. Soft. EVERYWHERE. Don't let the ears fool you."),
+            },
+            new Prank
+            {
+                Name = "ShrethInfestation",
+                Run = (s, p) => SpawnSwarmAroundPlayer(s, p, ShrethWcid, count: 20, radius: 5f,
+                    line: "Shreth! Shreth everywhere! I suggest running. Quickly."),
+            },
+            new Prank
+            {
+                Name = "CheeseCannonBarrage",
+                Run = (s, p) => DropFromSky(s, p, CheeseWcid, count: 500, heightFt: 300f, durationSeconds: 30f,
+                    line: "FIRE THE CHEESE CANNONS! ALL OF THEM!"),
+            },
+            new Prank
+            {
+                Name = "MiteRatReedsharkCombo",
+                Run = (s, p) =>
+                {
+                    SpawnSwarmAroundPlayer(s, p, MiteWcid,      count: 20, radius: 4f, line: null);
+                    SpawnSwarmAroundPlayer(s, p, RatWcid,       count: 20, radius: 7f, line: null);
+                    SpawnSwarmAroundPlayer(s, p, ReedsharkWcid, count: 8,  radius: 9f, line: null);
+                    if (s != null && !s.IsDestroyed)
+                        s.EnqueueBroadcast(new GameMessageHearSpeech(
+                            "Mites. Rats. Reedsharks. The full experience. You are VERY welcome.",
+                            s.Name, s.Guid.Full, ChatMessageType.Speech));
+                },
+            },
         };
 
         private static readonly Dictionary<uint, double> _lastUse = new Dictionary<uint, double>();
@@ -193,6 +253,13 @@ namespace ACE.Server.WorldObjects
         // Per-player list of currently-spawned chest guids, used for cleanup when opens are exhausted.
         private static readonly Dictionary<uint, List<uint>> _playerChests = new Dictionary<uint, List<uint>>();
 
+        /// <summary>
+        /// Guid of the player currently in an active Stranger session.
+        /// Only one player may play at a time; others are told to wait.
+        /// Cleared when all chests are cleaned up or the session ends with 0 opens.
+        /// </summary>
+        private static uint? _activePlayerGuid;
+
         private sealed class ChestSession
         {
             public uint PlayerGuid;
@@ -200,6 +267,8 @@ namespace ACE.Server.WorldObjects
             public Creature Stranger;
             public bool Opened;
             public bool LaughOnClose;
+            /// <summary>True when the player still has opens left after this chest — reshuffle fires on chest close.</summary>
+            public bool PendingReshuffle;
         }
 
         // ---------- entry point (called from Creature.ActOnUse) ----------
@@ -222,6 +291,18 @@ namespace ACE.Server.WorldObjects
                 return;
             }
             _lastUse[player.Guid.Full] = now;
+
+            // Only one player may have an active session at a time.
+            if (_activePlayerGuid.HasValue && _activePlayerGuid.Value != player.Guid.Full)
+            {
+                stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                    "One soul at a time. The Stranger is... occupied. Come back shortly.",
+                    stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "The Mysterious Stranger is currently dealing with another player. Please wait.",
+                    ChatMessageType.Broadcast));
+                return;
+            }
 
             if (player.IsDead)
                 return;
@@ -307,6 +388,9 @@ namespace ACE.Server.WorldObjects
             // Stamp the 24-hour cooldown the moment the player commits, win or lose.
             player.QuestManager?.Stamp(DealQuestStamp);
 
+            // Lock the Stranger to this player for the duration of the session.
+            _activePlayerGuid = player.Guid.Full;
+
             // 1) Apply the price: vitae is bound no matter what
             ApplyVitae(player, vitaePct / 100.0f);
 
@@ -324,6 +408,8 @@ namespace ACE.Server.WorldObjects
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat(
                     "You were granted 0 chest opens. The house wins.",
                     ChatMessageType.Broadcast));
+                // No chests — session is over, release the lock.
+                _activePlayerGuid = null;
                 return;
             }
 
@@ -390,17 +476,17 @@ namespace ACE.Server.WorldObjects
             _playerChests[player.Guid.Full] = new List<uint>(9);
 
             player.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                $"[MysteriousStranger] Conjuring {opensAllowed} of 9 chests {(player.IsAdmin ? "(admin: [JACKPOT]/[MID]/[JUNK] tags enabled) " : "")}...",
+                $"[MysteriousStranger] Conjuring {opensAllowed} of 9 chests...",
                 ChatMessageType.System));
 
             // Capture the stranger's starting orientation so the whole sweep is relative
             // to where he was looking when the deal closed (which is at the player).
             var startQuat = stranger.Location.Rotation;
 
-            // 9 placements means 8 rotation steps; spread the full sweep across those steps.
-            var stepDegrees = ChestArcSweepDegrees / 8.0f;
-            // Start the arc at -sweep/2 so the middle chest lands straight ahead.
-            var startOffsetDeg = -ChestArcSweepDegrees / 2.0f;
+            // 9 even slices around the full circle (360 / 9 = 40 degrees per step).
+            var stepDegrees = ChestArcSweepDegrees / 9.0f;
+            // Start at 0 — the first chest lands directly in front, then we go around.
+            var startOffsetDeg = 0.0f;
 
             // Big purple flourish kicks off the show.
             stranger.EnqueueBroadcast(new GameMessageScript(stranger.Guid, PlayScript.EnchantUpPurple, 1.5f));
@@ -491,6 +577,10 @@ namespace ACE.Server.WorldObjects
             target.Location = new Position(slotPos);
             target.SetProperty(PropertyBool.DefaultLocked, false);
             target.SetProperty(PropertyBool.Stuck, false);
+            // Ethereal so chests don't collide with players or each other.
+            target.SetProperty(PropertyBool.Ethereal, true);
+            target.SetProperty(PropertyBool.IgnoreCollisions, true);
+            target.SetProperty(PropertyBool.ReportCollisions, false);
             if (target is Chest tc)
             {
                 tc.IsLocked = false;
@@ -505,15 +595,6 @@ namespace ACE.Server.WorldObjects
             // Randomize palette per chest so the grid pops visually.
             target.PaletteTemplate = (int)RandomChestPalettes[ThreadSafeRandom.Next(0, RandomChestPalettes.Length - 1)];
             target.Shade = (float)ThreadSafeRandom.Next(0, 1000) / 1000f;
-
-            // Admin debug: tag the chest's name with its slot type so staff can verify spawns.
-            if (player.IsAdmin)
-            {
-                var tag = slotKind == ChestSlot.Jackpot ? "[JACKPOT]"
-                        : slotKind == ChestSlot.MidTier ? "[MID]"
-                                                        : "[JUNK]";
-                target.Name = $"{target.Name} {tag}";
-            }
 
             if (!LandblockManager.AddObject(target, true))
             {
@@ -637,6 +718,11 @@ namespace ACE.Server.WorldObjects
                     _strangerChestOwner.Remove(guid);
             }
             _playerChests.Remove(playerGuid);
+            _opensRemaining.Remove(playerGuid);
+
+            // Release the single-player session lock.
+            if (_activePlayerGuid.HasValue && _activePlayerGuid.Value == playerGuid)
+                _activePlayerGuid = null;
         }
 
         /// <summary>
@@ -671,9 +757,10 @@ namespace ACE.Server.WorldObjects
 
             _opensRemaining[player.Guid.Full] = remaining - 1;
 
-            // Mark this chest as opened and arm a "laugh-on-close" reaction. The Stranger waits
-            // for the player to finish poking through their winnings before he heckles them.
+            // Mark this chest as opened.
             session.Opened = true;
+
+            // LaughOnClose arms for every slot — each has its own distinct on-close reaction.
             session.LaughOnClose = true;
 
             // Stranger reacts to what the player just opened.
@@ -687,6 +774,10 @@ namespace ACE.Server.WorldObjects
                         stranger.EnqueueBroadcast(new GameMessageHearSpeech(
                             "Hah! The dice love you, friend. The dice LOVE you!",
                             stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                        // Broadcast jackpot to the whole area so everyone knows.
+                        stranger.EnqueueBroadcast(new GameMessageSystemChat(
+                            $"*** {player.Name} found the JACKPOT chest of the Mysterious Stranger! ***",
+                            ChatMessageType.Broadcast));
                         break;
                     case ChestSlot.MidTier:
                         stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.Nod));
@@ -695,11 +786,15 @@ namespace ACE.Server.WorldObjects
                             stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
                         break;
                     default:
+                        // TRICK CHEST — loud broadcast so all nearby players witness the humiliation.
                         stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.HeartyLaugh));
                         var heckle = JunkOneLiners[ThreadSafeRandom.Next(0, JunkOneLiners.Length - 1)];
                         stranger.EnqueueBroadcast(new GameMessageHearSpeech(
                             heckle,
                             stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                        stranger.EnqueueBroadcast(new GameMessageSystemChat(
+                            $"** TRICK CHEST! {player.Name} opened a trick chest from the Mysterious Stranger! **",
+                            ChatMessageType.Broadcast));
 
                         // Roll for a prank on top of the heckle. Pranks fire on a small delay
                         // so the player has a beat to read the line before the chaos hits.
@@ -726,25 +821,12 @@ namespace ACE.Server.WorldObjects
             player.Session.Network.EnqueueSend(new GameMessageSystemChat(
                 $"Opens remaining: {nowLeft}.", ChatMessageType.Broadcast));
 
-            // If the player still has opens left, the Stranger reshuffles the rest of the
-            // unopened chests so the next pick is a fresh gamble.
+            // If the player still has opens left, mark this chest session so the reshuffle
+            // fires after the player CLOSES the chest rather than the moment they open it.
             if (nowLeft > 0)
             {
-                if (stranger != null && !stranger.IsDestroyed)
-                {
-                    stranger.EnqueueBroadcast(new GameMessageHearSpeech(
-                        "Oooo, not so quick. Let me give the rest a little... stir.",
-                        stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
-                }
-
-                var capturedPlayer = player.Guid.Full;
-                var rchain = new ActionChain();
-                rchain.AddDelaySeconds(1.0);
-                rchain.AddAction(stranger ?? (WorldObject)chest, () =>
-                {
-                    ReshuffleRemainingChests(capturedPlayer, stranger);
-                });
-                rchain.EnqueueChain();
+                if (_strangerChestOwner.TryGetValue(chest.Guid.Full, out var openedSession))
+                    openedSession.PendingReshuffle = true;
             }
 
             // When opens hit zero, the remaining chests vanish — this is the big "show's over" moment.
@@ -780,197 +862,103 @@ namespace ACE.Server.WorldObjects
         {
             if (chest == null || player == null) return;
             if (!_strangerChestOwner.TryGetValue(chest.Guid.Full, out var session)) return;
-            if (!session.LaughOnClose) return;
             if (session.PlayerGuid != player.Guid.Full) return;
 
-            session.LaughOnClose = false;
-
             var stranger = session.Stranger;
-            if (stranger == null || stranger.IsDestroyed)
-                return;
 
-            stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.HeartyLaugh));
-            stranger.EnqueueBroadcast(new GameMessageHearSpeech(
-                "Hehehe... go on then. Try another. Fortune is a fickle dance partner.",
-                stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+            // On-close reaction — slot-specific so jackpot/mid/junk each feel different.
+            if (session.LaughOnClose)
+            {
+                session.LaughOnClose = false;
+
+                if (stranger != null && !stranger.IsDestroyed)
+                {
+                    switch (session.Slot)
+                    {
+                        case ChestSlot.Jackpot:
+                            stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.Cheer));
+                            stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                                "Well done, well DONE. Savour it. That kind of luck doesn't come twice.",
+                                stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                            break;
+                        case ChestSlot.MidTier:
+                            stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.Nod));
+                            stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                                "Solid. Not legendary, but nothing to weep over either. Try your luck again.",
+                                stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                            break;
+                        default:
+                            // TRICK CHEST close — mocking laugh, then nudge to keep playing.
+                            stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.HeartyLaugh));
+                            stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                                "Hehehe... go on then. Try another. Fortune is a fickle dance partner.",
+                                stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                            break;
+                    }
+                }
+            }
+
+            // Reshuffle all remaining unopened chests now that the player has closed this one.
+            if (session.PendingReshuffle)
+            {
+                session.PendingReshuffle = false;
+
+                var capturedPlayer = player.Guid.Full;
+
+                if (stranger != null && !stranger.IsDestroyed)
+                {
+                    stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                        "Oooo, not so quick. Let me give the rest a little... stir.",
+                        stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                }
+
+                var rchain = new ActionChain();
+                rchain.AddDelaySeconds(0.8);
+                rchain.AddAction(stranger ?? (WorldObject)chest, () =>
+                {
+                    ReshuffleRemainingChests(capturedPlayer, stranger);
+                });
+                rchain.EnqueueChain();
+            }
         }
 
         /// <summary>
-        /// Re-rolls slot types (jackpot/mid/junk) and contents across all of the player's
-        /// remaining UNOPENED stranger chests. Number of jackpots/mids/junks scales down
-        /// with how many have already been opened so the distribution stays fair-ish.
+        /// Full board reset: despawns ALL remaining stranger chests for the player
+        /// (opened or not) and respawns a fresh set of 9 with a guaranteed jackpot.
+        /// Called after each chest open when the player still has opens remaining.
         /// </summary>
         private static void ReshuffleRemainingChests(uint playerGuid, Creature stranger)
         {
-            if (!_playerChests.TryGetValue(playerGuid, out var bucket) || bucket.Count == 0)
+            if (stranger == null || stranger.IsDestroyed) return;
+
+            var player = PlayerManager.GetOnlinePlayer(new ObjectGuid(playerGuid)) as Player;
+            if (player == null) return;
+
+            if (!_opensRemaining.TryGetValue(playerGuid, out var opensLeft) || opensLeft <= 0)
                 return;
 
-            var landblock = stranger?.CurrentLandblock;
-
-            // Collect the still-spawned, still-unopened chests for this player.
-            var unopened = new List<(Chest chest, ChestSession session)>();
-            foreach (var guid in bucket)
+            // ---- tear down every chest currently tagged to this player ----
+            if (_playerChests.TryGetValue(playerGuid, out var bucket))
             {
-                if (!_strangerChestOwner.TryGetValue(guid, out var sess)) continue;
-                if (sess.Opened) continue;
-
-                var wo = landblock?.GetObject(new ObjectGuid(guid)) as Chest;
-                if (wo == null || wo.IsDestroyed) continue;
-
-                unopened.Add((wo, sess));
-            }
-
-            if (unopened.Count == 0)
-                return;
-
-            // Build a fresh slot distribution sized to whatever is still on the board.
-            var newSlots = BuildRandomizedSlots(unopened.Count);
-
-            for (var i = 0; i < unopened.Count; i++)
-            {
-                var (chest, sess) = unopened[i];
-                var newKind = newSlots[i];
-                sess.Slot = newKind;
-
-                // Drop the existing contents so the next open rolls cleanly.
-                var existing = new List<WorldObject>(chest.Inventory.Values);
-                foreach (var item in existing)
+                var landblock = stranger.CurrentLandblock;
+                foreach (var guid in bucket)
                 {
-                    if (chest.TryRemoveFromInventory(item.Guid))
-                        item.Destroy();
+                    if (!_strangerChestOwner.TryGetValue(guid, out var sess)) continue;
+                    var wo = landblock?.GetObject(new ObjectGuid(guid));
+                    if (wo != null && !wo.IsDestroyed)
+                    {
+                        wo.EnqueueBroadcast(new GameMessageScript(wo.Guid, PlayScript.Destroy, 1.0f));
+                        wo.Destroy();
+                    }
+                    _strangerChestOwner.Remove(guid);
                 }
-
-                FillChest(chest, newKind);
-
-                // Re-obfuscate burden so the reshuffled chest doesn't betray its new contents.
-                ObfuscateBurden(chest);
-
-                // Re-randomize the palette and admin debug tag so the visual hint matches.
-                chest.PaletteTemplate = (int)RandomChestPalettes[ThreadSafeRandom.Next(0, RandomChestPalettes.Length - 1)];
-                chest.Shade = (float)ThreadSafeRandom.Next(0, 1000) / 1000f;
-                RetagAdminChestName(chest, newKind, playerGuid);
-
-                // Visual puff so the player can SEE the stranger meddling with it.
-                chest.EnqueueBroadcast(new GameMessageScript(chest.Guid, PlayScript.EnchantUpPurple, 1.0f));
+                bucket.Clear();
             }
 
-            // Now perform the cinematic cup-shuffle: visibly swap chest positions back
-            // and forth a few times so the player can SEE the Stranger meddling with
-            // them. The slot kinds were already re-rolled above, so wherever a chest
-            // physically ends up after the shuffle is wherever its NEW contents live.
-            PerformCupShuffle(stranger, unopened);
+            // ---- spawn a completely fresh 9-chest board ----
+            SpawnNineChests(stranger, player, opensLeft);
         }
 
-        // ---- tuning for the cup-shuffle visual ----
-        public static int   CupShuffleSwapCount     = 8;     // how many pair-swaps to perform
-        public static float CupShuffleSwapInterval  = 0.35f; // seconds between swaps
-
-        /// <summary>
-        /// Cinematic "follow the cup" shuffle. Picks two random chests, swaps their
-        /// positions with a small visual puff, and repeats a few times. Each swap
-        /// fires on an ActionChain so the player sees the chests sliding around.
-        /// </summary>
-        private static void PerformCupShuffle(Creature stranger, List<(Chest chest, ChestSession session)> unopened)
-        {
-            if (stranger == null || unopened == null || unopened.Count < 2)
-                return;
-
-            var chests = new List<Chest>(unopened.Count);
-            foreach (var entry in unopened)
-                chests.Add(entry.chest);
-
-            var chain = new ActionChain();
-
-            // Opening flourish on the Stranger so the player knows something's coming.
-            chain.AddAction(stranger, () =>
-            {
-                stranger.EnqueueBroadcast(new GameMessageScript(stranger.Guid, PlayScript.EnchantUpPurple, 1.0f));
-                stranger.EnqueueBroadcastMotion(new Motion(stranger, MotionCommand.Point));
-            });
-            chain.AddDelaySeconds(0.4);
-
-            for (var i = 0; i < CupShuffleSwapCount; i++)
-            {
-                chain.AddAction(stranger, () => SwapTwoChests(chests));
-                chain.AddDelaySeconds(CupShuffleSwapInterval);
-            }
-
-            // Closing flourish on every remaining chest.
-            chain.AddAction(stranger, () =>
-            {
-                foreach (var c in chests)
-                {
-                    if (c == null || c.IsDestroyed) continue;
-                    c.EnqueueBroadcast(new GameMessageScript(c.Guid, PlayScript.EnchantUpPurple, 1.0f));
-                }
-            });
-
-            chain.EnqueueChain();
-        }
-
-        /// <summary>
-        /// Picks two distinct chests from <paramref name="chests"/> and swaps their
-        /// world positions, emitting a small puff so the swap reads visually.
-        /// </summary>
-        private static void SwapTwoChests(List<Chest> chests)
-        {
-            if (chests == null || chests.Count < 2) return;
-
-            var live = new List<Chest>(chests.Count);
-            foreach (var c in chests)
-                if (c != null && !c.IsDestroyed && c.Location != null) live.Add(c);
-            if (live.Count < 2) return;
-
-            var a = live[ThreadSafeRandom.Next(0, live.Count - 1)];
-            Chest b;
-            int guard = 0;
-            do
-            {
-                b = live[ThreadSafeRandom.Next(0, live.Count - 1)];
-            } while (b == a && ++guard < 8);
-            if (b == a) return;
-
-            var posA = new Position(a.Location);
-            var posB = new Position(b.Location);
-
-            a.Location = new Position(posB);
-            b.Location = new Position(posA);
-
-            a.SendUpdatePosition(true);
-            b.SendUpdatePosition(true);
-
-            a.EnqueueBroadcast(new GameMessageScript(a.Guid, PlayScript.EnchantUpPurple, 1.0f));
-            b.EnqueueBroadcast(new GameMessageScript(b.Guid, PlayScript.EnchantUpPurple, 1.0f));
-        }
-
-        /// <summary>
-        /// Strips any previous [JACKPOT]/[MID]/[JUNK] suffix from a chest's name and
-        /// re-applies the correct one for admin players. No-op for non-admin owners.
-        /// </summary>
-        private static void RetagAdminChestName(Chest chest, ChestSlot kind, uint playerGuid)
-        {
-            // Only retag if the original opener was admin (the name already carries a tag).
-            var name = chest.Name ?? string.Empty;
-            var hadTag = name.EndsWith("[JACKPOT]") || name.EndsWith("[MID]") || name.EndsWith("[JUNK]");
-            if (!hadTag) return;
-
-            var idx = name.LastIndexOf('[');
-            var baseName = idx > 0 ? name.Substring(0, idx).TrimEnd() : name;
-            var tag = kind == ChestSlot.Jackpot ? "[JACKPOT]"
-                    : kind == ChestSlot.MidTier ? "[MID]"
-                                                : "[JUNK]";
-            chest.Name = $"{baseName} {tag}";
-        }
-
-        /// <summary>
-        /// Overrides the chest's reported burden with a random value within
-        /// [<see cref="ObfuscatedBurdenMin"/>, <see cref="ObfuscatedBurdenMax"/>] so
-        /// players can't tell jackpot from junk by appraising encumbrance.
-        ///
-        /// The chest itself is <see cref="PropertyBool.Stuck"/> = true (it can't be
-        /// picked up), so changing the burden has no gameplay side effects beyond
-        /// what the player sees in the appraisal panel.
-        /// </summary>
         private static void ObfuscateBurden(WorldObject chest)
         {
             if (chest == null) return;
@@ -1203,6 +1191,51 @@ namespace ACE.Server.WorldObjects
                 return null;
             }
             return wo;
+        }
+
+        // ---------- new prank helpers ----------
+
+        /// <summary>
+        /// Teleports the player straight up <paramref name="heightFt"/> feet, then lets
+        /// gravity do its job. Pure chaos. Wear a feather fall.
+        /// </summary>
+        private static void LaunchPlayerSkyward(Creature stranger, Player player, float heightFt, string line)
+        {
+            if (player == null) return;
+
+            if (!string.IsNullOrEmpty(line) && stranger != null && !stranger.IsDestroyed)
+                stranger.EnqueueBroadcast(new GameMessageHearSpeech(line, stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+
+            var dest = new Position(player.Location);
+            dest.PositionZ += heightFt * 0.3048f; // feet -> meters
+            dest.SetLandblock();
+            dest.SetLandCell();
+
+            player.Teleport(dest);
+        }
+
+        /// <summary>
+        /// Teleports the player to a random offset up to ~200m from their current position.
+        /// </summary>
+        private static void TeleportPlayerRandomly(Creature stranger, Player player, string line)
+        {
+            if (player == null) return;
+
+            if (!string.IsNullOrEmpty(line) && stranger != null && !stranger.IsDestroyed)
+                stranger.EnqueueBroadcast(new GameMessageHearSpeech(line, stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+
+            var angle  = (float)(ThreadSafeRandom.Next(0f, 1f) * Math.PI * 2.0);
+            var dist   = ThreadSafeRandom.Next(80f, 200f);
+            var dx     = (float)(Math.Cos(angle) * dist);
+            var dy     = (float)(Math.Sin(angle) * dist);
+
+            var dest = new Position(player.Location);
+            dest.PositionX += dx;
+            dest.PositionY += dy;
+            dest.SetLandblock();
+            dest.SetLandCell();
+
+            player.Teleport(dest);
         }
     }
 }

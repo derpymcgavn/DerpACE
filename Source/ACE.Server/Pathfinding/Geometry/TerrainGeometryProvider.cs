@@ -104,7 +104,29 @@ namespace ACE.Server.Pathfinding.Geometry
                 // Static-object loading is a best-effort enhancement; terrain alone is still usable.
             }
 
-            return new TerrainGeometryProvider(vertList.ToArray(), triList.ToArray());
+            // Validate: strip any triangle whose indices are out of range or degenerate
+            // (two identical vertex indices). Both can cause IndexOutOfRangeException or
+            // NaN-propagation inside DotRecast's NavMeshBuilder.
+            var vertCount = vertList.Count / 3;
+            var validTris = new List<int>(triList.Count);
+            for (int ti = 0; ti + 2 < triList.Count; ti += 3)
+            {
+                int a = triList[ti], b = triList[ti + 1], c = triList[ti + 2];
+                if (a >= 0 && a < vertCount &&
+                    b >= 0 && b < vertCount &&
+                    c >= 0 && c < vertCount &&
+                    a != b && b != c && a != c)
+                {
+                    validTris.Add(a);
+                    validTris.Add(b);
+                    validTris.Add(c);
+                }
+            }
+
+            if (validTris.Count == 0)
+                return null;
+
+            return new TerrainGeometryProvider(vertList.ToArray(), validTris.ToArray());
         }
 
         private TerrainGeometryProvider(float[] vertices, int[] faces)

@@ -99,7 +99,7 @@ namespace ACE.Server.WorldObjects
         public bool PendingEndRoute = false;
         public bool PendingRetryRoute = false;
         public bool PendingContinueRoute = false;
-        protected const double MaxRouteFrequency = 5;
+        protected const double MaxRouteFrequency = 2.5;
 
         // ===== Route patrol burst =====
         // To make routed movement look like scouting (rather than restarting on each

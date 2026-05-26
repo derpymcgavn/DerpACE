@@ -1,3 +1,5 @@
+using System;
+
 using DotRecast.Detour;
 using DotRecast.Recast;
 using DotRecast.Recast.Geom;
@@ -33,7 +35,54 @@ namespace ACE.Server.Pathfinding.Geometry
             bool filterLowHangingObstacles, bool filterLedgeSpans, bool filterWalkableLowHeightSpans,
             bool keepInterResults)
         {
-            RcConfig cfg = new RcConfig(
+            // Pass 1: normal settings
+            var cfg = MakeConfig(partitionType, cellSize, cellHeight, agentMaxSlope, agentHeight, agentRadius,
+                agentMaxClimb, regionMinSize, regionMergeSize, edgeMaxLen, edgeMaxError, vertsPerPoly,
+                detailSampleDist, detailSampleMaxError,
+                filterLowHangingObstacles, filterLedgeSpans, filterWalkableLowHeightSpans);
+
+            RcBuilderResult rcResult;
+            try
+            {
+                rcResult = BuildRecastResult(geom, cfg, keepInterResults);
+            }
+            catch (IndexOutOfRangeException)
+            {
+                // DotRecast 2024.3.1 bug: RcMeshDetails.TriangulateHull crashes on certain
+                // polygon configurations. Retry with a coarser cell size and triangles-only
+                // (vertsPerPoly=3) to force simpler polygon shapes that avoid the OOB.
+                var coarseCfg = MakeConfig(partitionType, cellSize * 2f, cellHeight * 2f,
+                    agentMaxSlope, agentHeight, agentRadius, agentMaxClimb,
+                    regionMinSize, regionMergeSize, edgeMaxLen, edgeMaxError,
+                    3 /* triangles only */,
+                    0f, 0f, // no detail sampling
+                    filterLowHangingObstacles, filterLedgeSpans, filterWalkableLowHeightSpans);
+                try
+                {
+                    rcResult = BuildRecastResult(geom, coarseCfg, keepInterResults);
+                    cellSize *= 2f;
+                    cellHeight *= 2f;
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            }
+
+            return BuildMeshData(geom, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, rcResult);
+        }
+
+        private static RcConfig MakeConfig(
+            RcPartition partitionType,
+            float cellSize, float cellHeight,
+            float agentMaxSlope, float agentHeight, float agentRadius, float agentMaxClimb,
+            int regionMinSize, int regionMergeSize,
+            float edgeMaxLen, float edgeMaxError,
+            int vertsPerPoly,
+            float detailSampleDist, float detailSampleMaxError,
+            bool filterLowHangingObstacles, bool filterLedgeSpans, bool filterWalkableLowHeightSpans)
+        {
+            return new RcConfig(
                 partitionType,
                 cellSize, cellHeight,
                 agentMaxSlope, agentHeight, agentRadius, agentMaxClimb,
@@ -43,11 +92,6 @@ namespace ACE.Server.Pathfinding.Geometry
                 detailSampleDist, detailSampleMaxError,
                 filterLowHangingObstacles, filterLedgeSpans, filterWalkableLowHeightSpans,
                 SampleAreaModifications.SAMPLE_AREAMOD_WALKABLE, true);
-
-            RcBuilderResult rcResult = BuildRecastResult(geom, cfg, keepInterResults);
-            var meshData = BuildMeshData(geom, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, rcResult);
-
-            return meshData;
         }
 
         private DtNavMesh BuildNavMesh(DtMeshData meshData, int vertsPerPoly)
@@ -55,10 +99,7 @@ namespace ACE.Server.Pathfinding.Geometry
             var mesh = new DtNavMesh();
             var status = mesh.Init(meshData, vertsPerPoly, 0);
             if (status.Failed())
-            {
                 return null;
-            }
-
             return mesh;
         }
 
@@ -79,9 +120,7 @@ namespace ACE.Server.Pathfinding.Geometry
 
             var meshData = DtNavMeshBuilder.CreateNavMeshData(option);
             if (null == meshData)
-            {
                 return null;
-            }
 
             return DemoNavMeshBuilder.UpdateAreaAndFlags(meshData);
         }

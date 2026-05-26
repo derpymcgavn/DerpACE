@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -683,6 +684,191 @@ namespace ACE.Server.Command.Handlers
                     session.LogOffPlayer();
                 });
             });
+        }
+
+        // -----------------------------------------------------------------------
+        // /tp  — Player-to-player teleport with accept/decline and pyreal cost
+        // -----------------------------------------------------------------------
+
+        /// <summary>
+        /// Pending /tp requests: key = target player name (case-insensitive), value = (requester guid, expiry unix time).
+        /// </summary>
+        private static readonly ConcurrentDictionary<string, (uint RequesterGuid, double Expiry)> _tpRequests
+            = new ConcurrentDictionary<string, (uint, double)>(StringComparer.OrdinalIgnoreCase);
+
+        /// Pyreal cost per meter of distance.
+        private const double TpCostPerMeter = 2.0;
+        /// Minimum fee regardless of distance.
+        private const int TpMinCost = 50;
+        /// How many seconds a request stays open before it expires.
+        private const double TpRequestTtl = 30.0;
+
+        [CommandHandler("tp", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 1,
+            "Request to teleport to another online player. Costs pyrals based on distance; target must /tpaccept.",
+            "[player name]\n  /tpaccept  — Accept an incoming request\n  /tpdecline — Decline an incoming request")]
+        public static void HandleTpRequest(Session session, params string[] parameters)
+        {
+            var targetName = string.Join(" ", parameters).Trim();
+            var requester = session.Player;
+
+            var target = PlayerManager.GetOnlinePlayer(targetName);
+            if (target == null)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Player '{targetName}' is not online.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (target.Guid == requester.Guid)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "You cannot teleport to yourself.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (requester.Location == null || target.Location == null)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "Teleport is unavailable right now.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var dist = requester.Location.DistanceTo(target.Location);
+            var cost = Math.Max(TpMinCost, (int)Math.Round(dist * TpCostPerMeter));
+
+            var coinValue = requester.CoinValue ?? 0;
+            if (coinValue < cost)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"You need {cost:N0} pyrals to teleport to {target.Name} (you have {coinValue:N0}). [TP]",
+                    ChatMessageType.Broadcast));
+                return;
+            }
+
+            var expiry = Common.Time.GetUnixTime() + TpRequestTtl;
+            _tpRequests[target.Name] = (requester.Guid.Full, expiry);
+
+            session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Teleport request sent to {target.Name}. Cost: {cost:N0} pyrals. Awaiting acceptance... (expires in {TpRequestTtl}s) [TP]",
+                ChatMessageType.Broadcast));
+
+            target.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                $"{requester.Name} wants to teleport to you (cost to them: {cost:N0} pyrals). Type /tpaccept or /tpdecline. (expires in {TpRequestTtl}s) [TP]",
+                ChatMessageType.Broadcast));
+        }
+
+        [CommandHandler("tpaccept", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
+            "Accept an incoming /tp teleport request.")]
+        public static void HandleTpAccept(Session session, params string[] parameters)
+        {
+            var target = session.Player;
+
+            if (!_tpRequests.TryGetValue(target.Name, out var entry))
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "You have no pending teleport request. [TP]", ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (Common.Time.GetUnixTime() > entry.Expiry)
+            {
+                _tpRequests.TryRemove(target.Name, out _);
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "The teleport request has expired. [TP]", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var requester = PlayerManager.GetOnlinePlayer(new ObjectGuid(entry.RequesterGuid));
+            if (requester == null)
+            {
+                _tpRequests.TryRemove(target.Name, out _);
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "The requesting player is no longer online. [TP]", ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (requester.Location == null || target.Location == null)
+            {
+                _tpRequests.TryRemove(target.Name, out _);
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "Teleport is unavailable right now. [TP]", ChatMessageType.Broadcast));
+                return;
+            }
+
+            // Recalculate cost at accept time — requester may have moved
+            var dist = requester.Location.DistanceTo(target.Location);
+            var cost = Math.Max(TpMinCost, (int)Math.Round(dist * TpCostPerMeter));
+
+            var coinValue = requester.CoinValue ?? 0;
+            if (coinValue < cost)
+            {
+                _tpRequests.TryRemove(target.Name, out _);
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"{requester.Name} no longer has enough pyrals ({cost:N0} required). Teleport cancelled. [TP]",
+                    ChatMessageType.Broadcast));
+                requester.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Teleport to {target.Name} accepted but you no longer have enough pyrals ({cost:N0} required). [TP]",
+                    ChatMessageType.Broadcast));
+                return;
+            }
+
+            requester.TryConsumeFromInventoryWithNetworking(273, cost);
+            _tpRequests.TryRemove(target.Name, out _);
+
+            // --- Portal flair ---
+            var tpChain = new ActionChain();
+
+            // Step 1: EnterPortal emote, then wait 5 seconds
+            requester.EnqueueMotion(tpChain, MotionCommand.EnterPortal);
+            tpChain.AddDelaySeconds(5.0);
+
+            // Step 2: Teleport, then wait 5 seconds
+            tpChain.AddAction(requester, () =>
+            {
+                if (requester.Session == null || target.Session == null) return;
+                requester.Teleport(new Position(target.Location));
+            });
+            tpChain.AddDelaySeconds(5.0);
+
+            // Step 3: AetheriaLevelUp re-emerge effect, then wait 5 seconds
+            tpChain.AddAction(requester, () =>
+            {
+                requester.EnqueueBroadcast(new GameMessageScript(requester.Guid, PlayScript.AetheriaLevelUp));
+            });
+            tpChain.AddDelaySeconds(5.0);
+
+            // Step 4: ExitPortal emote
+            requester.EnqueueMotion(tpChain, MotionCommand.ExitPortal);
+
+            tpChain.EnqueueChain();
+
+            requester.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Teleporting to {target.Name}! {cost:N0} pyrals deducted. [TP]",
+                ChatMessageType.Broadcast));
+            session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"{requester.Name} is teleporting to you. [TP]", ChatMessageType.Broadcast));
+        }
+
+        [CommandHandler("tpdecline", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
+            "Decline an incoming /tp teleport request.")]
+        public static void HandleTpDecline(Session session, params string[] parameters)
+        {
+            var target = session.Player;
+
+            if (!_tpRequests.TryRemove(target.Name, out var entry))
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "You have no pending teleport request. [TP]", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var requester = PlayerManager.GetOnlinePlayer(new ObjectGuid(entry.RequesterGuid));
+            requester?.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                $"{target.Name} declined your teleport request. [TP]", ChatMessageType.Broadcast));
+
+            session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"You declined {requester?.Name ?? "that player"}'s teleport request. [TP]",
+                ChatMessageType.Broadcast));
         }
     }
 }

@@ -420,15 +420,15 @@ namespace ACE.Server.Managers
 
         /// <summary>
         /// Minimum ProcSpellRate (0–1) rolled onto the weapon for the blast proc.
-        /// Default 0.00001 (0.001%, effectively a rare per-hit roll).
+        /// Default 0.01 (1% per-hit chance to fire).
         /// </summary>
-        public static float WeaponBlastProcRateMin { get; set; } = 0.00001f;
+        public static float WeaponBlastProcRateMin { get; set; } = 0.01f;
 
         /// <summary>
         /// Maximum ProcSpellRate (0–1) rolled onto the weapon for the blast proc.
-        /// Default 0.001 (0.1%).
+        /// Default 0.04 (4% per-hit chance to fire).
         /// </summary>
-        public static float WeaponBlastProcRateMax { get; set; } = 0.001f;
+        public static float WeaponBlastProcRateMax { get; set; } = 0.04f;
 
         // ---------- Mob Modifiers (rare spawn affixes) ----------
 
@@ -438,11 +438,11 @@ namespace ACE.Server.Managers
         /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 2 (starts at tier 2).</summary>
         public static int MobModifierMinTier { get; set; } = 2;
 
-        /// <summary>Per-spawn chance (0-1) for the Nocturnal modifier to land on an eligible mob (only at night). Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float NocturnalMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Nocturnal modifier to land on an eligible mob (only at night). Default 0.0005 (1 in 2000).</summary>
+        public static float NocturnalMobChance { get; set; } = 0.0005f;
 
-        /// <summary>Per-spawn chance (0-1) for the Exploding modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float ExplodingMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Exploding modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
+        public static float ExplodingMobChance { get; set; } = 0.0005f;
 
         /// <summary>Radius (meters) of the Exploding modifier's on-death AoE. Default 6.</summary>
         public static float ExplodingMobRadius { get; set; } = 6.0f;
@@ -450,8 +450,8 @@ namespace ACE.Server.Managers
         /// <summary>Fraction of the mob's MaxHealth dealt as on-death AoE damage. Default 0.25.</summary>
         public static float ExplodingMobDamageScale { get; set; } = 0.25f;
 
-        /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float VampiricMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Vampiric modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
+        public static float VampiricMobChance { get; set; } = 0.0005f;
 
         /// <summary>Minimum vampiric lifesteal % rolled at spawn (integer). Default 10.</summary>
         public static int VampiricLifestealMin { get; set; } = 10;
@@ -459,11 +459,11 @@ namespace ACE.Server.Managers
         /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 25.</summary>
         public static int VampiricLifestealMax { get; set; } = 25;
 
-        /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float ThiefMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
+        public static float ThiefMobChance { get; set; } = 0.0005f;
 
-        /// <summary>Per-spawn chance (0-1) for the Scout modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float ScoutMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Scout modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
+        public static float ScoutMobChance { get; set; } = 0.0005f;
 
         /// <summary>Per-hit chance (0-1) the Thief modifier steals a tradenote stack from a player. Default 0.10.</summary>
         public static float ThiefStealProc { get; set; } = 0.10f;
@@ -480,8 +480,8 @@ namespace ACE.Server.Managers
         /// <summary>Per-spawn chance (0-1) for the Simulacrum modifier to land on eligible mobs (only CreatureType.Simulacrum). Default 0 (disabled - only applied via /cimob spawn command).</summary>
         public static float SimulacrumMobChance { get; set; } = 0.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Healer modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float HealerMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Healer modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
+        public static float HealerMobChance { get; set; } = 0.0005f;
 
         /// <summary>Maximum range (meters) a Healer mob will look for wounded allies to mend. Default 25.</summary>
         public static float HealerMobRange { get; set; } = 25.0f;
@@ -492,8 +492,8 @@ namespace ACE.Server.Managers
         /// <summary>Seconds between Heal Other casts by a Healer mob. Default 8.</summary>
         public static float HealerMobCooldownSeconds { get; set; } = 8.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Tank modifier to land on an eligible mob. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float TankMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Tank modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
+        public static float TankMobChance { get; set; } = 0.0005f;
 
         /// <summary>Health multiplier for Tank mobs. Default 2.5 (250%).</summary>
         public static float TankMobHealthMultiplier { get; set; } = 2.5f;
@@ -509,8 +509,8 @@ namespace ACE.Server.Managers
 
         // ---------- Creature Affixes (ported from ACE.BaseMod Expansion) ----------
 
-        /// <summary>Per-spawn chance (0-1) for the Reaper affix. Default 0.01 (1% at tier 2, scales to 4% at tier 8).</summary>
-        public static float ReaperMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Reaper affix. Default 0.0005 (1 in 2000).</summary>
+        public static float ReaperMobChance { get; set; } = 0.0005f;
 
         /// <summary>Bonus damage multiplier applied to a Reaper's outgoing melee hits (on top of its base damage). Default 1.35.</summary>
         public static float ReaperDamageBonus { get; set; } = 1.35f;
@@ -518,8 +518,8 @@ namespace ACE.Server.Managers
         /// <summary>Fraction (0-1) of damage dealt that a Reaper drains back as health. Default 0.25.</summary>
         public static float ReaperLifedrainPct { get; set; } = 0.25f;
 
-        /// <summary>Per-spawn chance (0-1) for the Necromancer affix. Default 0.01.</summary>
-        public static float NecromancerMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Necromancer affix. Default 0.0005 (1 in 2000).</summary>
+        public static float NecromancerMobChance { get; set; } = 0.0005f;
 
         /// <summary>Per-hit chance (0-1) a Necromancer applies a nether DoT to its target. Default 0.30.</summary>
         public static float NecromancerDotChance { get; set; } = 0.30f;
@@ -527,11 +527,11 @@ namespace ACE.Server.Managers
         /// <summary>Total nether DoT damage dealt over its duration (split across ticks). Default 60.</summary>
         public static float NecromancerDotTotal { get; set; } = 60.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Merger affix. Default 0.01.</summary>
-        public static float MergerMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Merger affix. Default 0.0005 (1 in 2000).</summary>
+        public static float MergerMobChance { get; set; } = 0.0005f;
 
-        /// <summary>Max times a single Merger may absorb a same-WCID neighbor. Default 5.</summary>
-        public static int MergerMaxMerges { get; set; } = 5;
+        /// <summary>Max times a single Merger may absorb a same-WCID neighbor. Default 8.</summary>
+        public static int MergerMaxMerges { get; set; } = 8;
 
         /// <summary>Radius (meters) a Merger searches for a same-WCID neighbor on heartbeat. Default 10.</summary>
         public static float MergerSearchRange { get; set; } = 10.0f;
@@ -539,8 +539,8 @@ namespace ACE.Server.Managers
         /// <summary>Seconds between Merger absorb attempts. Default 12.</summary>
         public static float MergerCooldownSeconds { get; set; } = 12.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Horde affix. Default 0.01.</summary>
-        public static float HordeMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Horde affix. Default 0.0005 (1 in 2000).</summary>
+        public static float HordeMobChance { get; set; } = 0.0005f;
 
         /// <summary>Minimum starting swarm size for a Horde. Default 3.</summary>
         public static int HordeMinSize { get; set; } = 3;
@@ -548,14 +548,14 @@ namespace ACE.Server.Managers
         /// <summary>Maximum starting swarm size for a Horde. Default 6.</summary>
         public static int HordeMaxSize { get; set; } = 6;
 
-        /// <summary>Per-spawn chance (0-1) for the Warder affix. Default 0.01.</summary>
-        public static float WarderMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Warder affix. Default 0.0005 (1 in 2000).</summary>
+        public static float WarderMobChance { get; set; } = 0.0005f;
 
         /// <summary>Radius (meters) a Warder's ward extends to nearby creatures. Default 8.</summary>
         public static float WarderRange { get; set; } = 8.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Illusionist affix. Default 0.01.</summary>
-        public static float IllusionistMobChance { get; set; } = 0.01f;
+        /// <summary>Per-spawn chance (0-1) for the Illusionist affix. Default 0.0005 (1 in 2000).</summary>
+        public static float IllusionistMobChance { get; set; } = 0.0005f;
 
         /// <summary>Number of 1-HP copies an Illusionist spawns on first sight of a player. Default 10.</summary>
         public static int IllusionistCopyCount { get; set; } = 10;
@@ -639,6 +639,19 @@ namespace ACE.Server.Managers
 
         /// <summary>PaletteBase applied to a [PP] WCID 8489 variant. Default 67108990.</summary>
         public static uint PrePatch8489PaletteBase { get; set; } = 67108990u;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Vendor Random Loot Stock
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>Master switch. When true, vendors with PropertyInt.VendorLootTier > 0 receive randomised loot stock on load. Default true.</summary>
+        public static bool VendorRandomLootEnabled { get; set; } = true;
+
+        /// <summary>Minimum number of random items rolled per category (Item, MagicItem, MundaneItem) when stocking a vendor. Default 1.</summary>
+        public static int VendorRandomLootMinItems { get; set; } = 1;
+
+        /// <summary>Maximum number of random items rolled per category per stock cycle. Default 10.</summary>
+        public static int VendorRandomLootMaxItems { get; set; } = 10;
     }
 }
 

@@ -685,6 +685,8 @@ namespace ACE.Entity.Enum.Properties
         MergerMergeCount                         = 9031,
         // DerpACE: current Horde swarm population (number of "members" remaining)
         HordeSwarmCount                          = 9032,
+        // DerpACE: initial Horde swarm size at spawn (immutable reference for fraction math)
+        HordeSwarmInitialCount                   = 9037,
         // DerpACE: number of illusionist copies currently alive (tracked on the original)
         IllusionistCopyCount                     = 9033,
         // DerpACE: Aura system - up to 3 looping PlayScript particle effect slots.
@@ -692,6 +694,8 @@ namespace ACE.Entity.Enum.Properties
         AuraPlayScript1                          = 9034,
         AuraPlayScript2                          = 9035,
         AuraPlayScript3                          = 9036,
+        // DerpACE: loot tier (1-8) for vendor random-loot stock. Set by admin via @props or @vendortier.
+        VendorLootTier                           = 9038,
     }
 
     public static class PropertyIntExtensions

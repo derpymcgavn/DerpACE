@@ -56,12 +56,23 @@ namespace ACE.Server.WorldObjects
                 // (this, weapon, attacker) and the defender cloak (handled on proc-on-hit).
                 if (PropertyManager.GetBool("proc_on_attack_enabled").Item)
                 {
+                    // DerpACE: when a player has a real weapon equipped, unarmed gauntlets and boots
+                    // must not contribute procs — they are unarmed-only modifiers.
+                    var playerWielder = wielder as Player;
+                    var weaponEquipped = playerWielder != null && !playerWielder.IsNomadUnarmed;
+
                     foreach (var item in wielder.EquippedObjects.Values)
                     {
                         if (item == this || item == weapon || item == attacker)
                             continue;
 
                         if (!item.HasProc || item.ProcSpellSelfTargeted != selfTarget)
+                            continue;
+
+                        // Skip unarmed gauntlet/boot procs when a real weapon is equipped
+                        if (weaponEquipped && item.CurrentWieldedLocation is EquipMask wieldLoc
+                            && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0
+                            && (item.UnarmedBaseDamage ?? 0) > 0)
                             continue;
 
                         item.TryProcItem(attacker, target, selfTarget);
