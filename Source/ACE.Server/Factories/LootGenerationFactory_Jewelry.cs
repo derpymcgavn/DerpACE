@@ -74,7 +74,8 @@ namespace ACE.Server.Factories
             var vampPts = 0;
             var vampVitalRoll = 0;
             string vampVitalLabel = null;
-            if (profile.Tier >= ACE.Server.Managers.DerpACEConfig.VampiricJewelryMinTier
+            if (ACE.Server.Managers.DerpACEConfig.EnableVampiricJewelry
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.VampiricJewelryMinTier
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.VampiricJewelryDropChance)
             {
                 vampPts = ThreadSafeRandom.Next(

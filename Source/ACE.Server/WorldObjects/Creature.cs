@@ -334,7 +334,8 @@ namespace ACE.Server.WorldObjects
         public override void ActOnUse(WorldObject worldObject)
         {
             // DerpACE: Mysterious Stranger NPC -- vitae-for-chests gambling encounter
-            if (WeenieClassId == MysteriousStranger.WeenieClassId && worldObject is Player mystPlayer)
+            if (ACE.Server.Managers.DerpACEConfig.EnableMysteriousStranger
+                && WeenieClassId == MysteriousStranger.WeenieClassId && worldObject is Player mystPlayer)
             {
                 MysteriousStranger.OnUse(this, mystPlayer);
                 return;

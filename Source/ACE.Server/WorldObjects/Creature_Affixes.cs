@@ -324,13 +324,16 @@ namespace ACE.Server.WorldObjects
         // ---------- Warder ----------
 
         /// <summary>
-        /// DerpACE: returns true if the given target is currently warded by a nearby Warder mob
-        /// (or is a Warder itself). Used by Player_Magic to block offensive casts.
+        /// DerpACE: returns true if the given target is currently warded by a nearby Warder mob.
+        /// A Warder protects other nearby mobs but does NOT ward itself.
+        /// Used by Player_Magic to block offensive casts.
         /// </summary>
         public static bool IsWardedTarget(WorldObject target)
         {
             if (target == null || target.Location == null) return false;
-            if (target is Creature targetCreature && targetCreature.IsWarderMob) return true;
+
+            // Warders do not ward themselves - they shield nearby allies instead.
+            var targetCreature = target as Creature;
 
             var range = Math.Max(1.0f, DerpACEConfig.WarderRange);
             var rangeSq = range * range;
@@ -342,6 +345,7 @@ namespace ACE.Server.WorldObjects
             {
                 if (c == null || c.IsDead || c.Location == null) continue;
                 if (!c.IsWarderMob) continue;
+                if (c == targetCreature) continue; // skip self
                 if (target.Location.SquaredDistanceTo(c.Location) <= rangeSq)
                     return true;
             }

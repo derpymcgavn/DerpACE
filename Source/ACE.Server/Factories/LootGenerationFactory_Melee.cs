@@ -131,6 +131,9 @@ namespace ACE.Server.Factories
         /// </summary>
         private static void TryRollWeaponBlastProc(WorldObject wo, TreasureDeath profile)
         {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || !ACE.Server.Managers.DerpACEConfig.WeaponElemBlastEnabled)
+                return;
+
             var minTier = ACE.Server.Managers.DerpACEConfig.WeaponBlastProcMinTier;
             if (profile == null || profile.Tier < minTier)
                 return;

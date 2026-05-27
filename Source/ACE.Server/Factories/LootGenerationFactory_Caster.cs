@@ -116,7 +116,8 @@ namespace ACE.Server.Factories
             // The actual proc is driven at runtime by TryProcArchmagi in Player_Magic.cs —
             // it only fires when the player casts a spell whose element matches the caster,
             // and never on ring, wall, volley, or blast AoE spells.
-            if (isMagical && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && wo.SpellDID.HasValue && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ArchmagiEnabled
+                && isMagical && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && wo.SpellDID.HasValue && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)
             {
                 var isLifeCaster = wo.W_DamageType == DamageType.Health;
 
@@ -150,7 +151,8 @@ namespace ACE.Server.Factories
 
             // Hierophant: support-healer variant for life casters (Martyr Staff family).
             // Only rolls if the caster is a life caster, didn't already become Archmagi, and meets tier.
-            if (isMagical
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.HierophantEnabled
+                && isMagical
                 && wo.W_DamageType == DamageType.Health
                 && profile.Tier >= ACE.Server.Managers.DerpACEConfig.HierophantMinTier
                 && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true

@@ -861,7 +861,7 @@ namespace ACE.Server.WorldObjects
 
             // DerpACE Mutator Derpcoin Reward: chance for mutator mobs to drop derpcoins
             var mutatorCount = GetProperty(PropertyInt.MutatorCount) ?? 0;
-            if (mutatorCount > 0 && corpse != null && DeathTreasure != null)
+            if (ACE.Server.Managers.DerpACEConfig.EnableDerpcoin && mutatorCount > 0 && corpse != null && DeathTreasure != null)
             {
                 int tier = DeathTreasure.Tier;
                 if (tier < 2) tier = 2; // Minimum tier 2

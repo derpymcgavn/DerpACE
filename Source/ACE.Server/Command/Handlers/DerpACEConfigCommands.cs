@@ -1,8 +1,10 @@
 using System;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.DerpAce;
 using ACE.Server.Factories.Tables;
 using ACE.Server.Managers;
 using ACE.Server.Network;
@@ -874,6 +876,91 @@ namespace ACE.Server.Command.Handlers
             CommandHandlerHelper.WriteOutputInfo(session,
                 $"[VendorTier] {target.Name} ({target.WeenieClassId}) set to T{newTier}. Re-approach the vendor to reload stock.",
                 ChatMessageType.Broadcast);
+        }
+
+        // ── @derpconfig ──────────────────────────────────────────────────────
+
+        [CommandHandler("derpconfig", AccessLevel.Developer, CommandHandlerFlag.None, 0,
+            "Manage the DerpAce.json runtime config file.",
+            "reload   — reload DerpAce.json from disk and apply all values\n" +
+            "show     — print the current in-memory config values\n" +
+            "save     — write current in-memory values back to DerpAce.json")]
+        public static void HandleDerpConfig(Session session, params string[] parameters)
+        {
+            var cmd = parameters.Length > 0 ? parameters[0].ToLowerInvariant() : "show";
+
+            void Reply(string msg)
+            {
+                if (session != null)
+                    session.Network.EnqueueSend(new Network.GameMessages.Messages.GameMessageSystemChat(msg, ChatMessageType.Broadcast));
+                else
+                    Console.WriteLine(msg);
+            }
+
+            switch (cmd)
+            {
+                case "reload":
+                {
+                    var result = DerpAceConfigManager.Reload();
+                    Reply(result);
+                    break;
+                }
+                case "save":
+                {
+                    DerpAceConfigManager.Save();
+                    Reply("DerpAce config saved to disk.");
+                    break;
+                }
+                case "show":
+                default:
+                {
+                    var c = DerpAceConfigManager.Config;
+                    var sb = new StringBuilder();
+                    sb.AppendLine("── DerpAce Config ──────────────────────────────");
+                    sb.AppendLine($"  [Section Toggles]");
+                    sb.AppendLine($"    enable_teleport           = {c.EnableTeleport}");
+                    sb.AppendLine($"    enable_mysterious_stranger= {c.EnableMysteriousStranger}");
+                    sb.AppendLine($"    enable_mob_modifiers      = {c.EnableMobModifiers}");
+                    sb.AppendLine($"    enable_derpcoin           = {c.EnableDerpcoin}");
+                    sb.AppendLine($"    enable_custom_weapons     = {c.EnableCustomWeapons}");
+                    sb.AppendLine($"    enable_armor_enchants     = {c.EnableArmorEnchants}");
+                    sb.AppendLine($"    enable_vampiric_jewelry   = {c.EnableVampiricJewelry}");
+                    sb.AppendLine($"    enable_prepatch_variants  = {c.EnablePrePatchVariants}");
+                    sb.AppendLine($"  [Mutator Toggles]");
+                    sb.AppendLine($"    nocturnal={c.NocturnalMobEnabled}  exploding={c.ExplodingMobEnabled}  vampiric={c.VampiricMobEnabled}  thief={c.ThiefMobEnabled}");
+                    sb.AppendLine($"    scout={c.ScoutMobEnabled}  simulacrum={c.SimulacrumMobEnabled}  healer={c.HealerMobEnabled}  tank={c.TankMobEnabled}");
+                    sb.AppendLine($"    reaper={c.ReaperMobEnabled}  necromancer={c.NecromancerMobEnabled}  merger={c.MergerMobEnabled}  horde={c.HordeMobEnabled}");
+                    sb.AppendLine($"    warder={c.WarderMobEnabled}  illusionist={c.IllusionistMobEnabled}");
+                    sb.AppendLine($"  [Weapon / LootGen Toggles]");
+                    sb.AppendLine($"    defender={c.DefenderShieldEnabled}  archmagi={c.ArchmagiEnabled}  hierophant={c.HierophantEnabled}");
+                    sb.AppendLine($"    thievesdagger={c.ThievesDaggerEnabled}  sentinel={c.SentinelSpearEnabled}  unarmedelem={c.UnarmedElemEnabled}");
+                    sb.AppendLine($"    fencer={c.FencerBladeEnabled}  ravager={c.RavagerAxeEnabled}  warden={c.WardenMaulEnabled}");
+                    sb.AppendLine($"    resolute={c.ResoluteBladeEnabled}  polebreaker={c.PolebreakerStaffEnabled}  stalker={c.StalkerBowEnabled}");
+                    sb.AppendLine($"    breacher={c.BreacherCrossbowEnabled}  reaperatlatl={c.ReaperAtlatlEnabled}  elemblast={c.WeaponElemBlastEnabled}");
+                    sb.AppendLine($"  [TP]");
+                    sb.AppendLine($"    tp_cost_per_meter         = {c.TpCostPerMeter}");
+                    sb.AppendLine($"    tp_min_cost               = {c.TpMinCost}");
+                    sb.AppendLine($"    tp_request_ttl_seconds    = {c.TpRequestTtlSeconds}");
+                    sb.AppendLine($"  [Mysterious Stranger]");
+                    sb.AppendLine($"    stranger_min_vitae_percent            = {c.StrangerMinVitaePercent}");
+                    sb.AppendLine($"    stranger_max_vitae_percent            = {c.StrangerMaxVitaePercent}");
+                    sb.AppendLine($"    stranger_min_chest_opens              = {c.StrangerMinChestOpens}");
+                    sb.AppendLine($"    stranger_max_chest_opens              = {c.StrangerMaxChestOpens}");
+                    sb.AppendLine($"    stranger_chest_despawn_seconds        = {c.StrangerChestDespawnSeconds}");
+                    sb.AppendLine($"    stranger_chest_despawn_warning_seconds= {c.StrangerChestDespawnWarningSeconds}");
+                    sb.AppendLine($"    stranger_chest_despawn_grace_seconds  = {c.StrangerChestDespawnGraceSeconds}");
+                    sb.AppendLine($"    stranger_chest_arc_distance           = {c.StrangerChestArcDistance}");
+                    sb.AppendLine($"    stranger_chest_arc_sweep_degrees      = {c.StrangerChestArcSweepDegrees}");
+                    sb.AppendLine($"    stranger_dramatic_spawn_delay         = {c.StrangerDramaticSpawnDelay}");
+                    sb.AppendLine($"    stranger_obfuscated_burden_min        = {c.StrangerObfuscatedBurdenMin}");
+                    sb.AppendLine($"    stranger_obfuscated_burden_max        = {c.StrangerObfuscatedBurdenMax}");
+                    sb.AppendLine($"    stranger_deal_cooldown_seconds        = {c.StrangerDealCooldownSeconds}");
+                    sb.AppendLine($"    stranger_junk_prank_chance            = {c.StrangerJunkPrankChance}");
+                    sb.Append("────────────────────────────────────────────────");
+                    Reply(sb.ToString());
+                    break;
+                }
+            }
         }
     }
 }

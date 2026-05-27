@@ -110,7 +110,8 @@ namespace ACE.Server.Factories
             wo.LongDesc = GetLongDesc(wo);
 
             // Defender's shield: configurable chance on any T6+ shield drop (see @lootconfig)
-            if (wo.IsShield && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.DefenderShieldEnabled
+                && wo.IsShield && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
             {
                 wo.Name = "Defender's " + wo.Name;
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield, true);

@@ -310,12 +310,13 @@ namespace ACE.Server.WorldObjects
             }
 
             // Thief's Dagger: configurable proc chance / bonus on sneak attacks (see @lootconfig)
-            // Only applies to Dagger weapon type
+            // Applies to Dagger weapon type, and to Sword variants when the interchangeable
+            // loot rule stamped IsThievesDagger onto a sword (epee/rapier/schlager-style finesse blades).
             uint thievesDaggerBonus = 0;
             if (damageEvent.HasDamage
                 && damageEvent.SneakAttackMod > 1.0f
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger)
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger, WeaponType.Sword)
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance)
             {
                 var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;

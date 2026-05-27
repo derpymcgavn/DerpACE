@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.DerpAce.Bank;
 using ACE.Server.Entity;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
@@ -62,7 +63,44 @@ namespace ACE.Server.WorldObjects
 
             var currencyWcid = vendor.AlternateCurrency ?? coinStackWcid;
 
-            SpendCurrency(currencyWcid, cost, true);
+            // DerpACE: VendorsUseBank â€” drain from banked balance first, then physical coins/alt-currency
+            if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank
+                && vendor.AlternateCurrency == null)
+            {
+                this.SpendWithBank(cost);
+            }
+            else if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank
+                && vendor.AlternateCurrency != null)
+            {
+                // Alt-currency: spend banked first, then inventory
+                var bankedItem = DerpAce.Bank.BankConfig.Items
+                    .FirstOrDefault(i => i.Id == vendor.AlternateCurrency.Value);
+                if (bankedItem != null)
+                {
+                    var bankedAmt = this.GetBanked(bankedItem.Prop);
+                    if (bankedAmt >= cost)
+                    {
+                        this.IncBanked(bankedItem.Prop, -(long)cost);
+                    }
+                    else if (bankedAmt > 0)
+                    {
+                        this.IncBanked(bankedItem.Prop, -bankedAmt);
+                        SpendCurrency(currencyWcid, (uint)(cost - bankedAmt), true);
+                    }
+                    else
+                    {
+                        SpendCurrency(currencyWcid, cost, true);
+                    }
+                }
+                else
+                {
+                    SpendCurrency(currencyWcid, cost, true);
+                }
+            }
+            else
+            {
+                SpendCurrency(currencyWcid, cost, true);
+            }
 
             vendor.MoneyIncome += (int)cost;
 
@@ -208,13 +246,22 @@ namespace ACE.Server.WorldObjects
             // for the vendor to determine what to do with each item (resell, destroy)
             vendor.ProcessItemsForPurchase(this, sellList);
 
-            // add coins to player inventory
-            foreach (var item in payoutCoinStacks)
+            // DerpACE: direct deposit â€” bank the payout instead of adding coin stacks to inventory
+            if (this.UseDirectDeposit() && payoutCoinAmount > 0)
             {
-                if (!TryCreateInInventoryWithNetworking(item))  // this shouldn't happen because of pre-validations in itemsToReceive
+                this.IncCash(payoutCoinAmount);
+                SendMessage($"Deposited {payoutCoinAmount:N0} Pyreals into your bank. Balance: {this.GetCash():N0}");
+            }
+            else
+            {
+                // add coins to player inventory (vanilla path)
+                foreach (var item in payoutCoinStacks)
                 {
-                    log.WarnFormat("[VENDOR] Payout 0x{0:X8}:{1} for player {2} failed to add to inventory HandleActionSellItem.", item.Guid.Full, item.Name, Name);
-                    item.Destroy();
+                    if (!TryCreateInInventoryWithNetworking(item))  // this shouldn't happen because of pre-validations in itemsToReceive
+                    {
+                        log.WarnFormat("[VENDOR] Payout 0x{0:X8}:{1} for player {2} failed to add to inventory HandleActionSellItem.", item.Guid.Full, item.Name, Name);
+                        item.Destroy();
+                    }
                 }
             }
 
@@ -406,3 +453,4 @@ namespace ACE.Server.WorldObjects
         }
     }
 }
+

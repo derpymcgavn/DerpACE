@@ -155,6 +155,9 @@ namespace ACE.Server
             log.Info("Initializing ConfigManager...");
             ConfigManager.Initialize();
 
+            log.Info("Initializing DerpAceConfigManager...");
+            DerpAce.DerpAceConfigManager.Initialize();
+
             log.Info("Initializing ModManager...");
             ModManager.Initialize();
 

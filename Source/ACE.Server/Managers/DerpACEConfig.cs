@@ -7,6 +7,57 @@ namespace ACE.Server.Managers
     /// </summary>
     public static class DerpACEConfig
     {
+        // ══════════════════════════════════════════════════════════════════════
+        // Section Master Toggles
+        // ══════════════════════════════════════════════════════════════════════
+
+        public static bool EnableTeleport          { get; set; } = true;
+        public static bool EnableMysteriousStranger { get; set; } = true;
+        public static bool EnableMobModifiers      { get; set; } = true;
+        public static bool EnableDerpcoin          { get; set; } = true;
+        public static bool EnableCustomWeapons     { get; set; } = true;
+        public static bool EnableArmorEnchants     { get; set; } = true;
+        public static bool EnableVampiricJewelry   { get; set; } = true;
+        public static bool EnablePrePatchVariants  { get; set; } = true;
+
+        // ══════════════════════════════════════════════════════════════════════
+        // Per-Mutator Toggles  (also gated by EnableMobModifiers above)
+        // ══════════════════════════════════════════════════════════════════════
+
+        public static bool NocturnalMobEnabled     { get; set; } = true;
+        public static bool ExplodingMobEnabled     { get; set; } = true;
+        public static bool VampiricMobEnabled      { get; set; } = true;
+        public static bool ThiefMobEnabled         { get; set; } = true;
+        public static bool ScoutMobEnabled         { get; set; } = true;
+        public static bool SimulacrumMobEnabled    { get; set; } = true;
+        public static bool HealerMobEnabled        { get; set; } = true;
+        public static bool TankMobEnabled          { get; set; } = true;
+        public static bool ReaperMobEnabled        { get; set; } = true;
+        public static bool NecromancerMobEnabled   { get; set; } = true;
+        public static bool MergerMobEnabled        { get; set; } = true;
+        public static bool HordeMobEnabled         { get; set; } = true;
+        public static bool WarderMobEnabled        { get; set; } = true;
+        public static bool IllusionistMobEnabled   { get; set; } = true;
+
+        // ══════════════════════════════════════════════════════════════════════
+        // Per-Custom-Weapon Toggles  (also gated by EnableCustomWeapons above)
+        // ══════════════════════════════════════════════════════════════════════
+
+        public static bool DefenderShieldEnabled   { get; set; } = true;
+        public static bool ArchmagiEnabled         { get; set; } = true;
+        public static bool HierophantEnabled       { get; set; } = true;
+        public static bool ThievesDaggerEnabled    { get; set; } = true;
+        public static bool SentinelSpearEnabled    { get; set; } = true;
+        public static bool UnarmedElemEnabled      { get; set; } = true;
+        public static bool FencerBladeEnabled      { get; set; } = true;
+        public static bool RavagerAxeEnabled       { get; set; } = true;
+        public static bool WardenMaulEnabled       { get; set; } = true;
+        public static bool ResoluteBladeEnabled    { get; set; } = true;
+        public static bool PolebreakerStaffEnabled { get; set; } = true;
+        public static bool StalkerBowEnabled       { get; set; } = true;
+        public static bool BreacherCrossbowEnabled { get; set; } = true;
+        public static bool ReaperAtlatlEnabled     { get; set; } = true;
+        public static bool WeaponElemBlastEnabled  { get; set; } = true;
         // ──────────────────────────────────────────────────────────────────────
         // Defender's Shield
         // ──────────────────────────────────────────────────────────────────────
@@ -652,6 +703,12 @@ namespace ACE.Server.Managers
 
         /// <summary>Maximum number of random items rolled per category per stock cycle. Default 10.</summary>
         public static int VendorRandomLootMaxItems { get; set; } = 10;
+
+        /// <summary>Minimum minutes between vendor restock cycles. Default 15.</summary>
+        public static int VendorRestockMinMinutes { get; set; } = 15;
+
+        /// <summary>Maximum minutes between vendor restock cycles. Default 45.</summary>
+        public static int VendorRestockMaxMinutes { get; set; } = 45;
     }
 }
 

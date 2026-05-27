@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ACE.Common;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -21,7 +21,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.VampiricMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.VampiricMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -62,7 +62,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.ThiefMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.ThiefMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -100,7 +100,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.ScoutMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.ScoutMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -148,7 +148,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.SimulacrumMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.SimulacrumMobEnabled;
         }
 
         public override bool CanApply(Creature creature, int tier)
@@ -177,13 +177,13 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Nocturnal mob mutator — boosts DamageRating + Overpower at spawn.
+    /// DerpACE: Nocturnal mob mutator â€” boosts DamageRating + Overpower at spawn.
     /// In random spawn flow, only rolls at night; force-apply (admin) bypasses time-of-day.
     /// </summary>
     public class NocturnalMutator : CreatureMutator
     {
         public override string Name => "Nocturnal";
-        public override string Description => "Hunts after dark — boosted damage and overpower.";
+        public override string Description => "Hunts after dark â€” boosted damage and overpower.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsNocturnalMob;
         public override string NamePrefix => "Nocturnal";
 
@@ -191,7 +191,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.NocturnalMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.NocturnalMobEnabled;
         }
 
         public override bool CanApply(Creature creature, int tier)
@@ -211,7 +211,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Exploding mob mutator — detonates on death casting an elemental ring spell.
+    /// DerpACE: Exploding mob mutator â€” detonates on death casting an elemental ring spell.
     /// Death-side AoE is handled in Creature_Death.cs by checking PropertyBool.IsExplodingMob.
     /// </summary>
     public class ExplodingMutator : CreatureMutator
@@ -225,7 +225,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.ExplodingMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.ExplodingMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -259,7 +259,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Healer mob mutator — casts Heal Other on wounded nearby allies,
+    /// DerpACE: Healer mob mutator â€” casts Heal Other on wounded nearby allies,
     /// spends mana, and shows heal notification/animation on the target.
     /// Heartbeat logic is in Creature_Healer.cs.
     /// </summary>
@@ -274,7 +274,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.HealerMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.HealerMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -295,7 +295,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Tank mob mutator — high HP, physical damage reduction, bonus healing received,
+    /// DerpACE: Tank mob mutator â€” high HP, physical damage reduction, bonus healing received,
     /// and boosted Light Weapons + Shield skills.
     /// </summary>
     public class TankMutator : CreatureMutator
@@ -309,7 +309,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.TankMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.TankMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -356,7 +356,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Reaper affix — death-aspected: bonus melee damage and life-drain on hit.
+    /// DerpACE: Reaper affix â€” death-aspected: bonus melee damage and life-drain on hit.
     /// On-hit lifedrain handled in Player_Combat.TryProcMobModifiers.
     /// </summary>
     public class ReaperMutator : CreatureMutator
@@ -370,7 +370,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.ReaperMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.ReaperMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -394,7 +394,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Necromancer affix — applies a nether damage-over-time on hit.
+    /// DerpACE: Necromancer affix â€” applies a nether damage-over-time on hit.
     /// DoT roll handled in Player_Combat.TryProcMobModifiers.
     /// </summary>
     public class NecromancerMutator : CreatureMutator
@@ -408,7 +408,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.NecromancerMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.NecromancerMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -421,7 +421,7 @@ namespace ACE.Server.Factories
                 creature.Mana.Current = creature.Mana.MaxValue;
             }
 
-            // Improve nether resistance — a necromancer shrugs off the same stuff it casts
+            // Improve nether resistance â€” a necromancer shrugs off the same stuff it casts
             creature.SetProperty(PropertyFloat.ResistNether, 0.5f);
 
             // Visual tell: dark/black tint, slightly larger
@@ -432,7 +432,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Merger affix — periodically absorbs a nearby same-WCID creature, growing larger and stronger.
+    /// DerpACE: Merger affix â€” periodically absorbs a nearby same-WCID creature, growing larger and stronger.
     /// Heartbeat logic is in Creature_Affixes.cs.
     /// </summary>
     public class MergerMutator : CreatureMutator
@@ -446,7 +446,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.MergerMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.MergerMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -469,13 +469,13 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Horde affix — represents a small swarm; takes multiple kills to bring down
+    /// DerpACE: Horde affix â€” represents a small swarm; takes multiple kills to bring down
     /// and announces shrinkage in combat chat. Per-hit "swarm member" tracking is in Creature_Affixes.cs.
     /// </summary>
     public class HordeMutator : CreatureMutator
     {
         public override string Name => "Horde";
-        public override string Description => "A swarm — multiple members must be killed to defeat it.";
+        public override string Description => "A swarm â€” multiple members must be killed to defeat it.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsHordeMob;
         public override string NamePrefix => "Swarming";
 
@@ -483,7 +483,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.HordeMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.HordeMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -495,7 +495,7 @@ namespace ACE.Server.Factories
             creature.SetProperty(PropertyInt.HordeSwarmCount, size);
             creature.SetProperty(PropertyInt.HordeSwarmInitialCount, size);
 
-            // Scale the shared health pool: leader's MaxHP = single-body HP × pack size
+            // Scale the shared health pool: leader's MaxHP = single-body HP Ã— pack size
             if (creature.Health != null && creature.Health.MaxValue > 0)
             {
                 var baseMax = creature.Health.MaxValue;
@@ -517,7 +517,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Warder affix — wards nearby creatures, blocking offensive spells cast against them.
+    /// DerpACE: Warder affix â€” wards nearby creatures, blocking offensive spells cast against them.
     /// Spell-cast block is enforced in Player_Magic.CreatePlayerSpell.
     /// </summary>
     public class WarderMutator : CreatureMutator
@@ -531,7 +531,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.WarderMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.WarderMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -553,7 +553,7 @@ namespace ACE.Server.Factories
                 creature.Mana.Current = creature.Mana.MaxValue;
             }
 
-            // Visual tell: bright blue and slightly larger — telegraph that they buff allies
+            // Visual tell: bright blue and slightly larger â€” telegraph that they buff allies
             creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
             creature.PaletteTemplate = (int)PaletteTemplate.Blue;
             creature.Shade = 0.4;
@@ -561,7 +561,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Illusionist affix — on first sight of a player, spawns N 1-HP copies of itself.
+    /// DerpACE: Illusionist affix â€” on first sight of a player, spawns N 1-HP copies of itself.
     /// Periodically swaps positions with a random surviving copy, making the real one hard to pin down.
     /// Copy spawning + swap logic lives in Creature_Affixes.cs (TryIllusionistOnAggro / TryIllusionistSwap).
     /// </summary>
@@ -576,7 +576,7 @@ namespace ACE.Server.Factories
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
             Chance = DerpACEConfig.IllusionistMobChance;
-            Enabled = DerpACEConfig.MobModifierEnabled;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.IllusionistMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -591,3 +591,4 @@ namespace ACE.Server.Factories
         }
     }
 }
+

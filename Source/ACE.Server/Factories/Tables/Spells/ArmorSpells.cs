@@ -192,10 +192,13 @@ namespace ACE.Server.Factories.Tables
 
             // DerpACE: Covenant armor rolls banes at a much higher chance; normal armor gets a slight bump.
             // Tunables: DerpACEConfig.ArmorBaneChanceCovenant / ArmorBaneChanceNormal (see @lootconfig)
+            // When EnableArmorEnchants is off, bane chance falls back to the vanilla spell.chance table.
             var isCovenant = roll != null && roll.ArmorType == ACE.Server.Factories.Enum.TreasureArmorType.Covenant;
-            var baneChance = isCovenant
-                ? ACE.Server.Managers.DerpACEConfig.ArmorBaneChanceCovenant
-                : ACE.Server.Managers.DerpACEConfig.ArmorBaneChanceNormal;
+            var baneChance = ACE.Server.Managers.DerpACEConfig.EnableArmorEnchants
+                ? (isCovenant
+                    ? ACE.Server.Managers.DerpACEConfig.ArmorBaneChanceCovenant
+                    : ACE.Server.Managers.DerpACEConfig.ArmorBaneChanceNormal)
+                : -1f; // force vanilla path below
 
             var spells = new List<SpellId>();
 
@@ -203,8 +206,9 @@ namespace ACE.Server.Factories.Tables
             {
                 var rng = ThreadSafeRandom.NextInterval(treasureDeath.LootQualityMod);
 
-                // Impenetrability keeps its original 1.00 chance; banes use the configurable chance.
-                var chance = spell.spellId == SpellId.Impenetrability1 ? spell.chance : baneChance;
+                // Impenetrability keeps its original 1.00 chance; banes use the configurable chance (or vanilla when enchants disabled).
+                var chance = spell.spellId == SpellId.Impenetrability1 ? spell.chance
+                    : (baneChance >= 0f ? baneChance : spell.chance);
 
                 if (rng < chance)
                     spells.Add(spell.spellId);

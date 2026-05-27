@@ -58,6 +58,7 @@ namespace ACE.Server.Managers
             var thread = new Thread(() =>
             {
                 LandblockManager.PreloadConfigLandblocks();
+                LandblockManager.PreloadDerpAceTownLandblocks();
                 UpdateWorld();
             });
             thread.Name = "World Manager";

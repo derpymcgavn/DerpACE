@@ -386,6 +386,7 @@ namespace ACE.Server.Factories
         {
             if (wo == null) return;
             if (wo.WeenieClassId != 8489) return;
+            if (!ACE.Server.Managers.DerpACEConfig.EnablePrePatchVariants) return;
 
             var chance = ACE.Server.Managers.DerpACEConfig.PrePatch8489Chance;
             if (chance <= 0f) return;

@@ -99,5 +99,8 @@ namespace ACE.Entity.Enum.Properties
         /* DerpACE Ironman mode */
         IronmanPlan                    = 9008,
         IronmanLifeMilestones          = 9009,
+
+        /* DerpACE Mail system */
+        PlayerMailbox                  = 9010,
     }
 }

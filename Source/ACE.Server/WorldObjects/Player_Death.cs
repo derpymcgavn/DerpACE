@@ -797,6 +797,10 @@ namespace ACE.Server.WorldObjects
 
             var numCoinsDropped = level > 5 ? coins / 2 : 0;
 
+            // DerpACE: cap coins dropped at configured maximum
+            if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.MaxCoinsDropped >= 0)
+                numCoinsDropped = Math.Min(numCoinsDropped, DerpAce.Bank.BankConfig.MaxCoinsDropped);
+
             return numCoinsDropped;
         }
 

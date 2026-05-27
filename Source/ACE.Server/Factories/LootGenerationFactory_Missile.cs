@@ -108,7 +108,8 @@ namespace ACE.Server.Factories
             var specialModifierApplied = false;
 
             // Stalker's Bow: configurable chance on T6+ bows to grant a first-strike damage bonus (see @lootconfig)
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.StalkerBowEnabled
+                && TryRollWeaponModifier(
                 profile,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.StalkerBowDropChance,
@@ -139,7 +140,8 @@ namespace ACE.Server.Factories
             }
 
             // Breacher's Crossbow: configurable chance on T6+ crossbows for an always-on armor pierce % (see @lootconfig)
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.BreacherCrossbowEnabled
+                && TryRollWeaponModifier(
                 profile,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.BreacherCrossbowDropChance,
@@ -163,7 +165,8 @@ namespace ACE.Server.Factories
             }
 
             // Reaper's Atlatl: configurable chance on T6+ atlatls for a kill-fed self-heal proc (see @lootconfig)
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ReaperAtlatlEnabled
+                && TryRollWeaponModifier(
                 profile,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.ReaperAtlatlDropChance,

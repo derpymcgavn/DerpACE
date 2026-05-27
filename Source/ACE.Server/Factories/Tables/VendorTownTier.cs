@@ -1,21 +1,30 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
+using ACE.Database;
+using ACE.Entity;
+using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
+using ACE.Entity.Models;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Factories.Tables
 {
     /// <summary>
-    /// Maps a vendor's landblock (X, Y) coordinates to a loot tier (1–7) based on
+    /// Maps a vendor's landblock (X, Y) coordinates to a loot tier (1–8) based on
     /// the town it is located in.  Used by <see cref="Vendor.LoadRandomLootInventory"/>
     /// to automatically stock tier-appropriate random loot when no explicit
     /// <c>PropertyInt.VendorLootTier</c> override has been set.
     ///
-    /// Town centres and their canonical landblock IDs (hex) were cross-referenced
-    /// with the ACE WeenieClassName vendor prefixes and AC wiki coordinates.
-    /// A ±3-landblock radius is applied around each anchor so that vendors in the
-    /// same town cluster (including surrounding outposts) all resolve correctly.
+    /// As of DerpACE, the town anchor coordinates are sourced directly from the
+    /// in-database PointsOfInterest table (the same data behind <c>/telepoi</c>),
+    /// so any POI the server knows about can be used as a town centre.  The tier
+    /// classification for each town name is defined in <see cref="TownTiers"/>.
+    /// POIs that don't appear in <see cref="TownTiers"/> are still kept as valid
+    /// anchors for permaload, but resolve to tier 0 for vendor stocking.
     ///
+    /// Tier groupings:
     ///  Tier 1 (Levels  1–15): Holtburg, Arwic, Cragstone, Eastham, Glenden Wood,
     ///                          Lytelthorpe, Rithwic, Shoushi, Sawato, Mayoi, Yanshi,
     ///                          Tufa, Lost Wish Beach, Bluespire/Greenspire/Redspire
@@ -23,20 +32,90 @@ namespace ACE.Server.Factories.Tables
     ///  Tier 3 (Levels 40–50): Kara, Linvak Tukal, Plateau Village, Xarabydun,
     ///                          Oolutanga's Refuge, Crater Lake Village
     ///  Tier 4 (Levels 60–80): Al-Jalima, Qalaba'r, Uziz, Samsur, Danby's Outpost,
-    ///                          Ayan Baqur, Khayyaban, Neftet
+    ///                          Khayyaban, Neftet, MacNiall's Freehold
     ///  Tier 5 (Levels 100–115): Kryst, Sanamar, Timaru, Silyun, Stonehold
     ///  Tier 6 (Levels 135–160): Fiun Outpost, Dryreach, Ahurenga, Via Apt,
     ///                            Neydisa Castle, Zalphos' Retreat
-    ///  Tier 7 (Levels 185+): Fort Tethana, Zaikhal, Undercity, Candeth Keep
+    ///  Tier 7 (Levels 185+):    Fort Tethana, Zaikhal, Undercity, Candeth Keep
     ///  Tier 8 (Endgame / 200+): Ayan Baqur
     /// </summary>
     public static class VendorTownTier
     {
+        private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
         /// <summary>
-        /// Radius (in landblock units) around each town anchor within which a vendor
-        /// is still considered to be "in" that town.
+        /// Default radius (in landblock units) around each town anchor within which
+        /// a vendor is still considered to be "in" that town.  Individual towns may
+        /// override this via <see cref="RadiusOverrides"/>.
         /// </summary>
-        private const int Radius = 3;
+        private const int DefaultRadius = 3;
+
+        /// <summary>
+        /// Per-town radius overrides (keyed by normalized name).  Larger cities and
+        /// spread-out town clusters use a wider sweep so all vendor camps resolve.
+        /// </summary>
+        private static readonly Dictionary<string, int> RadiusOverrides = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            { Normalize("Ayan Baqur"),    4 },
+            { Normalize("Candeth Keep"),  4 },
+            { Normalize("Zaikhal"),       4 },
+            { Normalize("Holtburg"),      4 },
+            { Normalize("Yaraq"),         4 },
+            { Normalize("Shoushi"),       4 },
+            { Normalize("Sanamar"),       4 },
+            { Normalize("Fort Tethana"),  4 },
+        };
+
+        /// <summary>
+        /// Town name (normalized) → loot tier.  POIs not present here are not
+        /// classified as a tiered town (vendors there fall back to tier 0).
+        /// </summary>
+        private static readonly Dictionary<string, int> TownTiers = BuildTownTierTable();
+
+        private static Dictionary<string, int> BuildTownTierTable()
+        {
+            var t = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+            void Add(int tier, params string[] names)
+            {
+                foreach (var n in names)
+                    t[Normalize(n)] = tier;
+            }
+
+            // Tier 1 — starter towns
+            Add(1, "Holtburg", "Arwic", "Cragstone", "Eastham", "Glenden Wood",
+                   "Lytelthorpe", "Rithwic", "Shoushi", "Sawato", "Mayoi",
+                   "Yanshi", "Tufa", "Lost Wish Beach",
+                   "Bluespire", "Greenspire", "Redspire");
+
+            // Tier 2 — intermediate
+            Add(2, "Baishi", "Yaraq", "Nanto", "Hebian-To", "Tou-Tou", "Wai Jhou");
+
+            // Tier 3 — mid-range
+            Add(3, "Kara", "Linvak Tukal", "Plateau Village", "Xarabydun",
+                   "Oolutanga's Refuge", "Crater Lake Village");
+
+            // Tier 4 — advanced
+            Add(4, "Al-Jalima", "Qalaba'r", "Uziz", "Samsur",
+                   "Danby's Outpost", "Khayyaban", "Neftet", "MacNiall's Freehold");
+
+            // Tier 5 — high-level
+            Add(5, "Kryst", "Sanamar", "Timaru", "Silyun", "Stonehold");
+
+            // Tier 6 — veteran
+            Add(6, "Fiun Outpost", "Dryreach", "Ahurenga", "Via Apt",
+                   "Neydisa Castle", "Zalphos' Retreat");
+
+            // Tier 7 — endgame
+            Add(7, "Fort Tethana", "Zaikhal", "Undercity", "Candeth Keep");
+
+            // Tier 8 — pinnacle
+            Add(8, "Ayan Baqur");
+
+            return t;
+        }
+
+        // ── Internal anchor model (built from /telepoi data) ───────────────────
 
         private readonly struct TownAnchor
         {
@@ -44,129 +123,110 @@ namespace ACE.Server.Factories.Tables
             public readonly byte Y;
             public readonly int Tier;
             public readonly string Name;
+            public readonly int Radius;
 
-            public TownAnchor(byte x, byte y, int tier, string name)
+            public TownAnchor(byte x, byte y, int tier, string name, int radius)
             {
-                X    = x;
-                Y    = y;
-                Tier = tier;
-                Name = name;
+                X      = x;
+                Y      = y;
+                Tier   = tier;
+                Name   = name;
+                Radius = radius;
             }
         }
 
-        // ── Town anchor table ──────────────────────────────────────────────────
-        // LandblockX = bits 31-24 of the cell_Id, LandblockY = bits 23-16.
-        // Positions verified against ACE WeenieClassName prefixes and AC cell data.
-        private static readonly IReadOnlyList<TownAnchor> Anchors = new[]
+        private static readonly object _lock = new object();
+        private static IReadOnlyList<TownAnchor> _anchors;
+
+        /// <summary>
+        /// Returns the cached anchor list, building it on first access from the
+        /// PointsOfInterest cache.  Falls back to an empty list if the DB hasn't
+        /// been populated yet (callers will simply get tier 0 / no permaload).
+        /// </summary>
+        private static IReadOnlyList<TownAnchor> GetAnchors()
         {
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 1 — starter / newbie towns (Levels 1–15)
-            // ════════════════════════════════════════════════════════════════════
+            var snapshot = _anchors;
+            if (snapshot != null)
+                return snapshot;
 
-            // Core Aluvian starter cluster
-            new TownAnchor(0xA0, 0x9C, 1, "Holtburg"),
-            new TownAnchor(0x9A, 0xA1, 1, "Arwic"),
-            new TownAnchor(0x98, 0xBD, 1, "Cragstone"),
-            new TownAnchor(0xCE, 0xB7, 1, "Eastham"),
-            new TownAnchor(0x8D, 0xB8, 1, "Glenden Wood"),
-            new TownAnchor(0xA2, 0xB6, 1, "Lytelthorpe"),
-            new TownAnchor(0x9D, 0xB7, 1, "Rithwic"),
+            lock (_lock)
+            {
+                if (_anchors != null)
+                    return _anchors;
 
-            // Sho starter cluster
-            new TownAnchor(0xDB, 0xAC, 1, "Shoushi"),
-            new TownAnchor(0xD8, 0xA8, 1, "Sawato"),
-            new TownAnchor(0xC6, 0xA5, 1, "Mayoi"),
+                _anchors = BuildAnchorsFromPoiCache();
+                return _anchors;
+            }
+        }
 
-            // Gharu'ndim starter cluster
-            new TownAnchor(0xBF, 0x76, 1, "Yanshi"),        // 0xBF76
-            new TownAnchor(0xBE, 0x71, 1, "Tufa"),          // 0xBE71
+        /// <summary>
+        /// Forces the anchor list to be rebuilt from the current POI cache.  Call
+        /// this if the PointsOfInterest table is re-cached at runtime.
+        /// </summary>
+        public static void Rebuild()
+        {
+            lock (_lock)
+                _anchors = BuildAnchorsFromPoiCache();
+        }
 
-            // Spire towns (low-level outpost trio)
-            new TownAnchor(0xAD, 0xC3, 1, "Bluespire"),     // 0xADC3
-            new TownAnchor(0xA4, 0xC3, 1, "Greenspire"),    // 0xA4C3
-            new TownAnchor(0xA8, 0xBE, 1, "Redspire"),      // 0xA8BE
+        private static IReadOnlyList<TownAnchor> BuildAnchorsFromPoiCache()
+        {
+            var anchors = new List<TownAnchor>();
+            var seen    = new HashSet<uint>();
 
-            // Lost Wish Beach outpost (Sho coast)
-            new TownAnchor(0xE0, 0xBF, 1, "Lost Wish Beach"), // 0xE0BF
+            try
+            {
+                DatabaseManager.World.CacheAllPointsOfInterest();
+                var pois = DatabaseManager.World.GetPointsOfInterestCache();
 
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 2 — intermediate towns (Levels 20–30)
-            // ════════════════════════════════════════════════════════════════════
+                foreach (var kvp in pois)
+                {
+                    var poi = kvp.Value;
+                    if (poi == null)
+                        continue;
 
-            new TownAnchor(0xD4, 0x92, 2, "Baishi"),
-            new TownAnchor(0x7E, 0x84, 2, "Yaraq"),
-            new TownAnchor(0xE1, 0x8A, 2, "Nanto"),
-            new TownAnchor(0xD7, 0x8C, 2, "Hebian-To"),
-            new TownAnchor(0xE8, 0x84, 2, "Tou-Tou"),       // low-level Sho east
-            new TownAnchor(0xDD, 0x76, 2, "Wai Jhou"),      // 0xDD76 — Sho south coast
+                    var weenie = DatabaseManager.World.GetCachedWeenie(poi.WeenieClassId);
+                    if (weenie == null)
+                        continue;
 
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 3 — mid-range towns (Levels 40–50)
-            // ════════════════════════════════════════════════════════════════════
+                    var dest = weenie.GetPosition(PositionType.Destination);
+                    if (dest == null)
+                        continue;
 
-            new TownAnchor(0x5A, 0x60, 3, "Kara"),
-            new TownAnchor(0x48, 0x59, 3, "Linvak Tukal"),
-            new TownAnchor(0x52, 0x4C, 3, "Plateau Village"),
-            new TownAnchor(0x6C, 0x52, 3, "Xarabydun"),      // 0x6C52
-            new TownAnchor(0x3A, 0x5E, 3, "Oolutanga's Refuge"), // 0x3A5E
-            new TownAnchor(0x52, 0x73, 3, "Crater Lake Village"), // 0x5273
+                    // Landblock high bytes from cell_id: X = bits 31-24, Y = bits 23-16
+                    var lbHi = (ushort)(dest.LandblockId.Raw >> 16);
+                    var x = (byte)(lbHi >> 8);
+                    var y = (byte)(lbHi & 0xFF);
 
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 4 — advanced towns (Levels 60–80)
-            // ════════════════════════════════════════════════════════════════════
+                    var normalized = Normalize(poi.Name);
+                    TownTiers.TryGetValue(normalized, out var tier);
 
-            new TownAnchor(0x8E, 0x77, 4, "Al-Jalima"),
-            new TownAnchor(0x83, 0x73, 4, "Qalaba'r"),
-            new TownAnchor(0x8E, 0x5C, 4, "Uziz"),
-            new TownAnchor(0x94, 0x74, 4, "Samsur"),
-            new TownAnchor(0x7B, 0x5E, 4, "Danby's Outpost"),  // 0x7B5E
-            new TownAnchor(0x58, 0x8A, 8, "Ayan Baqur"),       // 0x588A
-            new TownAnchor(0x71, 0x47, 4, "Khayyaban"),        // 0x7147
-            new TownAnchor(0xA5, 0x47, 4, "Neftet"),           // 0xA547
-            new TownAnchor(0xBE, 0x5C, 4, "MacNiall's Freehold"), // 0xBE5C
+                    var radius = RadiusOverrides.TryGetValue(normalized, out var rOverride)
+                        ? rOverride
+                        : DefaultRadius;
 
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 5 — high-level towns (Levels 100–115)
-            // ════════════════════════════════════════════════════════════════════
+                    // Dedupe by landblock — same town can have multiple POI portals.
+                    var key = ((uint)x << 8) | y;
+                    if (!seen.Add(key))
+                        continue;
 
-            new TownAnchor(0x3F, 0x1F, 7, "Candeth Keep"),
-            new TownAnchor(0x2F, 0x28, 5, "Kryst"),
-            new TownAnchor(0x31, 0x43, 5, "Sanamar"),          // 0x3143 — Haebrean starter town
-            new TownAnchor(0x51, 0x2A, 5, "Timaru"),           // 0x512A — Haebrean outpost
-            new TownAnchor(0x3A, 0x35, 5, "Silyun"),           // 0x3A35 — Empyrean ruins town
-            new TownAnchor(0x5B, 0x37, 5, "Stonehold"),        // 0x5B37 — northern keep
+                    anchors.Add(new TownAnchor(x, y, tier, poi.Name, radius));
+                }
 
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 6 — veteran towns (Levels 135–160)
-            // ════════════════════════════════════════════════════════════════════
+                log.Info($"[DerpACE] VendorTownTier: built {anchors.Count} town anchors from /telepoi cache ({TownTiers.Count} tiered town names known).");
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"[DerpACE] VendorTownTier: failed to build anchors from POI cache — {ex.Message}");
+            }
 
-            new TownAnchor(0x18, 0x3A, 6, "Fiun Outpost"),
-            new TownAnchor(0x19, 0x3B, 6, "Dryreach"),
-            new TownAnchor(0x15, 0x4F, 6, "Ahurenga"),          // 0x154F — deep southwest
-            new TownAnchor(0x25, 0x3C, 6, "Via Apt"),           // 0x253C — Empyrean gate town
-            new TownAnchor(0x34, 0x4A, 6, "Neydisa Castle"),    // 0x344A
-            new TownAnchor(0x9B, 0x53, 6, "Zalphos' Retreat"),  // 0x9B53
-
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 7 — endgame towns (Levels 185+)
-            // ════════════════════════════════════════════════════════════════════
-
-            new TownAnchor(0x13, 0x5C, 7, "Fort Tethana"),
-            new TownAnchor(0x93, 0x64, 7, "Zaikhal"),
-            new TownAnchor(0x8C, 0x4B, 7, "Undercity"),         // 0x8C4B — Virindi Undercity
-            new TownAnchor(0x3F, 0x1F, 7, "Candeth Keep"),      // T7 — major endgame hub
-
-            // ════════════════════════════════════════════════════════════════════
-            // TIER 8 — pinnacle / 200+ towns
-            // ════════════════════════════════════════════════════════════════════
-
-            new TownAnchor(0x58, 0x8A, 8, "Ayan Baqur"),        // 0x588A — deep Gharu'ndim endgame
-        };
+            return anchors;
+        }
 
         // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Returns the loot tier (1–7) for <paramref name="vendor"/> based on its
+        /// Returns the loot tier (1–8) for <paramref name="vendor"/> based on its
         /// current landblock position, or <c>0</c> if the vendor is not within
         /// the radius of any known town anchor.
         /// </summary>
@@ -175,10 +235,7 @@ namespace ACE.Server.Factories.Tables
             if (vendor?.Location == null)
                 return 0;
 
-            var vx = (int)vendor.Location.LandblockX;
-            var vy = (int)vendor.Location.LandblockY;
-
-            return GetTierForLandblock(vx, vy);
+            return GetTierForLandblock((int)vendor.Location.LandblockX, (int)vendor.Location.LandblockY);
         }
 
         /// <summary>
@@ -187,9 +244,12 @@ namespace ACE.Server.Factories.Tables
         /// </summary>
         public static int GetTierForLandblock(int lbX, int lbY)
         {
-            foreach (var anchor in Anchors)
+            foreach (var anchor in GetAnchors())
             {
-                if (Math.Abs(lbX - anchor.X) <= Radius && Math.Abs(lbY - anchor.Y) <= Radius)
+                if (anchor.Tier <= 0)
+                    continue;
+
+                if (Math.Abs(lbX - anchor.X) <= anchor.Radius && Math.Abs(lbY - anchor.Y) <= anchor.Radius)
                     return anchor.Tier;
             }
 
@@ -202,13 +262,44 @@ namespace ACE.Server.Factories.Tables
         /// </summary>
         public static string GetTownName(int lbX, int lbY)
         {
-            foreach (var anchor in Anchors)
+            foreach (var anchor in GetAnchors())
             {
-                if (Math.Abs(lbX - anchor.X) <= Radius && Math.Abs(lbY - anchor.Y) <= Radius)
+                if (Math.Abs(lbX - anchor.X) <= anchor.Radius && Math.Abs(lbY - anchor.Y) <= anchor.Radius)
                     return anchor.Name;
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Returns one <c>(X, Y, Name)</c> entry per unique town anchor sourced
+        /// from the POI cache.  Used by DerpACE to permaload every town landblock
+        /// on server start.
+        /// </summary>
+        public static IReadOnlyList<(byte X, byte Y, string Name)> GetAllTownAnchors()
+        {
+            var anchors = GetAnchors();
+            var result  = new List<(byte, byte, string)>(anchors.Count);
+            foreach (var a in anchors)
+                result.Add((a.X, a.Y, a.Name));
+            return result;
+        }
+
+        // ── Helpers ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Normalize a name for case/space/punctuation-insensitive matching.
+        /// POI names in the DB are typically stored without spaces (e.g.
+        /// "GlendenWood", "FortTethana"), so we strip whitespace, hyphens,
+        /// apostrophes, and periods from both sides before comparing.
+        /// </summary>
+        private static string Normalize(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return string.Empty;
+
+            return new string(name.Where(c => !char.IsWhiteSpace(c) && c != '-' && c != '\'' && c != '.').ToArray())
+                .ToLowerInvariant();
         }
     }
 }

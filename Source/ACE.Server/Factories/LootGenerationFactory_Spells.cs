@@ -199,7 +199,7 @@ namespace ACE.Server.Factories
 
             // DerpACE: add configurable flat bonus to make critter/life spells more common on armor/weapons.
             // Casters keep their own table; only armor and melee/missile weapons get the bonus.
-            if (!roll.IsCaster)
+            if (!roll.IsCaster && ACE.Server.Managers.DerpACEConfig.EnableArmorEnchants)
                 baseChance = Math.Min(1.0f, baseChance + ACE.Server.Managers.DerpACEConfig.ArmorEnchantmentChanceBonus);
 
             var rng = ThreadSafeRandom.NextInterval(profile.LootQualityMod);
@@ -209,6 +209,10 @@ namespace ACE.Server.Factories
             // First spell always lands. Try for additional spells up to ArmorMaxEnchantments.
             if (roll.IsCaster)
                 return 1;   // casters keep the original single-spell behaviour
+
+            // If armor enchants are disabled, cap at 1 spell (vanilla behaviour).
+            if (!ACE.Server.Managers.DerpACEConfig.EnableArmorEnchants)
+                return 1;
 
             var maxExtra = Math.Max(0, ACE.Server.Managers.DerpACEConfig.ArmorMaxEnchantments - 1);
             var extraChance = baseChance * ACE.Server.Managers.DerpACEConfig.ArmorExtraEnchantmentChanceMult;

@@ -145,6 +145,12 @@ namespace ACE.Server.WorldObjects
             }
 
             log.DebugFormat("[LOGIN] Account {0} entered the world with character {1} (0x{2}) at {3}.", Account.AccountName, Name, Guid, DateTime.Now.ToCommonString());
+
+            // DerpACE — notify player of unread/unclaimed mail
+            var mailChain = new ActionChain();
+            mailChain.AddDelaySeconds(5.0f);
+            mailChain.AddAction(this, () => DerpAce.Mail.MailboxManager.HandleLoginNotify(this));
+            mailChain.EnqueueChain();
         }
 
         public void SendTurbineChatChannels(bool breakAllegiance = false)
