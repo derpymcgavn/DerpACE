@@ -125,6 +125,22 @@ namespace ACE.Database
             return weenieCache.TryRemove(weenieClassId, out _);
         }
 
+        /// <summary>
+        /// DerpACE: Force-insert a hardcoded weenie into the cache, bypassing the database.
+        /// Used to ship custom WCIDs (e.g. the Aetherial Quiver) without requiring SQL imports.
+        /// Always overwrites any existing cached value.
+        /// </summary>
+        public void SetCachedWeenie(ACE.Entity.Models.Weenie weenie)
+        {
+            if (weenie == null)
+                return;
+
+            weenieCache[weenie.WeenieClassId] = weenie;
+
+            if (!string.IsNullOrEmpty(weenie.ClassName))
+                weenieClassNameToClassIdCache[weenie.ClassName.ToLower()] = weenie.WeenieClassId;
+        }
+
 
 
         private bool weenieSpecificCachesPopulated;

@@ -118,9 +118,27 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            // DerpACE Ironman: record which creature killed this Ironman player for the killer leaderboard
-            if (GetProperty(PropertyBool.IsIronman) == true && lastDamager != null && !(lastDamager.TryGetAttacker() is ACE.Server.WorldObjects.Player))
-                ACE.Server.Managers.IronmanKillerTracker.RecordKill(lastDamager.Name);
+            // DerpACE: record which creature killed this player for the killer leaderboards.
+            // PvP kills are excluded — these tables only count mob deaths.
+            if (lastDamager != null && !(lastDamager.TryGetAttacker() is ACE.Server.WorldObjects.Player))
+            {
+                var isIronman = GetProperty(PropertyBool.IsIronman) == true;
+                var isHardcore = GetProperty(PropertyBool.IsHardcore) == true;
+
+                if (isIronman)
+                {
+                    ACE.Server.Managers.IronmanKillerTracker.RecordKill(lastDamager.Name);
+                    ACE.Server.Managers.PlayerKillerTracker.RecordKill(ACE.Server.Managers.PlayerKillerTracker.Category.Ironman, lastDamager.Name);
+                }
+                else if (isHardcore)
+                {
+                    ACE.Server.Managers.PlayerKillerTracker.RecordKill(ACE.Server.Managers.PlayerKillerTracker.Category.Hardcore, lastDamager.Name);
+                }
+                else
+                {
+                    ACE.Server.Managers.PlayerKillerTracker.RecordKill(ACE.Server.Managers.PlayerKillerTracker.Category.Normal, lastDamager.Name);
+                }
+            }
 
             var lastDamagerObj = lastDamager?.TryGetAttacker();
 

@@ -330,6 +330,11 @@ namespace ACE.Server.WorldObjects
             if (item.HasItemSet)
                 EquipItemFromSet(item);
 
+            // DerpACE: if a missile launcher was just equipped, conform any equipped
+            // UniversalAmmunition's AmmoType to it so the client doesn't auto-unequip it.
+            if (item.IsAmmoLauncher && GetEquippedAmmo() is UniversalAmmunition universalAmmo)
+                universalAmmo.SyncToLauncher(item);
+
             return true;
         }
 
@@ -1963,8 +1968,9 @@ namespace ACE.Server.WorldObjects
                         }
 
                         // Ensure our ammo types align properly
+                        // DerpACE: UniversalAmmunition is a wildcard and conforms to the launcher on equip
                         ammo = GetEquippedAmmo();
-                        if (item.AmmoType != null && ammo != null && ammo.AmmoType != item.AmmoType)
+                        if (item.AmmoType != null && ammo != null && !(ammo is UniversalAmmunition) && ammo.AmmoType != item.AmmoType)
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}), AmmoType: {item.AmmoType} in slot {wieldedLocation}, which conflicts with ammo of '{ammo.Name}' ({ammo.AmmoType})");
                             return false;
@@ -1973,8 +1979,9 @@ namespace ACE.Server.WorldObjects
                         break;
                     case EquipMask.MissileAmmo:
                         // Ensure our ammo types align properly
+                        // DerpACE: UniversalAmmunition is a wildcard and conforms to the launcher on equip
                         mainhand = GetEquippedMainHand();
-                        if (mainhand != null && mainhand.AmmoType != null && item.AmmoType != null && mainhand.AmmoType != item.AmmoType)
+                        if (mainhand != null && mainhand.AmmoType != null && item.AmmoType != null && !(item is UniversalAmmunition) && mainhand.AmmoType != item.AmmoType)
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}), AmmoType: {item.AmmoType} in slot {wieldedLocation}, which conflicts with AmmoType of '{mainhand.Name}' ({mainhand.AmmoType})");
                             return false;
@@ -2070,7 +2077,13 @@ namespace ACE.Server.WorldObjects
                     if (mainhand.IsAmmoLauncher)
                     {
                         ammo = GetEquippedAmmo();
-                        if (ammo != null && ammo.AmmoType != null && mainhand.AmmoType != null && ammo.AmmoType != mainhand.AmmoType)
+
+                        // DerpACE: UniversalAmmunition conforms to the launcher; keep it in sync and skip the mismatch check
+                        if (ammo is UniversalAmmunition universalAmmo)
+                        {
+                            universalAmmo.SyncToLauncher(mainhand);
+                        }
+                        else if (ammo != null && ammo.AmmoType != null && mainhand.AmmoType != null && ammo.AmmoType != mainhand.AmmoType)
                         {
                             log.Warn($"'{Name}' is illegally wielding '{mainhand.Name}' ({mainhand.Guid}) with ammo {ammo.Name}' ({ammo.AmmoType})");
                             return false;

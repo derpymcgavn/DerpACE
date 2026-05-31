@@ -920,6 +920,25 @@ namespace ACE.Server.WorldObjects
                 });
                 rchain.EnqueueChain();
             }
+
+            // Always clean up the just-closed chest. Without this, an opened chest only
+            // disappears when its per-chest despawn timer fires (or when the player exhausts
+            // their opens) — which leaves looted props lying around at the stranger's feet.
+            // The reshuffle path above also tears down chests, but it's keyed on
+            // PendingReshuffle and skips the final "show's over" branch, so we do it here
+            // unconditionally to guarantee the closed chest goes away.
+            var closedChest = chest;
+            var closedPlayerGuid = player.Guid.Full;
+            var closeChain = new ActionChain();
+            closeChain.AddDelaySeconds(0.5); // brief beat so the close animation plays out
+            closeChain.AddAction(stranger ?? (WorldObject)chest, () =>
+            {
+                if (closedChest == null || closedChest.IsDestroyed) return;
+                if (_playerChests.TryGetValue(closedPlayerGuid, out var bucket))
+                    bucket.Remove(closedChest.Guid.Full);
+                DespawnChest(closedChest);
+            });
+            closeChain.EnqueueChain();
         }
 
         /// <summary>

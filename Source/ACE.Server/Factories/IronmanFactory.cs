@@ -68,6 +68,21 @@ namespace ACE.Server.Factories
             HeritageGroup.Lugian,
         };
 
+        // DerpACE: -nh ("no non-humans") race pool. The -nh toggle REMOVES the non-human /
+        // monstrous heritages (Gearknight, Tumerok, Lugian) so only the humanoid-framed races
+        // remain in the roll.
+        private static readonly HeritageGroup[] IronmanRacePoolNoNonHuman =
+        {
+            HeritageGroup.Aluvian,
+            HeritageGroup.Gharundim,
+            HeritageGroup.Sho,
+            HeritageGroup.Viamontian,
+            HeritageGroup.Shadowbound, // Umbraen
+            HeritageGroup.Penumbraen,
+            HeritageGroup.Undead,
+            HeritageGroup.Empyrean,
+        };
+
         // Mirrors the webpage character size list.
         private static readonly IronmanCharacterSizeOption[] IronmanCharacterSizes =
         {
@@ -188,7 +203,7 @@ namespace ACE.Server.Factories
 
         // ---------- Public entry point ----------
 
-        public static void InitializeIronman(Player player)
+        public static void InitializeIronman(Player player, bool noNonHuman = false)
         {
             if (player == null) return;
 
@@ -208,7 +223,7 @@ namespace ACE.Server.Factories
             chain.AddAction(player, () =>
             {
                 player.SendMessage("Ironman step 1/6: rerolling heritage, appearance, attributes, and skills...");
-                RollHeritageAndAppearance(player);
+                RollHeritageAndAppearance(player, noNonHuman);
                 RollAttributes(player);
                 rolledPrimary = RollSkills(player);
             });
@@ -294,7 +309,7 @@ namespace ACE.Server.Factories
         /// Starter gear still flows through GiveStarterGear (the equip restrictions block
         /// nomads from actually wielding weapons granted to the Light Weapons skill).
         /// </summary>
-        public static void InitializeIronmanNomad(Player player)
+        public static void InitializeIronmanNomad(Player player, bool noNonHuman = false)
         {
             if (player == null) return;
 
@@ -311,7 +326,7 @@ namespace ACE.Server.Factories
             chain.AddAction(player, () =>
             {
                 player.SendMessage("Nomad step 1/6: rerolling heritage, appearance, random attributes, and skills...");
-                RollHeritageAndAppearance(player);
+                RollHeritageAndAppearance(player, noNonHuman);
                 RollAttributesRandom(player);
                 RollSkills(player, forcedWeaponSkill: Skill.LightWeapons, forcedWeaponIsMagic: false, specializeArcaneLore: true);
             });
@@ -894,9 +909,10 @@ namespace ACE.Server.Factories
             return rolledWeapon.Skill;
         }
 
-        private static void RollHeritageAndAppearance(Player player)
+        private static void RollHeritageAndAppearance(Player player, bool noNonHuman = false)
         {
-            var raceRoll = IronmanRacePool[ThreadSafeRandom.Next(0, IronmanRacePool.Length - 1)];
+            var racePool = noNonHuman ? IronmanRacePoolNoNonHuman : IronmanRacePool;
+            var raceRoll = racePool[ThreadSafeRandom.Next(0, racePool.Length - 1)];
             var charSize = IronmanCharacterSizes[ThreadSafeRandom.Next(0, IronmanCharacterSizes.Length - 1)];
             var appearanceRoll = ThreadSafeRandom.Next(1, 15);
 

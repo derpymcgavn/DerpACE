@@ -294,14 +294,16 @@ namespace ACE.Server.DerpAce
         public float HierophantAggroBonus { get; set; } = 0.35f;
 
         // Thief Dagger
+        [JsonPropertyName("sneak_attack_bonus_pct")]
+        public float SneakAttackBonusPct { get; set; } = 0.15f;
         [JsonPropertyName("thief_dagger_drop_chance")]
         public float ThievesDaggerDropChance { get; set; } = 0.02f;
         [JsonPropertyName("thief_dagger_min_tier")]
         public int ThievesDaggerMinTier { get; set; } = 5;
         [JsonPropertyName("thief_dagger_proc_chance")]
-        public float ThievesDaggerProcChance { get; set; } = 0.05f;
+        public float ThievesDaggerProcChance { get; set; } = 0.10f;
         [JsonPropertyName("thief_dagger_proc_bonus")]
-        public float ThievesDaggerProcBonus { get; set; } = 0.08f;
+        public float ThievesDaggerProcBonus { get; set; } = 0.10f;
         [JsonPropertyName("thief_dagger_aggro_penalty")]
         public float ThievesDaggerAggroPenalty { get; set; } = 0.3f;
 

@@ -287,6 +287,7 @@ namespace ACE.Server
             {
                 log.Info("Precaching Weenies...");
                 DatabaseManager.World.CacheAllWeenies();
+                DerpAce.HardcodedWeenies.RegisterAll();
                 log.Info("Precaching Cookbooks...");
                 DatabaseManager.World.CacheAllCookbooks();
                 log.Info("Precaching Events...");
@@ -309,13 +310,19 @@ namespace ACE.Server
                 DatabaseManager.World.CacheAllTreasureWielded();
             }
             else
+            {
                 log.Info("Precaching World Database Disabled...");
+                DerpAce.HardcodedWeenies.RegisterAll();
+            }
 
             log.Info("Initializing PlayerManager...");
             PlayerManager.Initialize();
 
             log.Info("Initializing IronmanKillerTracker...");
             IronmanKillerTracker.Initialize();
+
+            log.Info("Initializing PlayerKillerTracker...");
+            PlayerKillerTracker.Initialize();
 
             log.Info("Initializing CreatureMutatorManager...");
             Factories.CreatureMutatorManager.Initialize();

@@ -80,14 +80,26 @@ namespace ACE.Server.WorldObjects
         {
             if (target is Creature creatureTarget)
             {
-                var targets = GetNonComponentTargetTypes(spell, creatureTarget);
+                // DerpACE: a beneficial impen/bane cast on another creature should walk ALL of the
+                // target's equipped armor/clothing/shield pieces (handled in HandleCastSpell's
+                // IsImpenBaneType branch). The default GetNonComponentTargetTypes redirect filters
+                // by EquipMask.Selectable, which armor/clothing are NOT — so it would restrict the
+                // spell to the shield, or cast nothing at all when no shield is equipped. Skip the
+                // redirect in that case so buff bots can reliably apply Impen + Banes to all armor.
+                var skipRedirectForBeneficialImpenBane =
+                    spell.IsImpenBaneType && spell.IsBeneficial && creatureTarget != this;
 
-                if (targets != null)
+                if (!skipRedirectForBeneficialImpenBane)
                 {
-                    foreach (var itemTarget in targets)
-                        TryCastSpell(spell, itemTarget, itemCaster, weapon, isWeaponSpell, fromProc, tryResist);
+                    var targets = GetNonComponentTargetTypes(spell, creatureTarget);
 
-                    return targets.Count > 0;
+                    if (targets != null)
+                    {
+                        foreach (var itemTarget in targets)
+                            TryCastSpell(spell, itemTarget, itemCaster, weapon, isWeaponSpell, fromProc, tryResist);
+
+                        return targets.Count > 0;
+                    }
                 }
             }
 
@@ -2237,20 +2249,50 @@ namespace ACE.Server.WorldObjects
                     else
                     {
                         // targeting another player or monster
-                        var item = targetCreature.EquippedObjects.Values.FirstOrDefault(i => i.IsShield && i.IsEnchantable);
-
-                        if (item != null)
+                        // DerpACE: when casting a BENEFICIAL impen/bane (Impenetrability, Acid/Blade/etc Bane)
+                        // on another player, walk all of their equipped armor/clothing/shield pieces instead
+                        // of only the shield. This lets players reliably act as buff bots for each other.
+                        // Harmful redirectable spells (Brittlemail, Lures) keep the original shield-only
+                        // behavior so we don't widen PK / griefing surface area.
+                        if (targetPlayer != null && spell.IsBeneficial)
                         {
-                            HandleCastSpell(spell, item);
+                            var items = targetCreature.EquippedObjects.Values
+                                .Where(i => (i.WeenieType == WeenieType.Clothing || i.IsShield) && i.IsEnchantable)
+                                .ToList();
+
+                            foreach (var armorItem in items)
+                                HandleCastSpell(spell, armorItem);
+
+                            if (items.Count > 0)
+                            {
+                                DoSpellEffects(spell, this, targetCreature);
+                            }
+                            else
+                            {
+                                if (player != null)
+                                    player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You fail to affect {targetCreature.Name} with {spell.Name}", ChatMessageType.Magic));
+
+                                if (!targetPlayer.SquelchManager.Squelches.Contains(this, ChatMessageType.Magic))
+                                    targetPlayer.Session.Network.EnqueueSend(new GameMessageSystemChat($"{Name} fails to affect you with {spell.Name}", ChatMessageType.Magic));
+                            }
                         }
                         else
                         {
-                            // 'fails to affect'?
-                            if (player != null && targetCreature != null)
-                                player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You fail to affect {targetCreature.Name} with {spell.Name}", ChatMessageType.Magic));
+                            var item = targetCreature.EquippedObjects.Values.FirstOrDefault(i => i.IsShield && i.IsEnchantable);
 
-                            if (targetPlayer != null && !targetPlayer.SquelchManager.Squelches.Contains(this, ChatMessageType.Magic))
-                                targetPlayer.Session.Network.EnqueueSend(new GameMessageSystemChat($"{Name} fails to affect you with {spell.Name}", ChatMessageType.Magic));
+                            if (item != null)
+                            {
+                                HandleCastSpell(spell, item);
+                            }
+                            else
+                            {
+                                // 'fails to affect'?
+                                if (player != null && targetCreature != null)
+                                    player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You fail to affect {targetCreature.Name} with {spell.Name}", ChatMessageType.Magic));
+
+                                if (targetPlayer != null && !targetPlayer.SquelchManager.Squelches.Contains(this, ChatMessageType.Magic))
+                                    targetPlayer.Session.Network.EnqueueSend(new GameMessageSystemChat($"{Name} fails to affect you with {spell.Name}", ChatMessageType.Magic));
+                            }
                         }
                     }
                 }

@@ -341,6 +341,13 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            // DerpACE: Sausage McBuffin -- static buff NPC that casts the full Level 7 buff suite
+            if (WeenieClassId == SausageMcBuffin.WeenieClassId && worldObject is Player buffPlayer)
+            {
+                SausageMcBuffin.OnUse(this, buffPlayer);
+                return;
+            }
+
             // handled in base.OnActivate -> EmoteManager.OnUse()
         }
 

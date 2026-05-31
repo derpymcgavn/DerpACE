@@ -46,10 +46,22 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ### Recent Patch Notes (Vendor Random Loot by Town Tier)
 Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.
 
-#### Town Tier Resolution (`Source/ACE.Server/Factories/Tables/VendorTownTier.cs` — new)
-* `VendorTownTier.GetTierForVendor(Vendor)` — resolves the loot tier (1–8) for a vendor from its landblock coordinates using a ±3 landblock radius anchor table.
+#### Town Tier Resolution (`Source/ACE.Server/Factories/Tables/VendorTownTier.cs`)
+* Town anchor coordinates are now sourced **directly from the in-database `PointsOfInterest` table** (the same data that powers `/telepoi`), so every POI the server knows about is automatically a town anchor — no hand-curated landblock table to drift out of sync.
+* `VendorTownTier.GetTierForVendor(Vendor)` — resolves the loot tier (1–8) for a vendor from its landblock coordinates using a per-town radius sweep (default ±3, with overrides up to ±4 for large/spread-out cities like Ayan Baqur, Candeth Keep, Zaikhal, Holtburg, Yaraq, Shoushi, Sanamar, Fort Tethana).
 * `GetTownName(...)` — returns the human-readable town name for diagnostics and the `@vendortier` command.
-* **Covered towns include** (non-exhaustive): Holtburg, Shoushi, Yaraq, Rithwic, Lytelthorpe, Cragstone, Eastham, Dryreach, Hebian-To, Sawato, Al-Arqas, Zaikhal, Kara, Baishi, Ikeras, Linvak Tukal, Candeth Keep (T7), Ayan Baqur (T8), Danby's Outpost, Yanshi, Tufa, Xarabydun, Crater Lake Village, Oolutanga's Refuge, Khayyaban, Neftet, Sanamar, Timaru, Silyun, Stonehold, Ahurenga, Via Apt, Neydisa Castle, Zalphos' Retreat, Undercity, and more. Unknown locations default to **T4**.
+* `GetAllTownAnchors()` — used by `LandblockManager.PreloadDerpAceTownLandblocks` to permaload every POI landblock (plus adjacents) on server start.
+* `VendorTownTier.Rebuild()` — forces an anchor refresh from the current POI cache (useful after live POI edits).
+* **Tier classification** lives in a name→tier dictionary inside `BuildTownTierTable()`. POI name matching is case/space/punctuation-insensitive (so DB names like `GlendenWood` / `FortTethana` resolve to `Glenden Wood` / `Fort Tethana`):
+  * **T1** — Holtburg, Arwic, Cragstone, Eastham, Glenden Wood, Lytelthorpe, Rithwic, Shoushi, Sawato, Mayoi, Yanshi, Tufa, Lost Wish Beach, Bluespire/Greenspire/Redspire
+  * **T2** — Baishi, Yaraq, Nanto, Hebian-To, Wai Jhou, Tou-Tou
+  * **T3** — Kara, Linvak Tukal, Plateau Village, Xarabydun, Oolutanga's Refuge, Crater Lake Village
+  * **T4** — Al-Jalima, Qalaba'r, Uziz, Samsur, Danby's Outpost, Khayyaban, Neftet, MacNiall's Freehold
+  * **T5** — Kryst, Sanamar, Timaru, Silyun, Stonehold
+  * **T6** — Fiun Outpost, Dryreach, Ahurenga, Via Apt, Neydisa Castle, Zalphos' Retreat
+  * **T7** — Fort Tethana, Zaikhal, Undercity, Candeth Keep
+  * **T8** — Ayan Baqur
+* POIs not present in the tier table are still valid anchors for permaload, but resolve to tier 0 for vendor stocking (vendors there fall back to the explicit `PropertyInt.VendorLootTier` override if any).
 
 #### Vendor auto-stocking (`Source/ACE.Server/WorldObjects/Vendor.cs`)
 * `LoadInventory()` calls `LoadRandomLootInventory()` after the static shop items load.
@@ -283,6 +295,7 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 
 ### Thief's Daggers
 * **5% of T6+ dagger loot drops** (Dagger and DaggerMultiStrike types) are converted to a Thief's Dagger (e.g. *Obsidian Kris of the Thief*)
+* When the loot-modifier "interchangeable" rule is active, the same affix can also roll on Sword / SwordMultiStrike finesse blades (epee/rapier/schlager families), keeping generation in lockstep with the combat proc gate.
 * The item stores `PropertyBool.IsThievesDagger = true` on the world object
 * **Wield requirement:** Specialized Sneak Attack skill
 * **Icon underlay:** `0x060065FC`
@@ -300,7 +313,8 @@ Direction is calculated from the character's current heading (`RotationW`/`Rotat
 * Applied both to the global `invRatioSum` and per-target weight, making Thief's Dagger wielders roughly 40% less likely to be the primary attack target
 
 #### Sneak Attack Bonus (proc)
-* On each sneak attack hit with a Thief's Dagger equipped, there is a **6% proc chance** to deal an additional **+10% damage**
+* On each successful sneak attack hit with a Thief-tagged weapon equipped (`IsThievesDagger == true` on a `WeaponType.Dagger` **or** `WeaponType.Sword`), there is a **6% proc chance** to deal an additional **+10% damage**
+* Gated in `Player_Combat.cs` to ensure the proc only fires when `damageEvent.SneakAttackMod > 1.0f` (i.e. an actual sneak attack landed)
 * When the proc fires, the player sees: `+N [Thief's Dagger]` in the combat chat channel (after the standard hit notification)
 * Long description reads: *"Sneak attacks have a 10% chance to proc an additional 10% bonus damage."*
 

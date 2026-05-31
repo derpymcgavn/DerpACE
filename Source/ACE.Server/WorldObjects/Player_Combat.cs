@@ -280,7 +280,7 @@ namespace ACE.Server.WorldObjects
 
                         if (nomadFlurryHits > 0 && !SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                             Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"Cleave Flurry! {nomadFlurryHits} extra strikes for {nomadFlurryDamage} damage [{target.Name}]",
+                                $"You fall upon {target.Name} in a flurry — {nomadFlurryHits} swift strikes for {nomadFlurryDamage} damage.",
                                 ChatMessageType.CombatSelf));
                     }
                     else if (procType == 2)
@@ -300,13 +300,29 @@ namespace ACE.Server.WorldObjects
 
                                     if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                                         Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                            $"Healing Strike! +{nomadHealApplied} health from {target.Name}",
+                                            $"The blow returns to you — {nomadHealApplied} health flows from {target.Name} into your wounds.",
                                             ChatMessageType.CombatSelf));
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // DerpACE: Universal Sneak Attack damage bonus.
+            // Any successful sneak attack (SneakAttackMod > 1.0 — i.e. the vanilla check
+            // already determined this was a sneak hit) gets a flat configurable damage
+            // bonus on top of vanilla. Stacks additively with the Thief's Dagger proc
+            // below. Tracked separately so we can show the player how much of the
+            // damage was sneak-derived.
+            uint sneakBonusApplied = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.SneakAttackMod > 1.0f
+                && ACE.Server.Managers.DerpACEConfig.SneakAttackBonusPct > 0.0f)
+            {
+                var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.SneakAttackBonusPct;
+                damageEvent.Damage += bonus;
+                sneakBonusApplied = (uint)Math.Round(bonus);
             }
 
             // Thief's Dagger: configurable proc chance / bonus on sneak attacks (see @lootconfig)
@@ -758,138 +774,144 @@ namespace ACE.Server.WorldObjects
                 if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                     Session.Network.EnqueueSend(new GameEventAttackerNotification(Session, target.Name, damageEvent.DamageType, (float)intDamage / target.Health.MaxValue, intDamage, damageEvent.IsCritical, damageEvent.AttackConditions));
 
-                // Thief's Dagger: show bonus when the 10% proc fired
-                if (thievesDaggerBonus > 0)
-                    Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{thievesDaggerBonus} sneak bonus [{target.Name}] ({intDamage} total) [Thief's Dagger]",
-                        ChatMessageType.CombatSelf));
+                // Sneak Attack — universal bonus + (optional) Thief's Dagger proc, folded
+                // into a single immersive suffix appended to the damage notification.
+                // Examples:
+                //   "You strike unseen — 47 damage from the shadows."
+                //   "You strike unseen — 47 from the shadows, your dagger drinking deep for 80 more."
+                if ((sneakBonusApplied > 0 || thievesDaggerBonus > 0)
+                    && !SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                {
+                    string sneakLine;
+                    if (thievesDaggerBonus > 0 && sneakBonusApplied > 0)
+                        sneakLine = $"You strike unseen — {sneakBonusApplied} damage from the shadows, your blade drinking deep for {thievesDaggerBonus} more.";
+                    else if (thievesDaggerBonus > 0)
+                        sneakLine = $"Your blade drinks deep from the shadows — {thievesDaggerBonus} damage flows from the unseen blow.";
+                    else
+                        sneakLine = $"You strike unseen — {sneakBonusApplied} of the wound comes from the shadows.";
 
-                // Vampiric Jewelry: announce the on-hit drink when any health-flavor piece proc'd.
-                // Combat channel renders red client-side, matching the health visual.
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(sneakLine, ChatMessageType.CombatSelf));
+                }
+
+                // Vampiric Jewelry: red-channel "you feel its hunger" line when any piece drinks
                 if (vampiricJewelryHealed > 0)
                 {
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{vampiricJewelryHealed} health drained from {target.Name} [Vampiric Jewelry]",
+                        $"Your jewelry drinks of {target.Name}'s vitality — {vampiricJewelryHealed} health flows into you.",
                         ChatMessageType.Combat));
                 }
 
                 // DerpACE: Unarmed Combo notification
                 if (comboResult != null)
                 {
-                    // Building combo — show the running chain as readable attacks (e.g. "Jab · Jab ·  2 hits")
-                    if (comboResult.HitCount > 0 && comboResult.ComboType == ComboType.None)
+                    // Building combo — compact suffix appended to the damage line
+                    // instead of a separate verbose chain message. Format: "+X dmg <combo N>"
+                    if (comboResult.HitCount >= 2 && comboResult.ComboType == ComboType.None)
                     {
-                        var chain = UnarmedComboSystem.GetComboChainDisplayVerbose();
                         var streakPart = "";
-                        if (hitStreakAfter > 1) streakPart = $"  (streak ×{hitStreakAfter})";
-                        if (killStreakAfter > 0) streakPart += $"  (killing spree ×{killStreakAfter})";
+                        if (hitStreakAfter > 1) streakPart += $" ×{hitStreakAfter}";
+                        if (killStreakAfter > 0) streakPart += $" ks×{killStreakAfter}";
 
-                        var msg = $"{chain}  •  {comboResult.HitCount} hit{(comboResult.HitCount != 1 ? "s" : "")} building{streakPart}";
-                        Session.Network.EnqueueSend(new GameMessageSystemChat(msg, ChatMessageType.CombatSelf));
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"+{intDamage} dmg <combo {comboResult.HitCount}{streakPart}>",
+                            ChatMessageType.CombatSelf));
                     }
 
                     // Completed combo — one punchy line per tier, damage baked in
                     if (comboResult.ComboType != ComboType.None && !string.IsNullOrEmpty(comboResult.Message))
                     {
-                        // No particle effect — the chat line is the cue
-
                         // Tier 3: broadcast channel (loud, gold), Tier 1-2: CombatSelf (quieter)
                         var channel = comboResult.Tier >= 3 ? ChatMessageType.Broadcast : ChatMessageType.CombatSelf;
 
-                        // E.g. "★ DEMOLISHER  →  +247 combo damage on Skeleton Warrior"
-                        // Or on first discovery: "★ DEMOLISHER  "Three punches..."  →  +247 combo damage on..."
-                        var damageStr = comboBonusApplied > 0 ? $"  →  +{comboBonusApplied} on {target.Name}" : $"  →  {intDamage} total on {target.Name}";
-                        var streakStr = streakBonusApplied > 0 ? $"  +{streakBonusApplied} streak" : "";
+                        var damageStr = comboBonusApplied > 0 ? $"  —  {comboBonusApplied} extra damage to {target.Name}" : $"  —  {intDamage} damage to {target.Name}";
+                        var streakStr = streakBonusApplied > 0 ? $"  (+{streakBonusApplied} from your streak)" : "";
                         var fullMsg = comboResult.Message + damageStr + streakStr;
 
                         Session.Network.EnqueueSend(new GameMessageSystemChat(fullMsg, channel));
-
-                        // On new discovery only, append the flavor text as a follow-up whisper in CombatSelf
-                        // (GetComboMessage already bakes it in for discovery; this is a no-op but kept
-                        //  as a safety net for future separation of message vs flavor)
                     }
                 }
 
-                // Fencer's Blade: show pierce bonus when armor-pierce proc fired
+                // Fencer's Blade: blade slips through the gap in their guard
                 if (fencerPierceBonus > 0)
                 {
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{fencerPierceBonus} armor pierce [{target.Name}] ({intDamage} total) [Fencer's Blade]",
+                        $"Your point finds the seam in {target.Name}'s armor, drawing {fencerPierceBonus} more blood.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Sentinel's Spear: show stamina drain/return when proc fired
+                // Sentinel's Spear: stamina siphon — phrased as the spear "drinking" their wind
                 if (sentinelStaminaDrained > 0)
                 {
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpYellow);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Stamina siphon: -{sentinelStaminaDrained} from {target.Name}, +{sentinelStaminaReturned} returned to you [Sentinel's Spear]",
+                        $"Your spear drinks the wind from {target.Name} — {sentinelStaminaDrained} stamina drained, {sentinelStaminaReturned} restored to you.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Ravager's Axe: announce the bleed when proc fired (ticks deliver damage on a delay)
+                // Ravager's Axe: bleed — gory, AC-flavored
                 if (ravagerBleedTotal > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"{target.Name} is bleeding (+{ravagerBleedTotal}) [Ravager's Axe]",
+                        $"A ragged wound opens on {target.Name}, bleeding for {ravagerBleedTotal} damage over time.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Ravager's Axe (hammer-named variants): announce crushing proc when fired
+                // Ravager's Axe hammer variants: crushing blow
                 if (ravagerCrushBonus > 0 || ravagerStaminaDrained > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"{target.Name} is crushed (+{ravagerCrushBonus} dmg, -{ravagerStaminaDrained} stamina) [Ravager's Axe]",
+                        $"A crushing blow staggers {target.Name} — {ravagerCrushBonus} extra damage and {ravagerStaminaDrained} stamina spent reeling.",
                         ChatMessageType.CombatSelf));
                 }
 
                 if (ravagerCleaveHits > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Hammer cleave hits {ravagerCleaveHits} nearby target(s) for {ravagerCleaveTotal} total splash [Ravager's Axe]",
+                        $"Your hammer carves through {ravagerCleaveHits} nearby foe(s), dealing {ravagerCleaveTotal} damage in the sweep.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Warden's Maul: announce the concussion when proc fired
+                // Warden's Maul: concussion / dazing blow
                 if (wardenPenaltyApplied > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Concussion! {target.Name} loses {wardenPenaltyApplied} defense skill for {wardenDurationApplied}s [Warden's Maul]",
+                        $"{target.Name} reels, dazed — their defenses falter by {wardenPenaltyApplied} for the next {wardenDurationApplied} seconds.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Polebreaker Staff: announce current stack and bonus damage (if any) on the chained hit
+                // Polebreaker Staff: each successive strike lands harder
                 if (polebreakerStacks > 1 && polebreakerBonus > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"[Polebreaker] x{polebreakerStacks} stack -- +{polebreakerBonus} bonus ({intDamage} total) [{target.Name}]",
+                        $"Your staff finds its rhythm against {target.Name} — strike {polebreakerStacks} draws {polebreakerBonus} more.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Stalker's Bow: announce opening-shot bonus damage when proc fired
+                // Stalker's Bow: the opening shot lands true
                 if (stalkerBonusApplied > 0)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{stalkerBonusApplied} first-strike bonus [{target.Name}] ({intDamage} total) [Stalker's Bow]",
+                        $"Your opening shot catches {target.Name} unprepared, biting for {stalkerBonusApplied} more.",
                         ChatMessageType.CombatSelf));
                 }
 
-                // Breacher's Crossbow: announce armor bypass proc
+                // Breacher's Crossbow: bolt punches through plate
                 if (breacherArmorIgnored > 0)
                 {
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{breacherArmorIgnored} armor bypassed [{target.Name}] ({intDamage} total) [Breacher's Crossbow]",
+                        $"Your bolt punches clean through {target.Name}'s armor for {breacherArmorIgnored} unblocked damage.",
                         ChatMessageType.CombatSelf));
                 }
 
+                // Vital Armor: the wearer feels a surge from their own gear
                 if (armorVitalProcRestore > 0 && armorVitalProcLabel != null)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"+{armorVitalProcRestore} {armorVitalProcLabel} [Vital Armor]",
+                        $"Your armor hums faintly, restoring {armorVitalProcRestore} {armorVitalProcLabel}.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -919,7 +941,7 @@ namespace ACE.Server.WorldObjects
             // Resolute Blade: announce heal-on-crit if it fired
             if (resoluteHealApplied > 0 && !SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                 Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"+{resoluteHealApplied} health [Resolute Blade]",
+                    $"Your blade sings with the strike, mending {resoluteHealApplied} of your wounds.",
                     ChatMessageType.CombatSelf));
 
             // Resolute Blade: bloodthirst burst on killing blow (heal + stamina)
@@ -939,7 +961,7 @@ namespace ACE.Server.WorldObjects
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
                     if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                         Session.Network.EnqueueSend(new GameMessageSystemChat(
-                            $"Bloodthirst! +{(uint)Math.Max(0, hpBurst)} health, +{(uint)Math.Max(0, stamBurst)} stamina restored on kill [Resolute Blade]",
+                            $"Bloodthirst! Your blade drinks of the fallen, restoring {(uint)Math.Max(0, hpBurst)} health and {(uint)Math.Max(0, stamBurst)} stamina.",
                             ChatMessageType.CombatSelf));
                 }
             }
@@ -973,7 +995,7 @@ namespace ACE.Server.WorldObjects
                         ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpRed);
                         if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                             Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"Reaped! +{(uint)heal} health [Reaper's Atlatl]",
+                                $"The Reaper claims its due — {(uint)heal} health returns to you with the kill.",
                                 ChatMessageType.CombatSelf));
                     }
                 }

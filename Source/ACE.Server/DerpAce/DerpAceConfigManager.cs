@@ -254,6 +254,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.HierophantFellowEchoRange   = c.HierophantFellowEchoRange;
             DerpACEConfig.HierophantAggroBonus        = c.HierophantAggroBonus;
 
+            DerpACEConfig.SneakAttackBonusPct         = c.SneakAttackBonusPct;
             DerpACEConfig.ThievesDaggerDropChance     = c.ThievesDaggerDropChance;
             DerpACEConfig.ThievesDaggerMinTier        = c.ThievesDaggerMinTier;
             DerpACEConfig.ThievesDaggerProcChance     = c.ThievesDaggerProcChance;

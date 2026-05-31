@@ -128,6 +128,17 @@ namespace ACE.Server.Managers
         public static float HierophantAggroBonus { get; set; } = 0.35f;
 
         // ──────────────────────────────────────────────────────────────────────
+        // Sneak Attack (global)
+        // ──────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Flat bonus damage fraction applied to every successful sneak attack, on top of
+        /// the vanilla Sneak Attack Damage Rating. Stacks with weapon-specific procs like
+        /// the Thief's Dagger. Default 0.15 = +15% damage.
+        /// </summary>
+        public static float SneakAttackBonusPct { get; set; } = 0.15f;
+
+        // ──────────────────────────────────────────────────────────────────────
         // Thief's Dagger
         // ──────────────────────────────────────────────────────────────────────
 
@@ -137,11 +148,11 @@ namespace ACE.Server.Managers
         /// <summary>Minimum treasure tier required. Default 2.</summary>
         public static int ThievesDaggerMinTier { get; set; } = 5;
 
-        /// <summary>Chance per sneak-attack hit to fire the damage bonus proc (0–1). Default 0.06 = 6%.</summary>
-        public static float ThievesDaggerProcChance { get; set; } = 0.05f;
+        /// <summary>Chance per sneak-attack hit to fire the damage bonus proc (0–1). Default 0.10 = 10%.</summary>
+        public static float ThievesDaggerProcChance { get; set; } = 0.10f;
 
         /// <summary>Fraction of damage added as a bonus when the proc fires (0–1). Default 0.10 = 10%.</summary>
-        public static float ThievesDaggerProcBonus { get; set; } = 0.08f;
+        public static float ThievesDaggerProcBonus { get; set; } = 0.10f;
 
         /// <summary>Targeting weight subtracted from the dagger-bearer. Default 0.4.</summary>
         public static float ThievesDaggerAggroPenalty { get; set; } = 0.3f;

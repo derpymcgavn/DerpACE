@@ -147,6 +147,7 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  archmagi.drop   = {DerpACEConfig.ArchmagiDropChance:P0}  ({DerpACEConfig.ArchmagiDropChance})");
                 sb.AppendLine($"  archmagi.tier   = {DerpACEConfig.ArchmagiMinTier}");
                 sb.AppendLine($"  archmagi.proc   = {DerpACEConfig.ArchmagiProcChance:P0}  ({DerpACEConfig.ArchmagiProcChance})");
+                sb.AppendLine($"  sneak.bonus     = {DerpACEConfig.SneakAttackBonusPct:P0}  ({DerpACEConfig.SneakAttackBonusPct})");
                 sb.AppendLine($"  thief.drop      = {DerpACEConfig.ThievesDaggerDropChance:P0}  ({DerpACEConfig.ThievesDaggerDropChance})");
                 sb.AppendLine($"  thief.tier      = {DerpACEConfig.ThievesDaggerMinTier}");
                 sb.AppendLine($"  thief.proc      = {DerpACEConfig.ThievesDaggerProcChance:P0}  ({DerpACEConfig.ThievesDaggerProcChance})");

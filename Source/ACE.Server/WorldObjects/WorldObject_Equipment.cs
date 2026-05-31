@@ -190,23 +190,35 @@ namespace ACE.Server.WorldObjects
 
             // Thief's Dagger: enter stealth.
             // Translucency is set synchronously so that if the tracking system recreates the
-            // player during the particle delay it already carries the correct 0.5f value.
-            // GameMessageUpdateObject / CreateObject to self causes teleport-re-init or duplicates,
-            // so we only update others (sendSelf=false). Self gets particle + chat confirmation.
+            // player during the particle delay it already carries the correct value.
+            // We can't send GameMessageCreateObject to self (teleport-re-init / duplicates),
+            // so for the wielder we push a GameMessagePublicUpdatePropertyFloat directly to
+            // their session — this updates the client's local Translucency without rebuilding
+            // the object. For nearby players we still do the Delete+Create dance.
             if (GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true)
             {
+                const float stealthTranslucency = 0.75f;
+
                 var player = creature as Player;
-                creature.Translucency = 0.5f;   // set immediately so all future CreateObject packets include it
+                creature.Translucency = stealthTranslucency;   // set immediately so all future CreateObject packets include it
+
+                // Self-sync: push the translucency property to the wielder so their own client
+                // immediately renders them translucent (no re-create, no teleport flicker).
+                if (player?.Session != null)
+                {
+                    player.Session.Network.EnqueueSend(new GameMessagePublicUpdatePropertyFloat(
+                        creature, ACE.Entity.Enum.Properties.PropertyFloat.Translucency, stealthTranslucency));
+                }
 
                 var chain = new ActionChain();
-                // 1. play black particle, then delete others' stale copy
+                // 1. play black particle (visible to self + others), then delete others' stale copy
                 chain.AddAction(creature, () =>
                 {
                     creature.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownBlack);
                     creature.EnqueueBroadcast(false, new GameMessageDeleteObject(creature));
                 });
                 chain.AddDelaySeconds(0.5);
-                // 2. recreate for others — translucency=0.5f is already set on the object
+                // 2. recreate for others — translucency is already set on the object
                 chain.AddAction(creature, () =>
                 {
                     creature.EnqueueBroadcast(false, new GameMessageCreateObject(creature));
@@ -230,6 +242,14 @@ namespace ACE.Server.WorldObjects
                 {
                     var player = creature as Player;
                     creature.Translucency = null;   // clear immediately so tracking-system recreates are opaque
+
+                    // Self-sync: push the cleared translucency back to the wielder's client.
+                    // PublicUpdatePropertyFloat with value 0.0 is the standard "back to opaque" signal.
+                    if (player?.Session != null)
+                    {
+                        player.Session.Network.EnqueueSend(new GameMessagePublicUpdatePropertyFloat(
+                            creature, ACE.Entity.Enum.Properties.PropertyFloat.Translucency, 0.0));
+                    }
 
                     var chain = new ActionChain();
                     // 1. delete others' translucent copy

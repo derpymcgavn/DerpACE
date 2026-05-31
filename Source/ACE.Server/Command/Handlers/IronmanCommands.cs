@@ -58,12 +58,16 @@ namespace ACE.Server.Command.Handlers
         private static readonly ConcurrentDictionary<uint, DateTime> PendingConfirms = new ConcurrentDictionary<uint, DateTime>();
         // GUID -> pending mode ("standard" or "nomad"). Defaults to standard if missing.
         private static readonly ConcurrentDictionary<uint, string> PendingModes = new ConcurrentDictionary<uint, string>();
+        // GUID -> whether the pending commitment requested the -nh (no non-humans) restricted race pool.
+        private static readonly ConcurrentDictionary<uint, bool> PendingNoNonHuman = new ConcurrentDictionary<uint, bool>();
         private const int ConfirmWindowSeconds = 30;
 
         [CommandHandler("ironman", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Ironman mode (IRREVERSIBLE).",
             "on        - begin Ironman commitment (you must then run /ironman confirm within 30 seconds)\n" +
             "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 450 in clothes)\n" +
+            "  add -nh to 'on' or 'nomad' to exclude non-human heritages, rolling only\n" +
+            "            Aluvian, Gharundim, Sho, Viamontian, Umbraen, Penumbraen, Undead, or Empyrean\n" +
             "confirm   - finalize Ironman conversion. Cannot be undone.\n" +
             "char      - view your character progression milestones\n" +
             "top       - show the Ironman leaderboard\n" +
@@ -92,11 +96,17 @@ namespace ACE.Server.Command.Handlers
                     return;
                 }
 
-                player.SendMessage("Usage: /ironman on | confirm");
+                player.SendMessage("Usage: /ironman on [-nh] | nomad [-nh] | confirm");
                 return;
             }
 
             var sub = parameters[0].ToLowerInvariant();
+
+            // DerpACE: detect the -nh (no non-humans) toggle anywhere in the remaining args.
+            var noNonHuman = parameters.Skip(1).Any(p =>
+                string.Equals(p, "-nh", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "nh", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "nonhuman", StringComparison.OrdinalIgnoreCase));
 
             // Handle read-only commands first (bypass enrollment checks)
             switch (sub)
@@ -146,20 +156,23 @@ namespace ACE.Server.Command.Handlers
                 case "on":
                     PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     PendingModes[player.Guid.Full] = "standard";
+                    PendingNoNonHuman[player.Guid.Full] = noNonHuman;
                     player.SendMessage(
                         $"WARNING: Ironman mode is permanent and will wipe your inventory, spellbook, " +
-                        $"and reroll your attributes/skills. Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
+                        $"and reroll your attributes/skills.{(noNonHuman ? " Heritage will exclude non-humans." : "")} " +
+                        $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
 
                 case "nomad":
                     PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     PendingModes[player.Guid.Full] = "nomad";
+                    PendingNoNonHuman[player.Guid.Full] = noNonHuman;
                     player.SendMessage(
                         $"WARNING: Ironman NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
                         $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
                         $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
-                        $"AL of 450 (average); worn armor is only half effective. " +
+                        $"AL of 450 (average); worn armor is only half effective.{(noNonHuman ? " Heritage will exclude non-humans." : "")} " +
                         $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
@@ -167,22 +180,25 @@ namespace ACE.Server.Command.Handlers
                 case "confirm":
                     if (!PendingConfirms.TryRemove(player.Guid.Full, out var expires))
                     {
+                        PendingNoNonHuman.TryRemove(player.Guid.Full, out _);
                         player.SendMessage("You have no pending Ironman commitment. Type /ironman on or /ironman nomad first.");
                         return;
                     }
                     if (DateTime.UtcNow > expires)
                     {
                         PendingModes.TryRemove(player.Guid.Full, out _);
+                        PendingNoNonHuman.TryRemove(player.Guid.Full, out _);
                         player.SendMessage("Your Ironman commitment window has expired. Type /ironman on or /ironman nomad again.");
                         return;
                     }
                     PendingModes.TryRemove(player.Guid.Full, out var pendingMode);
+                    PendingNoNonHuman.TryRemove(player.Guid.Full, out var pendingNoNonHuman);
                     var isNomad = string.Equals(pendingMode, "nomad", StringComparison.OrdinalIgnoreCase);
 
                     if (isNomad)
-                        IronmanFactory.InitializeIronmanNomad(player);
+                        IronmanFactory.InitializeIronmanNomad(player, pendingNoNonHuman);
                     else
-                        IronmanFactory.InitializeIronman(player);
+                        IronmanFactory.InitializeIronman(player, pendingNoNonHuman);
 
                     // Global announcement for Ironman activation
                     var pathLabel = isNomad ? "NOMAD Ironman" : "Ironman";
@@ -193,7 +209,7 @@ namespace ACE.Server.Command.Handlers
                     break;
 
                 default:
-                    player.SendMessage("Usage: /ironman on | nomad | confirm");
+                    player.SendMessage("Usage: /ironman on [-nh] | nomad [-nh] | confirm");
                     break;
             }
         }
@@ -319,8 +335,6 @@ namespace ACE.Server.Command.Handlers
 
             var sb = new StringBuilder();
             sb.AppendLine("=== Top 10 Ironman Killers (Creatures) ===");
-            sb.AppendLine($"  {"#",-3} {"Creature",-32} {"IM Kills",8}");
-            sb.AppendLine($"  {new string('-', 46)}");
 
             if (entries.Count == 0)
             {
@@ -329,7 +343,7 @@ namespace ACE.Server.Command.Handlers
             else
             {
                 for (int i = 0; i < entries.Count; i++)
-                    sb.AppendLine($"  {i + 1,-3} {entries[i].Name,-32} {entries[i].Kills,8:N0}");
+                    sb.AppendLine($"  {i + 1,2}. {entries[i].Name} - {entries[i].Kills:N0} IM kills");
             }
 
             session.Player.SendMessage(sb.ToString(), ChatMessageType.System);
@@ -472,8 +486,6 @@ namespace ACE.Server.Command.Handlers
 
             var sb = new StringBuilder();
             sb.AppendLine($"=== Ironman Leaderboard (Top {LeaderboardSize}) ===");
-            sb.AppendLine($"  {"#",-3} {"Name",-28} {"Lives",5} {"Status",-6} {"Level",5}  {"Kills",7}");
-            sb.AppendLine($"  {new string('-', 62)}");
 
             if (entries.Count == 0)
             {
@@ -485,7 +497,9 @@ namespace ACE.Server.Command.Handlers
                 {
                     var e = entries[i];
                     var status = e.Lives <= 0 ? "DEAD" : (e.Nomad ? "NOMAD" : "ALIVE");
-                    sb.AppendLine($"  {i + 1,-3} {e.Name,-28} {e.Lives,5} {status,-6} {e.Level,5}  {e.Kills,7:N0}");
+                    // AC's chat font is proportional, so column padding never aligns.
+                    // Use a separator-based line that reads cleanly at any name length.
+                    sb.AppendLine($"  {i + 1,2}. {e.Name} - Lv {e.Level} | {e.Kills:N0} kills | {e.Lives} life(s) | {status}");
                 }
             }
 

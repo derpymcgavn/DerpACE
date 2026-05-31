@@ -81,6 +81,8 @@ namespace ACE.Server.Factories
                 case WeenieType.MissileLauncher:
                     return new MissileLauncher(weenie, guid);
                 case WeenieType.Ammunition:
+                    if (weenie.WeenieClassId == UniversalAmmunition.WeenieClassId)
+                        return new UniversalAmmunition(weenie, guid);
                     return new Ammunition(weenie, guid);
                 case WeenieType.Missile:
                     return new Missile(weenie, guid);
@@ -141,6 +143,8 @@ namespace ACE.Server.Factories
                 case WeenieType.CraftTool:
                     if (weenie.WeenieClassId == 420420420)
                         return new RandomDye(weenie, guid);
+                    if (weenie.WeenieClassId == 420420423)
+                        return new TransmutersDye(weenie, guid);
                     return new CraftTool(weenie, guid);
                 case WeenieType.LightSource:
                     return new LightSource(weenie, guid);
@@ -204,6 +208,8 @@ namespace ACE.Server.Factories
                 case WeenieType.MissileLauncher:
                     return new MissileLauncher(biota);
                 case WeenieType.Ammunition:
+                    if (biota.WeenieClassId == UniversalAmmunition.WeenieClassId)
+                        return new UniversalAmmunition(biota);
                     return new Ammunition(biota);
                 case WeenieType.Missile:
                     return new Missile(biota);
@@ -262,6 +268,8 @@ namespace ACE.Server.Factories
                 case WeenieType.CraftTool:
                     if (biota.WeenieClassId == 420420420)
                         return new RandomDye(biota);
+                    if (biota.WeenieClassId == 420420423)
+                        return new TransmutersDye(biota);
                     return new CraftTool(biota);
                 case WeenieType.LightSource:
                     return new LightSource(biota);
