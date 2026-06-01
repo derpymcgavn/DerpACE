@@ -87,6 +87,15 @@ namespace ACE.Server.Managers
         /// <summary>Targeting weight subtracted from the caster (fragile burst). Default 0.2.</summary>
         public static float ArchmagiAggroPenalty { get; set; } = 0.2f;
 
+        /// <summary>Dual-cast bounce proc chance per cast (0–1). Default 0.04 = 4%.</summary>
+        public static float ArchmagiDualCastChance { get; set; } = 0.04f;
+
+        /// <summary>Bounce target search radius in yards. Default 10.0.</summary>
+        public static float ArchmagiDualCastRadius { get; set; } = 10.0f;
+
+        /// <summary>Damage multiplier for bounce cast (0–1). Default 0.75 = 75% damage.</summary>
+        public static float ArchmagiDualCastDamageModifier { get; set; } = 0.75f;
+
         // ──────────────────────────────────────────────────────────────────────
         // Hierophant Caster (support life-staff variant of Martyr Staff)
         // ──────────────────────────────────────────────────────────────────────

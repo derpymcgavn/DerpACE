@@ -34,6 +34,14 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public void TryCastSpell(Spell spell, WorldObject target, WorldObject itemCaster = null, WorldObject weapon = null, bool isWeaponSpell = false, bool fromProc = false, bool tryResist = true)
         {
+            TryCastSpell(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, 1.0f);
+        }
+
+        /// <summary>
+        /// Instantly casts a spell for a WorldObject with optional damage modifier (ie. spell traps, procs)
+        /// </summary>
+        public void TryCastSpell(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, float damageModifier)
+        {
             // TODO: look into further normalizing this / caster / weapon
 
             // verify spell exists in database
@@ -53,13 +61,23 @@ namespace ACE.Server.WorldObjects
                 var fellows = targetPlayer.Fellowship.GetFellowshipMembers();
 
                 foreach (var fellow in fellows.Values)
-                    TryCastSpell_Inner(spell, fellow, itemCaster, weapon, isWeaponSpell, fromProc, tryResist);
+                    TryCastSpell_Inner(spell, fellow, itemCaster, weapon, isWeaponSpell, fromProc, true, damageModifier);
             }
             else
-                TryCastSpell_Inner(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, tryResist);
+                TryCastSpell_Inner(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, true, damageModifier);
         }
 
+        /// <summary>
+        /// Original TryCastSpell method signature
+        /// </summary>
+        private void TryCastSpell_Original(Spell spell, WorldObject target, WorldObject itemCaster = null, WorldObject weapon = null, bool isWeaponSpell = false, bool fromProc = false, bool tryResist = true)
+
         public void TryCastSpell_Inner(Spell spell, WorldObject target, WorldObject itemCaster = null, WorldObject weapon = null, bool isWeaponSpell = false, bool fromProc = false, bool tryResist = true)
+        {
+            TryCastSpell_Inner(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, 1.0f);
+        }
+
+        public void TryCastSpell_Inner(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, bool tryResist, float damageModifier)
         {
             // verify before resist, still consumes source item
             if (spell.MetaSpellType == SpellType.Dispel && !VerifyDispelPKStatus(itemCaster, target))
@@ -70,7 +88,7 @@ namespace ACE.Server.WorldObjects
                 return;
 
             // if not resisted, cast spell
-            HandleCastSpell(spell, target, itemCaster, weapon, isWeaponSpell, fromProc);
+            HandleCastSpell(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, damageModifier);
         }
 
         /// <summary>

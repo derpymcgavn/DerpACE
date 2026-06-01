@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using ACE.Common;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Network.GameMessages.Messages;
@@ -10,12 +11,12 @@ using ACE.Server.Network.GameMessages.Messages;
 namespace ACE.Server.WorldObjects
 {
     /// <summary>
-    /// DerpACE: Sausage McBuffin (WCID 2000500).
+    /// DerpACE: Sausage McBuffin (WCID 2000500) — A pancake golem buff-bot NPC.
     ///
-    /// A static buff-bot NPC. When a player uses him, he casts the full
-    /// Level 7 life / creature / item buff suite on them (attributes, vitals,
-    /// regens, masteries, protections, plus Impenetrability 7 and all 7th-level
-    /// banes on their armor).
+    /// When a player uses him, he casts the full Level 7 life / creature / item buff
+    /// suite on them (attributes, vitals, regens, masteries, protections, plus
+    /// Impenetrability 7 and all 7th-level banes on their armor). Speaks in old internet
+    /// leet speak because he's a sentient breakfast item with an attitude.
     ///
     /// Cooldown is enforced per-player so spamming him doesn't flood the player
     /// with thousands of cast messages.
@@ -149,6 +150,25 @@ namespace ACE.Server.WorldObjects
             if (player.IsDead || npc.IsDead)
                 return;
 
+            // Reject hardcore and ironman characters
+            if (player.GetProperty(PropertyBool.IsHardcore) ?? false)
+            {
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"{npc.Name} flips dramatically. \"w00t!!! ur h4rdcore br0? i c4nnot h3lp d00dz l1k3 j00!!!!\"",
+                    ChatMessageType.Tell));
+                player.SendUseDoneEvent();
+                return;
+            }
+
+            if (player.GetProperty(PropertyBool.IsIronman) ?? false)
+            {
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"{npc.Name} melts slightly. \"n4h n4h n4h... ur ironm4n d00d. gr1nd it y0urself!!!!!!11one\"",
+                    ChatMessageType.Tell));
+                player.SendUseDoneEvent();
+                return;
+            }
+
             // Range check — use radius might not be set on the weenie.
             if (npc.Location != null && player.Location != null)
             {
@@ -156,7 +176,7 @@ namespace ACE.Server.WorldObjects
                 if (distSq > UseRange * UseRange)
                 {
                     player.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"{npc.Name} grins from afar. \"Step closer, friend — me blessings don't carry on the wind!\"",
+                        $"{npc.Name} jiggles indignantly. \"g3t clos3r n00b!! i c4nnot buff j00 from th3 n3xt c0unt33\"",
                         ChatMessageType.Tell));
                     player.SendUseDoneEvent();
                     return;
@@ -169,7 +189,7 @@ namespace ACE.Server.WorldObjects
             {
                 var remaining = Math.Max(1, (int)Math.Ceiling(CooldownSeconds - (now - last)));
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"{npc.Name} pats his stomach. \"Give me a moment to catch me breath, eh? Come back in {remaining} second{(remaining == 1 ? "" : "s")}.\"",
+                    $"{npc.Name} steams angrily. \"dood!!! w41t {remaining} m0r3 s3c0ndz ur buff3d m0nst3r!!!!!11\"",
                     ChatMessageType.Tell));
                 player.SendUseDoneEvent();
                 return;
@@ -177,7 +197,7 @@ namespace ACE.Server.WorldObjects
             _lastUseTime[player.Guid.Full] = now;
 
             npc.EnqueueBroadcast(new GameMessageHearSpeech(
-                $"Ahhh, a hungry adventurer! Have a taste of me finest sausage, blessed by the Empyrean themselves!",
+                $"h4v3 sum buffz n00b!!! p4nc4k3z 0f p0w3r!!!11oneone",
                 npc.Name, npc.Guid.Full, ChatMessageType.Speech), WorldObject.LocalBroadcastRange);
 
             // Stagger the casts so the client doesn't drown in spell FX in a single frame.
@@ -195,7 +215,12 @@ namespace ACE.Server.WorldObjects
                     var spell = new Spell(spellId);
                     if (spell.NotFound) return;
 
-                    npc.TryCastSpell_WithRedirects(spell, player, npc, null, false, false, false);
+                    // Use TryCastItemEnchantment_WithRedirects for armor/impen/bane spells
+                    // to ensure they apply to all equipped armor pieces, not just the player
+                    if (spell.IsImpenBaneType)
+                        npc.TryCastItemEnchantment_WithRedirects(spell, player, npc);
+                    else
+                        npc.TryCastSpell_WithRedirects(spell, player, npc, null, false, false, false);
                 });
             }
 
@@ -215,7 +240,7 @@ namespace ACE.Server.WorldObjects
             {
                 if (player.IsDead) return;
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"{npc.Name} dusts off his apron. \"Off ye go now, fully seasoned and ready for adventure!\"",
+                    $"{npc.Name} gives a crispy thumbs up. \"n0 h4x n33d3d, j00 iz buff br0zk11!!!oneone n0w g0 pwn s0m3 d00dz!!\"",
                     ChatMessageType.Tell));
             });
 

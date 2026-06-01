@@ -1204,10 +1204,7 @@ namespace ACE.Server.WorldObjects
             if (caster == null || caster.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true)
                 return;
 
-            if (!caster.ProcSpell.HasValue)
-                return;
-
-            // exclude ring, wall, blast, volley (AoE spell types)
+            // Exclude AoE spell types (ring, wall, blast, volley)
             var projType = SpellProjectile.GetProjectileSpellType(spell.Id);
             if (projType == ProjectileSpellType.Ring ||
                 projType == ProjectileSpellType.Wall ||
@@ -1215,38 +1212,68 @@ namespace ACE.Server.WorldObjects
                 projType == ProjectileSpellType.Volley)
                 return;
 
-            var isLifeCaster = caster.W_DamageType == DamageType.Health;
+            // Only bounce War, Void, Combat, or Life magic
+            if (spell.School != MagicSchool.WarMagic &&
+                spell.School != MagicSchool.VoidMagic &&
+                spell.School != MagicSchool.LifeMagic)
+                return;
 
-            if (isLifeCaster)
+            // Roll for bounce proc
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastChance)
+                return;
+
+            // Exclude self-targeting spells
+            var targetCreature = target as Creature;
+            if (targetCreature == null || targetCreature == this)
+                return;
+
+            // Find a bounce target: random enemy within radius, excluding the original target
+            var bounceRadius = ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastRadius;
+            var nearbyEnemies = new System.Collections.Generic.List<Creature>();
+
+            if (CurrentLandblock != null)
             {
-                // trigger on harmful life spells; echo a heal onto self
-                if (spell.School != MagicSchool.LifeMagic || !spell.IsHarmful)
-                    return;
+                var creatures = CurrentLandblock.GetCreaturesInRange(this.Location, bounceRadius);
+                foreach (var creature in creatures)
+                {
+                    // Skip original target, self, and invalid creatures
+                    if (creature == targetCreature || creature == this || creature == caster)
+                        continue;
 
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance)
-                    return;
+                    // Only bounce to enemies
+                    if (!creature.IsMonster && !creature.IsPlayer)
+                        continue;
 
-                var healSpell = new ACE.Server.Entity.Spell(caster.ProcSpell.Value);
-                if (!healSpell.NotFound)
-                    TryCastSpell(healSpell, this, caster, caster, true, true);
+                    // Ensure they're actually enemies
+                    if (creature.IsPlayer && !this.IsPKEncounterPossible(creature))
+                        continue;
+
+                    nearbyEnemies.Add(creature);
+                }
             }
-            else
+
+            if (nearbyEnemies.Count == 0)
+                return;
+
+            // Pick random bounce target
+            var bounceTarget = nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count)];
+
+            // Queue the bounce cast with slight delay for immersion
+            var actionChain = new ActionChain();
+            actionChain.AddDelaySeconds(0.15);
+            actionChain.AddAction(this, () =>
             {
-                // trigger when the cast spell's element matches the caster's element
-                if (spell.DamageType != caster.W_DamageType)
-                    return;
+                TryCastSpell(spell, bounceTarget, caster, caster, true, true, ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier);
+            });
+            actionChain.EnqueueChain();
 
-                var targetCreature = target as Creature;
-                if (targetCreature == null || targetCreature == this)
-                    return;
+            // Broadcast immersive messages
+            var castingMessage = $"{caster.Name}'s spell ripples and bounces to {bounceTarget.Name}!";
+            var casterMessage = new GameMessageSystemChat(castingMessage, ChatMessageType.Spell);
+            caster.Session?.Network.EnqueueSend(casterMessage);
 
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance)
-                    return;
-
-                var echoSpell = new ACE.Server.Entity.Spell(caster.ProcSpell.Value);
-                if (!echoSpell.NotFound)
-                    TryCastSpell(echoSpell, target, caster, caster, true, true);
-            }
+            if (bounceTarget is Player bouncePlayer)
+                bouncePlayer.Session?.Network.EnqueueSend(casterMessage);
         }
 
         public void TryBurnComponents(Spell spell)

@@ -266,6 +266,12 @@ namespace ACE.Server.DerpAce
         public float ArchmagiProcChance { get; set; } = 0.06f;
         [JsonPropertyName("archmagi_aggro_penalty")]
         public float ArchmagiAggroPenalty { get; set; } = 0.2f;
+        [JsonPropertyName("archmagi_dual_cast_chance")]
+        public float ArchmagiDualCastChance { get; set; } = 0.04f;
+        [JsonPropertyName("archmagi_dual_cast_radius")]
+        public float ArchmagiDualCastRadius { get; set; } = 10.0f;
+        [JsonPropertyName("archmagi_dual_cast_damage_modifier")]
+        public float ArchmagiDualCastDamageModifier { get; set; } = 0.75f;
 
         // Hierophant
         [JsonPropertyName("hierophant_drop_chance")]
