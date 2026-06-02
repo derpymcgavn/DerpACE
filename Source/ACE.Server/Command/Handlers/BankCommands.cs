@@ -106,6 +106,12 @@ namespace ACE.Server.Command.Handlers
             }
 
             TryParseAmountArg(parameters, out var amount);
+            if (amount <= 0)
+            {
+                player.SendMessage("Amount must be greater than zero.");
+                return;
+            }
+
             amount = amount == int.MaxValue ? held : Math.Min(amount, held);
             if (BankConfig.ExcessSetToMax)
                 amount = Math.Min(amount, held);
@@ -144,23 +150,37 @@ namespace ACE.Server.Command.Handlers
             }
 
             TryParseAmountArg(parameters, out var amount);
+            if (amount <= 0)
+            {
+                player.SendMessage("Amount must be greater than zero.");
+                return;
+            }
+
             amount = amount == int.MaxValue ? (int)Math.Min(banked, int.MaxValue) : (int)Math.Min(amount, banked);
 
             // Create the items and try to give them to the player
-            for (int i = 0; i < amount; i++)
+            var withdrawn = 0;
+            for (; withdrawn < amount; withdrawn++)
             {
                 var wo = Factories.WorldObjectFactory.CreateNewWorldObject(item.Id);
-                if (wo == null) break;
+                if (wo == null)
+                {
+                    player.SendMessage($"Could not create {item.Name}.");
+                    break;
+                }
+
                 if (!player.TryCreateInInventoryWithNetworking(wo))
                 {
-                    // Ran out of inventory space -- stop and refund the remainder
-                    player.SendMessage($"Inventory full -- only withdrew {i:N0} {item.Name}.");
-                    return;
+                    wo.Destroy();
+                    player.SendMessage($"Inventory full -- only withdrew {withdrawn:N0} {item.Name}.");
+                    break;
                 }
+
+                player.IncBanked(item.Prop, -1);
             }
 
-            player.IncBanked(item.Prop, -amount);
-            player.SendMessage($"Withdrew {amount:N0} {item.Name}. Banked: {player.GetBanked(item.Prop):N0}  Held: {player.GetNumInventoryItemsOfWCID(item.Id):N0}");
+            if (withdrawn > 0)
+                player.SendMessage($"Withdrew {withdrawn:N0} {item.Name}. Banked: {player.GetBanked(item.Prop):N0}  Held: {player.GetNumInventoryItemsOfWCID(item.Id):N0}");
         }
 
         // -- /cash --
@@ -234,6 +254,12 @@ namespace ACE.Server.Command.Handlers
         {
             // /cash take [amount|*]
             TryParseAmountArg(parameters, out var requestedRaw, skip: 1);
+            if (requestedRaw <= 0)
+            {
+                player.SendMessage("Amount must be greater than zero.");
+                return;
+            }
+
             var banked = player.GetCash();
             if (banked <= 0)
             {

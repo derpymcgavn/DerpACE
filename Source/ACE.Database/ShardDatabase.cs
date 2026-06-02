@@ -348,7 +348,11 @@ namespace ACE.Database
             try
             {
                 foreach (var table in BiotaPropertyOrphanTables)
-                    context.Database.ExecuteSqlRaw($"DELETE FROM `{table}` WHERE `object_Id` = {{0}};", id);
+                {
+                    // Table identifiers cannot be parameterized. Values in this private list are trusted constants.
+                    var sql = "DELETE FROM `" + table + "` WHERE `object_Id` = {0};";
+                    context.Database.ExecuteSqlRaw(sql, id);
+                }
             }
             catch (Exception ex)
             {

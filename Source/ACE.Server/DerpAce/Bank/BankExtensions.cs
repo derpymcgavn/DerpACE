@@ -37,8 +37,9 @@ namespace ACE.Server.DerpAce.Bank
                 var stacks = player.GetInventoryItemsOfWCID(cur.Id).ToList();
                 foreach (var stack in stacks)
                 {
-                    total += (long)(stack.StackSize ?? 1) * cur.Value;
-                    player.TryConsumeFromInventoryWithNetworking(stack);
+                    var stackValue = (long)(stack.StackSize ?? 1) * cur.Value;
+                    if (player.TryConsumeFromInventoryWithNetworking(stack))
+                        total += stackValue;
                 }
             }
             if (total > 0) player.IncCash(total);

@@ -27,7 +27,7 @@ namespace ACE.Server.WorldObjects
     /// </summary>
     public class UniversalAmmunition : Ammunition
     {
-        public const uint WeenieClassId = 2000600;
+        public const uint UniversalWeenieClassId = 2000600;
 
         // Tuned 1 below Deadly Prismatic for each launcher family.
         private const int BowMaxDamage      = 13;

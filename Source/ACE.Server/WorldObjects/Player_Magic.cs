@@ -1212,8 +1212,9 @@ namespace ACE.Server.WorldObjects
                 projType == ProjectileSpellType.Volley)
                 return;
 
-            // Only bounce War, Void, Combat, or Life magic
-            if (spell.School != MagicSchool.WarMagic &&
+            // Only bounce harmful War, Void, or Life magic
+            if (!spell.IsHarmful ||
+                spell.School != MagicSchool.WarMagic &&
                 spell.School != MagicSchool.VoidMagic &&
                 spell.School != MagicSchool.LifeMagic)
                 return;
@@ -1224,7 +1225,7 @@ namespace ACE.Server.WorldObjects
 
             // Exclude self-targeting spells
             var targetCreature = target as Creature;
-            if (targetCreature == null || targetCreature == this)
+            if (targetCreature == null || targetCreature == this || targetCreature.Location == null)
                 return;
 
             // Find a bounce target: random enemy within radius, excluding the original target
@@ -1233,19 +1234,18 @@ namespace ACE.Server.WorldObjects
 
             if (CurrentLandblock != null)
             {
-                var creatures = CurrentLandblock.GetCreaturesInRange(this.Location, bounceRadius);
+                var radiusSq = bounceRadius * bounceRadius;
+                var creatures = CurrentLandblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>();
                 foreach (var creature in creatures)
                 {
                     // Skip original target, self, and invalid creatures
-                    if (creature == targetCreature || creature == this || creature == caster)
-                        continue;
-
-                    // Only bounce to enemies
-                    if (!creature.IsMonster && !creature.IsPlayer)
+                    if (creature == targetCreature || creature == this || creature == caster ||
+                        !creature.IsAlive || !creature.Attackable || creature.Teleporting || creature.Location == null ||
+                        targetCreature.Location.SquaredDistanceTo(creature.Location) > radiusSq)
                         continue;
 
                     // Ensure they're actually enemies
-                    if (creature.IsPlayer && !this.IsPKEncounterPossible(creature))
+                    if (CheckPKStatusVsTarget(creature, spell) != null)
                         continue;
 
                     nearbyEnemies.Add(creature);
@@ -1256,21 +1256,21 @@ namespace ACE.Server.WorldObjects
                 return;
 
             // Pick random bounce target
-            var bounceTarget = nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count)];
+            var bounceTarget = nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count - 1)];
 
             // Queue the bounce cast with slight delay for immersion
             var actionChain = new ActionChain();
             actionChain.AddDelaySeconds(0.15);
             actionChain.AddAction(this, () =>
             {
-                TryCastSpell(spell, bounceTarget, caster, caster, true, true, ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier);
+                TryCastSpell(spell, bounceTarget, caster, caster, true, true, true, ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier);
             });
             actionChain.EnqueueChain();
 
             // Broadcast immersive messages
             var castingMessage = $"{caster.Name}'s spell ripples and bounces to {bounceTarget.Name}!";
-            var casterMessage = new GameMessageSystemChat(castingMessage, ChatMessageType.Spell);
-            caster.Session?.Network.EnqueueSend(casterMessage);
+            var casterMessage = new GameMessageSystemChat(castingMessage, ChatMessageType.Spellcasting);
+            Session?.Network.EnqueueSend(casterMessage);
 
             if (bounceTarget is Player bouncePlayer)
                 bouncePlayer.Session?.Network.EnqueueSend(casterMessage);

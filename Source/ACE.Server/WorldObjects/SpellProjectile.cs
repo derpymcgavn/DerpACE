@@ -23,6 +23,7 @@ namespace ACE.Server.WorldObjects
         public Position SpawnPos { get; set; }
         public float DistanceToTarget { get; set; }
         public uint LifeProjectileDamage { get; set; }
+        public float DamageModifier { get; set; } = 1.0f;
 
         public SpellProjectileInfo Info { get; set; }
 
@@ -556,6 +557,8 @@ namespace ACE.Server.WorldObjects
 
                 finalDamage *= elementalDamageMod * slayerMod * resistanceMod * absorbMod;
             }
+
+            finalDamage *= DamageModifier;
 
             // show debug info
             if (sourceCreature != null && sourceCreature.DebugDamage.HasFlag(Creature.DebugDamageType.Attacker))

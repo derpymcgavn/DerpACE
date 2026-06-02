@@ -81,7 +81,7 @@ namespace ACE.Server.Factories
                 case WeenieType.MissileLauncher:
                     return new MissileLauncher(weenie, guid);
                 case WeenieType.Ammunition:
-                    if (weenie.WeenieClassId == UniversalAmmunition.WeenieClassId)
+                    if (weenie.WeenieClassId == UniversalAmmunition.UniversalWeenieClassId)
                         return new UniversalAmmunition(weenie, guid);
                     return new Ammunition(weenie, guid);
                 case WeenieType.Missile:
@@ -208,7 +208,7 @@ namespace ACE.Server.Factories
                 case WeenieType.MissileLauncher:
                     return new MissileLauncher(biota);
                 case WeenieType.Ammunition:
-                    if (biota.WeenieClassId == UniversalAmmunition.WeenieClassId)
+                    if (biota.WeenieClassId == UniversalAmmunition.UniversalWeenieClassId)
                         return new UniversalAmmunition(biota);
                     return new Ammunition(biota);
                 case WeenieType.Missile:
