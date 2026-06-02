@@ -56,19 +56,7 @@ namespace ACE.Server.DerpAce.Mail
                 return;
             }
 
-            // Prune oldest read/claimed messages if over the limit
-            while (messages.Count > MaxMessages)
-            {
-                var oldest = messages
-                    .Where(m => m.Read && !m.HasUnclaimed)
-                    .OrderBy(m => m.SentUtc)
-                    .FirstOrDefault();
-
-                if (oldest != null)
-                    messages.Remove(oldest);
-                else
-                    break;
-            }
+            Prune(messages);
 
             player.SetProperty(MailboxProperty, JsonSerializer.Serialize(messages, JsonOpts));
         }
@@ -168,9 +156,26 @@ namespace ACE.Server.DerpAce.Mail
                 return;
             }
 
+            Prune(messages);
             player.SetProperty(MailboxProperty, JsonSerializer.Serialize(messages, JsonOpts));
             // ChangesDetected is set automatically by SetProperty;
             // PlayerManager.SaveOfflinePlayersWithChanges() handles the DB flush on its own timer.
+        }
+
+        private static void Prune(List<MailMessage> messages)
+        {
+            while (messages.Count > MaxMessages)
+            {
+                var oldest = messages
+                    .Where(m => m.Read && !m.HasUnclaimed)
+                    .OrderBy(m => m.SentUtc)
+                    .FirstOrDefault();
+
+                if (oldest == null)
+                    break;
+
+                messages.Remove(oldest);
+            }
         }
     }
 }

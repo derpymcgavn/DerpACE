@@ -334,10 +334,14 @@ namespace ACE.Server.Command.Handlers
                 // Mail the MMDs back to the original sender as a payment message.
                 var paymentPyreals = (long)owed * MmdValue;
                 var fromName       = msg.CodSenderName ?? msg.SenderName;
-                DeliverMessage(player, fromName,
+                if (!DeliverMessage(player, fromName,
                     $"COD payment: {owed:N0} MMD",
                     $"Payment for '{msg.Subject}' delivered by {player.Name}.",
-                    paymentPyreals, null);
+                    paymentPyreals, null))
+                {
+                    player.SendMessage("[MAIL] COD payment could not be delivered. Your payment was refunded and the package remains in your inbox.");
+                    return;
+                }
 
                 player.SendMessage($"[MAIL] Paid {owed:N0} MMD COD ({payInv:N0} inventory + {payBank:N0} bank) to {fromName}.");
                 msg.CodMmd = 0;
@@ -359,13 +363,19 @@ namespace ACE.Server.Command.Handlers
                     }
                     else
                     {
-                        GiveMmds(player, mmdsToGive);
-                        claimed.Add($"{mmdsToGive:N0} MMD");
+                        var mmdsGiven = GiveMmds(player, mmdsToGive);
+                        if (mmdsGiven > 0)
+                            claimed.Add($"{mmdsGiven:N0} MMD");
+                        msg.Pyreals -= (long)mmdsGiven * MmdValue;
                     }
+
+                    if (useBank)
+                        msg.Pyreals = 0;
                 }
             }
 
             // Deliver items - bankable attachments deposit directly when direct deposit is on
+            var remainingAttachments = new List<MailAttachment>();
             foreach (var att in msg.Attachments)
             {
                 var bankSlot = BankConfig.EnableBank
@@ -379,22 +389,40 @@ namespace ACE.Server.Command.Handlers
                     continue;
                 }
 
+                WorldObject wo = null;
                 try
                 {
-                    var wo = CreateAttachmentItem(att);
-                    if (wo == null) continue;
+                    wo = CreateAttachmentItem(att);
+                    if (wo == null)
+                    {
+                        remainingAttachments.Add(att);
+                        continue;
+                    }
 
                     if (player.TryCreateInInventoryWithNetworking(wo))
                         claimed.Add($"{att.Name} x{att.StackSize}");
+                    else
+                    {
+                        wo.Destroy();
+                        remainingAttachments.Add(att);
+                    }
                 }
-                catch { /* item WCID no longer valid */ }
+                catch
+                {
+                    wo?.Destroy();
+                    remainingAttachments.Add(att);
+                }
             }
 
-            msg.Claimed = true;
+            msg.Attachments = remainingAttachments;
+            msg.Claimed = !msg.HasUnclaimed;
             msg.Read    = true;
             MailboxManager.SaveMailbox(player, box);
 
-            player.SendMessage($"[MAIL] Claimed: {string.Join(", ", claimed)}");
+            if (claimed.Count > 0)
+                player.SendMessage($"[MAIL] Claimed: {string.Join(", ", claimed)}");
+            if (msg.HasUnclaimed)
+                player.SendMessage("[MAIL] Some attachments could not be delivered and remain in your inbox.");
         }
 
         // -- decline (return COD package to sender) ----------------------------
@@ -410,7 +438,11 @@ namespace ACE.Server.Command.Handlers
             if (msg.Claimed)     { player.SendMessage("[MAIL] Message already claimed."); return; }
             if (msg.CodMmd <= 0) { player.SendMessage("[MAIL] Only COD messages can be declined. Use /mail delete instead."); return; }
 
-            ReturnCodToSender(player, msg, "declined");
+            if (!ReturnCodToSender(player, msg, "declined"))
+            {
+                player.SendMessage("[MAIL] Could not return the COD package. It remains in your inbox.");
+                return;
+            }
 
             box.Remove(msg);
             MailboxManager.SaveMailbox(player, box);
@@ -431,7 +463,11 @@ namespace ACE.Server.Command.Handlers
             // Auto-decline unclaimed COD so the sender doesn't lose the item.
             if (msg.CodMmd > 0 && !msg.Claimed)
             {
-                ReturnCodToSender(player, msg, "deleted by recipient");
+                if (!ReturnCodToSender(player, msg, "deleted by recipient"))
+                {
+                    player.SendMessage("[MAIL] Could not return the COD package. It remains in your inbox.");
+                    return;
+                }
                 box.Remove(msg);
                 MailboxManager.SaveMailbox(player, box);
                 player.SendMessage($"[MAIL] Deleted; COD package returned to {msg.CodSenderName ?? msg.SenderName}.");
@@ -468,16 +504,17 @@ namespace ACE.Server.Command.Handlers
 
         // -- Shared helpers ----------------------------------------------------
 
-        private static void DeliverMessage(Player sender, string recipientName, string subject, string body,
-            long pyreals, List<MailAttachment> attachments, long codMmd = 0)
+        private static bool DeliverMessage(Player sender, string recipientName, string subject, string body,
+            long pyreals, List<MailAttachment> attachments, long codMmd = 0, bool refundOnFailure = true)
         {
             var target = PlayerManager.FindByName(recipientName, out var isOnline);
 
             if (target == null)
             {
                 sender.SendMessage($"[MAIL] Player '{recipientName}' not found.");
-                RefundAttachments(sender, pyreals, attachments);
-                return;
+                if (refundOnFailure)
+                    RefundAttachments(sender, pyreals, attachments);
+                return false;
             }
 
             var msg = new MailMessage
@@ -526,8 +563,9 @@ namespace ACE.Server.Command.Handlers
             if (!delivered)
             {
                 sender.SendMessage($"[MAIL] Could not deliver message to {recipientName} (mailbox full or unavailable).");
-                RefundAttachments(sender, pyreals, attachments);
-                return;
+                if (refundOnFailure)
+                    RefundAttachments(sender, pyreals, attachments);
+                return false;
             }
 
             var attachNote = pyreals > 0 ? $" with {pyreals / MmdValue:N0} MMD" : "";
@@ -536,6 +574,7 @@ namespace ACE.Server.Command.Handlers
             if (codMmd > 0)
                 attachNote += $" (COD {codMmd:N0} MMD)";
             sender.SendMessage($"[MAIL] Message sent to {target.Name}{attachNote}.");
+            return true;
         }
 
         // -- item-shipping helpers --------------------------------------------
@@ -750,16 +789,17 @@ namespace ACE.Server.Command.Handlers
         /// <summary>
         /// Mails the attachments of a COD message back to the original sender as a no-cost shipment.
         /// </summary>
-        private static void ReturnCodToSender(Player recipient, MailMessage msg, string reasonLabel)
+        private static bool ReturnCodToSender(Player recipient, MailMessage msg, string reasonLabel)
         {
             var fromName = msg.CodSenderName ?? msg.SenderName;
-            if (string.IsNullOrEmpty(fromName)) return;
+            if (string.IsNullOrEmpty(fromName)) return false;
 
-            DeliverMessage(recipient, fromName,
+            return DeliverMessage(recipient, fromName,
                 $"Returned: {msg.Subject}",
                 $"{recipient.Name} {reasonLabel} the COD package.",
                 0,
-                msg.Attachments != null ? new List<MailAttachment>(msg.Attachments) : null);
+                msg.Attachments != null ? new List<MailAttachment>(msg.Attachments) : null,
+                refundOnFailure: false);
         }
 
         private static void RefundAttachments(Player sender, long pyreals, List<MailAttachment> attachments)
@@ -792,7 +832,8 @@ namespace ACE.Server.Command.Handlers
 
                     var wo = CreateAttachmentItem(att);
                     if (wo == null) continue;
-                    sender.TryCreateInInventoryWithNetworking(wo);
+                    if (!sender.TryCreateInInventoryWithNetworking(wo))
+                        wo.Destroy();
                 }
             }
         }
@@ -800,8 +841,9 @@ namespace ACE.Server.Command.Handlers
         /// <summary>
         /// Creates MMD stacks (up to MmdMaxStack each) and gives them to the player.
         /// </summary>
-        private static void GiveMmds(Player player, int count)
+        private static int GiveMmds(Player player, int count)
         {
+            var given = 0;
             while (count > 0)
             {
                 var stackSize = Math.Min(count, MmdMaxStack);
@@ -811,11 +853,15 @@ namespace ACE.Server.Command.Handlers
                     stack.SetStackSize(Math.Min(stackSize, stack.MaxStackSize ?? stackSize));
                 if (!player.TryCreateInInventoryWithNetworking(stack))
                 {
+                    stack.Destroy();
                     player.SendMessage("[MAIL] Inventory full - remaining MMDs could not be delivered.");
                     break;
                 }
                 count -= stackSize;
+                given += stackSize;
             }
+
+            return given;
         }
 
         private static string Truncate(string s, int max) =>

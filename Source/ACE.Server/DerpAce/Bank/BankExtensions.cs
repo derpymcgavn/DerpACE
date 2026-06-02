@@ -51,20 +51,39 @@ namespace ACE.Server.DerpAce.Bank
             return !(player.GetProperty(DirectDepositDisabled) ?? false);
         }
 
-        public static void SpendWithBank(this Player player, long cost)
+        public static bool SpendWithBank(this Player player, long cost)
         {
-            if (cost <= 0) return;
+            if (cost <= 0) return true;
+
             var banked = player.GetCash();
-            if (banked >= cost) { player.IncCash(-cost); return; }
-            if (banked > 0)    { player.IncCash(-banked); cost -= banked; }
+            var physical = player.GetInventoryItemsOfWCID(273).Sum(c => (long)(c.StackSize ?? 1));
+            if (banked + physical < cost)
+                return false;
+
+            var bankedSpent = Math.Min(banked, cost);
+            if (bankedSpent > 0)
+            {
+                player.IncCash(-bankedSpent);
+                cost -= bankedSpent;
+            }
+
             var stacks = player.GetInventoryItemsOfWCID(273).OrderBy(c => c.StackSize ?? 0).ToList();
             foreach (var stack in stacks)
             {
                 if (cost <= 0) break;
+
                 var qty = stack.StackSize ?? 1;
-                if (qty <= cost) { cost -= qty; player.TryConsumeFromInventoryWithNetworking(stack); }
-                else             { stack.SetStackSize((int)(qty - cost)); cost = 0; }
+                var spend = (int)Math.Min(qty, cost);
+                if (!player.TryConsumeFromInventoryWithNetworking(stack, spend))
+                {
+                    player.IncCash(bankedSpent);
+                    return false;
+                }
+
+                cost -= spend;
             }
+
+            return cost == 0;
         }
 
         public static void ToggleDirectDeposit(this Player player)

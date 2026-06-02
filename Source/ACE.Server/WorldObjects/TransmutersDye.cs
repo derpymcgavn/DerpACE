@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using ACE.Common;
 using ACE.DatLoader;
 using ACE.DatLoader.FileTypes;
 using ACE.Entity;
@@ -25,7 +26,6 @@ namespace ACE.Server.WorldObjects
     /// </summary>
     public class TransmutersDye : CraftTool
     {
-        private static readonly Random _random = new Random();
         private const uint TRANSMUTERS_DYE_WCID = 420420423;
 
         // Curated pool of materials that read as a sensible "what is this made of?" answer
@@ -125,6 +125,14 @@ namespace ACE.Server.WorldObjects
             {
                 try
                 {
+                    if (player.FindObject(Guid.Full, Player.SearchLocations.MyInventory) == null ||
+                        player.FindObject(target.Guid.Full, Player.SearchLocations.MyInventory | Player.SearchLocations.MyEquippedItems) == null)
+                    {
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat("The dye and target item must remain in your possession.", ChatMessageType.Tell));
+                        player.SendUseDoneEvent();
+                        return;
+                    }
+
                     var clothingTable = DatManager.PortalDat.ReadFromDat<ClothingTable>(clothingBaseId.Value);
                     if (clothingTable?.ClothingSubPalEffects == null || clothingTable.ClothingSubPalEffects.Count == 0)
                     {
@@ -135,11 +143,18 @@ namespace ACE.Server.WorldObjects
 
                     // Random palette + shade (so the visual changes, same as RandomDye).
                     var validPalettes = clothingTable.ClothingSubPalEffects.Keys.ToList();
-                    var randomPalette = (int)validPalettes[_random.Next(validPalettes.Count)];
-                    var randomShade = _random.NextDouble();
+                    var randomPalette = (int)validPalettes[ThreadSafeRandom.Next(0, validPalettes.Count - 1)];
+                    var randomShade = ThreadSafeRandom.Next(0.0f, 1.0f);
 
                     // Random material — the headline feature of this dye.
-                    var newMaterial = TransmutableMaterials[_random.Next(TransmutableMaterials.Length)];
+                    var newMaterial = TransmutableMaterials[ThreadSafeRandom.Next(0, TransmutableMaterials.Length - 1)];
+
+                    if (!player.TryConsumeFromInventoryWithNetworking(this, 1))
+                    {
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat("The dye could not be consumed.", ChatMessageType.Tell));
+                        player.SendUseDoneEvent();
+                        return;
+                    }
 
                     var icon = clothingTable.GetIcon((uint)randomPalette);
                     target.SetProperty(PropertyDataId.Icon, icon);
@@ -156,7 +171,6 @@ namespace ACE.Server.WorldObjects
                         $"The Transmuter's Dye seethes and reshapes the {target.Name} — it now appears wrought from {GetMaterialDisplayName(newMaterial)}.",
                         ChatMessageType.Tell));
 
-                    player.TryConsumeFromInventoryWithNetworking(this, 1);
                 }
                 catch (Exception ex)
                 {

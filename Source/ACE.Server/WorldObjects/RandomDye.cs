@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 
+using ACE.Common;
 using ACE.DatLoader;
 using ACE.DatLoader.FileTypes;
 using ACE.Entity;
@@ -14,7 +15,6 @@ namespace ACE.Server.WorldObjects
 {
     public class RandomDye : CraftTool
     {
-        private static readonly Random _random = new Random();
         private const uint RANDOM_DYE_WCID = 420420420;
 
         public RandomDye(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
@@ -65,6 +65,14 @@ namespace ACE.Server.WorldObjects
             {
                 try
                 {
+                    if (player.FindObject(Guid.Full, Player.SearchLocations.MyInventory) == null ||
+                        player.FindObject(target.Guid.Full, Player.SearchLocations.MyInventory | Player.SearchLocations.MyEquippedItems) == null)
+                    {
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat("The dye and target item must remain in your possession.", ChatMessageType.Tell));
+                        player.SendUseDoneEvent();
+                        return;
+                    }
+
                     var clothingTable = DatManager.PortalDat.ReadFromDat<ClothingTable>(clothingBaseId.Value);
                     if (clothingTable?.ClothingSubPalEffects == null || clothingTable.ClothingSubPalEffects.Count == 0)
                     {
@@ -74,8 +82,15 @@ namespace ACE.Server.WorldObjects
                     }
 
                     var validPalettes = clothingTable.ClothingSubPalEffects.Keys.ToList();
-                    var randomPalette = (int)validPalettes[_random.Next(validPalettes.Count)];
-                    var randomShade = _random.NextDouble();
+                    var randomPalette = (int)validPalettes[ThreadSafeRandom.Next(0, validPalettes.Count - 1)];
+                    var randomShade = ThreadSafeRandom.Next(0.0f, 1.0f);
+
+                    if (!player.TryConsumeFromInventoryWithNetworking(this, 1))
+                    {
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat("The dye could not be consumed.", ChatMessageType.Tell));
+                        player.SendUseDoneEvent();
+                        return;
+                    }
 
                     var icon = clothingTable.GetIcon((uint)randomPalette);
                     target.SetProperty(PropertyDataId.Icon, icon);
@@ -88,7 +103,6 @@ namespace ACE.Server.WorldObjects
                         player.EnqueueBroadcast(new GameMessageObjDescEvent(player));
 
                     player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You apply the dye to the {target.Name}.", ChatMessageType.Tell));
-                    player.TryConsumeFromInventoryWithNetworking(this, 1);
                 }
                 catch (Exception ex)
                 {

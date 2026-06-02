@@ -67,7 +67,13 @@ namespace ACE.Server.WorldObjects
             if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank
                 && vendor.AlternateCurrency == null)
             {
-                this.SpendWithBank(cost);
+                if (!this.SpendWithBank(cost))
+                {
+                    log.Error($"[VENDOR] {Name}.FinalizeBuyTransaction({vendor.Name}) - couldn't spend {cost:N0} pyreals after validation.");
+                    foreach (var item in genericItems)
+                        item.Destroy();
+                    return;
+                }
             }
             else if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank
                 && vendor.AlternateCurrency != null)
@@ -213,23 +219,23 @@ namespace ACE.Server.WorldObjects
             }
 
             // verify player has enough pack slots / burden to receive these pyreals
-            var itemsToReceive = new ItemsToReceive(this);
-
-            itemsToReceive.Add((uint)ACE.Entity.Enum.WeenieClassName.W_COINSTACK_CLASS, payoutCoinAmount);
-
-            if (itemsToReceive.PlayerExceedsLimits)
+            if (!this.UseDirectDeposit())
             {
-                if (itemsToReceive.PlayerExceedsAvailableBurden)
-                    Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You are too encumbered to sell that!"));
-                else if (itemsToReceive.PlayerOutOfInventorySlots)
-                    Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You do not have enough free pack space to sell that!"));
+                var itemsToReceive = new ItemsToReceive(this);
+                itemsToReceive.Add((uint)ACE.Entity.Enum.WeenieClassName.W_COINSTACK_CLASS, payoutCoinAmount);
 
-                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, Guid.Full));
-                SendUseDoneEvent();     // WeenieError.FullInventoryLocation?
-                return;
+                if (itemsToReceive.PlayerExceedsLimits)
+                {
+                    if (itemsToReceive.PlayerExceedsAvailableBurden)
+                        Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You are too encumbered to sell that!"));
+                    else if (itemsToReceive.PlayerOutOfInventorySlots)
+                        Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You do not have enough free pack space to sell that!"));
+
+                    Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, Guid.Full));
+                    SendUseDoneEvent();     // WeenieError.FullInventoryLocation?
+                    return;
+                }
             }
-
-            var payoutCoinStacks = CreatePayoutCoinStacks(payoutCoinAmount);
 
             vendor.MoneyOutflow += payoutCoinAmount;
 
@@ -255,6 +261,7 @@ namespace ACE.Server.WorldObjects
             else
             {
                 // add coins to player inventory (vanilla path)
+                var payoutCoinStacks = CreatePayoutCoinStacks(payoutCoinAmount);
                 foreach (var item in payoutCoinStacks)
                 {
                     if (!TryCreateInInventoryWithNetworking(item))  // this shouldn't happen because of pre-validations in itemsToReceive
