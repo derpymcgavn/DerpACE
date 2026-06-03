@@ -20,9 +20,8 @@ namespace ACE.Server.WorldObjects
     /// Variance matches Deadly Prismatic (0.20). DamageType is Base, so it inherits
     /// the launcher's damage type (same trick the real prismatic arrows use).
     ///
-    /// AmmoType is left unset while the item sits in inventory so it does not appraise as
-    /// "for use with bows". SyncToLauncher() stamps the matching AmmoType only once the ammo
-    /// is equipped to a launcher, so the AC client accepts it with any launcher family.
+    /// AmmoType advertises every launcher family while the item sits in inventory, then
+    /// SyncToLauncher() stamps the matching AmmoType once the ammo is equipped to a launcher.
     /// UnlimitedUse is forced true so the stack never depletes.
     /// </summary>
     public class UniversalAmmunition : Ammunition
@@ -37,6 +36,10 @@ namespace ACE.Server.WorldObjects
 
         // Fallback when GetBaseDamage is called on the item itself (no launcher context).
         private const int FallbackMaxDamage = 13;
+        private const ACE.Entity.Enum.AmmoType UniversalAmmoType =
+            ACE.Entity.Enum.AmmoType.Arrow | ACE.Entity.Enum.AmmoType.Bolt | ACE.Entity.Enum.AmmoType.Atlatl |
+            ACE.Entity.Enum.AmmoType.ArrowCrystal | ACE.Entity.Enum.AmmoType.BoltCrystal | ACE.Entity.Enum.AmmoType.AtlatlCrystal |
+            ACE.Entity.Enum.AmmoType.ArrowChorizite | ACE.Entity.Enum.AmmoType.BoltChorizite | ACE.Entity.Enum.AmmoType.AtlatlChorizite;
 
         public UniversalAmmunition(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
         {
@@ -50,13 +53,9 @@ namespace ACE.Server.WorldObjects
 
         private void ApplyUniversalDefaults()
         {
-            // Leave AmmoType unset while the item is in inventory. A concrete value here
-            // (e.g. Arrow) makes the AC client appraise the item as "for use with bows",
-            // which is wrong — this ammo works with every launcher. The REAL compatibility
-            // trick happens in SyncToLauncher(), which stamps the matching AmmoType only
-            // once the ammo is actually equipped to a launcher (the client auto-unequips
-            // ammo whose AmmoType != launcher.AmmoType, so the value must match at equip time).
-            RemoveProperty(PropertyInt.AmmoType);
+            // Keep AmmoType in the object header so the client recognizes this as ammo
+            // before it is wielded. SyncToLauncher narrows it to the exact launcher family.
+            SetProperty(PropertyInt.AmmoType, (int)UniversalAmmoType);
 
             // Never consumed.
             SetProperty(PropertyBool.UnlimitedUse, true);
@@ -80,10 +79,11 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public void SyncToLauncher(WorldObject launcher)
         {
-            if (launcher?.AmmoType == null)
+            var ammoType = GetAmmoTypeForLauncher(launcher);
+            if (ammoType == null)
                 return;
 
-            var launcherAmmoType = (int)launcher.AmmoType.Value;
+            var launcherAmmoType = (int)ammoType.Value;
 
             if ((GetProperty(PropertyInt.AmmoType) ?? 0) == launcherAmmoType)
                 return;
@@ -126,7 +126,7 @@ namespace ACE.Server.WorldObjects
 
         private static int GetMaxDamageForLauncher(WorldObject launcher)
         {
-            var ammoType = launcher.AmmoType ?? global::ACE.Entity.Enum.AmmoType.None;
+            var ammoType = GetAmmoTypeForLauncher(launcher) ?? global::ACE.Entity.Enum.AmmoType.None;
 
             // Crossbow family (Bolts)
             if ((ammoType & (global::ACE.Entity.Enum.AmmoType.Bolt | global::ACE.Entity.Enum.AmmoType.BoltCrystal | global::ACE.Entity.Enum.AmmoType.BoltChorizite)) != 0)
@@ -138,6 +138,27 @@ namespace ACE.Server.WorldObjects
 
             // Bow family (Arrows) — default
             return BowMaxDamage;
+        }
+
+        private static ACE.Entity.Enum.AmmoType? GetAmmoTypeForLauncher(WorldObject launcher)
+        {
+            if (launcher == null)
+                return null;
+
+            if (launcher.AmmoType != null)
+                return launcher.AmmoType.Value;
+
+            switch (launcher.DefaultCombatStyle)
+            {
+                case CombatStyle.Crossbow:
+                    return ACE.Entity.Enum.AmmoType.Bolt;
+                case CombatStyle.Atlatl:
+                    return ACE.Entity.Enum.AmmoType.Atlatl;
+                case CombatStyle.Bow:
+                    return ACE.Entity.Enum.AmmoType.Arrow;
+                default:
+                    return null;
+            }
         }
     }
 }

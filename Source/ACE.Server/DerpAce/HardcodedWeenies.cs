@@ -70,9 +70,9 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.Value]               = 100;
             w.PropertiesInt[PropertyInt.Damage]              = 40;
             w.PropertiesInt[PropertyInt.DamageType]          = (int)DamageType.Base;
-            // No AmmoType here on purpose: a concrete value makes the client appraise this as
-            // "for use with bows" only. UniversalAmmunition stamps the matching AmmoType at
-            // equip time (SyncToLauncher) so it works with every launcher family.
+            // Advertise all launcher families so the client treats this as ammo before
+            // UniversalAmmunition stamps the exact launcher AmmoType at equip time.
+            w.PropertiesInt[PropertyInt.AmmoType]            = (int)(AmmoType.Arrow | AmmoType.Bolt | AmmoType.Atlatl | AmmoType.ArrowCrystal | AmmoType.BoltCrystal | AmmoType.AtlatlCrystal | AmmoType.ArrowChorizite | AmmoType.BoltChorizite | AmmoType.AtlatlChorizite);
             w.PropertiesInt[PropertyInt.CombatUse]           = (int)CombatUse.Ammo;
             w.PropertiesInt[PropertyInt.PhysicsState]        = 132116;
             w.PropertiesInt[PropertyInt.HookPlacement]       = (int)Placement.Hook;
