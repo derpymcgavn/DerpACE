@@ -1452,19 +1452,7 @@ namespace ACE.Server.WorldObjects
                             $"{attacker.Name} reaches for your tradenotes! [Thief]",
                             ChatMessageType.CombatEnemy));
 
-                    bool stealSuccess;
-                    if (stackAmount <= amount)
-                    {
-                        stealSuccess = TryRemoveFromInventoryWithNetworking(tradenote.Guid, out var removed, RemoveFromInventoryAction.SpendItem);
-                        if (stealSuccess)
-                            removed.Destroy();
-                    }
-                    else
-                    {
-                        tradenote.SetStackSize(stackAmount - amount);
-                        Session.Network.EnqueueSend(new GameMessageSetStackSize(tradenote));
-                        stealSuccess = true;
-                    }
+                    var stealSuccess = TryConsumeFromInventoryWithNetworking(tradenote, amount);
 
                     if (stealSuccess)
                     {
@@ -1491,12 +1479,13 @@ namespace ACE.Server.WorldObjects
             // Reaper: deal bonus damage and lifedrain a fraction of it back to the attacker
             if (attacker.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReaperMob) == true && damageDealt > 0)
             {
-                var bonusMult = (float)(ACE.Server.Managers.DerpACEConfig.ReaperDamageBonus - 1.0f);
-                var bonusDmg = (uint)System.Math.Max(1, System.Math.Round(damageDealt * bonusMult));
+                var bonusMult = System.Math.Max(0.0f, (float)(ACE.Server.Managers.DerpACEConfig.ReaperDamageBonus - 1.0f));
+                var bonusDmg = (uint)System.Math.Round(damageDealt * bonusMult);
 
                 // Apply the extra damage to the player
-                var bonusTaken = (uint)-UpdateVitalDelta(Health, -(int)bonusDmg);
-                DamageHistory.Add(attacker, ACE.Entity.Enum.DamageType.Slash, bonusTaken);
+                var bonusTaken = bonusDmg > 0 ? (uint)-UpdateVitalDelta(Health, -(int)bonusDmg) : 0;
+                if (bonusTaken > 0)
+                    DamageHistory.Add(attacker, ACE.Entity.Enum.DamageType.Slash, bonusTaken);
 
                 // Drain a fraction of total damage dealt (base + bonus) back to attacker
                 var drainPct = ACE.Server.Managers.DerpACEConfig.ReaperLifedrainPct;
@@ -1543,7 +1532,10 @@ namespace ACE.Server.WorldObjects
                                 $"The necrotic curse burns you for {taken} nether damage. [Necromancer]",
                                 ChatMessageType.CombatEnemy));
                         if (Health.Current == 0)
+                        {
                             OnDeath(new ACE.Server.Entity.DamageHistoryInfo(attacker), ACE.Entity.Enum.DamageType.Nether, false);
+                            Die();
+                        }
                     });
                 }
                 dotChain.EnqueueChain();

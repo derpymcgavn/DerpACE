@@ -499,7 +499,7 @@ namespace ACE.Server.Factories
             if (creature.Health != null && creature.Health.MaxValue > 0)
             {
                 var baseMax = creature.Health.MaxValue;
-                var newMax = (uint)(baseMax * size);
+                var newMax = (uint)Math.Min(uint.MaxValue, (ulong)baseMax * (uint)size);
                 creature.Health.StartingValue += (newMax - baseMax);
                 creature.Health.Current = creature.Health.MaxValue;
             }
@@ -507,7 +507,7 @@ namespace ACE.Server.Factories
             // XP bonus reflects the full pack; awarded on leader death only
             var xpOverride = creature.GetProperty(PropertyInt.XpOverride) ?? 0;
             if (xpOverride > 0)
-                creature.SetProperty(PropertyInt.XpOverride, xpOverride * size);
+                creature.SetProperty(PropertyInt.XpOverride, (int)Math.Min(int.MaxValue, (long)xpOverride * size));
 
             // Visual tell: orange tint and noticeably larger
             creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.5f;

@@ -147,7 +147,10 @@ namespace ACE.Server.WorldObjects
                             ChatMessageType.CombatEnemy));
 
                         if (playerTarget.Health.Current == 0)
+                        {
                             playerTarget.OnDeath(new ACE.Server.Entity.DamageHistoryInfo(this), element, false);
+                            playerTarget.Die();
+                        }
                     }
                 }
                 else
@@ -156,14 +159,10 @@ namespace ACE.Server.WorldObjects
                     var resistMod = target.GetResistanceMod(element, this, null);
                     dmg = (int)Math.Max(1, Math.Round(dmg * resistMod));
 
-                    var taken = (uint)Math.Max(0, -(target.UpdateVitalDelta(target.Health, -dmg)));
+                    var taken = target.TakeDamage(this, element, dmg);
                     if (taken > 0)
                     {
-                        target.DamageHistory.Add(this, element, taken);
                         target.EnqueueBroadcast(new GameMessageScript(target.Guid, ringEffect, 1.0f));
-
-                        if (target.Health.Current == 0)
-                            target.OnDeath(new ACE.Server.Entity.DamageHistoryInfo(this), element, false);
                     }
                 }
             }

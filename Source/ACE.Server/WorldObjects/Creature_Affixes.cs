@@ -153,7 +153,7 @@ namespace ACE.Server.WorldObjects
         /// Called from <see cref="Monster_Combat.TakeDamage(WorldObject, DamageType, float, bool)"/>.
         /// Returns true if this method consumed the damage (caller should not apply it again).
         /// </summary>
-        public bool TryHordeDamageTaken(WorldObject source, uint damageTaken)
+        public bool TryHordeDamageTaken(WorldObject source, DamageType damageType, uint damageTaken)
         {
             // --- Member: route damage to leader ---
             if (IsHordeMember)
@@ -164,7 +164,7 @@ namespace ACE.Server.WorldObjects
                     var leader = CurrentLandblock?.GetObject(new ObjectGuid(leaderIid.Value)) as Creature;
                     if (leader != null && !leader.IsDead)
                     {
-                        leader.TryHordeDamageTaken(source, damageTaken);
+                        leader.TryHordeDamageTaken(source, damageType, damageTaken);
                         // Give the attacker a visual splatter on this member body
                         EnqueueBroadcast(new GameMessageScript(Guid, PlayScript.SplatterMidLeftBack, 1.0f));
                         return true;
@@ -180,10 +180,11 @@ namespace ACE.Server.WorldObjects
             var currentSwarm = GetProperty(PropertyInt.HordeSwarmCount) ?? 1;
             var initialCount = GetProperty(PropertyInt.HordeSwarmInitialCount) ?? currentSwarm;
 
-            // Apply damage to our own health pool
-            var newHp = (int)Health.Current - (int)damageTaken;
-            if (newHp < 0) newHp = 0;
-            Health.Current = (uint)newHp;
+            // Apply damage once to our own health pool and keep normal vital notifications.
+            var safeDamage = (int)Math.Min(damageTaken, int.MaxValue);
+            var actualDamage = (uint)Math.Max(0, -UpdateVitalDelta(Health, -safeDamage));
+            if (source != null && actualDamage > 0)
+                DamageHistory.Add(source, damageType, actualDamage);
 
             var frac = Health.MaxValue > 0 ? (float)Health.Current / Health.MaxValue : 0f;
             var newMembers = Health.Current <= 0 ? 0 : Math.Max(0, (int)Math.Ceiling(initialCount * frac));
@@ -194,7 +195,7 @@ namespace ACE.Server.WorldObjects
                 SetProperty(PropertyInt.HordeSwarmCount, newMembers);
 
                 // Kill off the appropriate number of member bodies
-                KillHordeMembers(killed, source);
+                KillHordeMembers(killed, damageType);
 
                 // Splatter effect on the leader body
                 var blips = Math.Min(killed, 3);
@@ -273,8 +274,11 @@ namespace ACE.Server.WorldObjects
                     pos.Pos = new System.Numerics.Vector3(Location.Pos.X + ox, Location.Pos.Y + oy, Location.Pos.Z);
                     member.Location = pos;
 
-                    LandblockManager.AddObject(member);
-                    member.EnterWorld();
+                    if (!member.EnterWorld())
+                    {
+                        member.Destroy();
+                        continue;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -287,7 +291,7 @@ namespace ACE.Server.WorldObjects
         /// Kill exactly <paramref name="count"/> live member bodies for this pack.
         /// If the pool hits zero, kills all remaining members and then also kills the leader.
         /// </summary>
-        private void KillHordeMembers(int count, WorldObject killer)
+        private void KillHordeMembers(int count, DamageType damageType)
         {
             var remaining = GetProperty(PropertyInt.HordeSwarmCount) ?? 0;
             var killAll = remaining <= 0;
@@ -316,7 +320,11 @@ namespace ACE.Server.WorldObjects
                 // Pool exhausted — kill the leader body too via normal die
                 var chain = new ActionChain();
                 chain.AddDelaySeconds(0.25);
-                chain.AddAction(this, () => Die());
+                chain.AddAction(this, () =>
+                {
+                    OnDeath(DamageHistory.LastDamager, damageType, false);
+                    Die();
+                });
                 chain.EnqueueChain();
             }
         }

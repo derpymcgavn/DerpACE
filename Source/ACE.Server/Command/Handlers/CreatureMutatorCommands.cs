@@ -308,6 +308,7 @@ namespace ACE.Server.Command.Handlers
                     continue;
                 }
 
+                CreatureMutatorManager.ScheduleHordeMemberSpawn(creature);
                 successCount++;
             }
 

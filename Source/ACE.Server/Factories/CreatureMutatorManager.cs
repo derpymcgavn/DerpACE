@@ -145,12 +145,7 @@ namespace ACE.Server.Factories
 
                             // DerpACE: Horde — defer member spawning until the leader is in world
                             if (creature.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHordeMob) == true)
-                            {
-                                var chain = new ACE.Server.Entity.Actions.ActionChain();
-                                chain.AddDelaySeconds(0.5);
-                                chain.AddAction(creature, () => creature.SpawnHordeMembers());
-                                chain.EnqueueChain();
-                            }
+                                ScheduleHordeMemberSpawn(creature);
 
                             break;
                         }
@@ -161,6 +156,17 @@ namespace ACE.Server.Factories
                     }
                 }
             }
+        }
+
+        public static void ScheduleHordeMemberSpawn(Creature creature)
+        {
+            if (creature == null || !creature.IsHordeMob)
+                return;
+
+            var chain = new ACE.Server.Entity.Actions.ActionChain();
+            chain.AddDelaySeconds(0.5);
+            chain.AddAction(creature, () => creature.SpawnHordeMembers());
+            chain.EnqueueChain();
         }
 
         /// <summary>
