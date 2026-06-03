@@ -1384,9 +1384,11 @@ namespace ACE.Server.WorldObjects
                 containerRootOwner.Value += (item.Value ?? 0);
             }
 
-            // DerpACE Ironman: tag items moving into an Ironman player's inventory from an
-            // external container (chest, corpse, etc.) — same logic as TryCreateInInventoryWithNetworking.
-            if (containerRootOwner == this && GetProperty(PropertyBool.IsIronman) == true
+            // DerpACE Ironman: tag items moving into an Ironman player's inventory from
+            // real external containers (chest, corpse, etc.). Loose landscape pickups are
+            // not tagged so dropped player gear cannot be laundered into Ironman gear.
+            if (itemRootOwner != null
+                && containerRootOwner == this && GetProperty(PropertyBool.IsIronman) == true
                 && item.GetProperty(PropertyBool.IsIronmanItem) != true)
             {
                 item.SetProperty(PropertyBool.IsIronmanItem, true);
@@ -3351,6 +3353,14 @@ namespace ACE.Server.WorldObjects
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Olthoi cannot trade items with other players!")); // Custom error message
                 Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                return;
+            }
+
+            if ((GetProperty(PropertyBool.IsIronman) == true) ^ (target.GetProperty(PropertyBool.IsIronman) == true))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only give items to other Ironmen."));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                target.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(target.Session, "Ironmen can only receive items from other Ironmen."));
                 return;
             }
 

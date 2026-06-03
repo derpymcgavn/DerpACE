@@ -1,6 +1,7 @@
 using System.Linq;
 
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Managers;
 
 namespace ACE.Server.WorldObjects
@@ -77,6 +78,36 @@ namespace ACE.Server.WorldObjects
                     ? loc.Value.HasFlag(EquipMask.FootWear)
                     : loc.Value.HasFlag(EquipMask.HandWear);
             });
+        }
+
+        public bool IsUnarmedArmorPiece(WorldObject item)
+        {
+            return item != null
+                && item is Clothing
+                && item.CurrentWieldedLocation is EquipMask wieldLoc
+                && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0
+                && ((item.UnarmedBaseDamage ?? 0) > 0
+                    || item.GetProperty(PropertyInt.NomadProcType) > 0
+                    || item.HasProc);
+        }
+
+        public bool IsUnarmedFamilyAttack(WorldObject damageSource)
+        {
+            if (AttackType != AttackType.Punch && AttackType != AttackType.Kick)
+                return false;
+
+            if (!IsNomadUnarmed)
+                return false;
+
+            if (damageSource == this)
+                return true;
+
+            if (damageSource is Clothing
+                && damageSource.CurrentWieldedLocation is EquipMask wieldLoc
+                && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0)
+                return true;
+
+            return false;
         }
     }
 }

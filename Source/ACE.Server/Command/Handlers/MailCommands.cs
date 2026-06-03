@@ -305,6 +305,12 @@ namespace ACE.Server.Command.Handlers
             if (msg == null)    { player.SendMessage("[MAIL] Message not found."); return; }
             if (msg.Claimed)    { player.SendMessage("[MAIL] Attachments already claimed."); return; }
             if (!msg.HasUnclaimed) { player.SendMessage("[MAIL] No attachments to claim."); return; }
+            var sender = msg.SenderId != 0 ? PlayerManager.FindByGuid(msg.SenderId) : null;
+            if (IsMixedIronmanAssetTransfer(player, sender))
+            {
+                player.SendMessage("[MAIL] Ironmen can only exchange mailed currency or item attachments with other Ironmen.");
+                return;
+            }
 
             // COD: charge the recipient before delivering anything
             if (msg.CodMmd > 0)
@@ -517,6 +523,15 @@ namespace ACE.Server.Command.Handlers
                 return false;
             }
 
+            var containsAssets = pyreals > 0 || codMmd > 0 || (attachments != null && attachments.Count > 0);
+            if (containsAssets && IsMixedIronmanAssetTransfer(sender, target))
+            {
+                sender.SendMessage("[MAIL] Ironmen can only exchange mailed currency or item attachments with other Ironmen.");
+                if (refundOnFailure)
+                    RefundAttachments(sender, pyreals, attachments);
+                return false;
+            }
+
             var msg = new MailMessage
             {
                 SenderName  = sender.Name,
@@ -575,6 +590,19 @@ namespace ACE.Server.Command.Handlers
                 attachNote += $" (COD {codMmd:N0} MMD)";
             sender.SendMessage($"[MAIL] Message sent to {target.Name}{attachNote}.");
             return true;
+        }
+
+        private static bool IsMixedIronmanAssetTransfer(ACE.Server.Entity.IPlayer first, ACE.Server.Entity.IPlayer second)
+        {
+            if (first == null || second == null)
+                return IsIronmanPlayer(first) || IsIronmanPlayer(second);
+
+            return IsIronmanPlayer(first) ^ IsIronmanPlayer(second);
+        }
+
+        private static bool IsIronmanPlayer(ACE.Server.Entity.IPlayer player)
+        {
+            return player?.GetProperty(PropertyBool.IsIronman) == true;
         }
 
         // -- item-shipping helpers --------------------------------------------

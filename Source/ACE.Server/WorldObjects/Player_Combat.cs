@@ -180,15 +180,9 @@ namespace ACE.Server.WorldObjects
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
 
-            // DerpACE: an unarmed swing is either a bare-fisted hit (damageSource == this) OR a
-            // surrogate-weapon hit where Player_Melee promoted the equipped glove/boot into the
-            // weapon slot. Both must count as "unarmed" for combos, streaks, and nomad procs.
-            var isUnarmedAttack = (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
-                && IsNomadUnarmed
-                && (damageSource == this
-                    || (damageSource is Clothing
-                        && damageSource.CurrentWieldedLocation is EquipMask wieldLoc
-                        && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0));
+            // DerpACE: bare hands and gauntlet/shoe surrogates belong to the same
+            // weapon-free unarmed family for bonuses, combo tracking, and procs.
+            var isUnarmedAttack = IsUnarmedFamilyAttack(damageSource);
 
             // DerpACE: Unarmed Combo System - check for combos and apply bonuses.
             // Strict nomad-style gate: combos only track when the player has no weapon/missile/2h/wand equipped (shield is fine).
@@ -246,13 +240,19 @@ namespace ACE.Server.WorldObjects
                 && (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
                 && (damageSource == this || isUnarmedAttack))
             {
-                var procSource = AttackType == AttackType.Punch ? HandArmor : FootArmor;
-                var procType = procSource?.GetProperty(PropertyInt.NomadProcType) ?? 0;
-                var procChance = procSource?.GetProperty(PropertyFloat.NomadProcChance) ?? 0.0;
-                var procMagnitude = procSource?.GetProperty(PropertyFloat.NomadProcMagnitude) ?? 0.0;
+                var procSources = new[] { HandArmor, FootArmor }
+                    .Where(IsUnarmedArmorPiece)
+                    .Distinct();
 
-                if (procType > 0 && procChance > 0 && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                foreach (var procSource in procSources)
                 {
+                    var procType = procSource.GetProperty(PropertyInt.NomadProcType) ?? 0;
+                    var procChance = procSource.GetProperty(PropertyFloat.NomadProcChance) ?? 0.0;
+                    var procMagnitude = procSource.GetProperty(PropertyFloat.NomadProcMagnitude) ?? 0.0;
+
+                    if (procType <= 0 || procChance <= 0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                        continue;
+
                     if (procType == 1)
                     {
                         // Cleave Flurry: 2-4 extra fast strikes at procMagnitude * base damage each.

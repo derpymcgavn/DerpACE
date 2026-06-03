@@ -368,7 +368,7 @@ namespace ACE.Server.Command.Handlers
             var player = session?.Player;
             if (player == null) return;
 
-            // Already hardcore — show status regardless of sub-command.
+            // Already hardcore - show status regardless of sub-command.
             if (player.GetProperty(PropertyBool.IsHardcore) == true)
             {
                 // Only show the status message if triggered directly; Ironman already
@@ -383,7 +383,7 @@ namespace ACE.Server.Command.Handlers
                 }
                 else
                 {
-                    player.SendMessage("You are an Ironman — use /ironman for your status.", ChatMessageType.System);
+                    player.SendMessage("You are an Ironman - use /ironman for your status.", ChatMessageType.System);
                 }
                 return;
             }
@@ -408,7 +408,7 @@ namespace ACE.Server.Command.Handlers
                 case "on":
                     PendingHardcoreConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     player.SendMessage(
-                        $"WARNING: Hardcore mode is permanent. You will have 1 life — death deletes your character forever.\n" +
+                        $"WARNING: Hardcore mode is permanent. You will have 1 life - death deletes your character forever.\n" +
                         $"Type /hardcore confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
@@ -445,7 +445,7 @@ namespace ACE.Server.Command.Handlers
             player.SetProperty(PropertyInt.HardcoreLives, 1);
             player.SetModeTitle("HARDCORE");
 
-            // Pink radar blip — visible to all nearby players.
+            // Pink radar blip - visible to all nearby players.
             player.RadarColor = RadarColor.Pink;
             player.EnqueueBroadcast(true,
                 new GameMessagePublicUpdatePropertyInt(player, PropertyInt.RadarBlipColor, (int)RadarColor.Pink));

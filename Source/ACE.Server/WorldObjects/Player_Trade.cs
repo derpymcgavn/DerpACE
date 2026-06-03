@@ -6,6 +6,7 @@ using System.Threading;
 using ACE.Database;
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Managers;
 using ACE.Server.Entity.Actions;
@@ -37,6 +38,9 @@ namespace ACE.Server.WorldObjects
 
             var tradePartner = PlayerManager.GetOnlinePlayer(tradePartnerGuid);
             if (tradePartner == null) return;
+
+            if (IsIronmanTradeBlocked(tradePartner))
+                return;
 
             //Check to see if potential trading partner is an Olthoi player
             if (initiator && tradePartner.IsOlthoiPlayer)
@@ -124,6 +128,12 @@ namespace ACE.Server.WorldObjects
 
             if (target == null || itemGuid == 0)
                 return;
+
+            if (IsIronmanTradeBlocked(target))
+            {
+                Session.Network.EnqueueSend(new GameEventTradeFailure(Session, itemGuid, WeenieError.None));
+                return;
+            }
 
             target.TradeAccepted = false;
 
@@ -217,7 +227,7 @@ namespace ACE.Server.WorldObjects
 
         private void FinalizeTrade(Player target)
         {
-            if (!VerifyTrade_BusyState(target) || !VerifyTrade_Inventory(target))
+            if (!VerifyTrade_BusyState(target) || !VerifyTrade_Ironman(target) || !VerifyTrade_Inventory(target))
                 return;
 
             IsBusy = true;
@@ -357,6 +367,38 @@ namespace ACE.Server.WorldObjects
             partner.ClearTradeAcceptance();
 
             return false;
+        }
+
+        private bool VerifyTrade_Ironman(Player partner)
+        {
+            if (!IsMixedIronmanTrade(partner))
+                return true;
+
+            Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only trade with other Ironmen."));
+            if (partner.Session != null)
+                partner.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, "Ironmen can only trade with other Ironmen."));
+
+            ClearTradeAcceptance();
+            partner.ClearTradeAcceptance();
+
+            return false;
+        }
+
+        private bool IsIronmanTradeBlocked(Player partner)
+        {
+            if (!IsMixedIronmanTrade(partner))
+                return false;
+
+            Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only trade with other Ironmen."));
+            if (partner.Session != null)
+                partner.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, "Ironmen can only trade with other Ironmen."));
+            return true;
+        }
+
+        private bool IsMixedIronmanTrade(Player partner)
+        {
+            return (GetProperty(PropertyBool.IsIronman) == true)
+                ^ (partner.GetProperty(PropertyBool.IsIronman) == true);
         }
 
         private bool VerifyTrade_Inventory(Player partner)
