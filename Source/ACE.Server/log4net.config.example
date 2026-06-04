@@ -40,14 +40,10 @@
     <level value="INFO" />
   </logger> 
 
-  <appender name="asyncForwarder" type="Log4Net.Async.AsyncForwardingAppender,Log4Net.Async">
-    <appender-ref ref="Console" />
-    <appender-ref ref="RollingFileAppender" />
-  </appender>
-
   <root>
     <level value="ALL" />
-    <appender-ref ref="asyncForwarder" />
+    <appender-ref ref="Console" />
+    <appender-ref ref="RollingFileAppender" />
   </root>
 
 </log4net>

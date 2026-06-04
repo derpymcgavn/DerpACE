@@ -32,6 +32,10 @@ namespace ACE.Server.Managers
     {
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
+        private const string ContentDirectoryEnvVar = "DERPACE_CUSTOM_CLOTHING_DIR";
+        private const uint ClothingBaseMinId = 0x10000000;
+        private const uint ClothingBaseMaxId = 0x10FFFFFF;
+
         /// <summary>Path to the folder that holds JSON override files.</summary>
         public static string ContentDir { get; private set; }
 
@@ -45,8 +49,7 @@ namespace ACE.Server.Managers
 
         public static void Initialize(string contentDir = null)
         {
-            ContentDir = contentDir
-                ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "CustomClothingBase");
+            ContentDir = ResolveContentDir(contentDir);
 
             Directory.CreateDirectory(ContentDir);
 
@@ -72,6 +75,18 @@ namespace ACE.Server.Managers
             log.Info($"CustomClothingManager: Reloaded {_custom.Count} custom clothing table(s) (flushed {flushed} cached entries).");
         }
 
+        private static string ResolveContentDir(string contentDir)
+        {
+            if (!string.IsNullOrWhiteSpace(contentDir))
+                return Path.GetFullPath(contentDir);
+
+            var envDir = System.Environment.GetEnvironmentVariable(ContentDirectoryEnvVar);
+            if (!string.IsNullOrWhiteSpace(envDir))
+                return Path.GetFullPath(envDir);
+
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "CustomClothingBase");
+        }
+
         // ──────────────────────────────────────────────────────────────────────
         // Loading
         // ──────────────────────────────────────────────────────────────────────
@@ -84,7 +99,7 @@ namespace ACE.Server.Managers
                 return;
             }
 
-            var files = Directory.GetFiles(ContentDir, "*.json");
+            var files = Directory.GetFiles(ContentDir, "*.json", SearchOption.AllDirectories);
             if (files.Length == 0)
             {
                 log.Info($"CustomClothingManager: No *.json overrides found in {ContentDir}");
@@ -130,7 +145,7 @@ namespace ACE.Server.Managers
                         continue;
                     }
 
-                    if (table.Id < 0x10000000 || table.Id > 0x10FFFFFF)
+                    if (!IsClothingBaseId(table.Id))
                         log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' Id 0x{table.Id:X8} ({table.Id}) is outside the ClothingBase range [0x10000000, 0x10FFFFFF]; loading anyway.");
 
                     _custom[table.Id] = table;
@@ -162,53 +177,11 @@ namespace ACE.Server.Managers
             if (string.IsNullOrEmpty(idToken))
                 return 0;
 
-            // Explicit hex prefix wins.
-            if (idToken.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-            {
-                return uint.TryParse(idToken.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
-                    ? hexId : 0u;
-            }
-
-            // Heuristic: 8 hex digits with at least one non-decimal digit → hex.
-            // Otherwise try decimal first, then 8-char hex as a fallback so plain "10004611"
-            // (which is also a valid decimal) resolves to the hex value 0x10004611 — the form
-            // weenies usually store the reference as a uint.
-            bool hasNonDecimal = false;
-            foreach (var c in idToken)
-            {
-                if (!char.IsDigit(c))
-                {
-                    hasNonDecimal = true;
-                    break;
-                }
-            }
-
-            if (hasNonDecimal)
-            {
-                return uint.TryParse(idToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
-                    ? hexId : 0u;
-            }
-
-            if (uint.TryParse(idToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decId))
-            {
-                // If decimal parse lands in the ClothingBase range, take it as-is.
-                if (decId >= 0x10000000 && decId <= 0x10FFFFFF)
-                    return decId;
-
-                // Otherwise, if the token is exactly 8 digits, prefer the hex interpretation
-                // since that's the canonical 0x1________ ClothingBase form.
-                if (idToken.Length == 8 &&
-                    uint.TryParse(idToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId8) &&
-                    hexId8 >= 0x10000000 && hexId8 <= 0x10FFFFFF)
-                {
-                    return hexId8;
-                }
-
-                return decId;
-            }
-
-            return 0;
+            return ParseClothingBaseIdToken(idToken);
         }
+
+        private static bool IsClothingBaseId(uint id)
+            => id >= ClothingBaseMinId && id <= ClothingBaseMaxId;
 
         // ──────────────────────────────────────────────────────────────────────
         // Hook implementation
@@ -307,10 +280,10 @@ namespace ACE.Server.Managers
 
             var table = new ClothingTable();
 
-            if (root.TryGetProperty("Id", out var idEl))
-                table.Id = ParseUint(idEl);
+            if (TryGetProperty(root, "Id", out var idEl))
+                table.Id = ParseClothingBaseId(idEl);
 
-            if (root.TryGetProperty("ClothingBaseEffects", out var cbeEl))
+            if (TryGetProperty(root, "ClothingBaseEffects", out var cbeEl))
             {
                 foreach (var prop in cbeEl.EnumerateObject())
                 {
@@ -320,7 +293,7 @@ namespace ACE.Server.Managers
                 }
             }
 
-            if (root.TryGetProperty("ClothingSubPalEffects", out var cspeEl))
+            if (TryGetProperty(root, "ClothingSubPalEffects", out var cspeEl))
             {
                 foreach (var prop in cspeEl.EnumerateObject())
                 {
@@ -337,24 +310,24 @@ namespace ACE.Server.Managers
         {
             var effect = new ClothingBaseEffect();
 
-            if (el.TryGetProperty("CloObjectEffects", out var arr))
+            if (TryGetProperty(el, "CloObjectEffects", out var arr))
             {
                 foreach (var item in arr.EnumerateArray())
                 {
                     var coe = new CloObjectEffect
                     {
-                        Index   = item.TryGetProperty("Index",   out var idx)  ? ParseUint(idx)  : 0,
-                        ModelId = item.TryGetProperty("ModelId", out var mid)  ? ParseUint(mid)  : 0,
+                        Index   = TryGetProperty(item, "Index",   out var idx)  ? ParseUint(idx)  : 0,
+                        ModelId = TryGetProperty(item, "ModelId", out var mid)  ? ParseUint(mid)  : 0,
                     };
 
-                    if (item.TryGetProperty("CloTextureEffects", out var texArr))
+                    if (TryGetProperty(item, "CloTextureEffects", out var texArr))
                     {
                         foreach (var tex in texArr.EnumerateArray())
                         {
                             coe.CloTextureEffects.Add(new CloTextureEffect
                             {
-                                OldTexture = tex.TryGetProperty("OldTexture", out var ot) ? ParseUint(ot) : 0,
-                                NewTexture = tex.TryGetProperty("NewTexture", out var nt) ? ParseUint(nt) : 0,
+                                OldTexture = TryGetProperty(tex, "OldTexture", out var ot) ? ParseUint(ot) : 0,
+                                NewTexture = TryGetProperty(tex, "NewTexture", out var nt) ? ParseUint(nt) : 0,
                             });
                         }
                     }
@@ -370,26 +343,26 @@ namespace ACE.Server.Managers
         {
             var effect = new CloSubPalEffect();
 
-            if (el.TryGetProperty("Icon", out var iconEl))
+            if (TryGetProperty(el, "Icon", out var iconEl))
                 effect.Icon = ParseUint(iconEl);
 
-            if (el.TryGetProperty("CloSubPalettes", out var palArr))
+            if (TryGetProperty(el, "CloSubPalettes", out var palArr))
             {
                 foreach (var item in palArr.EnumerateArray())
                 {
                     var pal = new CloSubPalette
                     {
-                        PaletteSet = item.TryGetProperty("PaletteSet", out var ps) ? ParseUint(ps) : 0,
+                        PaletteSet = TryGetProperty(item, "PaletteSet", out var ps) ? ParseUint(ps) : 0,
                     };
 
-                    if (item.TryGetProperty("Ranges", out var rangesEl))
+                    if (TryGetProperty(item, "Ranges", out var rangesEl))
                     {
                         foreach (var r in rangesEl.EnumerateArray())
                         {
                             pal.Ranges.Add(new CloSubPaletteRange
                             {
-                                Offset    = r.TryGetProperty("Offset",    out var off) ? ParseUint(off) : 0,
-                                NumColors = r.TryGetProperty("NumColors", out var nc)  ? ParseUint(nc)  : 0,
+                                Offset    = TryGetProperty(r, "Offset",    out var off) ? ParseUint(off) : 0,
+                                NumColors = TryGetProperty(r, "NumColors", out var nc)  ? ParseUint(nc)  : 0,
                             });
                         }
                     }
@@ -401,6 +374,24 @@ namespace ACE.Server.Managers
             return effect;
         }
 
+        private static bool TryGetProperty(JsonElement element, string name, out JsonElement value)
+        {
+            if (element.TryGetProperty(name, out value))
+                return true;
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+
+            value = default;
+            return false;
+        }
+
         // Parses a JsonElement that may be decimal or hex string, or a plain JSON number
         private static uint ParseUint(JsonElement el)
         {
@@ -410,11 +401,62 @@ namespace ACE.Server.Managers
             return ParseUintStr(el.GetString() ?? "0");
         }
 
+        private static uint ParseClothingBaseId(JsonElement el)
+        {
+            if (el.ValueKind == JsonValueKind.Number)
+                return el.GetUInt32();
+
+            return ParseClothingBaseIdToken(el.GetString() ?? "0");
+        }
+
+        private static uint ParseClothingBaseIdToken(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s))
+                return 0;
+
+            s = s.Trim();
+
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return uint.TryParse(s.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
+                    ? hexId : 0u;
+            }
+
+            foreach (var c in s)
+            {
+                if (!char.IsDigit(c))
+                {
+                    return uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
+                        ? hexId : 0u;
+                }
+            }
+
+            if (!uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decId))
+                return 0;
+
+            if (IsClothingBaseId(decId))
+                return decId;
+
+            if (s.Length == 8
+                && uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId8)
+                && IsClothingBaseId(hexId8))
+                return hexId8;
+
+            return decId;
+        }
+
         private static uint ParseUintStr(string s)
         {
             if (string.IsNullOrEmpty(s)) return 0;
             if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return uint.Parse(s[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+
+            foreach (var c in s)
+            {
+                if (!char.IsDigit(c))
+                    return uint.Parse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+            }
+
             return uint.Parse(s, CultureInfo.InvariantCulture);
         }
 

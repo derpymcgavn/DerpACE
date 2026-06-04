@@ -308,6 +308,12 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool TryEquipObjectWithNetworking(WorldObject item, EquipMask wieldedLocation)
         {
+            // DerpACE: if a missile launcher is being equipped while the universal
+            // ammo is already worn, conform the ammo before any wield/update packets
+            // are broadcast. The client rejects ammo by exact AmmoType, not flags.
+            if (item.IsAmmoLauncher && GetEquippedAmmo() is UniversalAmmunition equippedUniversalAmmo)
+                equippedUniversalAmmo.SyncToLauncher(item);
+
             if (!TryEquipObjectWithBroadcasting(item, wieldedLocation))
                 return false;
 
@@ -329,11 +335,6 @@ namespace ACE.Server.WorldObjects
             // handle equipment sets
             if (item.HasItemSet)
                 EquipItemFromSet(item);
-
-            // DerpACE: if a missile launcher was just equipped, conform any equipped
-            // UniversalAmmunition's AmmoType to it so the client doesn't auto-unequip it.
-            if (item.IsAmmoLauncher && GetEquippedAmmo() is UniversalAmmunition universalAmmo)
-                universalAmmo.SyncToLauncher(item);
 
             return true;
         }

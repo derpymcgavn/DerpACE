@@ -1,6 +1,7 @@
 using System;
 
 using ACE.Entity;
+using ACE.Entity.Enum;
 using ACE.Entity.Models;
 using ACE.Server.Entity;
 
@@ -8,6 +9,8 @@ namespace ACE.Server.WorldObjects
 {
     public class CraftTool : Stackable
     {
+        private const ItemType SalvageTargetTypeOverride = (ItemType)3303;
+
         /// <summary>
         /// A new biota be created taking all of its values from weenie.
         /// </summary>
@@ -26,6 +29,8 @@ namespace ACE.Server.WorldObjects
 
         private void SetEphemeralValues()
         {
+            if (ItemType == ItemType.TinkeringMaterial)
+                TargetType = (TargetType ?? ItemType.None) | SalvageTargetTypeOverride;
         }
 
         public override void HandleActionUseOnTarget(Player player, WorldObject target)

@@ -36,10 +36,7 @@ namespace ACE.Server.WorldObjects
 
         // Fallback when GetBaseDamage is called on the item itself (no launcher context).
         private const int FallbackMaxDamage = 13;
-        private const ACE.Entity.Enum.AmmoType UniversalAmmoType =
-            ACE.Entity.Enum.AmmoType.Arrow | ACE.Entity.Enum.AmmoType.Bolt | ACE.Entity.Enum.AmmoType.Atlatl |
-            ACE.Entity.Enum.AmmoType.ArrowCrystal | ACE.Entity.Enum.AmmoType.BoltCrystal | ACE.Entity.Enum.AmmoType.AtlatlCrystal |
-            ACE.Entity.Enum.AmmoType.ArrowChorizite | ACE.Entity.Enum.AmmoType.BoltChorizite | ACE.Entity.Enum.AmmoType.AtlatlChorizite;
+        private const ACE.Entity.Enum.AmmoType DefaultAmmoType = ACE.Entity.Enum.AmmoType.Arrow;
 
         public UniversalAmmunition(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
         {
@@ -53,9 +50,10 @@ namespace ACE.Server.WorldObjects
 
         private void ApplyUniversalDefaults()
         {
-            // Keep AmmoType in the object header so the client recognizes this as ammo
-            // before it is wielded. SyncToLauncher narrows it to the exact launcher family.
-            SetProperty(PropertyInt.AmmoType, (int)UniversalAmmoType);
+            // Keep AmmoType in the object header so the client recognizes this as ammo.
+            // The AC client expects one exact family value, not a bitmask, so unpaired
+            // universal ammo advertises Arrow and SyncToLauncher narrows it before use.
+            SetProperty(PropertyInt.AmmoType, (int)DefaultAmmoType);
 
             // Never consumed.
             SetProperty(PropertyBool.UnlimitedUse, true);

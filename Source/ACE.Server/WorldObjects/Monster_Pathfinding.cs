@@ -100,6 +100,7 @@ namespace ACE.Server.WorldObjects
         public bool PendingRetryRoute = false;
         public bool PendingContinueRoute = false;
         protected const double MaxRouteFrequency = 2.5;
+        protected virtual double GetMaxRouteFrequency() => MaxRouteFrequency;
 
         // ===== Route patrol burst =====
         // To make routed movement look like scouting (rather than restarting on each
@@ -109,6 +110,12 @@ namespace ACE.Server.WorldObjects
         protected const int RouteBurstMin = 3;
         protected const int RouteBurstMax = 5;
         protected int CurrentRouteBurstRemaining = 0;
+
+        protected virtual int GetRouteBurstMin() => RouteBurstMin;
+        protected virtual int GetRouteBurstMax() => RouteBurstMax;
+
+        protected virtual float GetPathRunRate() => RunRate;
+        protected virtual float GetPathWalkRunThreshold() => 1.0f;
 
         // ===== Passage granting =====
         protected double LastRequestPassageTime = 0;
@@ -176,7 +183,7 @@ namespace ACE.Server.WorldObjects
             {
                 _scoutPatrolCurrent = _scoutPatrolQueue.Dequeue();
                 NextScoutRoamTime = currentUnixTime + ThreadSafeRandom.Next((float)ScoutRoamIntervalMin, (float)ScoutRoamIntervalMax);
-                MoveTo(_scoutPatrolCurrent, RunRate, false, 1.0f);
+                MoveAlongPath(_scoutPatrolCurrent);
                 return;
             }
 
@@ -387,7 +394,7 @@ namespace ACE.Server.WorldObjects
 
             IsWandering = true;
             LastWanderTime = Time.GetUnixTime();
-            MoveTo(WanderTarget, RunRate, false, 1.0f);
+            MoveAlongPath(WanderTarget);
         }
 
         public void EndWandering(bool forced = true)
@@ -480,11 +487,12 @@ namespace ACE.Server.WorldObjects
         {
             if (!PathfindingEnabled) return;
             if (IsRouting || IsRouteStartPending) return;
-            if (Time.GetUnixTime() - LastRouteTime < MaxRouteFrequency) return;
+            if (Time.GetUnixTime() - LastRouteTime < GetMaxRouteFrequency()) return;
             if (Location == null) return;
 
             if (route != null)
             {
+                LastRouteStartAttemptWasNullRoute = false;
                 CurrentRoute = route;
                 CurrentRouteIndex = 0;
                 IsRouteStartPending = true;
@@ -515,6 +523,18 @@ namespace ACE.Server.WorldObjects
             IsRouteStartPending = true;
         }
 
+        protected bool CanAttemptRouteAfterNullRoute(double currentUnixTime)
+        {
+            if (!LastRouteStartAttemptWasNullRoute)
+                return true;
+
+            if (currentUnixTime - LastRouteTime < GetMaxRouteFrequency() * 2)
+                return false;
+
+            LastRouteStartAttemptWasNullRoute = false;
+            return true;
+        }
+
         public void StartRoute()
         {
             IsRouteStartPending = false;
@@ -523,7 +543,7 @@ namespace ACE.Server.WorldObjects
             IsRouting = true;
             LastRouteTime = Time.GetUnixTime();
             CurrentRouteIndex = 0;
-            CurrentRouteBurstRemaining = ThreadSafeRandom.Next(RouteBurstMin, RouteBurstMax);
+            CurrentRouteBurstRemaining = ThreadSafeRandom.Next(GetRouteBurstMin(), GetRouteBurstMax());
             ContinueRoute();
         }
 
@@ -543,7 +563,7 @@ namespace ACE.Server.WorldObjects
                 // Refill the scouting burst whenever it runs out so the creature
                 // re-commits to another 3-5 waypoint segment of the route.
                 if (CurrentRouteBurstRemaining <= 0)
-                    CurrentRouteBurstRemaining = ThreadSafeRandom.Next(RouteBurstMin, RouteBurstMax);
+                    CurrentRouteBurstRemaining = ThreadSafeRandom.Next(GetRouteBurstMin(), GetRouteBurstMax());
 
                 // Follow route entries in order and skip tiny/no-op hops.
                 var nextWaypoint = CurrentRoute[CurrentRouteIndex];
@@ -566,7 +586,7 @@ namespace ACE.Server.WorldObjects
             }
 
             LastPathMoveTarget = RoutePositionTarget;
-            MoveTo(RoutePositionTarget, RunRate, false, 1.0f);
+            MoveAlongPath(RoutePositionTarget);
         }
 
         public void RetryRoute()
@@ -597,7 +617,7 @@ namespace ACE.Server.WorldObjects
                         FailedSightCount = 0;
 
                         LastPathMoveTarget = wallAvoidingPos;
-                        MoveTo(wallAvoidingPos, RunRate, false, 1.0f);
+                        MoveAlongPath(wallAvoidingPos);
                         return;
                     }
                 }
@@ -661,7 +681,17 @@ namespace ACE.Server.WorldObjects
 
             IsGrantingPassage = true;
             LastGrantPassageTime = Time.GetUnixTime();
-            MoveTo(GrantPassageTarget, RunRate, false, 1.0f);
+            MoveAlongPath(GrantPassageTarget);
+        }
+
+        private void MoveAlongPath(Position target)
+        {
+            if (target == null)
+                return;
+
+            LastPathMoveTarget = target;
+            MoveTo(target, GetPathRunRate(), true, GetPathWalkRunThreshold());
+            StartMove();
         }
 
         public void EndGrantPassage(bool forced = true)
@@ -695,6 +725,9 @@ namespace ACE.Server.WorldObjects
             // If we regain sight/range of the target while emoting/wandering/routing, abort
             // the path action immediately so combat can resume this tick. Without this, mobs
             // appear "stuck" while finishing a wander/route the player is already standing in.
+            if (this is CombatPet combatPet && (IsRouting || IsRouteStartPending) && combatPet.TryAbortIndoorRouteForAttack())
+                return false;
+
             if (IsAwake && AttackTarget != null && (IsEmoting || IsEmotePending
                 || IsWandering || IsWanderingPending
                 || IsRouting || IsRouteStartPending))

@@ -242,7 +242,6 @@
     <PackageReference Include="DotRecast.Recast.Toolset" Version="2024.3.1" />
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />
     <PackageReference Include="log4net" Version="3.3.1" />
-    <PackageReference Include="Log4Net.Async.Standard" Version="3.1.0" />
     <PackageReference Include="McMaster.NETCore.Plugins" Version="2.0.0" />
     <PackageReference Include="MySqlConnector" Version="2.5.0" />
   </ItemGroup>
@@ -295,6 +294,10 @@
     <None Include="..\..\Database\Updates\**" CopyToOutputDirectory="PreserveNewest" LinkBase="DatabaseSetupScripts\Updates\" />
     <None Include="..\..\Database\Optional\**" CopyToOutputDirectory="PreserveNewest" LinkBase="DatabaseSetupScripts\Optional\" />
     <!-- DerpACE: CustomClothingBase JSON overrides — copied to bin/.../Data/CustomClothingBase/ so CustomClothingManager.Initialize() can find them. -->
+    <None Update="Data\CustomClothingBase\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>Data\CustomClothingBase\README.md</TargetPath>
+    </None>
     <None Include="Data\CustomClothingBase\**\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\CustomClothingBase\" />
   </ItemGroup>
 

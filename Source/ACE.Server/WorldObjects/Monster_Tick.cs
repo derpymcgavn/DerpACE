@@ -206,13 +206,13 @@ namespace ACE.Server.WorldObjects
                                     if (LastWanderTime + MaxWanderFrequency < currentUnixTime
                                         && WanderChance > ACE.Common.ThreadSafeRandom.Next(0.0f, 1.0f))
                                     {
-                                        if (PathfindingEnabled && Location != null && Location.Indoors && !LastRouteStartAttemptWasNullRoute)
+                                        if (PathfindingEnabled && Location != null && Location.Indoors && CanAttemptRouteAfterNullRoute(currentUnixTime))
                                             TryWandering(160, 200, 5);
                                         else
                                             TryWandering(100, 260, 7);
                                     }
 
-                                    if (PathfindingEnabled && Location != null && !LastRouteStartAttemptWasNullRoute)
+                                    if (PathfindingEnabled && Location != null && CanAttemptRouteAfterNullRoute(currentUnixTime))
                                         TryRoute();
                                 }
                             }

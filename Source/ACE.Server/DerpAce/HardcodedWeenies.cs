@@ -66,13 +66,13 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.StackUnitMass]       = 2;
             w.PropertiesInt[PropertyInt.StackUnitValue]      = 100;
             w.PropertiesInt[PropertyInt.ItemUseable]         = (int)Usable.No;
-            w.PropertiesInt[PropertyInt.UiEffects]           = (int)UiEffects.Magical;
+            w.PropertiesInt[PropertyInt.UiEffects]           = (int)UiEffects.BoostStamina;
             w.PropertiesInt[PropertyInt.Value]               = 100;
             w.PropertiesInt[PropertyInt.Damage]              = 40;
             w.PropertiesInt[PropertyInt.DamageType]          = (int)DamageType.Base;
-            // Advertise all launcher families so the client treats this as ammo before
+            // Advertise one exact launcher family so the client accepts the ammo header.
             // UniversalAmmunition stamps the exact launcher AmmoType at equip time.
-            w.PropertiesInt[PropertyInt.AmmoType]            = (int)(AmmoType.Arrow | AmmoType.Bolt | AmmoType.Atlatl | AmmoType.ArrowCrystal | AmmoType.BoltCrystal | AmmoType.AtlatlCrystal | AmmoType.ArrowChorizite | AmmoType.BoltChorizite | AmmoType.AtlatlChorizite);
+            w.PropertiesInt[PropertyInt.AmmoType]            = (int)AmmoType.Arrow;
             w.PropertiesInt[PropertyInt.CombatUse]           = (int)CombatUse.Ammo;
             w.PropertiesInt[PropertyInt.PhysicsState]        = 132116;
             w.PropertiesInt[PropertyInt.HookPlacement]       = (int)Placement.Hook;

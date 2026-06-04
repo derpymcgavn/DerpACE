@@ -76,6 +76,9 @@ namespace ACE.Server.WorldObjects
         private const float PetReturnThreshold = 6.0f;
 
         private const double AutoRecoverCooldownSeconds = 0.75;
+        private const double IndoorRouteCooldownSeconds = 0.35;
+        private const float IndoorPathRunRateMultiplier = 1.75f;
+        private const float IndoorRouteAttackBuffer = 0.75f;
         private double _nextAcquireTime;
 
         // ── Stuck detection ──────────────────────────────────────────────────
@@ -92,6 +95,49 @@ namespace ACE.Server.WorldObjects
         /// Returns the flat cylinder distance between this pet and its owner, or float.MaxValue if unavailable.
         /// </summary>
         private float OwnerDistance => P_PetOwner != null ? GetCylinderDistance(P_PetOwner) : float.MaxValue;
+
+        protected override int GetRouteBurstMin() => Location?.Indoors == true ? 1 : base.GetRouteBurstMin();
+        protected override int GetRouteBurstMax() => Location?.Indoors == true ? 2 : base.GetRouteBurstMax();
+        protected override double GetMaxRouteFrequency() => Location?.Indoors == true ? IndoorRouteCooldownSeconds : base.GetMaxRouteFrequency();
+
+        protected override float GetPathRunRate()
+        {
+            var runRate = RunRate;
+            if (runRate <= 0.0f)
+                runRate = GetRunRate();
+
+            return Location?.Indoors == true ? runRate * IndoorPathRunRateMultiplier : runRate;
+        }
+
+        protected override float GetPathWalkRunThreshold() => 0.0f;
+
+        private void SetAttackTargetFast(Creature target)
+        {
+            AttackTarget = target;
+            CurrentAttack = null;
+            MaxRange = 0.0f;
+            FailedMovementCount = 0;
+            FailedSightCount = 0;
+            NextMoveTime = Timers.RunningTime;
+            NextAttackTime = Math.Min(NextAttackTime, Timers.RunningTime);
+            _stuckCheckPending = false;
+        }
+
+        public bool TryAbortIndoorRouteForAttack()
+        {
+            if (Location?.Indoors != true || AttackTarget == null || CurrentAttack == null)
+                return false;
+
+            var closeEnough = GetDistanceToTarget() <= MaxRange + IndoorRouteAttackBuffer;
+            var visibleEnough = CurrentAttack == CombatType.Melee ? IsDirectVisible(AttackTarget) : IsDirectVisible(AttackTarget);
+            if (!closeEnough || !visibleEnough)
+                return false;
+
+            EndRoute();
+            NextMoveTime = Timers.RunningTime;
+            NextAttackTime = Math.Min(NextAttackTime, Timers.RunningTime);
+            return true;
+        }
 
         public override void StartTurn()
         {
@@ -274,7 +320,7 @@ namespace ACE.Server.WorldObjects
                 if (ownerTarget != null && !ownerTarget.IsDead && ownerTarget.Attackable
                     && !SameFaction(ownerTarget) && IsVisibleTarget(ownerTarget))
                 {
-                    AttackTarget = ownerTarget;
+                    SetAttackTargetFast(ownerTarget);
                     return true;
                 }
             }
@@ -294,7 +340,7 @@ namespace ACE.Server.WorldObjects
                     return da.CompareTo(db);
                 });
 
-                AttackTarget = nearbyMonsters[0];
+                SetAttackTargetFast(nearbyMonsters[0]);
                 return true;
             }
 
@@ -303,7 +349,7 @@ namespace ACE.Server.WorldObjects
             if (nearest[0].Distance > VisualAwarenessRangeSq)
                 return false;
 
-            AttackTarget = nearest[0].Target;
+            SetAttackTargetFast(nearest[0].Target);
             return true;
         }
 

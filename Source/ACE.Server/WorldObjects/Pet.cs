@@ -13,6 +13,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Managers;
+using ACE.Server.Pathfinding;
 using ACE.Server.Physics.Animation;
 
 namespace ACE.Server.WorldObjects
@@ -181,6 +182,9 @@ namespace ACE.Server.WorldObjects
         {
             NextMonsterTickTime = currentUnixTime + monsterTickInterval;
 
+            if (TickPathfinding(currentUnixTime))
+                return;
+
             if (IsMoving)
             {
                 PhysicsObj.update_object();
@@ -216,7 +220,10 @@ namespace ACE.Server.WorldObjects
             var dist = GetCylinderDistance(P_PetOwner);
 
             if (dist > MaxDistance)
+            {
                 Destroy();
+                return;
+            }
 
             if (!IsMoving && dist > MinDistance)
                 StartFollow();
@@ -234,6 +241,9 @@ namespace ACE.Server.WorldObjects
 
             //Console.WriteLine($"{Name}.StartFollow()");
 
+            if (TryRouteToOwner())
+                return;
+
             IsMoving = true;
 
             // broadcast to clients
@@ -250,6 +260,39 @@ namespace ACE.Server.WorldObjects
 
             // prevent snap forward
             PhysicsObj.UpdateTime = Physics.Common.PhysicsTimer.CurrentTime;
+        }
+
+        private bool TryRouteToOwner()
+        {
+            if (P_PetOwner?.Location == null || Location == null || !PathfindingEnabled)
+                return false;
+
+            if (IsRouting || IsRouteStartPending)
+                return true;
+
+            if (!Location.Indoors && !P_PetOwner.Location.Indoors)
+                return false;
+
+            var sameLandblock = (Location.Cell & 0xFFFF0000) == (P_PetOwner.Location.Cell & 0xFFFF0000);
+            if (!sameLandblock)
+                return false;
+
+            var agentWidth = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
+            var route = Pathfinder.FindRoute(Location, P_PetOwner.Location, agentWidth);
+            if (route == null || route.Count == 0)
+                return false;
+
+            AttackTarget = null;
+            RouteAttackTarget = null;
+            RoutePositionTarget = P_PetOwner.Location;
+            TryRoute(route);
+
+            if (!IsRouteStartPending && !IsRouting)
+                return false;
+
+            IsMoving = true;
+            LastMoveTime = Timers.RunningTime;
+            return true;
         }
 
         /// <summary>
@@ -286,7 +329,7 @@ namespace ACE.Server.WorldObjects
         {
             //Console.WriteLine($"{Name}.OnMoveComplete({status})");
 
-            if (!IsPassivePet)
+            if (!IsPassivePet || IsRouting)
             {
                 base.OnMoveComplete(status);
                 return;
@@ -310,7 +353,7 @@ namespace ACE.Server.WorldObjects
 
             var scale = ObjScale ?? 1.0f;
 
-            return ProjectileRadiusCache[WeenieClassId] = setup.Spheres[0].Radius * scale;
+            return PetRadiusCache[WeenieClassId] = setup.Spheres[0].Radius * scale;
         }
     }
 }

@@ -7,6 +7,7 @@ using ACE.DatLoader;
 using ACE.DatLoader.Entity;
 using ACE.DatLoader.FileTypes;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
@@ -36,6 +37,18 @@ namespace ACE.Server.WorldObjects
         {
             ACE.Entity.ObjDesc objDesc = new ACE.Entity.ObjDesc();
             ClothingTable item;
+
+            if (this is Player morphicPlayer && morphicPlayer.GetProperty(PropertyBool.IsMorphicForm) == true)
+            {
+                if (PaletteBaseDID.HasValue)
+                    objDesc.PaletteID = PaletteBaseDID.Value;
+
+                Biota.PropertiesAnimPart.CopyTo(objDesc.AnimPartChanges, BiotaDatabaseLock);
+                Biota.PropertiesPalette.CopyTo(objDesc.SubPalettes, BiotaDatabaseLock);
+                Biota.PropertiesTextureMap.CopyTo(objDesc.TextureChanges, BiotaDatabaseLock);
+
+                return objDesc;
+            }
 
             AddBaseModelData(objDesc);
 
