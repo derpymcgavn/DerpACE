@@ -145,19 +145,25 @@ namespace ACE.Server.WorldObjects
             var vitaePenalty = vitae.StatModValue;
             var startPenalty = vitaePenalty;
 
-            var maxPool = (int)VitaeCPPoolThreshold(vitaePenalty, DeathLevel.Value);
-            var curPool = VitaeCpPool + amount;
+            var deathLevel = DeathLevel ?? Level ?? 1;
+            if (DeathLevel == null)
+                DeathLevel = deathLevel;
+
+            var curPool = (long)(VitaeCpPool ?? 0) + amount;
+            var maxPool = Math.Max(1, (int)VitaeCPPoolThreshold(vitaePenalty, deathLevel));
             while (curPool >= maxPool)
             {
                 curPool -= maxPool;
                 vitaePenalty = EnchantmentManager.ReduceVitae();
                 if (vitaePenalty == 1.0f)
                     break;
-                maxPool = (int)VitaeCPPoolThreshold(vitaePenalty, DeathLevel.Value);
+                maxPool = Math.Max(1, (int)VitaeCPPoolThreshold(vitaePenalty, deathLevel));
             }
             VitaeCpPool = (int)curPool;
 
-            Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.VitaeCpPool, VitaeCpPool.Value));
+            Session.Network.EnqueueSend(
+                new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.DeathLevel, DeathLevel ?? 0),
+                new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.VitaeCpPool, VitaeCpPool ?? 0));
 
             if (vitaePenalty != startPenalty)
             {

@@ -206,7 +206,7 @@ namespace ACE.Server.WorldObjects
 
         public override void Close(Player player)
         {
-            Close(player);
+            Close(player, true);
         }
 
         /// <summary>

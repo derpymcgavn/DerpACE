@@ -93,8 +93,18 @@ namespace ACE.Server.Physics
         public bool IsAnimating;
 
         // this is used by the 1991 branch to determine when physics updates need to be run
-        public bool IsMovingOrAnimating => IsAnimating || !PartArray.Sequence.is_first_cyclic() || CachedVelocity != Vector3.Zero || Velocity != Vector3.Zero ||
-            MovementManager.MotionInterpreter.InterpretedState.HasCommands() || MovementManager.MoveToManager.Initialized;
+        public bool IsMovingOrAnimating
+        {
+            get
+            {
+                var hasActiveSequence = PartArray?.Sequence != null && !PartArray.Sequence.is_first_cyclic();
+                var hasMotionCommands = MovementManager?.MotionInterpreter?.InterpretedState?.HasCommands() ?? false;
+                var hasMoveTo = MovementManager?.MoveToManager?.Initialized ?? false;
+
+                return IsAnimating || hasActiveSequence || CachedVelocity != Vector3.Zero || Velocity != Vector3.Zero ||
+                    hasMotionCommands || hasMoveTo;
+            }
+        }
 
         // server
         public Position RequestPos;

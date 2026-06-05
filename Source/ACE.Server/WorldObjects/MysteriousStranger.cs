@@ -56,6 +56,9 @@ namespace ACE.Server.WorldObjects
         // we push the despawn back this many seconds and re-check. Prevents yanking
         // the inventory window out from under the player mid-loot.
         public static float  ChestDespawnGraceSeconds   = 5.0f;
+        // Hard ceiling for open-chest grace retries. Without this, a chest held open
+        // forever can keep queuing despawn checks and keep the Stranger session locked.
+        public static float  ChestMaxOpenGraceSeconds    = 60.0f;
         public static float  ChestGridSpacing      = 1.5f;
         public static uint   ChestWcid             = 143; // chest weenie
         // Obfuscated burden range (stones) shown on appraisal so players can't weigh-check the jackpot.
@@ -267,6 +270,7 @@ namespace ACE.Server.WorldObjects
             public Creature Stranger;
             public bool Opened;
             public bool LaughOnClose;
+            public double ForceDespawnTime;
             /// <summary>True when the player still has opens left after this chest — reshuffle fires on chest close.</summary>
             public bool PendingReshuffle;
         }
@@ -422,7 +426,7 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
-        /// Applies a custom-amount vitae penalty without touching VitaeCpPool/DeathLevel.
+        /// Applies a custom-amount vitae penalty and initializes normal vitae recovery tracking.
         /// Mirrors EnchantmentManager.UpdateVitae(), but uses the caller-supplied delta
         /// instead of the global vitae_penalty config value.
         /// </summary>
@@ -432,8 +436,9 @@ namespace ACE.Server.WorldObjects
                 return;
 
             var em = player.EnchantmentManager;
+            var hadVitae = em.HasVitae;
 
-            if (!em.HasVitae)
+            if (!hadVitae)
             {
                 // Use the standard pathway to insert the vitae enchantment, then patch the value.
                 em.UpdateVitae();
@@ -444,7 +449,7 @@ namespace ACE.Server.WorldObjects
                 return;
 
             // Subtract by our amount; clamp to the level-based floor.
-            var newValue = (em.HasVitae ? vitae.StatModValue : 1.0f) - amount;
+            var newValue = (hadVitae ? vitae.StatModValue : 1.0f) - amount;
 
             var minVitae = em.GetMinVitae((uint)(player.Level ?? 1));
             if (newValue < minVitae) newValue = minVitae;
@@ -453,11 +458,39 @@ namespace ACE.Server.WorldObjects
             vitae.StatModValue = newValue;
             em.WorldObject.ChangesDetected = true;
 
+            EnsureVitaeRecoveryTracking(player);
+
             // Broadcast the update to the client so the vitae indicator refreshes.
             var spell = new ACE.Server.Entity.Spell((uint)SpellId.Vitae);
             var enchantment = new Enchantment(player, player.Guid.Full, (uint)SpellId.Vitae, 0,
                 (EnchantmentMask)spell.StatModType, newValue);
             player.Session.Network.EnqueueSend(new GameEventMagicUpdateEnchantment(player.Session, enchantment));
+        }
+
+        private static void EnsureVitaeRecoveryTracking(Player player)
+        {
+            if (player == null)
+                return;
+
+            var changed = false;
+            if (player.DeathLevel == null)
+            {
+                player.DeathLevel = player.Level ?? 1;
+                changed = true;
+            }
+
+            if (player.VitaeCpPool == null)
+            {
+                player.VitaeCpPool = 0;
+                changed = true;
+            }
+
+            if (!changed || player.Session == null)
+                return;
+
+            player.Session.Network.EnqueueSend(
+                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.DeathLevel, player.DeathLevel ?? 0),
+                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.VitaeCpPool, player.VitaeCpPool ?? 0));
         }
 
         // ---------- chest spawning ----------
@@ -608,9 +641,10 @@ namespace ACE.Server.WorldObjects
             // Tag ownership AFTER add (guid is finalized)
             _strangerChestOwner[target.Guid.Full] = new ChestSession
             {
-                PlayerGuid = player.Guid.Full,
-                Slot       = slotKind,
-                Stranger   = stranger,
+                PlayerGuid       = player.Guid.Full,
+                Slot             = slotKind,
+                Stranger         = stranger,
+                ForceDespawnTime = Time.GetUnixTime() + ChestDespawnSeconds + ChestMaxOpenGraceSeconds,
             };
             if (_playerChests.TryGetValue(player.Guid.Full, out var bucket))
                 bucket.Add(target.Guid.Full);
@@ -673,26 +707,72 @@ namespace ACE.Server.WorldObjects
         {
             if (chest == null || chest.IsDestroyed)
             {
-                if (chest != null) _strangerChestOwner.Remove(chest.Guid.Full);
+                if (chest != null) RemoveChestTracking(chest.Guid.Full);
                 return;
             }
 
             if (chest is Container c && c.IsOpen)
             {
-                var rechain = new ActionChain();
-                rechain.AddDelaySeconds(ChestDespawnGraceSeconds);
-                rechain.AddAction(chest, () => TryDespawnChestSafely(chest));
-                rechain.EnqueueChain();
-                return;
+                if (_strangerChestOwner.TryGetValue(chest.Guid.Full, out var session)
+                    && Time.GetUnixTime() < session.ForceDespawnTime)
+                {
+                    var rechain = new ActionChain();
+                    rechain.AddDelaySeconds(ChestDespawnGraceSeconds);
+                    rechain.AddAction(chest, () => TryDespawnChestSafely(chest));
+                    rechain.EnqueueChain();
+                    return;
+                }
+
+                if (!_strangerChestOwner.ContainsKey(chest.Guid.Full))
+                    return;
+
+                log.Warn($"MysteriousStranger forced despawn of held-open chest {chest.Guid.Full:X8} after grace timeout.");
             }
 
             DespawnChest(chest);
         }
 
+        private static ChestSession RemoveChestTracking(uint chestGuid, bool releaseIfEmpty = true)
+        {
+            if (!_strangerChestOwner.TryGetValue(chestGuid, out var session))
+                return null;
+
+            _strangerChestOwner.Remove(chestGuid);
+
+            if (_playerChests.TryGetValue(session.PlayerGuid, out var bucket))
+            {
+                bucket.Remove(chestGuid);
+                if (releaseIfEmpty && bucket.Count == 0)
+                    EndPlayerSession(session.PlayerGuid);
+            }
+
+            return session;
+        }
+
+        private static void EndPlayerSession(uint playerGuid)
+        {
+            _playerChests.Remove(playerGuid);
+            _opensRemaining.Remove(playerGuid);
+
+            if (_activePlayerGuid.HasValue && _activePlayerGuid.Value == playerGuid)
+                _activePlayerGuid = null;
+        }
+
         private static void DespawnChest(WorldObject chest)
         {
             if (chest == null) return;
-            _strangerChestOwner.Remove(chest.Guid.Full);
+            RemoveChestTracking(chest.Guid.Full);
+            if (!chest.IsDestroyed)
+            {
+                chest.EnqueueBroadcast(new GameMessageScript(chest.Guid, PlayScript.Destroy, 1.0f));
+                chest.Destroy();
+            }
+        }
+
+        private static void DespawnChestForReshuffle(WorldObject chest)
+        {
+            if (chest == null) return;
+            RemoveChestTracking(chest.Guid.Full, false);
             if (!chest.IsDestroyed)
             {
                 chest.EnqueueBroadcast(new GameMessageScript(chest.Guid, PlayScript.Destroy, 1.0f));
@@ -702,9 +782,13 @@ namespace ACE.Server.WorldObjects
 
         private static void CleanupPlayerChests(uint playerGuid, Chest excludeChest = null)
         {
-            if (!_playerChests.TryGetValue(playerGuid, out var bucket)) return;
+            if (!_playerChests.TryGetValue(playerGuid, out var bucket))
+            {
+                EndPlayerSession(playerGuid);
+                return;
+            }
 
-            foreach (var guid in bucket)
+            foreach (var guid in new List<uint>(bucket))
             {
                 if (excludeChest != null && excludeChest.Guid.Full == guid) continue;
                 if (!_strangerChestOwner.TryGetValue(guid, out var sess)) continue;
@@ -715,14 +799,10 @@ namespace ACE.Server.WorldObjects
                 if (wo != null)
                     DespawnChest(wo);
                 else
-                    _strangerChestOwner.Remove(guid);
+                    RemoveChestTracking(guid);
             }
-            _playerChests.Remove(playerGuid);
-            _opensRemaining.Remove(playerGuid);
 
-            // Release the single-player session lock.
-            if (_activePlayerGuid.HasValue && _activePlayerGuid.Value == playerGuid)
-                _activePlayerGuid = null;
+            EndPlayerSession(playerGuid);
         }
 
         /// <summary>
@@ -928,14 +1008,11 @@ namespace ACE.Server.WorldObjects
             // PendingReshuffle and skips the final "show's over" branch, so we do it here
             // unconditionally to guarantee the closed chest goes away.
             var closedChest = chest;
-            var closedPlayerGuid = player.Guid.Full;
             var closeChain = new ActionChain();
             closeChain.AddDelaySeconds(0.5); // brief beat so the close animation plays out
             closeChain.AddAction(stranger ?? (WorldObject)chest, () =>
             {
                 if (closedChest == null || closedChest.IsDestroyed) return;
-                if (_playerChests.TryGetValue(closedPlayerGuid, out var bucket))
-                    bucket.Remove(closedChest.Guid.Full);
                 DespawnChest(closedChest);
             });
             closeChain.EnqueueChain();
@@ -951,25 +1028,30 @@ namespace ACE.Server.WorldObjects
             if (stranger == null || stranger.IsDestroyed) return;
 
             var player = PlayerManager.GetOnlinePlayer(new ObjectGuid(playerGuid)) as Player;
-            if (player == null) return;
+            if (player == null)
+            {
+                CleanupPlayerChests(playerGuid);
+                return;
+            }
 
             if (!_opensRemaining.TryGetValue(playerGuid, out var opensLeft) || opensLeft <= 0)
+            {
+                CleanupPlayerChests(playerGuid);
                 return;
+            }
 
             // ---- tear down every chest currently tagged to this player ----
             if (_playerChests.TryGetValue(playerGuid, out var bucket))
             {
                 var landblock = stranger.CurrentLandblock;
-                foreach (var guid in bucket)
+                foreach (var guid in new List<uint>(bucket))
                 {
                     if (!_strangerChestOwner.TryGetValue(guid, out var sess)) continue;
                     var wo = landblock?.GetObject(new ObjectGuid(guid));
                     if (wo != null && !wo.IsDestroyed)
-                    {
-                        wo.EnqueueBroadcast(new GameMessageScript(wo.Guid, PlayScript.Destroy, 1.0f));
-                        wo.Destroy();
-                    }
-                    _strangerChestOwner.Remove(guid);
+                        DespawnChestForReshuffle(wo);
+                    else
+                        RemoveChestTracking(guid, false);
                 }
                 bucket.Clear();
             }

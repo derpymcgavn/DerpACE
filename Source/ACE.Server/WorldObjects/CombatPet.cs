@@ -77,8 +77,10 @@ namespace ACE.Server.WorldObjects
 
         private const double AutoRecoverCooldownSeconds = 0.75;
         private const double IndoorRouteCooldownSeconds = 0.35;
-        private const float IndoorPathRunRateMultiplier = 1.75f;
+        private const float PetIndoorPathRunRateMultiplier = 1.75f;
         private const float IndoorRouteAttackBuffer = 0.75f;
+        private const float IndoorPetAttackBuffer = 1.25f;
+        private const float IndoorDirectChaseRange = 12.0f;
         private double _nextAcquireTime;
 
         // ── Stuck detection ──────────────────────────────────────────────────
@@ -99,6 +101,7 @@ namespace ACE.Server.WorldObjects
         protected override int GetRouteBurstMin() => Location?.Indoors == true ? 1 : base.GetRouteBurstMin();
         protected override int GetRouteBurstMax() => Location?.Indoors == true ? 2 : base.GetRouteBurstMax();
         protected override double GetMaxRouteFrequency() => Location?.Indoors == true ? IndoorRouteCooldownSeconds : base.GetMaxRouteFrequency();
+        protected override float GetPathAttackBuffer() => Location?.Indoors == true ? IndoorPetAttackBuffer : base.GetPathAttackBuffer();
 
         protected override float GetPathRunRate()
         {
@@ -106,13 +109,27 @@ namespace ACE.Server.WorldObjects
             if (runRate <= 0.0f)
                 runRate = GetRunRate();
 
-            return Location?.Indoors == true ? runRate * IndoorPathRunRateMultiplier : runRate;
+            return Location?.Indoors == true ? runRate * PetIndoorPathRunRateMultiplier : runRate;
         }
 
         protected override float GetPathWalkRunThreshold() => 0.0f;
 
+        protected override bool IsPathAttackVisible(WorldObject target)
+        {
+            if (Location?.Indoors != true)
+                return base.IsPathAttackVisible(target);
+
+            if (target == null)
+                return false;
+
+            return IsMeleeVisible(target) || IsDirectVisible(target) || GetDistanceToTarget() <= MaxRange + IndoorPetAttackBuffer;
+        }
+
         private void SetAttackTargetFast(Creature target)
         {
+            if (target == null)
+                return;
+
             AttackTarget = target;
             CurrentAttack = null;
             MaxRange = 0.0f;
@@ -121,6 +138,49 @@ namespace ACE.Server.WorldObjects
             NextMoveTime = Timers.RunningTime;
             NextAttackTime = Math.Min(NextAttackTime, Timers.RunningTime);
             _stuckCheckPending = false;
+        }
+
+        private Creature GetOwnerPreferredTarget()
+        {
+            if (!PropertyManager.GetBool("pet_attack_selected_enabled").Item || P_PetOwner == null)
+                return null;
+
+            return (P_PetOwner.AttackTarget as Creature)
+                ?? (P_PetOwner.HealthQueryTarget.HasValue
+                    ? P_PetOwner.CurrentLandblock?.GetObject(P_PetOwner.HealthQueryTarget.Value) as Creature
+                    : null);
+        }
+
+        private bool TryAssistOwnerTarget(bool allowSwitch)
+        {
+            var ownerTarget = GetOwnerPreferredTarget();
+            if (ownerTarget == null || ownerTarget.IsDead || !ownerTarget.Attackable
+                || SameFaction(ownerTarget) || !IsVisibleTarget(ownerTarget))
+                return false;
+
+            if (AttackTarget == ownerTarget)
+                return true;
+
+            if (!allowSwitch && AttackTarget != null)
+                return false;
+
+            SetAttackTargetFast(ownerTarget);
+            return true;
+        }
+
+        private bool ShouldUseIndoorRouteToTarget()
+        {
+            if (!PathfindingEnabled || Location?.Indoors != true || AttackTarget?.Location == null)
+                return false;
+
+            var targetDist = GetDistanceToTarget();
+            if (CurrentAttack == CombatType.Melee && targetDist <= MaxRange + IndoorPetAttackBuffer)
+                return false;
+
+            if (IsDirectVisible(AttackTarget) && targetDist <= IndoorDirectChaseRange)
+                return false;
+
+            return true;
         }
 
         public bool TryAbortIndoorRouteForAttack()
@@ -144,7 +204,7 @@ namespace ACE.Server.WorldObjects
             // When indoors with a live navmesh, prefer a routed path to the target so
             // the pet navigates around dungeon walls instead of walking straight through them.
             // Fall back to the normal straight-line StartTurn if no mesh is available yet.
-            if (PathfindingEnabled && Location != null && Location.Indoors && AttackTarget?.Location != null)
+            if (ShouldUseIndoorRouteToTarget())
             {
                 var agentW = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
                 var route = Pathfinder.FindRoute(Location, AttackTarget.Location, agentW);
@@ -165,6 +225,9 @@ namespace ACE.Server.WorldObjects
 
         public override void HandleFindTarget()
         {
+            if (TryAssistOwnerTarget(true))
+                return;
+
             var creature = AttackTarget as Creature;
             var lostTarget = creature == null || creature.IsDead || !IsVisibleTarget(creature);
 
@@ -309,21 +372,8 @@ namespace ACE.Server.WorldObjects
 
             // DerpACE: prefer whatever the owner has selected/targeted so the pet
             // always assists the owner's fight rather than running off independently.
-            if (PropertyManager.GetBool("pet_attack_selected_enabled").Item && P_PetOwner != null)
-            {
-                // Check the owner's direct attack target first, then health-query target.
-                var ownerTarget = (P_PetOwner.AttackTarget as Creature)
-                    ?? (P_PetOwner.HealthQueryTarget.HasValue
-                        ? P_PetOwner.CurrentLandblock?.GetObject(P_PetOwner.HealthQueryTarget.Value) as Creature
-                        : null);
-
-                if (ownerTarget != null && !ownerTarget.IsDead && ownerTarget.Attackable
-                    && !SameFaction(ownerTarget) && IsVisibleTarget(ownerTarget))
-                {
-                    SetAttackTargetFast(ownerTarget);
-                    return true;
-                }
-            }
+            if (TryAssistOwnerTarget(true))
+                return true;
 
             var nearbyMonsters = GetNearbyMonsters();
             if (nearbyMonsters.Count == 0)
