@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 
 using ACE.Database;
 using ACE.Entity.Models;
+using ACE.Server.DerpAce.Bank;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Network.GameEvent.Events
@@ -33,8 +35,16 @@ namespace ACE.Server.Network.GameEvent.Events
                 var pluralName = altCurrency.GetPluralName();
 
                 // the total amount of alternate currency the player currently has
-                var altCurrencyInInventory = (uint)session.Player.GetNumInventoryItemsOfWCID(vendor.AlternateCurrency.Value);
-                Writer.Write(altCurrencyInInventory + altCurrencySpent);
+                var altCurrencyTotal = (long)session.Player.GetNumInventoryItemsOfWCID(vendor.AlternateCurrency.Value) + altCurrencySpent;
+
+                if (BankConfig.EnableBank && BankConfig.VendorsUseBank)
+                {
+                    var bankedItem = BankConfig.Items.FirstOrDefault(i => i.Id == vendor.AlternateCurrency.Value);
+                    if (bankedItem != null)
+                        altCurrencyTotal += session.Player.GetBanked(bankedItem.Prop);
+                }
+
+                Writer.Write((uint)Math.Min(altCurrencyTotal, uint.MaxValue));
 
                 // the plural name of alt currency
                 Writer.WriteString16L(pluralName);

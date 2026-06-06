@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -426,6 +426,9 @@ namespace ACE.Server.WorldObjects
         public void ApproachVendor(Player player, VendorType action = VendorType.Undef, uint altCurrencySpent = 0)
         {
             RotUniques();
+
+            if (AlternateCurrency == null)
+                player.SendBankAwareVendorCoinValue();
 
             player.Session.Network.EnqueueSend(new GameEventApproachVendor(player.Session, this, altCurrencySpent));
 

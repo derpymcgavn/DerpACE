@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -62,53 +62,7 @@ namespace ACE.Server.WorldObjects
             // transaction has been validated by this point
 
             var currencyWcid = vendor.AlternateCurrency ?? coinStackWcid;
-
-            // DerpACE: VendorsUseBank â€” drain from banked balance first, then physical coins/alt-currency
-            if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank
-                && vendor.AlternateCurrency == null)
-            {
-                if (!this.SpendWithBank(cost))
-                {
-                    log.Error($"[VENDOR] {Name}.FinalizeBuyTransaction({vendor.Name}) - couldn't spend {cost:N0} pyreals after validation.");
-                    foreach (var item in genericItems)
-                        item.Destroy();
-                    return;
-                }
-            }
-            else if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank
-                && vendor.AlternateCurrency != null)
-            {
-                // Alt-currency: spend banked first, then inventory
-                var bankedItem = DerpAce.Bank.BankConfig.Items
-                    .FirstOrDefault(i => i.Id == vendor.AlternateCurrency.Value);
-                if (bankedItem != null)
-                {
-                    var bankedAmt = this.GetBanked(bankedItem.Prop);
-                    if (bankedAmt >= cost)
-                    {
-                        this.IncBanked(bankedItem.Prop, -(long)cost);
-                    }
-                    else if (bankedAmt > 0)
-                    {
-                        this.IncBanked(bankedItem.Prop, -bankedAmt);
-                        SpendCurrency(currencyWcid, (uint)(cost - bankedAmt), true);
-                    }
-                    else
-                    {
-                        SpendCurrency(currencyWcid, cost, true);
-                    }
-                }
-                else
-                {
-                    SpendCurrency(currencyWcid, cost, true);
-                }
-            }
-            else
-            {
-                SpendCurrency(currencyWcid, cost, true);
-            }
-
-            vendor.MoneyIncome += (int)cost;
+            var transactionComplete = true;
 
             foreach (var item in genericItems)
             {
@@ -122,6 +76,8 @@ namespace ACE.Server.WorldObjects
                         log.Error($"[VENDOR] {Name}.FinalizeBuyTransaction({vendor.Name}) - couldn't add {item.Name} ({item.Guid}) to player inventory after validation, this shouldn't happen!");
 
                         item.Destroy();  // cleanup for guid manager
+                        transactionComplete = false;
+                        continue;
                     }
 
                     vendor.NumItemsSold++;
@@ -143,8 +99,22 @@ namespace ACE.Server.WorldObjects
                     vendor.NumItemsSold++;
                 }
                 else
+                {
                     log.Error($"[VENDOR] {Name}.FinalizeBuyTransaction({vendor.Name}) - couldn't add {item.Name} ({item.Guid}) to player inventory after validation, this shouldn't happen!");
+                    transactionComplete = false;
+                }
             }
+
+            if (!transactionComplete)
+                return;
+
+            if (!TrySpendVendorCurrency(vendor, currencyWcid, cost))
+            {
+                log.Error($"[VENDOR] {Name}.FinalizeBuyTransaction({vendor.Name}) - couldn't spend {cost:N0} after transaction completion.");
+                return;
+            }
+
+            vendor.MoneyIncome += (int)cost;
 
             Session.Network.EnqueueSend(new GameMessageSound(Guid, Sound.PickUpItem));
 
@@ -154,6 +124,54 @@ namespace ACE.Server.WorldObjects
             var altCurrencySpent = vendor.AlternateCurrency != null ? cost : 0;
 
             vendor.ApproachVendor(this, VendorType.Buy, altCurrencySpent);
+        }
+
+        private bool TrySpendVendorCurrency(Vendor vendor, uint currencyWcid, uint cost)
+        {
+            if (cost == 0)
+                return true;
+
+            if (!DerpAce.Bank.BankConfig.EnableBank || !DerpAce.Bank.BankConfig.VendorsUseBank)
+                return TryConsumeFromInventoryWithNetworking(currencyWcid, (int)cost);
+
+            if (vendor.AlternateCurrency == null)
+                return this.SpendWithBank(cost);
+
+            var remaining = (long)cost;
+            var bankedSpent = 0L;
+            var bankedItem = DerpAce.Bank.BankConfig.Items
+                .FirstOrDefault(i => i.Id == vendor.AlternateCurrency.Value);
+
+            if (bankedItem != null)
+            {
+                bankedSpent = Math.Min(this.GetBanked(bankedItem.Prop), remaining);
+                if (bankedSpent > 0)
+                {
+                    this.IncBanked(bankedItem.Prop, -bankedSpent);
+                    remaining -= bankedSpent;
+                }
+            }
+
+            if (remaining <= 0)
+                return true;
+
+            if (TryConsumeFromInventoryWithNetworking(currencyWcid, (int)remaining))
+                return true;
+
+            if (bankedItem != null && bankedSpent > 0)
+                this.IncBanked(bankedItem.Prop, bankedSpent);
+
+            return false;
+        }
+
+        public void SendBankAwareVendorCoinValue()
+        {
+            var coinValue = (long)(CoinValue ?? 0);
+
+            if (DerpAce.Bank.BankConfig.EnableBank && DerpAce.Bank.BankConfig.VendorsUseBank)
+                coinValue += this.GetCash();
+
+            Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.CoinValue, (int)Math.Min(coinValue, int.MaxValue)));
         }
 
         // player selling items to vendor
