@@ -45,6 +45,7 @@ namespace ACE.Server.Managers
 
         public static bool DefenderShieldEnabled   { get; set; } = true;
         public static bool ArchmagiEnabled         { get; set; } = true;
+        public static bool LifeCasterEnabled       { get; set; } = true;
         public static bool HierophantEnabled       { get; set; } = true;
         public static bool ThievesDaggerEnabled    { get; set; } = true;
         public static bool SentinelSpearEnabled    { get; set; } = true;
@@ -95,6 +96,12 @@ namespace ACE.Server.Managers
 
         /// <summary>Damage multiplier for bounce cast (0–1). Default 0.75 = 75% damage.</summary>
         public static float ArchmagiDualCastDamageModifier { get; set; } = 0.75f;
+
+        /// <summary>Chance that an eligible caster family rolls as a Life Magic caster. Default 0.03 = 3%.</summary>
+        public static float LifeCasterDropChance { get; set; } = 0.03f;
+
+        /// <summary>Minimum treasure tier required. Default 4.</summary>
+        public static int LifeCasterMinTier { get; set; } = 4;
 
         // ──────────────────────────────────────────────────────────────────────
         // Hierophant Caster (support life-staff variant of Martyr Staff)

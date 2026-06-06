@@ -6,6 +6,7 @@ using ACE.Server.Factories.Entity;
 using ACE.Server.Factories.Enum;
 using ACE.Server.Factories.Tables;
 using ACE.Server.Factories.Tables.Wcids;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Factories
@@ -15,6 +16,37 @@ namespace ACE.Server.Factories
         private static readonly System.Collections.Generic.HashSet<ACE.Server.Factories.Enum.WeenieClassName> LifeCasterWcids = new System.Collections.Generic.HashSet<ACE.Server.Factories.Enum.WeenieClassName>
         {
             ACE.Server.Factories.Enum.WeenieClassName.ace420420421_martyrstaff,
+        };
+
+        private static readonly System.Collections.Generic.HashSet<ACE.Server.Factories.Enum.WeenieClassName> LifeCasterMutationWcids = new System.Collections.Generic.HashSet<ACE.Server.Factories.Enum.WeenieClassName>
+        {
+            ACE.Server.Factories.Enum.WeenieClassName.sceptre,
+            ACE.Server.Factories.Enum.WeenieClassName.wand,
+            ACE.Server.Factories.Enum.WeenieClassName.staff,
+            ACE.Server.Factories.Enum.WeenieClassName.wandacid,
+            ACE.Server.Factories.Enum.WeenieClassName.wandblunt,
+            ACE.Server.Factories.Enum.WeenieClassName.wandelectric,
+            ACE.Server.Factories.Enum.WeenieClassName.wandfire,
+            ACE.Server.Factories.Enum.WeenieClassName.wandfrost,
+            ACE.Server.Factories.Enum.WeenieClassName.wandpiercing,
+            ACE.Server.Factories.Enum.WeenieClassName.wandslashing,
+            ACE.Server.Factories.Enum.WeenieClassName.ace43381_nethersceptre,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31819_slashingbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31825_piercingbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31821_bluntbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31820_acidbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31823_firebaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31824_frostbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace31822_electricbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace43382_netherbaton,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37223_slashingstaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37222_piercingstaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37225_bluntstaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37224_acidstaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37220_firestaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37221_froststaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace37219_electricstaff,
+            ACE.Server.Factories.Enum.WeenieClassName.ace43383_netherstaff,
         };
 
         public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical)
@@ -35,6 +67,8 @@ namespace ACE.Server.Factories
             // Ensure custom life caster templates always use the life-damage mutation path.
             if (LifeCasterWcids.Contains((ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId) && wo.W_DamageType == DamageType.Undef)
                 wo.W_DamageType = DamageType.Health;
+            else
+                TryMutateLifeCaster(wo, profile);
 
             // mutate ManaConversionMod
             var mutationFilter = MutationCache.GetMutation("Casters.caster.txt");
@@ -222,6 +256,65 @@ namespace ACE.Server.Factories
             var elementalStr = isElemental ? "elemental" : "non_elemental";
 
             return $"Casters.caster_{elementalStr}.txt";
+        }
+
+        private static void TryMutateLifeCaster(WorldObject wo, TreasureDeath profile)
+        {
+            if (!DerpACEConfig.EnableCustomWeapons || !DerpACEConfig.LifeCasterEnabled)
+                return;
+
+            if (profile.Tier < DerpACEConfig.LifeCasterMinTier)
+                return;
+
+            var wcid = (ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId;
+            if (!LifeCasterMutationWcids.Contains(wcid))
+                return;
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= DerpACEConfig.LifeCasterDropChance)
+                return;
+
+            var family = GetLifeCasterFamily(wcid);
+
+            wo.W_DamageType = DamageType.Health;
+            wo.WieldSkillType = (int)Skill.LifeMagic;
+            wo.Name = $"Martyr {family.Name}";
+            wo.Use = $"This {family.Name} has been sanctified to aid Life Magic.";
+
+            if (family.Setup != 0)
+                wo.SetupTableId = family.Setup;
+        }
+
+        private static (string Name, uint Setup) GetLifeCasterFamily(ACE.Server.Factories.Enum.WeenieClassName wcid)
+        {
+            switch (wcid)
+            {
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31819_slashingbaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31825_piercingbaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31821_bluntbaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31820_acidbaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31823_firebaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31824_frostbaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace31822_electricbaton:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace43382_netherbaton:
+                    return ("Baton", 0x02001637);
+
+                case ACE.Server.Factories.Enum.WeenieClassName.staff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37223_slashingstaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37222_piercingstaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37225_bluntstaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37224_acidstaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37220_firestaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37221_froststaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace37219_electricstaff:
+                case ACE.Server.Factories.Enum.WeenieClassName.ace43383_netherstaff:
+                    return ("Staff", 0x0200184B);
+
+                case ACE.Server.Factories.Enum.WeenieClassName.wand:
+                    return ("Wand", 0);
+
+                default:
+                    return ("Sceptre", 0x020012BF);
+            }
         }
     }
 }
