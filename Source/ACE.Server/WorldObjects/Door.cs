@@ -251,15 +251,20 @@ namespace ACE.Server.WorldObjects
 
         public override void OnCollideObject(WorldObject target)
         {
-            if (IsOpen) return;
+            if (target is Creature creature)
+                TryOpenForCreature(creature);
+        }
 
-            // currently the only AI options appear to be 0 or 1,
-            // 1 meaning able to open doors?
-            var creature = target as Creature;
-            if (creature == null || creature.AiOptions == 0)
-                return;
+        public bool TryOpenForCreature(Creature creature)
+        {
+            if (creature == null || creature is Player || creature.IsDead)
+                return false;
 
-            ActOnUse(target);
+            if (!Active || IsOpen || IsBusy || IsLocked)
+                return false;
+
+            ActOnUse(creature);
+            return IsOpen || IsBusy;
         }
     }
 }

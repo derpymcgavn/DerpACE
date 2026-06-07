@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using ACE.Server.Command;
 using ACE.Server.DerpAce.Bank;
 using ACE.Server.Network;
@@ -62,9 +62,11 @@ namespace ACE.Server.Command.Handlers
 
         private static void HandleBankList(Player player)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("[Bank] Your stored items:");
-            sb.AppendLine($"  {"Item",-28} {"Banked",12} {"Held",10}");
+            var lines = new List<string>
+            {
+                "[Bank] Your stored items:",
+                "Item | Banked | Held"
+            };
 
             var any = false;
             foreach (var item in BankConfig.Items)
@@ -73,13 +75,14 @@ namespace ACE.Server.Command.Handlers
                 var held   = player.GetNumInventoryItemsOfWCID(item.Id);
                 if (banked == 0 && held == 0) continue;
                 any = true;
-                sb.AppendLine($"  {item.Name,-28} {banked,12:N0} {held,10:N0}");
+                lines.Add($"{item.Name}: {banked:N0} banked, {held:N0} held");
             }
             if (!any)
-                sb.AppendLine("  (nothing banked or in inventory)");
+                lines.Add("(nothing banked or in inventory)");
 
-            sb.Append("Use: /bank store <name> <amt|*>  |  /bank take <name> <amt|*>");
-            player.SendMessage(sb.ToString());
+            lines.Add("Use: /bank store <name> <amt|*>");
+            lines.Add("Use: /bank take <name> <amt|*>");
+            SendBankLines(player, lines);
         }
 
         private static void HandleBankStore(Player player, string[] parameters)
@@ -222,23 +225,26 @@ namespace ACE.Server.Command.Handlers
             var cash = player.GetCash();
             var inv  = player.CoinValue ?? 0;
 
-            var sb = new StringBuilder();
-            sb.AppendLine("[Bank] Cash balance:");
-            sb.AppendLine($"  Banked Pyreals : {cash,14:N0}");
-            sb.AppendLine($"  On hand        : {inv,14:N0}");
-            sb.AppendLine($"  Total          : {cash + inv,14:N0}");
+            var lines = new List<string>
+            {
+                "[Bank] Cash balance:",
+                $"Banked Pyreals: {cash:N0}",
+                $"On hand: {inv:N0}",
+                $"Total: {cash + inv:N0}"
+            };
 
             var hasCurrency = false;
             foreach (var cur in BankConfig.Currencies)
             {
                 var held = player.GetNumInventoryItemsOfWCID(cur.Id);
                 if (held <= 0) continue;
-                if (!hasCurrency) { sb.AppendLine("  Inventory currency stacks:"); hasCurrency = true; }
-                sb.AppendLine($"    {cur.Name,-14} x{held,-6} = {(long)held * cur.Value,12:N0} Pyreals");
+                if (!hasCurrency) { lines.Add("Inventory currency stacks:"); hasCurrency = true; }
+                lines.Add($"{cur.Name}: x{held:N0} = {(long)held * cur.Value:N0} Pyreals");
             }
 
-            sb.Append("Use: /cash give (deposit all)  |  /cash take <amt|*>");
-            player.SendMessage(sb.ToString());
+            lines.Add("Use: /cash give (deposit all)");
+            lines.Add("Use: /cash take <amt|*>");
+            SendBankLines(player, lines);
         }
 
         private static void HandleCashGive(Player player)
@@ -349,6 +355,12 @@ namespace ACE.Server.Command.Handlers
             var end = eatLast ? parameters.Length - 1 : parameters.Length;
             if (end <= skip) return "";
             return string.Join(" ", parameters, skip, end - skip);
+        }
+
+        private static void SendBankLines(Player player, IEnumerable<string> lines)
+        {
+            foreach (var line in lines)
+                player.SendMessage(line);
         }
     }
 }

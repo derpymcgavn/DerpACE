@@ -48,6 +48,8 @@ namespace ACE.Server.WorldObjects
 
         public override void HandleActionUseOnTarget(Player healer, WorldObject target)
         {
+            target = GetValidHealingTarget(healer, target);
+
             if (healer.GetCreatureSkill(Skill.Healing).AdvancementClass < SkillAdvancementClass.Trained)
             {
                 healer.SendUseDoneEvent(WeenieError.YouArentTrainedInHealing);
@@ -116,6 +118,24 @@ namespace ACE.Server.WorldObjects
             DoHealMotion(healer, targetPlayer, true);
         }
 
+        /// <summary>
+        /// Double-clicking a healing kit heals the user. Use-on-target heals a targeted
+        /// player, but NPCs / monsters / invalid targets fall back to self-healing.
+        /// </summary>
+        public override void ActOnUse(WorldObject activator)
+        {
+            if (activator is Player player)
+                HandleActionUseOnTarget(player, player);
+        }
+
+        public WorldObject GetValidHealingTarget(Player healer, WorldObject target)
+        {
+            if (target is Player)
+                return target;
+
+            return healer;
+        }
+
         public const float Healing_MaxMove = 5.0f;
 
         public void DoHealMotion(Player healer, Player target, bool success)
@@ -133,6 +153,7 @@ namespace ACE.Server.WorldObjects
             var motion = new Motion(healer, motionCommand);
             var currentStance = healer.CurrentMotionState.Stance;
             var animLength = MotionTable.GetAnimationLength(healer.MotionTableId, currentStance, motionCommand);
+            healer.LastUseTime = float.MinValue;
 
             var startPos = new Physics.Common.Position(healer.PhysicsObj.Position);
 

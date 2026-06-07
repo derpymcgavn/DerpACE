@@ -135,6 +135,9 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
+            if (sourceItem is Healer healerItem)
+                target = healerItem.GetValidHealingTarget(this, target);
+
             // re-verify client checks
             if (((sourceItem.TargetType ?? ItemType.None) & target.ItemType) == ItemType.None)
             {
