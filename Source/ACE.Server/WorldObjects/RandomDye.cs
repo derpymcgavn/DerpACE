@@ -16,13 +16,22 @@ namespace ACE.Server.WorldObjects
     public class RandomDye : CraftTool
     {
         private const uint RANDOM_DYE_WCID = 420420420;
+        private const uint RANDOM_DYE_ICON = 0x06005FA0;
 
         public RandomDye(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
         {
+            SetDyeIcon();
         }
 
         public RandomDye(Biota biota) : base(biota)
         {
+            SetDyeIcon();
+        }
+
+        private void SetDyeIcon()
+        {
+            if (WeenieClassId == RANDOM_DYE_WCID)
+                IconId = RANDOM_DYE_ICON;
         }
 
         public override void HandleActionUseOnTarget(Player player, WorldObject target)

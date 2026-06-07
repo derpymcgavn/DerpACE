@@ -16,6 +16,8 @@ namespace ACE.Server.WorldObjects
     /// </summary>
     partial class Creature
     {
+        private bool moveToTickPending;
+
         /// <summary>
         /// Returns the 3D distance between this creature and target
         /// </summary>
@@ -358,34 +360,59 @@ namespace ACE.Server.WorldObjects
 
         private void AddMoveToTick()
         {
+            if (moveToTickPending)
+                return;
+
+            moveToTickPending = true;
+
             var actionChain = new ActionChain();
             actionChain.AddDelaySeconds(monsterTickInterval);
             actionChain.AddAction(this, () =>
             {
-                if (!IsDead && PhysicsObj?.MovementManager?.MoveToManager != null && PhysicsObj.IsMovingTo())
-                {
-                    PhysicsObj.update_object();
-                    UpdatePosition_SyncLocation();
-                    SendUpdatePosition();
+                moveToTickPending = false;
 
-                    if (PhysicsObj?.MovementManager?.MoveToManager?.FailProgressCount < 5)
+                if (IsDead || PhysicsObj?.MovementManager?.MoveToManager == null || Location == null)
+                    return;
+
+                var moveToManager = PhysicsObj.MovementManager.MoveToManager;
+                var isMovingTo = PhysicsObj.IsMovingTo();
+
+                if (isMovingTo || IsMoving || moveToManager.PendingActions.Count > 0)
+                {
+                    SyncMoveToPosition();
+
+                    isMovingTo = PhysicsObj.IsMovingTo();
+
+                    if (isMovingTo && moveToManager.FailProgressCount < 5)
                     {
                         AddMoveToTick();
                     }
-                    else
+                    else if (isMovingTo)
                     {
-                        if (PhysicsObj?.MovementManager?.MoveToManager != null)
-                        {
-                            PhysicsObj.MovementManager.MoveToManager.CancelMoveTo(WeenieError.ActionCancelled);
-                            PhysicsObj.MovementManager.MoveToManager.FailProgressCount = 0;
-                        }
+                        moveToManager.CancelMoveTo(WeenieError.ActionCancelled);
+                        moveToManager.FailProgressCount = 0;
                         EnqueueBroadcastMotion(new Motion(CurrentMotionState.Stance, MotionCommand.Ready));
+                        SyncMoveToPosition();
+                        PhysicsObj.CachedVelocity = Vector3.Zero;
+                        IsMoving = false;
+                    }
+                    else if (moveToManager.PendingActions.Count == 0)
+                    {
+                        PhysicsObj.CachedVelocity = Vector3.Zero;
+                        IsMoving = false;
                     }
 
                     //Console.WriteLine($"{Name}.Position: {Location}");
                 }
             });
             actionChain.EnqueueChain();
+        }
+
+        private void SyncMoveToPosition()
+        {
+            PhysicsObj.update_object();
+            UpdatePosition_SyncLocation();
+            SendUpdatePosition();
         }
 
         public Motion GetMoveToPosition(Position position, float runRate = 1.0f, float? walkRunThreshold = null, float? speed = null)

@@ -20,7 +20,7 @@ namespace ACE.Server.Physics.Common
         /// </summary>
         public const float DestructionTime = 25.0f;
 
-        private static readonly ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
+        private readonly ReaderWriterLockSlim rwLock = new ReaderWriterLockSlim(LockRecursionPolicy.SupportsRecursion);
 
         /// <summary>
         /// The owner of this ObjectMaint instance
@@ -310,7 +310,13 @@ namespace ACE.Server.Physics.Common
             rwLock.EnterReadLock();
             try
             {
-                return VisibleObjects.Values.Where(predicate).ToList();
+                var results = new List<PhysicsObj>();
+                foreach (var visibleObject in VisibleObjects.Values)
+                {
+                    if (predicate(visibleObject))
+                        results.Add(visibleObject);
+                }
+                return results;
             }
             finally
             {
@@ -323,7 +329,13 @@ namespace ACE.Server.Physics.Common
             rwLock.EnterReadLock();
             try
             {
-                return VisibleObjects.Values.Select(v => v.WeenieObj.WorldObject).OfType<Creature>().ToList();
+                var results = new List<Creature>();
+                foreach (var visibleObject in VisibleObjects.Values)
+                {
+                    if (visibleObject.WeenieObj?.WorldObject is Creature creature)
+                        results.Add(creature);
+                }
+                return results;
             }
             finally
             {
@@ -719,7 +731,13 @@ namespace ACE.Server.Physics.Common
             rwLock.EnterReadLock();
             try
             {
-                return KnownPlayers.Values.Select(v => v.WeenieObj.WorldObject).OfType<Player>().ToList();
+                var results = new List<Player>();
+                foreach (var knownPlayer in KnownPlayers.Values)
+                {
+                    if (knownPlayer.WeenieObj?.WorldObject is Player player)
+                        results.Add(player);
+                }
+                return results;
             }
             finally
             {
@@ -732,7 +750,13 @@ namespace ACE.Server.Physics.Common
             rwLock.EnterReadLock();
             try
             {
-                return KnownObjects.Values.Select(v => v.WeenieObj.WorldObject).OfType<Creature>().ToList();
+                var results = new List<Creature>();
+                foreach (var knownObject in KnownObjects.Values)
+                {
+                    if (knownObject.WeenieObj?.WorldObject is Creature creature)
+                        results.Add(creature);
+                }
+                return results;
             }
             finally
             {
@@ -898,7 +922,13 @@ namespace ACE.Server.Physics.Common
             rwLock.EnterReadLock();
             try
             {
-                return VisibleTargets.Values.Select(v => v.WeenieObj.WorldObject).OfType<Creature>().ToList();
+                var results = new List<Creature>();
+                foreach (var visibleTarget in VisibleTargets.Values)
+                {
+                    if (visibleTarget.WeenieObj?.WorldObject is Creature creature)
+                        results.Add(creature);
+                }
+                return results;
             }
             finally
             {

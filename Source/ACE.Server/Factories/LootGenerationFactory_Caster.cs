@@ -92,6 +92,8 @@ namespace ACE.Server.Factories
                     wo.WieldSkillType = (int)Skill.WarMagic;
             }
 
+            ApplyLootUiEffects(wo, wo.W_DamageType, isMagical);
+
             // mutate WeaponDefense
             mutationFilter = MutationCache.GetMutation("Casters.weapon_defense.txt");
             mutationFilter.TryMutate(wo, profile.Tier);
@@ -177,7 +179,7 @@ namespace ACE.Server.Factories
                     wo.Name = wo.Name + " of the Archmagi";
                     wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster, true);
                     wo.IconOverlayId = 0x06002860;
-                    wo.UiEffects = UiEffects.Magical | GetLootElementUiEffect(wo.W_DamageType);
+                    ApplyLootUiEffects(wo, wo.W_DamageType, true);
                     wo.ProcSpell = (uint)archagiSpellLevels[procIdx]; // stored for appraisal display; fired by TryProcArchmagi
                     wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory — when you cast a matching spell, it has a {ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance:P0} chance to echo {procDesc}.";
                 }
@@ -208,7 +210,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantHotPct, hotPct);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantFellowEchoPct, fellowEcho);
                 wo.IconOverlayId = 0x06002CB7;
-                wo.UiEffects = UiEffects.Magical | GetLootElementUiEffect(wo.W_DamageType);
+                ApplyLootUiEffects(wo, wo.W_DamageType, true);
 
                 wo.LongDesc = (wo.LongDesc ?? "")
                     + $"\n\nBlessed by the Hierophants — beneficial healing cast through this staff is amplified by {healBoost:P0}."

@@ -236,14 +236,12 @@ namespace ACE.Server.WorldObjects
                         // should probably shuffle the list beforehand,
                         // in case a bunch of levels of same level are in a group,
                         // so the same player isn't always selected
-                        var lowestLevel = visibleTargets.OrderBy(p => p.Level).FirstOrDefault();
-                        AttackTarget = lowestLevel;
+                        AttackTarget = GetLowestLevelTarget(visibleTargets);
                         break;
 
                     case TargetingTactic.Strongest:
 
-                        var highestLevel = visibleTargets.OrderByDescending(p => p.Level).FirstOrDefault();
-                        AttackTarget = highestLevel;
+                        AttackTarget = GetHighestLevelTarget(visibleTargets);
                         break;
 
                     case TargetingTactic.Nearest:
@@ -374,7 +372,8 @@ namespace ACE.Server.WorldObjects
                 //targetDistance.Add(new TargetDistance(target, distSq ? Location.SquaredDistanceTo(target.Location) : Location.DistanceTo(target.Location)));
                 targetDistance.Add(new TargetDistance(target, distSq ? (float)PhysicsObj.get_distance_sq_to_object(target.PhysicsObj, true) : (float)PhysicsObj.get_distance_to_object(target.PhysicsObj, true)));
 
-            return targetDistance.OrderBy(i => i.Distance).ToList();
+            targetDistance.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            return targetDistance;
         }
 
         /// <summary>
@@ -387,7 +386,9 @@ namespace ACE.Server.WorldObjects
 
             // http://asheron.wikia.com/wiki/Wi_Flag
 
-            var distSum = targetDistances.Select(i => i.Distance).Sum();
+            var distSum = 0.0f;
+            foreach (var targetDistance in targetDistances)
+                distSum += targetDistance.Distance;
 
             // get the sum of the inverted ratios
             var invRatioSum = (float)(targetDistances.Count - 1);
@@ -426,6 +427,28 @@ namespace ACE.Server.WorldObjects
             // precision error?
             Console.WriteLine($"{Name}.SelectWeightedDistance: couldn't find target: {string.Join(",", targetDistances.Select(i => i.Distance))}");
             return targetDistances[0].Target;
+        }
+
+        private static Creature GetLowestLevelTarget(List<Creature> targets)
+        {
+            Creature selected = null;
+            foreach (var target in targets)
+            {
+                if (selected == null || target.Level < selected.Level)
+                    selected = target;
+            }
+            return selected;
+        }
+
+        private static Creature GetHighestLevelTarget(List<Creature> targets)
+        {
+            Creature selected = null;
+            foreach (var target in targets)
+            {
+                if (selected == null || target.Level > selected.Level)
+                    selected = target;
+            }
+            return selected;
         }
 
         /// <summary>

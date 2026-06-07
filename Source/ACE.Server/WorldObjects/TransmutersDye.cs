@@ -27,6 +27,7 @@ namespace ACE.Server.WorldObjects
     public class TransmutersDye : CraftTool
     {
         private const uint TRANSMUTERS_DYE_WCID = 420420423;
+        private const uint TRANSMUTERS_DYE_ICON = 0x06005FE8;
 
         // Curated pool of materials that read as a sensible "what is this made of?" answer
         // on armor/clothing. Gems are excluded — nobody wants a "Diamond Helm" appraisal.
@@ -79,10 +80,18 @@ namespace ACE.Server.WorldObjects
 
         public TransmutersDye(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
         {
+            SetDyeIcon();
         }
 
         public TransmutersDye(Biota biota) : base(biota)
         {
+            SetDyeIcon();
+        }
+
+        private void SetDyeIcon()
+        {
+            if (WeenieClassId == TRANSMUTERS_DYE_WCID)
+                IconId = TRANSMUTERS_DYE_ICON;
         }
 
         public override void HandleActionUseOnTarget(Player player, WorldObject target)

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
 
 using ACE.Common;
@@ -77,14 +76,14 @@ namespace ACE.Server.WorldObjects
         private double nextCrowdUnstickTime;
         private double nextDoorOpenAttemptTime;
 
-        private const double StuckSampleInterval = 0.35;
+        private const double StuckSampleInterval = 0.25;
         private const float StuckMinTravelDistance = 0.18f;
         private const float StuckMinDistanceImprovement = 0.10f;
         private const int StuckCourseCorrectionThreshold = 2;
-        private const double CourseCorrectionCooldownMin = 0.20;
-        private const double CourseCorrectionCooldownMax = 0.45;
-        private const double CrowdUnstickCooldown = 0.65;
-        private const double DoorOpenAttemptCooldown = 0.45;
+        private const double CourseCorrectionCooldownMin = 0.15;
+        private const double CourseCorrectionCooldownMax = 0.30;
+        private const double CrowdUnstickCooldown = 0.45;
+        private const double DoorOpenAttemptCooldown = 0.30;
         private const float DoorOpenScanRadius = 3.5f;
         private const float DoorOpenForwardBias = -0.25f;
         private const float CrowdBlockerScanRadius = 2.6f;
@@ -253,38 +252,38 @@ namespace ACE.Server.WorldObjects
             var scanSq = DoorOpenScanRadius * DoorOpenScanRadius;
             var forward = GetDoorSearchForward();
 
-            var doors = PhysicsObj.ObjMaint
-                .GetVisibleObjectsValuesWhere(o => o?.WeenieObj?.WorldObject is Door)
-                .Select(o => o.WeenieObj.WorldObject as Door)
-                .Where(door => door != null && door.Location != null && !door.IsOpen)
-                .Where(door => (door.Location.Cell & 0xFFFF0000) == (Location.Cell & 0xFFFF0000))
-                .Select(door => new
-                {
-                    Door = door,
-                    Offset = door.Location.ToGlobal() - Location.ToGlobal(),
-                    DistanceSq = Location.SquaredDistanceTo(door.Location)
-                })
-                .Where(d => d.DistanceSq <= scanSq)
-                .Where(d =>
-                {
-                    var offset = d.Offset;
-                    offset.Z = 0;
-                    if (forward == Vector3.Zero || offset.LengthSquared() <= 0.001f)
-                        return true;
+            Door nearestDoor = null;
+            var nearestDoorDistanceSq = float.MaxValue;
+            var currentPos = Location.ToGlobal();
 
-                    return Vector3.Dot(Vector3.Normalize(offset), forward) >= DoorOpenForwardBias;
-                })
-                .OrderBy(d => d.DistanceSq);
-
-            foreach (var door in doors)
+            foreach (var visible in PhysicsObj.ObjMaint.GetVisibleObjectsValuesWhere(o => o?.WeenieObj?.WorldObject is Door))
             {
-                if (door.Door.TryOpenForCreature(this))
-                {
-                    FailedMovementCount = 0;
-                    nextDoorOpenAttemptTime = now + DoorOpenAttemptCooldown;
-                    NextCancelTime = Math.Max(NextCancelTime, now + 1.0);
-                    return true;
-                }
+                if (!(visible.WeenieObj.WorldObject is Door door) || door.Location == null || door.IsOpen)
+                    continue;
+
+                if ((door.Location.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                var distanceSq = Location.SquaredDistanceTo(door.Location);
+                if (distanceSq > scanSq || distanceSq >= nearestDoorDistanceSq)
+                    continue;
+
+                var offset = door.Location.ToGlobal() - currentPos;
+                offset.Z = 0;
+                if (forward != Vector3.Zero && offset.LengthSquared() > 0.001f
+                    && Vector3.Dot(Vector3.Normalize(offset), forward) < DoorOpenForwardBias)
+                    continue;
+
+                nearestDoor = door;
+                nearestDoorDistanceSq = distanceSq;
+            }
+
+            if (nearestDoor != null && nearestDoor.TryOpenForCreature(this))
+            {
+                FailedMovementCount = 0;
+                nextDoorOpenAttemptTime = now + DoorOpenAttemptCooldown;
+                NextCancelTime = Math.Max(NextCancelTime, now + 1.0);
+                return true;
             }
 
             return false;
@@ -382,9 +381,8 @@ namespace ACE.Server.WorldObjects
                 result.Add(visible);
             }
 
-            return result
-                .OrderBy(c => Location.SquaredDistanceTo(c.Location))
-                .ToList();
+            result.Sort((a, b) => Location.SquaredDistanceTo(a.Location).CompareTo(Location.SquaredDistanceTo(b.Location)));
+            return result;
         }
 
         private bool TryFindCrowdEscapePosition(List<Creature> blockers, out ACE.Entity.Position escape)
@@ -501,6 +499,15 @@ namespace ACE.Server.WorldObjects
 
             OnMovementStopped();
 
+            if (PhysicsObj != null && Location != null)
+            {
+                SyncMoveToPosition();
+                PhysicsObj.CachedVelocity = Vector3.Zero;
+            }
+
+            if (status != WeenieError.ActionCancelled)
+                IsMoving = false;
+
             if (IsMovingToHome)
                 PendingEndMoveToHome = true;
             if (IsGrantingPassage)
@@ -556,9 +563,6 @@ namespace ACE.Server.WorldObjects
 
             if (MonsterState == State.Return)
                 Sleep();
-
-            PhysicsObj.CachedVelocity = Vector3.Zero;
-            IsMoving = false;
         }
 
         /// <summary>

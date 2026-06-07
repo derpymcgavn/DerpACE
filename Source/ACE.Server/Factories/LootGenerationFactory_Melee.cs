@@ -540,7 +540,7 @@ namespace ACE.Server.Factories
                     wo.ProcSpellRate = procPct / 100.0;
                     wo.ProcSpellSelfTargeted = false;
 
-                    wo.UiEffects = UiEffects.Magical | GetLootElementUiEffect(wo.W_DamageType);
+                    ApplyLootUiEffects(wo, wo.W_DamageType, true);
 
                     wo.IconOverlayId = wo.W_DamageType switch
                     {

@@ -15,7 +15,7 @@ namespace ACE.Server.Factories
         {
             AssignSpells(wo, profile, roll);
 
-            wo.UiEffects = UiEffects.Magical | GetLootElementUiEffect(wo.W_DamageType);
+            ApplyLootUiEffects(wo, wo.W_DamageType, true);
 
             var maxBaseMana = GetMaxBaseMana(wo);
 
@@ -47,6 +47,20 @@ namespace ACE.Server.Factories
                 return UiEffects.BoostHealth;
 
             return IronmanFactory.GetElementalUiEffect(damageType);
+        }
+
+        private static UiEffects GetLootUiEffects(DamageType damageType, bool isMagical)
+        {
+            var ui = isMagical ? UiEffects.Magical : UiEffects.Undef;
+            ui |= GetLootElementUiEffect(damageType);
+            return ui;
+        }
+
+        private static void ApplyLootUiEffects(WorldObject wo, DamageType damageType, bool isMagical)
+        {
+            var ui = GetLootUiEffects(damageType, isMagical);
+            if (ui != UiEffects.Undef)
+                wo.UiEffects = ui;
         }
 
         /// <summary>

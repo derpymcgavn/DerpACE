@@ -47,9 +47,7 @@ namespace ACE.Server.Factories
             // for elemental missile weapons — covers dartflingers (atlatls), bows, and crossbows alike.
             if (isElemental)
             {
-                var ui = GetLootElementUiEffect(wo.W_DamageType);
-                if (ui != UiEffects.Undef)
-                    wo.UiEffects = ui;
+                ApplyLootUiEffects(wo, wo.W_DamageType, false);
             }
 
             // weapon speed

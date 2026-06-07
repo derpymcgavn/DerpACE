@@ -114,7 +114,7 @@ namespace ACE.Server.Factories
             wo.WeaponSkill = Skill.MissileWeapons;
             wo.W_WeaponType = WeaponType.Thrown;
             wo.W_DamageType = ThrowableDinnerwareDamageTypes[ThreadSafeRandom.Next(0, ThrowableDinnerwareDamageTypes.Length - 1)];
-            wo.UiEffects |= GetLootElementUiEffect(wo.W_DamageType);
+            ApplyLootUiEffects(wo, wo.W_DamageType, false);
             wo.Biota.PropertiesSpellBook?.Clear();
 
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.RicochetAtlatlEnabled)
