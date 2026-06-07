@@ -274,5 +274,10 @@ namespace ACE.Entity.Enum.Properties
         /* DerpACE Nomad — proc chance/magnitude stamped onto gauntlets/shoes */
         NomadProcChance                = 9026,  // 0.0-1.0 chance to fire the stamped proc on a Punch/Kick hit
         NomadProcMagnitude             = 9027,  // proc-type specific magnitude (e.g. heal % of damage, cleave dmg %)
+
+        /* DerpACE Ricochet Atlatl - visible secondary dart bounce */
+        RicochetProcChance             = 9028,  // chance on missile hit to launch a ricochet dart
+        RicochetDamageScale            = 9029,  // damage multiplier applied to the ricochet projectile
+        RicochetRadius                 = 9030,  // nearby target search radius in yards
     }
 }

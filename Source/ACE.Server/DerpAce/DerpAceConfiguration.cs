@@ -93,6 +93,8 @@ namespace ACE.Server.DerpAce
         public bool BreacherCrossbowEnabled { get; set; } = true;
         [JsonPropertyName("reaper_atlatl_enabled")]
         public bool ReaperAtlatlEnabled { get; set; } = true;
+        [JsonPropertyName("ricochet_atlatl_enabled")]
+        public bool RicochetAtlatlEnabled { get; set; } = true;
         [JsonPropertyName("weapon_elem_blast_enabled")]
         public bool WeaponElemBlastEnabled { get; set; } = true;
 
@@ -478,6 +480,20 @@ namespace ACE.Server.DerpAce
         public int ReaperHealMin { get; set; } = 4;
         [JsonPropertyName("reaper_atlatl_heal_max")]
         public int ReaperHealMax { get; set; } = 10;
+
+        // Ricochet Atlatl / Dartflinger
+        [JsonPropertyName("ricochet_atlatl_drop_chance")]
+        public float RicochetAtlatlDropChance { get; set; } = 0.02f;
+        [JsonPropertyName("ricochet_atlatl_min_tier")]
+        public int RicochetAtlatlMinTier { get; set; } = 5;
+        [JsonPropertyName("ricochet_proc_min")]
+        public int RicochetProcMin { get; set; } = 15;
+        [JsonPropertyName("ricochet_proc_max")]
+        public int RicochetProcMax { get; set; } = 30;
+        [JsonPropertyName("ricochet_damage_scale")]
+        public float RicochetDamageScale { get; set; } = 0.50f;
+        [JsonPropertyName("ricochet_radius")]
+        public float RicochetRadius { get; set; } = 10.0f;
 
         // Weapon Elemental Blast-on-Strike
         [JsonPropertyName("weapon_blast_proc_min_tier")]

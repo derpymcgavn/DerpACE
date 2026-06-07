@@ -36,7 +36,8 @@ namespace ACE.Server.WorldObjects
 
             // handle proc spells for weapon
             // this could be a melee weapon, or a missile launcher
-            if (weapon != null && weapon.HasProc && weapon.ProcSpellSelfTargeted == selfTarget)
+            if (weapon != null && weapon.HasProc && weapon.ProcSpellSelfTargeted == selfTarget
+                && (!(attacker is Player procPlayer) || !procPlayer.IsUnarmedArmorPiece(weapon) || procPlayer.IsUnarmedArmorActive(weapon)))
             {
                 // weapon
                 weapon.TryProcItem(attacker, target, selfTarget);
@@ -59,7 +60,6 @@ namespace ACE.Server.WorldObjects
                     // DerpACE: when a player has a real weapon equipped, unarmed gauntlets and boots
                     // must not contribute procs — they are unarmed-only modifiers.
                     var playerWielder = wielder as Player;
-                    var weaponEquipped = playerWielder != null && !playerWielder.IsNomadUnarmed;
 
                     foreach (var item in wielder.EquippedObjects.Values)
                     {
@@ -69,10 +69,8 @@ namespace ACE.Server.WorldObjects
                         if (!item.HasProc || item.ProcSpellSelfTargeted != selfTarget)
                             continue;
 
-                        // Skip unarmed gauntlet/boot procs when a real weapon is equipped
-                        if (weaponEquipped && item.CurrentWieldedLocation is EquipMask wieldLoc
-                            && (wieldLoc & (EquipMask.HandWear | EquipMask.FootWear)) != 0
-                            && (item.UnarmedBaseDamage ?? 0) > 0)
+                        // Skip unarmed gauntlet/boot procs unless the player is truly weapon-free.
+                        if (playerWielder != null && playerWielder.IsUnarmedArmorPiece(item) && !playerWielder.IsUnarmedArmorActive(item))
                             continue;
 
                         item.TryProcItem(attacker, target, selfTarget);

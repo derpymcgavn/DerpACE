@@ -143,6 +143,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.StalkerBowEnabled       = c.StalkerBowEnabled;
             DerpACEConfig.BreacherCrossbowEnabled = c.BreacherCrossbowEnabled;
             DerpACEConfig.ReaperAtlatlEnabled     = c.ReaperAtlatlEnabled;
+            DerpACEConfig.RicochetAtlatlEnabled   = c.RicochetAtlatlEnabled;
             DerpACEConfig.WeaponElemBlastEnabled  = c.WeaponElemBlastEnabled;
 
             // ── Teleport ─────────────────────────────────────────────────────
@@ -343,6 +344,13 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ReaperProcMax               = c.ReaperProcMax;
             DerpACEConfig.ReaperHealMin               = c.ReaperHealMin;
             DerpACEConfig.ReaperHealMax               = c.ReaperHealMax;
+
+            DerpACEConfig.RicochetAtlatlDropChance    = c.RicochetAtlatlDropChance;
+            DerpACEConfig.RicochetAtlatlMinTier       = c.RicochetAtlatlMinTier;
+            DerpACEConfig.RicochetProcMin             = c.RicochetProcMin;
+            DerpACEConfig.RicochetProcMax             = c.RicochetProcMax;
+            DerpACEConfig.RicochetDamageScale         = c.RicochetDamageScale;
+            DerpACEConfig.RicochetRadius              = c.RicochetRadius;
 
             DerpACEConfig.WeaponBlastProcMinTier      = c.WeaponBlastProcMinTier;
             DerpACEConfig.WeaponBlastProcChanceMin    = c.WeaponBlastProcChanceMin;

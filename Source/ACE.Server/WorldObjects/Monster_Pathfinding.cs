@@ -705,21 +705,38 @@ namespace ACE.Server.WorldObjects
             target.TryGrantPassage(this);
         }
 
-        public void TryGrantPassage(Creature requester)
+        public bool TryGrantPassage(Creature requester)
         {
-            if (requester?.Location == null || Location == null) return;
-            if (IsGrantingPassage || IsGrantPassagePending) return;
-            if (Time.GetUnixTime() - LastGrantPassageTime < MaxGrantPassageFrequency) return;
+            if (requester?.Location == null || Location == null)
+                return false;
+
+            if (IsGrantingPassage || IsGrantPassagePending || IsAttacking)
+                return false;
+
+            if (Time.GetUnixTime() - LastGrantPassageTime < MaxGrantPassageFrequency)
+                return false;
+
+            if (AttackTarget != null && CurrentAttack != null && TryAbortPathForAttack())
+                return false;
 
             // Pick a sidestep position perpendicular to requester's heading
             var dir = Location.Pos - requester.Location.Pos;
-            if (dir.LengthSquared() < 0.01f) return;
+            if (dir.LengthSquared() < 0.01f)
+                return false;
+
             var perp = Vector3.Normalize(new Vector3(-dir.Y, dir.X, 0)) * 2.0f;
             GrantPassageTarget = new Position(Location);
             GrantPassageTarget.PositionX += perp.X;
             GrantPassageTarget.PositionY += perp.Y;
 
+            if (!IsValidPathPosition(GrantPassageTarget) || (GrantPassageTarget.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+            {
+                GrantPassageTarget = null;
+                return false;
+            }
+
             IsGrantPassagePending = true;
+            return true;
         }
 
         public void GrantPassage()

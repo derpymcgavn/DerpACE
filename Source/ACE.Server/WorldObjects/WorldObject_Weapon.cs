@@ -87,6 +87,13 @@ namespace ACE.Server.WorldObjects
 
         private const float defaultModifier = 1.0f;
 
+        private static bool IsInactiveUnarmedArmor(Creature wielder, WorldObject weapon)
+        {
+            return wielder is Player player
+                && player.IsUnarmedArmorPiece(weapon)
+                && !player.IsUnarmedArmorActive(weapon);
+        }
+
         /// <summary>
         /// Returns the Melee Defense skill modifier for the current weapon
         /// </summary>
@@ -117,6 +124,9 @@ namespace ACE.Server.WorldObjects
             if (weapon == null)
                 return defaultModifier;
 
+            if (IsInactiveUnarmedArmor(wielder, weapon))
+                return defaultModifier;
+
             //var defenseMod = (float)(weapon.WeaponDefense ?? defaultModifier) + weapon.EnchantmentManager.GetDefenseMod();
 
             // TODO: Resolve this issue a better way?
@@ -145,6 +155,9 @@ namespace ACE.Server.WorldObjects
             if (weapon == null || wielder.CombatMode == CombatMode.NonCombat)
                 return defaultModifier;
 
+            if (IsInactiveUnarmedArmor(wielder, weapon))
+                return defaultModifier;
+
             //// no enchantments?
             //return (float)(weapon.WeaponMissileDefense ?? 1.0f);
 
@@ -168,6 +181,9 @@ namespace ACE.Server.WorldObjects
             WorldObject weapon = GetWeapon(wielder as Player);
 
             if (weapon == null || wielder.CombatMode == CombatMode.NonCombat)
+                return defaultModifier;
+
+            if (IsInactiveUnarmedArmor(wielder, weapon))
                 return defaultModifier;
 
             //// no enchantments?
@@ -226,6 +242,9 @@ namespace ACE.Server.WorldObjects
              While many old quest weapons still retain their (useless) attack bonus, we will not be putting any new ones into the system.
              */
             if (weapon == null || weapon.IsRanged /* see note above */)
+                return defaultModifier;
+
+            if (IsInactiveUnarmedArmor(wielder, weapon))
                 return defaultModifier;
 
             var offenseMod = (float)(weapon.WeaponOffense ?? defaultModifier) + weapon.EnchantmentManager.GetAttackMod();

@@ -112,9 +112,8 @@ namespace ACE.Server.Network.Structure
             if (wo is Creature creature)
                 BuildCreature(creature);
 
-            // DerpACE: Include boots/gauntlets with unarmed damage in weapon profile display
-            var isUnarmedArmorPiece = wo is Clothing && (wo.UnarmedBaseDamage ?? 0) > 0 &&
-                                      (wo.ValidLocations & (EquipMask.HandWear | EquipMask.FootWear)) != 0;
+            // DerpACE: Include boots/gauntlets with unarmed damage in weapon profile display.
+            var isUnarmedArmorPiece = IsUnarmedDamageArmorPiece(wo);
 
             if (wo.Damage != null && !(wo is Clothing) || wo is MeleeWeapon || wo is Missile || wo is MissileLauncher || wo is Ammunition || wo is Caster || isUnarmedArmorPiece)
                 BuildWeapon(wo);
@@ -340,7 +339,125 @@ namespace ACE.Server.Network.Structure
                 //PropertiesString.Clear();
             }
 
+            SuppressInactiveUnarmedArmorAppraisal(wo);
+            AddUnarmedDamageAppraisalLongDesc(wo);
+
             BuildFlags();
+        }
+
+        private static bool IsUnarmedDamageArmorPiece(WorldObject wo)
+        {
+            if (!(wo is Clothing))
+                return false;
+
+            var validLocs = wo.ValidLocations ?? 0;
+            if ((validLocs & (EquipMask.HandWear | EquipMask.FootWear)) == 0)
+                return false;
+
+            return (wo.UnarmedBaseDamage ?? 0) > 0
+                || ((wo.Damage ?? 0) > 0 && ((wo.UnarmedDamageType ?? 0) > 0 || (wo.GetProperty(PropertyInt.DamageType) ?? 0) > 0));
+        }
+
+        private static bool IsUnarmedDamageArmorActive(WorldObject wo)
+        {
+            if (!IsUnarmedDamageArmorPiece(wo))
+                return false;
+
+            return !(wo.Wielder is Player player) || player.IsUnarmedArmorActive(wo);
+        }
+
+        private void SuppressInactiveUnarmedArmorAppraisal(WorldObject wo)
+        {
+            if (!IsUnarmedDamageArmorPiece(wo) || IsUnarmedDamageArmorActive(wo))
+                return;
+
+            PropertiesInt[PropertyInt.Damage] = 0;
+            PropertiesInt[PropertyInt.DamageType] = 0;
+            PropertiesInt[PropertyInt.WeaponTime] = 0;
+
+            PropertiesFloat[PropertyFloat.DamageMod] = 0.0f;
+            PropertiesFloat[PropertyFloat.DamageVariance] = 0.0f;
+            PropertiesFloat[PropertyFloat.WeaponOffense] = 1.0f;
+            PropertiesFloat[PropertyFloat.WeaponDefense] = 1.0f;
+            PropertiesFloat[PropertyFloat.WeaponMissileDefense] = 1.0f;
+            PropertiesFloat[PropertyFloat.WeaponMagicDefense] = 1.0f;
+
+            if (WeaponProfile == null)
+                return;
+
+            WeaponProfile.Damage = 0;
+            WeaponProfile.DamageType = DamageType.Undef;
+            WeaponProfile.DamageVariance = 0.0f;
+            WeaponProfile.DamageMod = 0.0f;
+            WeaponProfile.WeaponTime = 0;
+            WeaponProfile.WeaponOffense = 1.0f;
+            WeaponProfile.WeaponDefense = 1.0f;
+            WeaponProfile.Enchantment_Damage = 0;
+            WeaponProfile.Enchantment_DamageMod = 0.0f;
+            WeaponProfile.Enchantment_DamageVariance = 0.0f;
+            WeaponProfile.Enchantment_WeaponOffense = 0.0f;
+            WeaponProfile.Enchantment_WeaponDefense = 0.0f;
+        }
+
+        private void AddUnarmedDamageAppraisalLongDesc(WorldObject wo)
+        {
+            if (!IsUnarmedDamageArmorPiece(wo))
+                return;
+
+            var baseDamage = wo.UnarmedBaseDamage ?? wo.Damage ?? 0;
+            if (baseDamage <= 0)
+                return;
+
+            var damageType = (DamageType)(wo.UnarmedDamageType ?? wo.GetProperty(PropertyInt.DamageType) ?? 0);
+            var damageTypeName = GetUnarmedDamageTypeName(damageType);
+            var variance = wo.UnarmedDamageVariance ?? wo.DamageVariance ?? 0.0f;
+
+            var validLocs = wo.ValidLocations ?? 0;
+            var slotType = (validLocs & EquipMask.HandWear) != 0 ? "gauntlets" : "boots";
+            var attackName = (validLocs & EquipMask.HandWear) != 0 ? "punches" : "kicks";
+
+            var active = IsUnarmedDamageArmorActive(wo);
+            var details = active
+                ? $"\n\nUnarmed Damage: {baseDamage} {damageTypeName} ({variance:P0} variance) for {attackName} while no weapon is equipped."
+                : $"\n\nUnarmed Damage: 0 (dormant while a weapon or caster is equipped).\nPotential: {baseDamage} {damageTypeName} ({variance:P0} variance) for {attackName} when no weapon is equipped.";
+
+            if (active && (wo.WeaponOffense.HasValue || wo.WeaponDefense.HasValue || wo.WeaponTime.HasValue))
+            {
+                var offense = wo.WeaponOffense.HasValue ? $"Offense: {wo.WeaponOffense.Value:P1}" : null;
+                var defense = wo.WeaponDefense.HasValue ? $"Defense: {wo.WeaponDefense.Value:P1}" : null;
+                var speed = wo.WeaponTime.HasValue ? $"Speed: {wo.WeaponTime.Value}" : null;
+
+                var statLine = string.Join("  ", new[] { offense, defense, speed }.Where(x => x != null));
+                if (!string.IsNullOrWhiteSpace(statLine))
+                    details += $"\n{statLine}";
+            }
+
+            details += $"\nThese {slotType} are compatible with the nomad unarmed system.";
+
+            if (PropertiesString.TryGetValue(PropertyString.LongDesc, out var longDesc) && !string.IsNullOrWhiteSpace(longDesc))
+            {
+                if (longDesc.Contains("Unarmed Damage:"))
+                    return;
+
+                PropertiesString[PropertyString.LongDesc] = longDesc.TrimEnd() + details;
+            }
+            else
+                PropertiesString[PropertyString.LongDesc] = details.TrimStart();
+        }
+
+        private static string GetUnarmedDamageTypeName(DamageType damageType)
+        {
+            return damageType switch
+            {
+                DamageType.Fire => "Fire",
+                DamageType.Cold => "Frost",
+                DamageType.Acid => "Acid",
+                DamageType.Electric => "Lightning",
+                DamageType.Pierce => "Piercing",
+                DamageType.Bludgeon => "Bludgeoning",
+                DamageType.Slash => "Slashing",
+                _ => "Physical",
+            };
         }
 
         private void BuildProperties(WorldObject wo)

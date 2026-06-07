@@ -47,7 +47,7 @@ namespace ACE.Server.Factories
             // for elemental missile weapons — covers dartflingers (atlatls), bows, and crossbows alike.
             if (isElemental)
             {
-                var ui = IronmanFactory.GetElementalUiEffect(wo.W_DamageType);
+                var ui = GetLootElementUiEffect(wo.W_DamageType);
                 if (ui != UiEffects.Undef)
                     wo.UiEffects = ui;
             }
@@ -114,8 +114,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.StalkerBowDropChance,
                 ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier,
-                roll.WeaponType == TreasureWeaponType.Bow,
-                roll.WeaponType == TreasureWeaponType.Crossbow || roll.WeaponType == TreasureWeaponType.Atlatl))
+                roll.WeaponType == TreasureWeaponType.Bow))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.StalkerProcMin,
@@ -146,8 +145,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.BreacherCrossbowDropChance,
                 ACE.Server.Managers.DerpACEConfig.BreacherCrossbowMinTier,
-                roll.WeaponType == TreasureWeaponType.Crossbow,
-                roll.WeaponType == TreasureWeaponType.Bow || roll.WeaponType == TreasureWeaponType.Atlatl))
+                roll.WeaponType == TreasureWeaponType.Crossbow))
             {
                 var armorIgnoreChance = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.BreacherArmorIgnoreMin,
@@ -164,36 +162,31 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
-            // Reaper's Atlatl: configurable chance on T6+ atlatls for a kill-fed self-heal proc (see @lootconfig)
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ReaperAtlatlEnabled
+            // Ricochet Atlatl: configurable chance on T6+ atlatls / dartflingers to bounce a visible dart
+            // into another nearby target after a successful hit (see @lootconfig).
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.RicochetAtlatlEnabled
                 && TryRollWeaponModifier(
                 profile,
                 ref specialModifierApplied,
-                ACE.Server.Managers.DerpACEConfig.ReaperAtlatlDropChance,
-                ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier,
-                roll.WeaponType == TreasureWeaponType.Atlatl,
-                roll.WeaponType == TreasureWeaponType.Bow || roll.WeaponType == TreasureWeaponType.Crossbow))
+                ACE.Server.Managers.DerpACEConfig.RicochetAtlatlDropChance,
+                ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier,
+                roll.WeaponType == TreasureWeaponType.Atlatl))
             {
                 var procPct = RollTierScaledInt(
-                    ACE.Server.Managers.DerpACEConfig.ReaperProcMin,
-                    ACE.Server.Managers.DerpACEConfig.ReaperProcMax,
+                    ACE.Server.Managers.DerpACEConfig.RicochetProcMin,
+                    ACE.Server.Managers.DerpACEConfig.RicochetProcMax,
                     profile.Tier,
-                    ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier);
-                var healPct = RollTierScaledInt(
-                    ACE.Server.Managers.DerpACEConfig.ReaperHealMin,
-                    ACE.Server.Managers.DerpACEConfig.ReaperHealMax,
-                    profile.Tier,
-                    ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier);
+                    ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier);
                 if (procPct < 1) procPct = 1;
-                if (healPct < 1) healPct = 1;
 
-                wo.Name = wo.Name + " of the Reaper";
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl, true);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc,    procPct / 100.0);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct, healPct / 100.0);
+                wo.Name = wo.Name + " of Ricochet";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRicochetAtlatl, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetProcChance,  procPct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetDamageScale, ACE.Server.Managers.DerpACEConfig.RicochetDamageScale);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetRadius,      ACE.Server.Managers.DerpACEConfig.RicochetRadius);
                 wo.IconOverlayId = 0x06002860u;
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} feasts on the slain \u2014 a killing blow has a {procPct}% chance to instantly restore {healPct}% of your maximum health.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} skips death through the air -- each hit has a {procPct}% chance to ricochet a second dart into another nearby foe for {ACE.Server.Managers.DerpACEConfig.RicochetDamageScale:P0} damage.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.

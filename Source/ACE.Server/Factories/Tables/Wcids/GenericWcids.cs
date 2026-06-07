@@ -21,7 +21,8 @@ namespace ACE.Server.Factories.Tables.Wcids
             ( WeenieClassName.ornamentalbowl, 0.00f ),
             ( WeenieClassName.dinnerplate,    0.08f ),
             ( WeenieClassName.stoup,          0.13f ),
-            ( WeenieClassName.tankard,        0.13f ),
+            ( WeenieClassName.tankard,        0.11f ),
+            ( (WeenieClassName)420498,        0.02f ),
         };
 
         private static ChanceTable<WeenieClassName> T3_T4_Chances = new ChanceTable<WeenieClassName>()
@@ -33,11 +34,12 @@ namespace ACE.Server.Factories.Tables.Wcids
             ( WeenieClassName.flagon,         0.11f ),
             ( WeenieClassName.flasksimple,    0.05f ),
             ( WeenieClassName.goblet,         0.14f ),
-            ( WeenieClassName.mug,            0.14f ),
+            ( WeenieClassName.mug,            0.12f ),
             ( WeenieClassName.ornamentalbowl, 0.08f ),
             ( WeenieClassName.dinnerplate,    0.08f ),
             ( WeenieClassName.stoup,          0.05f ),
             ( WeenieClassName.tankard,        0.05f ),
+            ( (WeenieClassName)420498,        0.02f ),
         };
 
         private static ChanceTable<WeenieClassName> T5_T6_Chances = new ChanceTable<WeenieClassName>()
@@ -48,12 +50,13 @@ namespace ACE.Server.Factories.Tables.Wcids
             ( WeenieClassName.ewer,           0.13f ),
             ( WeenieClassName.flagon,         0.09f ),
             ( WeenieClassName.flasksimple,    0.00f ),
-            ( WeenieClassName.goblet,         0.23f ),
+            ( WeenieClassName.goblet,         0.21f ),
             ( WeenieClassName.mug,            0.00f ),
             ( WeenieClassName.ornamentalbowl, 0.19f ),
             ( WeenieClassName.dinnerplate,    0.13f ),
             ( WeenieClassName.stoup,          0.00f ),
             ( WeenieClassName.tankard,        0.00f ),
+            ( (WeenieClassName)420498,        0.02f ),
         };
 
         private static List<ChanceTable<WeenieClassName>> tierChances = new List<ChanceTable<WeenieClassName>>()

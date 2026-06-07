@@ -75,8 +75,7 @@ namespace ACE.Server.Factories
             73081   // Shade Iron Ore Hammer
         };
 
-        // Returns a flavor noun for the rolled weapon type so long descriptions match the actual weapon
-        // (since custom modifiers can roll across interchangeable weapon types).
+        // Returns a flavor noun for the rolled weapon type so long descriptions match the actual weapon.
         private static string GetWeaponNoun(TreasureWeaponType weaponType)
         {
             switch (weaponType)
@@ -187,7 +186,7 @@ namespace ACE.Server.Factories
             wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis weapon occasionally releases a burst of {elemName} — each strike carries a {pctDisplay}% chance to discharge a level 3 {elemName} blast.";
         }
 
-        private static bool TryRollWeaponModifier(TreasureDeath profile, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible, bool interchangeableEligible = false)
+        private static bool TryRollWeaponModifier(TreasureDeath profile, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible)
         {
             if (profile == null || profile.Tier < minTier)
                 return false;
@@ -195,10 +194,7 @@ namespace ACE.Server.Factories
             if (ACE.Server.Managers.DerpACEConfig.LootModifierExclusivePerItem && specialModifierApplied)
                 return false;
 
-            var allowInterchange = ACE.Server.Managers.DerpACEConfig.LootModifierInterchangeable
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.LootModifierInterchangeableMinTier;
-
-            if (!primaryEligible && !(allowInterchange && interchangeableEligible))
+            if (!primaryEligible)
                 return false;
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= GetAdjustedModifierChance(baseChance))
@@ -305,8 +301,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.ThievesDaggerDropChance,
                 ACE.Server.Managers.DerpACEConfig.ThievesDaggerMinTier,
-                roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS,
-                roll.WeaponType == TreasureWeaponType.SwordMS || roll.WeaponType == TreasureWeaponType.Sword))
+                roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS))
             {
                 wo.Name = wo.Name + " of the Thief";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
@@ -329,8 +324,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.FencerBladeDropChance,
                 ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier,
-                roll.WeaponType == TreasureWeaponType.SwordMS,
-                roll.WeaponType == TreasureWeaponType.DaggerMS || roll.WeaponType == TreasureWeaponType.Sword))
+                roll.WeaponType == TreasureWeaponType.SwordMS))
             {
                 var piercePct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.FencerPierceMin,
@@ -366,8 +360,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.RavagerAxeDropChance,
                 ACE.Server.Managers.DerpACEConfig.RavagerAxeMinTier,
-                roll.WeaponType == TreasureWeaponType.Axe || roll.WeaponType == TreasureWeaponType.TwoHandedAxe,
-                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear))
+                roll.WeaponType == TreasureWeaponType.Axe || roll.WeaponType == TreasureWeaponType.TwoHandedAxe))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.RavagerProcMin,
@@ -424,8 +417,7 @@ namespace ACE.Server.Factories
                 ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier,
                 roll.WeaponType == TreasureWeaponType.Mace
                     || roll.WeaponType == TreasureWeaponType.MaceJitte
-                    || roll.WeaponType == TreasureWeaponType.TwoHandedMace,
-                roll.WeaponType == TreasureWeaponType.Staff))
+                    || roll.WeaponType == TreasureWeaponType.TwoHandedMace))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.WardenProcMin,
@@ -464,8 +456,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.ResoluteBladeDropChance,
                 ACE.Server.Managers.DerpACEConfig.ResoluteBladeMinTier,
-                roll.WeaponType == TreasureWeaponType.Sword || roll.WeaponType == TreasureWeaponType.TwoHandedSword,
-                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear))
+                roll.WeaponType == TreasureWeaponType.Sword || roll.WeaponType == TreasureWeaponType.TwoHandedSword))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.ResoluteProcMin,
@@ -494,14 +485,14 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is honed for the long fight — critical hits have a {procPct}% chance to restore {healPct}% of the damage dealt as health to the wielder. Killing blows surge with {killBurstPct}% of your maximum health and stamina.{(isTwoHandedSword ? " The two-handed grip drinks deeper from the slain." : "")}";
             }
 
-            // Polebreaker Staff: configurable chance on T6+ staves to escalate damage on consecutive hits against the same target (see @lootconfig)
+            // Polebreaker: configurable chance on T6+ staves to escalate
+            // damage on consecutive hits against the same target (see @lootconfig).
             if (TryRollWeaponModifier(
                 profile,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.PolebreakerDropChance,
                 ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier,
-                roll.WeaponType == TreasureWeaponType.Staff,
-                roll.WeaponType == TreasureWeaponType.TwoHandedMace || roll.WeaponType == TreasureWeaponType.MaceJitte))
+                roll.WeaponType == TreasureWeaponType.Staff))
             {
                 var stackPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.PolebreakerStackMin,
@@ -549,14 +540,7 @@ namespace ACE.Server.Factories
                     wo.ProcSpellRate = procPct / 100.0;
                     wo.ProcSpellSelfTargeted = false;
 
-                    wo.UiEffects = wo.W_DamageType switch
-                    {
-                        DamageType.Acid     => ACE.Entity.Enum.UiEffects.Acid,
-                        DamageType.Electric => ACE.Entity.Enum.UiEffects.Lightning,
-                        DamageType.Fire     => ACE.Entity.Enum.UiEffects.Fire,
-                        DamageType.Cold     => ACE.Entity.Enum.UiEffects.Frost,
-                        _                   => ACE.Entity.Enum.UiEffects.Undef
-                    };
+                    wo.UiEffects = UiEffects.Magical | GetLootElementUiEffect(wo.W_DamageType);
 
                     wo.IconOverlayId = wo.W_DamageType switch
                     {
@@ -596,8 +580,7 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.SentinelSpearDropChance,
                 ACE.Server.Managers.DerpACEConfig.SentinelSpearMinTier,
-                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear,
-                roll.WeaponType == TreasureWeaponType.Staff))
+                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear))
             {
                 wo.Name = wo.Name + " of the Sentinel";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);

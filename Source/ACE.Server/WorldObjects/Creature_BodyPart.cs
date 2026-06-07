@@ -41,25 +41,13 @@ namespace ACE.Server.WorldObjects
             // get base AL / RL
             var armorVsType = Biota.Value.BaseArmor * (float)Creature.GetArmorVsType(damageType);
 
-            // DerpACE Ironman Nomad — natural AL 450 with only clothes (no Armor layers),
-            // averaged across all damage types (resist 1.0). When wearing any armor, the
-            // armor's contribution is halved because nomads don't know how to wear armor.
-            var isNomad = Creature is Player nomadPlayer && nomadPlayer.GetProperty(PropertyBool.IsIronmanNomad) == true;
-            var hasArmorLayer = false;
-            if (isNomad)
-            {
-                foreach (var layer in armorLayers)
-                {
-                    if ((layer.ItemType & ItemType.Armor) != 0)
-                    {
-                        hasArmorLayer = true;
-                        break;
-                    }
-                }
-
-                if (!hasArmorLayer)
-                    armorVsType = 450.0f;
-            }
+            // DerpACE Ironman Nomad: natural AL 420 with above-average protections while
+            // wearing no armor. If a nomad wears armor anyway, its armor contribution is
+            // halved because nomads don't know how to wear armor.
+            var nomadPlayer = Creature as Player;
+            var isNomad = nomadPlayer != null && nomadPlayer.IsIronmanNomad;
+            if (isNomad && nomadPlayer.HasNomadUnarmoredProtection)
+                armorVsType = Player.NomadUnarmoredArmorLevel * Player.NomadUnarmoredProtectionMod;
 
             // additive enchantments:
             // imperil / armor
@@ -72,7 +60,7 @@ namespace ACE.Server.WorldObjects
             {
                 var layerAL = GetArmorMod(armorLayer, damageType, ignoreMagicArmor);
 
-                if (isNomad && (armorLayer.ItemType & ItemType.Armor) != 0)
+                if (isNomad && nomadPlayer.CountsAgainstNomadUnarmoredProtection(armorLayer))
                     layerAL *= 0.5f; // nomads don't know how to wear armor
 
                 effectiveAL += layerAL;

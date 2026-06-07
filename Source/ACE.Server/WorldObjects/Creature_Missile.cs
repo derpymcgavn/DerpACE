@@ -91,6 +91,8 @@ namespace ACE.Server.WorldObjects
 
             var proj = WorldObjectFactory.CreateNewWorldObject(ammo.WeenieClassId);
 
+            CopyProjectileCombatProperties(proj, ammo);
+
             proj.ProjectileSource = this;
             proj.ProjectileTarget = target;
 
@@ -140,6 +142,33 @@ namespace ACE.Server.WorldObjects
             }*/
 
             return proj;
+        }
+
+        private static void CopyProjectileCombatProperties(WorldObject projectile, WorldObject ammo)
+        {
+            if (projectile == null || ammo == null)
+                return;
+
+            projectile.ItemType = ammo.ItemType;
+            projectile.W_DamageType = ammo.W_DamageType;
+            projectile.W_WeaponType = ammo.W_WeaponType;
+            projectile.WeaponSkill = ammo.WeaponSkill;
+
+            projectile.Damage = ammo.Damage;
+            projectile.DamageMod = ammo.DamageMod;
+            projectile.DamageVariance = ammo.DamageVariance;
+            projectile.ElementalDamageBonus = ammo.ElementalDamageBonus;
+
+            projectile.CriticalFrequency = ammo.CriticalFrequency;
+            var criticalMultiplier = ammo.GetProperty(PropertyFloat.CriticalMultiplier);
+            if (criticalMultiplier.HasValue)
+                projectile.SetProperty(PropertyFloat.CriticalMultiplier, criticalMultiplier.Value);
+            else
+                projectile.RemoveProperty(PropertyFloat.CriticalMultiplier);
+            projectile.ImbuedEffect = ammo.ImbuedEffect;
+            projectile.SlayerCreatureType = ammo.SlayerCreatureType;
+            projectile.IconOverlayId = ammo.IconOverlayId;
+            projectile.UiEffects = ammo.UiEffects;
         }
 
         public const float ProjSpawnHeight = 0.8454f;

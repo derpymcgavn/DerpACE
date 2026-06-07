@@ -1,10 +1,15 @@
 using System;
+using System.Linq;
+using System.Numerics;
 
+using ACE.Common;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
+using ACE.Server.Physics.Extensions;
 
 namespace ACE.Server.WorldObjects
 {
@@ -119,6 +124,8 @@ namespace ACE.Server.WorldObjects
                         // WorldManager.EnqueueAction(new ActionEventDelegate(() => sourceCreature.TryProcEquippedItems(targetCreature, false)));
                         // But, to keep it simple, we will just ignore it and not bother with TryProcEquippedItems for this particular impact.
                     }
+
+                    TryLaunchRicochet(worldObject, sourcePlayer, targetCreature);
                 }
             }
 
@@ -126,6 +133,79 @@ namespace ACE.Server.WorldObjects
             worldObject.PhysicsObj.set_active(false);
 
             worldObject.HitMsg = true;
+        }
+
+        private static void TryLaunchRicochet(WorldObject projectile, Player sourcePlayer, Creature firstTarget)
+        {
+            if (sourcePlayer == null || firstTarget == null)
+                return;
+
+            if (projectile.GetProperty(PropertyBool.IsRicochetProjectile) == true)
+                return;
+
+            var launcher = projectile.ProjectileLauncher;
+            var ammo = projectile.ProjectileAmmo;
+            if (launcher?.GetProperty(PropertyBool.IsRicochetAtlatl) != true || ammo == null)
+                return;
+
+            var procChance = launcher.GetProperty(PropertyFloat.RicochetProcChance) ?? 0.0;
+            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                return;
+
+            var radius = Math.Max(1.0f, (float)(launcher.GetProperty(PropertyFloat.RicochetRadius) ?? 10.0));
+            var radiusSq = radius * radius;
+
+            var landblock = firstTarget.CurrentLandblock ?? sourcePlayer.CurrentLandblock;
+            if (landblock == null || firstTarget.Location == null)
+                return;
+
+            var firstLandblock = firstTarget.Location.Cell & 0xFFFF0000;
+            var bounceTarget = landblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Creature>()
+                .Where(c => c != null
+                            && c != firstTarget
+                            && c != sourcePlayer
+                            && c.IsAlive
+                            && c.Attackable
+                            && c.IsMonster
+                            && !c.Teleporting
+                            && c.Location != null
+                            && (c.Location.Cell & 0xFFFF0000) == firstLandblock
+                            && firstTarget.Location.SquaredDistanceTo(c.Location) <= radiusSq)
+                .OrderBy(c => firstTarget.Location.SquaredDistanceTo(c.Location))
+                .FirstOrDefault();
+
+            if (bounceTarget == null)
+                return;
+
+            var origin = firstTarget.Location.Pos;
+            origin.Z += firstTarget.Height * 0.5f;
+
+            var dest = bounceTarget.Location.Pos;
+            dest.Z += bounceTarget.Height * 0.5f;
+
+            var dir = Vector3.Normalize(dest - origin);
+            if (!dir.IsValid())
+                return;
+
+            var angle = Math.Atan2(-dir.X, dir.Y);
+            var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (float)angle);
+            var velocity = sourcePlayer.GetProjectileVelocity(bounceTarget, origin, dir, dest, sourcePlayer.GetProjectileSpeed(), out _);
+            if (!velocity.IsValid() || velocity == Vector3.Zero)
+                return;
+
+            var ricochet = sourcePlayer.LaunchProjectile(launcher, ammo, bounceTarget, origin, rotation, velocity);
+            if (ricochet == null)
+                return;
+
+            ricochet.SetProperty(PropertyBool.IsRicochetProjectile, true);
+
+            var damageScale = Math.Clamp((float)(launcher.GetProperty(PropertyFloat.RicochetDamageScale) ?? 0.5), 0.05f, 1.0f);
+            ricochet.DamageMod = (ricochet.DamageMod ?? 1.0) * damageScale;
+
+            sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Your dart ricochets toward {bounceTarget.Name}.",
+                ChatMessageType.CombatSelf));
         }
 
         public static void OnCollideEnvironment(WorldObject worldObject)

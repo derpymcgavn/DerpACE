@@ -15,12 +15,7 @@ namespace ACE.Server.Factories
         {
             AssignSpells(wo, profile, roll);
 
-            wo.UiEffects = UiEffects.Magical;
-
-            if (wo.W_DamageType == DamageType.Nether)
-                wo.UiEffects |= UiEffects.Nether;
-            else if (wo.W_DamageType == DamageType.Health)
-                wo.UiEffects |= UiEffects.BoostHealth;
+            wo.UiEffects = UiEffects.Magical | GetLootElementUiEffect(wo.W_DamageType);
 
             var maxBaseMana = GetMaxBaseMana(wo);
 
@@ -44,6 +39,14 @@ namespace ACE.Server.Factories
             wo.ItemSpellcraft = RollSpellcraft(wo, roll);
 
             AddActivationRequirements(wo, roll);
+        }
+
+        private static UiEffects GetLootElementUiEffect(DamageType damageType)
+        {
+            if (damageType == DamageType.Health)
+                return UiEffects.BoostHealth;
+
+            return IronmanFactory.GetElementalUiEffect(damageType);
         }
 
         /// <summary>

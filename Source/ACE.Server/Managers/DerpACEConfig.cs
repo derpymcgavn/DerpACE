@@ -58,6 +58,7 @@ namespace ACE.Server.Managers
         public static bool StalkerBowEnabled       { get; set; } = true;
         public static bool BreacherCrossbowEnabled { get; set; } = true;
         public static bool ReaperAtlatlEnabled     { get; set; } = true;
+        public static bool RicochetAtlatlEnabled   { get; set; } = true;
         public static bool WeaponElemBlastEnabled  { get; set; } = true;
         // ──────────────────────────────────────────────────────────────────────
         // Defender's Shield
@@ -431,6 +432,26 @@ namespace ACE.Server.Managers
 
         /// <summary>Maximum heal % of MaxHealth rolled at loot time (integer). Default 15.</summary>
         public static int ReaperHealMax { get; set; } = 10;
+
+        // ---------- Ricochet Atlatl / Dartflinger ----------
+
+        /// <summary>Loot drop chance (0-1). Default 0.02 = 2%.</summary>
+        public static float RicochetAtlatlDropChance { get; set; } = 0.02f;
+
+        /// <summary>Minimum treasure tier required. Default 5.</summary>
+        public static int RicochetAtlatlMinTier { get; set; } = 5;
+
+        /// <summary>Minimum ricochet proc % rolled at loot time (integer). Default 15.</summary>
+        public static int RicochetProcMin { get; set; } = 15;
+
+        /// <summary>Maximum ricochet proc % rolled at loot time (integer). Default 30.</summary>
+        public static int RicochetProcMax { get; set; } = 30;
+
+        /// <summary>Ricochet projectile damage multiplier. Default 0.50 = 50%.</summary>
+        public static float RicochetDamageScale { get; set; } = 0.50f;
+
+        /// <summary>Nearby target search radius in yards. Default 10.</summary>
+        public static float RicochetRadius { get; set; } = 10.0f;
 
         // ---------- Loot Modifier Balance Controls ----------
 

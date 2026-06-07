@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ACE.Entity.Enum;
 using ACE.Server.Entity;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.WorldObjects;
@@ -44,7 +45,9 @@ namespace ACE.Server.Network.Structure
             if (layers == null) return 0;
 
             // get total AL
-            var totalAL = 0;
+            var totalAL = creature is Player player && player.HasNomadUnarmoredProtection
+                ? Player.NomadUnarmoredArmorLevel
+                : 0;
 
             foreach (var layer in layers)
             {
@@ -52,6 +55,11 @@ namespace ACE.Server.Network.Structure
 
                 // impen / brittlemail
                 var modAL = layer.EnchantmentManager.GetArmorMod();
+                if (creature is Player nomadPlayer && nomadPlayer.CountsAgainstNomadUnarmoredProtection(layer))
+                {
+                    baseAL = (int)Math.Round(baseAL * 0.5f);
+                    modAL = (int)Math.Round(modAL * 0.5f);
+                }
 
                 totalAL += baseAL + modAL;
             }

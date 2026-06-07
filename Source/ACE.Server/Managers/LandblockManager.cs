@@ -136,23 +136,6 @@ namespace ACE.Server.Managers
             log.DebugFormat("Landblock {0:X4}, ({1}) preloaded. IncludeAdjacents = {2}, Permaload = {3}", landblockID.Landblock, preloadLandblock.Description, preloadLandblock.IncludeAdjacents, preloadLandblock.Permaload);
         }
 
-        /// <summary>
-        /// Permaloads every known DerpACE town landblock (including adjacents) so vendors
-        /// receive their random-loot inventory on server startup regardless of player traffic.
-        /// </summary>
-        public static void PreloadDerpAceTownLandblocks()
-        {
-            var towns = ACE.Server.Factories.Tables.VendorTownTier.GetAllTownAnchors();
-            log.InfoFormat("[DerpACE] Preloading {0} town landblocks...", towns.Count);
-            foreach (var (x, y, name) in towns)
-            {
-                var id = new LandblockId(x, y);
-                GetLandblock(id, loadAdjacents: true, permaload: true);
-                log.DebugFormat("[DerpACE] Permaload: {0} ({1:X2}{2:X2}FFFF)", name, x, y);
-            }
-            log.InfoFormat("[DerpACE] Town landblock permaload complete.");
-        }
-
         private static readonly uint[] apartmentLandblocks =
         {
             0x7200FFFF,

@@ -65,7 +65,7 @@ namespace ACE.Server.Command.Handlers
         [CommandHandler("ironman", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Ironman mode (IRREVERSIBLE).",
             "on        - begin Ironman commitment (you must then run /ironman confirm within 30 seconds)\n" +
-            "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 450 in clothes)\n" +
+            "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 420 with above-average protections while unarmored)\n" +
             "  add -nh to 'on' or 'nomad' to exclude non-human heritages, rolling only\n" +
             "            Aluvian, Gharundim, Sho, Viamontian, Umbraen, Penumbraen, Undead, or Empyrean\n" +
             "confirm   - finalize Ironman conversion. Cannot be undone.\n" +

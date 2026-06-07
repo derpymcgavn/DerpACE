@@ -117,7 +117,12 @@ namespace ACE.Server.Factories
         private static TreasureRoll RollWcid(TreasureDeath treasureDeath, TreasureItemCategory category, TreasureItemType treasureItemType = TreasureItemType.Undef)
         {
             if (treasureItemType == TreasureItemType.Undef)
+            {
+                if (!HasItemTypeSelectionProfile(treasureDeath, category))
+                    return null;
+
                 treasureItemType = RollItemType(treasureDeath, category);
+            }
 
             if (treasureItemType == TreasureItemType.Undef)
             {
@@ -240,6 +245,23 @@ namespace ACE.Server.Factories
                     break;
             }
             return treasureRoll;
+        }
+
+        private static bool HasItemTypeSelectionProfile(TreasureDeath treasureDeath, TreasureItemCategory category)
+        {
+            switch (category)
+            {
+                case TreasureItemCategory.Item:
+                    return treasureDeath.ItemTreasureTypeSelectionChances > 0;
+
+                case TreasureItemCategory.MagicItem:
+                    return treasureDeath.MagicItemTreasureTypeSelectionChances > 0;
+
+                case TreasureItemCategory.MundaneItem:
+                    return treasureDeath.MundaneItemTypeSelectionChances > 0;
+            }
+
+            return false;
         }
 
         /// <summary>

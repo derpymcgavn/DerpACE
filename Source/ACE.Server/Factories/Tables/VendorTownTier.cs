@@ -21,8 +21,8 @@ namespace ACE.Server.Factories.Tables
     /// in-database PointsOfInterest table (the same data behind <c>/telepoi</c>),
     /// so any POI the server knows about can be used as a town centre.  The tier
     /// classification for each town name is defined in <see cref="TownTiers"/>.
-    /// POIs that don't appear in <see cref="TownTiers"/> are still kept as valid
-    /// anchors for permaload, but resolve to tier 0 for vendor stocking.
+    /// POIs that don't appear in <see cref="TownTiers"/> resolve to tier 0 for
+    /// vendor stocking.
     ///
     /// Tier groupings:
     ///  Tier 1 (Levels  1–15): Holtburg, Arwic, Cragstone, Eastham, Glenden Wood,
@@ -269,20 +269,6 @@ namespace ACE.Server.Factories.Tables
             }
 
             return null;
-        }
-
-        /// <summary>
-        /// Returns one <c>(X, Y, Name)</c> entry per unique town anchor sourced
-        /// from the POI cache.  Used by DerpACE to permaload every town landblock
-        /// on server start.
-        /// </summary>
-        public static IReadOnlyList<(byte X, byte Y, string Name)> GetAllTownAnchors()
-        {
-            var anchors = GetAnchors();
-            var result  = new List<(byte, byte, string)>(anchors.Count);
-            foreach (var a in anchors)
-                result.Add((a.X, a.Y, a.Name));
-            return result;
         }
 
         // ── Helpers ────────────────────────────────────────────────────────────

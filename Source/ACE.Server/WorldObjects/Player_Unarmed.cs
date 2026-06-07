@@ -21,6 +21,11 @@ namespace ACE.Server.WorldObjects
     /// </summary>
     public partial class Player
     {
+        public const int NomadUnarmoredArmorLevel = 420;
+        public const float NomadUnarmoredProtectionMod = 1.2f;
+
+        public bool IsIronmanNomad => GetProperty(PropertyBool.IsIronmanNomad) == true;
+
         /// <summary>
         /// True when the player has no melee weapon, missile weapon, two-handed weapon,
         /// or held caster (wand) equipped. Shields are intentionally permitted.
@@ -89,6 +94,31 @@ namespace ACE.Server.WorldObjects
                 && ((item.UnarmedBaseDamage ?? 0) > 0
                     || item.GetProperty(PropertyInt.NomadProcType) > 0
                     || item.HasProc);
+        }
+
+        public bool CountsAgainstNomadUnarmoredProtection(WorldObject item)
+        {
+            if (!IsIronmanNomad || !(item is Clothing))
+                return false;
+
+            if ((item.ItemType & ItemType.Armor) == 0)
+                return false;
+
+            if (item.CurrentWieldedLocation == EquipMask.Shield)
+                return false;
+
+            return !IsUnarmedArmorPiece(item);
+        }
+
+        /// <summary>
+        /// True when an Ironman Nomad is wearing no armor pieces. Shields, plain clothing,
+        /// and nomad unarmed gauntlets/boots are allowed.
+        /// </summary>
+        public bool HasNomadUnarmoredProtection => IsIronmanNomad && !EquippedObjects.Values.Any(CountsAgainstNomadUnarmoredProtection);
+
+        public bool IsUnarmedArmorActive(WorldObject item)
+        {
+            return IsNomadUnarmed && IsUnarmedArmorPiece(item);
         }
 
         public bool IsUnarmedFamilyAttack(WorldObject damageSource)

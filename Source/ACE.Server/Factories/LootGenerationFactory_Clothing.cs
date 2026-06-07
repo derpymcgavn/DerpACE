@@ -98,16 +98,16 @@ namespace ACE.Server.Factories
             if (profile.Tier == 8)
                 TryMutateGearRating(wo, profile, roll);
 
-            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
-            {
-                TryMutateUnarmedDamage(wo, profile);
-            }
-
             // item value
             //if (wo.HasMutateFilter(MutateFilter.Value))   // fixme: data
                 MutateValue(wo, profile.Tier, roll);
 
             wo.LongDesc = GetLongDesc(wo);
+
+            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
+            {
+                TryMutateUnarmedDamage(wo, profile);
+            }
 
             // Defender's shield: configurable chance on any T6+ shield drop (see @lootconfig)
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.DefenderShieldEnabled

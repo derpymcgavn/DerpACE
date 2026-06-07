@@ -325,14 +325,12 @@ namespace ACE.Server.WorldObjects
                 sneakBonusApplied = (uint)Math.Round(bonus);
             }
 
-            // Thief's Dagger: configurable proc chance / bonus on sneak attacks (see @lootconfig)
-            // Applies to Dagger weapon type, and to Sword variants when the interchangeable
-            // loot rule stamped IsThievesDagger onto a sword (epee/rapier/schlager-style finesse blades).
+            // Thief's Dagger: configurable proc chance / bonus on dagger sneak attacks (see @lootconfig).
             uint thievesDaggerBonus = 0;
             if (damageEvent.HasDamage
                 && damageEvent.SneakAttackMod > 1.0f
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger, WeaponType.Sword)
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger)
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance)
             {
                 var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;
@@ -361,12 +359,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Sentinel's Spear: configurable proc/drain/return (see @lootconfig)
-            // Only applies to Spear weapon type
+            // Applies to spear family, including two-handed spears.
             uint sentinelStaminaDrained = 0;
             uint sentinelStaminaReturned = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Spear)
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Spear, WeaponType.TwoHanded)
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.SentinelSpearProcChance
                 && target.Stamina.Current > 0)
             {
@@ -383,7 +381,7 @@ namespace ACE.Server.WorldObjects
             }
 
             // Ravager's Axe: configurable proc to apply a bleed DoT (see @lootconfig)
-            // Only applies to Axe weapon type (or Mace types with 'hammer' in name)
+            // Applies to axe family, including two-handed axes.
             uint ravagerBleedTotal = 0;
             uint ravagerCrushBonus = 0;
             uint ravagerStaminaDrained = 0;
@@ -391,7 +389,7 @@ namespace ACE.Server.WorldObjects
             uint ravagerCleaveTotal = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe) == true
-                && (WeaponIsType(damageEvent.Weapon, WeaponType.Axe) || (WeaponIsType(damageEvent.Weapon, WeaponType.Mace) && WeaponNameContains(damageEvent.Weapon, "hammer"))))
+                && (WeaponIsType(damageEvent.Weapon, WeaponType.Axe, WeaponType.TwoHanded) || (WeaponIsType(damageEvent.Weapon, WeaponType.Mace) && WeaponNameContains(damageEvent.Weapon, "hammer"))))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -504,12 +502,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Warden's Maul: configurable proc to apply a flat defense-skill debuff (see @lootconfig)
-            // Only applies to Mace weapon type (hammers/mauls)
+            // Applies to mace family, including two-handed maces.
             uint wardenPenaltyApplied = 0;
             int wardenDurationApplied = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsWardensMaul) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Mace))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Mace, WeaponType.TwoHanded))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -535,12 +533,12 @@ namespace ACE.Server.WorldObjects
             }
 
             // Resolute Blade: heal-on-critical proc (see @lootconfig)
-            // Only applies to Sword weapon type with names: tachi, ken
+            // Applies to sword family, including two-handed swords.
             uint resoluteHealApplied = 0;
             if (damageEvent.HasDamage
                 && damageEvent.IsCritical
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword, WeaponType.TwoHanded))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc) ?? 0.0;
                 if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
@@ -639,13 +637,13 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            // Polebreaker Staff: consecutive-hit escalation against the same target (see @lootconfig)
-            // Only applies to Staff or TwoHanded weapon types (includes staff, tetsuba, etc.)
+            // Polebreaker: consecutive-hit escalation against the same target (see @lootconfig).
+            // Applies to flagged staff weapon types.
             uint polebreakerBonus = 0;
             int polebreakerStacks = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Staff, WeaponType.TwoHanded))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Staff))
             {
                 var stackPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerStackBonus) ?? 0.0;
                 var maxStacks = (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks) ?? 0.0);
@@ -882,11 +880,12 @@ namespace ACE.Server.WorldObjects
                         ChatMessageType.CombatSelf));
                 }
 
-                // Polebreaker Staff: each successive strike lands harder
+                // Polebreaker: each successive strike lands harder
                 if (polebreakerStacks > 1 && polebreakerBonus > 0)
                 {
+                    var polebreakerName = damageEvent.Weapon?.Name ?? "weapon";
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Your staff finds its rhythm against {target.Name} — strike {polebreakerStacks} draws {polebreakerBonus} more.",
+                        $"Your {polebreakerName} finds its rhythm against {target.Name} - strike {polebreakerStacks} draws {polebreakerBonus} more.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -949,7 +948,7 @@ namespace ACE.Server.WorldObjects
                 && !target.IsAlive
                 && targetPlayer == null
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsResoluteBlade) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Sword, WeaponType.TwoHanded))
             {
                 var burstPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct) ?? 0.0;
                 if (burstPct > 0)

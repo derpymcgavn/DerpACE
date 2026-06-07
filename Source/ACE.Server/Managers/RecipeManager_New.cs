@@ -20,7 +20,7 @@ namespace ACE.Server.Managers
             if (target.Workmanship == null)
                 return false;
 
-            if ((allowMelee || allowMissile) && IsThrownLightWeapon(target))
+            if ((allowMelee || allowMissile) && IsThrownMissileWeapon(target))
                 return true;
 
             if (allowMelee && target.WeenieType == WeenieType.MeleeWeapon)
@@ -35,10 +35,10 @@ namespace ACE.Server.Managers
             return IsUnarmedHandOrFootWear(target);
         }
 
-        private static bool IsThrownLightWeapon(WorldObject target)
+        private static bool IsThrownMissileWeapon(WorldObject target)
         {
             return target.W_WeaponType == WeaponType.Thrown
-                && target.WeaponSkill == Skill.LightWeapons
+                && target.WeaponSkill == Skill.MissileWeapons
                 && (target.ItemType & ItemType.MissileWeapon) != 0
                 && (target.Damage ?? 0) > 0;
         }

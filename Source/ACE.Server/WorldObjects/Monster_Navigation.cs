@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 using ACE.Common;
@@ -8,6 +10,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
+using ACE.Server.Pathfinding;
 using ACE.Server.Physics.Animation;
 using ACE.Server.Physics.Common;
 
@@ -71,6 +74,7 @@ namespace ACE.Server.WorldObjects
         private int stuckStrikeCount;
         private int courseCorrectionAttemptCount;
         private double nextCourseCorrectionTime;
+        private double nextCrowdUnstickTime;
 
         private const double StuckSampleInterval = 0.35;
         private const float StuckMinTravelDistance = 0.18f;
@@ -78,6 +82,11 @@ namespace ACE.Server.WorldObjects
         private const int StuckCourseCorrectionThreshold = 2;
         private const double CourseCorrectionCooldownMin = 0.20;
         private const double CourseCorrectionCooldownMax = 0.45;
+        private const double CrowdUnstickCooldown = 0.65;
+        private const float CrowdBlockerScanRadius = 2.6f;
+        private const float CrowdBlockerClearance = 1.35f;
+        private const float CrowdEscapeStepMin = 1.4f;
+        private const float CrowdEscapeStepMax = 3.4f;
 
         /// <summary>
         /// Starts the process of monster turning towards target
@@ -132,6 +141,7 @@ namespace ACE.Server.WorldObjects
             nextStuckSampleTime = 0;
             stuckStrikeCount = 0;
             courseCorrectionAttemptCount = 0;
+            nextCrowdUnstickTime = 0;
         }
 
         private bool TrySmartCourseCorrection(bool escalate = false)
@@ -219,8 +229,173 @@ namespace ACE.Server.WorldObjects
             if (stuckStrikeCount >= StuckCourseCorrectionThreshold)
             {
                 stuckStrikeCount = 0;
-                TrySmartCourseCorrection(escalate: true);
+                if (!TryCrowdUnstick())
+                    TrySmartCourseCorrection(escalate: true);
             }
+        }
+
+        private bool TryCrowdUnstick()
+        {
+            if (AttackTarget?.Location == null || Location == null || PhysicsObj?.ObjMaint == null)
+                return false;
+
+            var now = Timers.RunningTime;
+            if (now < nextCrowdUnstickTime)
+                return false;
+
+            var blockers = GetNearbyCreatureBlockers();
+            if (blockers.Count == 0)
+                return false;
+
+            // Ask nearby movers to sidestep first. This is the "communication" piece:
+            // large packs can make room for each other instead of every mob fighting
+            // the same blocked navpath.
+            var asked = 0;
+            foreach (var blocker in blockers)
+            {
+                if (asked >= 3)
+                    break;
+
+                if (blocker.TryGrantPassage(this))
+                    asked++;
+            }
+
+            if (!TryFindCrowdEscapePosition(blockers, out var escape))
+            {
+                nextCrowdUnstickTime = now + CrowdUnstickCooldown;
+                return asked > 0;
+            }
+
+            if (HasPendingMovement && PhysicsObj?.MovementManager?.MoveToManager != null)
+                PhysicsObj.MovementManager.MoveToManager.CancelMoveTo(WeenieError.ObjectGone);
+
+            LastPathMoveTarget = escape;
+            MoveAlongPath(escape);
+            IsMoving = true;
+            nextCrowdUnstickTime = now + CrowdUnstickCooldown;
+            NextCancelTime = now + 1.25;
+            return true;
+        }
+
+        private List<Creature> GetNearbyCreatureBlockers()
+        {
+            var result = new List<Creature>();
+            var myGuid = Guid.Full;
+            var scanSq = CrowdBlockerScanRadius * CrowdBlockerScanRadius;
+            var toTarget = AttackTarget.Location.ToGlobal() - Location.ToGlobal();
+            toTarget.Z = 0;
+            var hasTargetDir = toTarget.LengthSquared() > 0.001f;
+            var targetDir = hasTargetDir ? Vector3.Normalize(toTarget) : Vector3.Zero;
+
+            foreach (var visible in PhysicsObj.ObjMaint.GetVisibleObjectsValuesOfTypeCreature())
+            {
+                if (visible == null || visible.Guid.Full == myGuid || visible.IsDead || visible is Player)
+                    continue;
+
+                if (visible.Location == null || (visible.Location.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                var offset = visible.Location.ToGlobal() - Location.ToGlobal();
+                offset.Z = 0;
+                var distSq = offset.LengthSquared();
+                if (distSq > scanSq)
+                    continue;
+
+                // Prefer blockers that are in front of this creature's path to target.
+                if (hasTargetDir && distSq > 0.001f)
+                {
+                    var dot = Vector3.Dot(Vector3.Normalize(offset), targetDir);
+                    if (dot < -0.25f)
+                        continue;
+                }
+
+                result.Add(visible);
+            }
+
+            return result
+                .OrderBy(c => Location.SquaredDistanceTo(c.Location))
+                .ToList();
+        }
+
+        private bool TryFindCrowdEscapePosition(List<Creature> blockers, out ACE.Entity.Position escape)
+        {
+            escape = null;
+            if (Location == null || AttackTarget?.Location == null)
+                return false;
+
+            var toTarget = AttackTarget.Location.ToGlobal() - Location.ToGlobal();
+            toTarget.Z = 0;
+            if (toTarget.LengthSquared() <= 0.001f)
+                toTarget = Location.GetCurrentDir();
+
+            var forward = Vector3.Normalize(toTarget);
+            var side = Vector3.Normalize(new Vector3(-forward.Y, forward.X, 0));
+
+            // Try perpendicular openings first, then slight forward/back offsets.
+            var directions = new[]
+            {
+                side,
+                -side,
+                Vector3.Normalize(side + forward * 0.45f),
+                Vector3.Normalize(-side + forward * 0.45f),
+                Vector3.Normalize(side - forward * 0.35f),
+                Vector3.Normalize(-side - forward * 0.35f),
+                forward,
+                -forward,
+            };
+
+            var bestScore = float.MinValue;
+            ACE.Entity.Position best = null;
+
+            for (var i = 0; i < directions.Length; i++)
+            {
+                var step = CrowdEscapeStepMin + (i / 2) * 0.55f;
+                if (step > CrowdEscapeStepMax)
+                    step = CrowdEscapeStepMax;
+
+                var candidate = new ACE.Entity.Position(Location)
+                {
+                    PositionX = Location.PositionX + directions[i].X * step,
+                    PositionY = Location.PositionY + directions[i].Y * step,
+                };
+
+                if ((candidate.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                candidate = SnapToMeshIfAvailable(candidate);
+                if (!IsValidPathPosition(candidate))
+                    continue;
+
+                if ((candidate.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                var nearestBlockerSq = float.MaxValue;
+                foreach (var blocker in blockers)
+                    nearestBlockerSq = Math.Min(nearestBlockerSq, candidate.SquaredDistanceTo(blocker.Location));
+
+                if (nearestBlockerSq < CrowdBlockerClearance * CrowdBlockerClearance)
+                    continue;
+
+                var targetImprovement = Location.DistanceTo(AttackTarget.Location) - candidate.DistanceTo(AttackTarget.Location);
+                var score = nearestBlockerSq + targetImprovement * 0.75f;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+
+            escape = best;
+            return escape != null;
+        }
+
+        private ACE.Entity.Position SnapToMeshIfAvailable(ACE.Entity.Position candidate)
+        {
+            if (!PathfindingEnabled || candidate == null)
+                return candidate;
+
+            var agentWidth = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
+            return Pathfinder.GetClosestPointOnMesh(candidate, agentWidth) ?? candidate;
         }
 
         /// <summary>
