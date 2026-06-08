@@ -410,7 +410,14 @@ namespace ACE.Server.WorldObjects
 
         private void SyncMoveToPosition()
         {
+            if (IsDestroyed || CurrentLandblock == null || PhysicsObj == null || Location == null)
+                return;
+
             PhysicsObj.update_object();
+
+            if (IsDestroyed || CurrentLandblock == null || Location == null)
+                return;
+
             UpdatePosition_SyncLocation();
             SendUpdatePosition();
         }

@@ -497,6 +497,14 @@ namespace ACE.Server.WorldObjects
             if (DebugMove)
                 Console.WriteLine($"{Name} ({Guid}) - OnMoveComplete({status})");
 
+            if (IsDestroyed || CurrentLandblock == null || PhysicsObj == null || Location == null)
+            {
+                IsMoving = false;
+                FailedMovementCount = 0;
+                ResetStuckTracking();
+                return;
+            }
+
             OnMovementStopped();
 
             if (PhysicsObj != null && Location != null)

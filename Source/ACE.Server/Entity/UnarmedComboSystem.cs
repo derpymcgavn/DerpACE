@@ -176,66 +176,18 @@ namespace ACE.Server.Entity
         }
 
         /// <summary>
-        /// Gets or initializes the player's unique combo pattern mapping.
-        /// Each player gets a randomized assignment of patterns to combo types.
-        /// Stored as a compact PropertyInt.
+        /// Gets the global combo pattern mapping. All players use the master combo
+        /// patterns directly, so a given punch/kick sequence always means the same combo.
         /// </summary>
         private Dictionary<string, ComboType> GetPlayerComboMapping()
         {
             var mapping = new Dictionary<string, ComboType>();
             var masterList = GetMasterComboList();
 
-            // Check if player already has a mapping saved
-            var savedMapping = _player.GetProperty(PropertyInt.UnarmedComboSeed);
-
-            if (savedMapping == null)
+            foreach (var combo in masterList)
             {
-                // Generate new random mapping using player GUID as seed for consistency
-                var random = new Random((int)_player.Guid.Full);
-                var availableTypes = masterList.Keys.ToList();
-
-                // Shuffle the combo types
-                for (int i = availableTypes.Count - 1; i > 0; i--)
-                {
-                    int j = random.Next(i + 1);
-                    var temp = availableTypes[i];
-                    availableTypes[i] = availableTypes[j];
-                    availableTypes[j] = temp;
-                }
-
-                // Assign shuffled types to patterns
-                int index = 0;
-                foreach (var combo in masterList.OrderBy(c => c.Value.Tier).ThenBy(c => c.Key))
-                {
-                    var pattern = string.Join("", combo.Value.Pattern.Select(a => a == AttackType.Punch ? "P" : "K"));
-                    mapping[pattern] = availableTypes[index];
-                    index++;
-                }
-
-                // Save the seed so it remains consistent
-                _player.SetProperty(PropertyInt.UnarmedComboSeed, (int)_player.Guid.Full);
-            }
-            else
-            {
-                // Regenerate the same mapping from the saved seed
-                var random = new Random(savedMapping.Value);
-                var availableTypes = masterList.Keys.ToList();
-
-                for (int i = availableTypes.Count - 1; i > 0; i--)
-                {
-                    int j = random.Next(i + 1);
-                    var temp = availableTypes[i];
-                    availableTypes[i] = availableTypes[j];
-                    availableTypes[j] = temp;
-                }
-
-                int index = 0;
-                foreach (var combo in masterList.OrderBy(c => c.Value.Tier).ThenBy(c => c.Key))
-                {
-                    var pattern = string.Join("", combo.Value.Pattern.Select(a => a == AttackType.Punch ? "P" : "K"));
-                    mapping[pattern] = availableTypes[index];
-                    index++;
-                }
+                var pattern = string.Join("", combo.Value.Pattern.Select(a => a == AttackType.Punch ? "P" : "K"));
+                mapping[pattern] = combo.Key;
             }
 
             return mapping;

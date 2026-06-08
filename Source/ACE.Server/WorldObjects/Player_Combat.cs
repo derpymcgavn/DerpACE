@@ -40,6 +40,15 @@ namespace ACE.Server.WorldObjects
         // DerpACE Nomad — recursion guard so Cleave Flurry extra strikes don't proc themselves
         private bool _nomadProcInProgress;
 
+        private int _unarmedCriticalBoostCharges;
+        private DateTime _unarmedAttackSpeedBoostUntil = DateTime.MinValue;
+
+        private const double UnarmedAttackSpeedBoostSeconds = 6.0;
+        private const float UnarmedAttackSpeedBoostMultiplier = 1.25f;
+        private const float UnarmedCriticalBoostDamageMultiplier = 0.35f;
+        private const double UnarmedStunSeconds = 1.25;
+        private const float UnarmedKnockbackDistance = 2.0f;
+
         // DerpACE: Unarmed combo system for tracking punch/kick combos
         private UnarmedComboSystem _unarmedComboSystem;
         public UnarmedComboSystem UnarmedComboSystem
@@ -189,10 +198,13 @@ namespace ACE.Server.WorldObjects
             ComboResult comboResult = null;
             uint comboBonusApplied = 0;
             uint streakBonusApplied = 0;
+            uint criticalBoostBonusApplied = 0;
             int hitStreakAfter = 0;
             int killStreakAfter = 0;
             if (damageEvent.HasDamage && isUnarmedAttack)
             {
+                criticalBoostBonusApplied = TryConsumeUnarmedCriticalBoost(damageEvent);
+
                 comboResult = UnarmedComboSystem.RecordAttack(AttackType, target.Guid.Full);
 
                 // Apply combo damage multiplier, scaled by unarmed_damage_scalar so the bonus portion can be tuned.
@@ -689,19 +701,13 @@ namespace ACE.Server.WorldObjects
                 switch (comboResult.BonusEffect)
                 {
                     case ComboEffect.Stun:
-                        // 50% chance to briefly stun the target
-                        if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.5f)
-                        {
-                            target.EnqueueBroadcastMotion(new Motion(target.CurrentMotionState?.Stance ?? MotionStance.NonCombat, MotionCommand.Knock));
-                            target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillUpYellow);
-                        }
+                        TryApplyUnarmedStun(target);
                         break;
 
                     case ComboEffect.ElementalSurge:
                         // Add bonus elemental damage based on gauntlet/boot element
                         var surgeDamage = damageEvent.Damage * 0.25f;
                         damageEvent.Damage += surgeDamage;
-                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.BreatheFlame);
                         break;
 
                     case ComboEffect.Cleave:
@@ -721,14 +727,20 @@ namespace ACE.Server.WorldObjects
                             foreach (var splash in splashTargets)
                             {
                                 splash.TakeDamage(this, damageEvent.DamageType, cleaveDamage, false);
-                                splash.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.WeddingBliss);
                             }
                         }
                         break;
 
                     case ComboEffect.CriticalBoost:
-                        // Next attack has increased crit chance (tracked separately if needed)
-                        ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+                        GrantUnarmedCriticalBoost();
+                        break;
+
+                    case ComboEffect.AttackSpeedBoost:
+                        GrantUnarmedAttackSpeedBoost();
+                        break;
+
+                    case ComboEffect.Knockback:
+                        TryApplyUnarmedKnockback(target);
                         break;
 
                     case ComboEffect.ArmorPierce:
@@ -737,7 +749,6 @@ namespace ACE.Server.WorldObjects
                         if (pierceBonus > 1.0f)
                         {
                             damageEvent.Damage += pierceBonus;
-                            target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                         }
                         break;
                 }
@@ -824,7 +835,8 @@ namespace ACE.Server.WorldObjects
 
                         var damageStr = comboBonusApplied > 0 ? $"  —  {comboBonusApplied} extra damage to {target.Name}" : $"  —  {intDamage} damage to {target.Name}";
                         var streakStr = streakBonusApplied > 0 ? $"  (+{streakBonusApplied} from your streak)" : "";
-                        var fullMsg = comboResult.Message + damageStr + streakStr;
+                        var criticalBoostStr = criticalBoostBonusApplied > 0 ? $"  (+{criticalBoostBonusApplied} focused)" : "";
+                        var fullMsg = comboResult.Message + damageStr + streakStr + criticalBoostStr;
 
                         Session.Network.EnqueueSend(new GameMessageSystemChat(fullMsg, channel));
                     }
@@ -1227,6 +1239,77 @@ namespace ACE.Server.WorldObjects
                 }
             }
             return damageSource.GetDamageMod(this);
+        }
+
+        private uint TryConsumeUnarmedCriticalBoost(DamageEvent damageEvent)
+        {
+            if (_unarmedCriticalBoostCharges <= 0 || damageEvent == null || !damageEvent.HasDamage)
+                return 0;
+
+            _unarmedCriticalBoostCharges--;
+
+            var bonus = damageEvent.Damage * UnarmedCriticalBoostDamageMultiplier;
+            if (bonus < 1.0f)
+                return 0;
+
+            damageEvent.Damage += bonus;
+            return (uint)Math.Round(bonus);
+        }
+
+        private void GrantUnarmedCriticalBoost()
+        {
+            _unarmedCriticalBoostCharges = Math.Max(_unarmedCriticalBoostCharges, 1);
+        }
+
+        private void GrantUnarmedAttackSpeedBoost()
+        {
+            _unarmedAttackSpeedBoostUntil = DateTime.UtcNow.AddSeconds(UnarmedAttackSpeedBoostSeconds);
+        }
+
+        private float GetUnarmedComboAttackSpeedMultiplier()
+        {
+            return DateTime.UtcNow <= _unarmedAttackSpeedBoostUntil
+                ? UnarmedAttackSpeedBoostMultiplier
+                : 1.0f;
+        }
+
+        private void TryApplyUnarmedStun(Creature target)
+        {
+            if (target == null || !target.IsMonster)
+                return;
+
+            var stunUntil = Timers.RunningTime + UnarmedStunSeconds;
+            target.NextMoveTime = Math.Max(target.NextMoveTime, stunUntil);
+            target.NextAttackTime = Math.Max(target.NextAttackTime, stunUntil);
+        }
+
+        private void TryApplyUnarmedKnockback(Creature target)
+        {
+            if (target == null || !target.IsMonster || Location == null || target.Location == null)
+                return;
+
+            var dx = target.Location.PositionX - Location.PositionX;
+            var dy = target.Location.PositionY - Location.PositionY;
+            var distance = Math.Sqrt(dx * dx + dy * dy);
+
+            if (distance <= 0.01)
+            {
+                dx = 0;
+                dy = 1;
+                distance = 1;
+            }
+
+            var newPosition = new ACE.Entity.Position(target.Location)
+            {
+                PositionX = target.Location.PositionX + (float)(dx / distance) * UnarmedKnockbackDistance,
+                PositionY = target.Location.PositionY + (float)(dy / distance) * UnarmedKnockbackDistance,
+            };
+
+            if (newPosition.Landblock != target.Location.Landblock)
+                return;
+
+            target.FakeTeleport(newPosition);
+            target.NextMoveTime = Math.Max(target.NextMoveTime, Timers.RunningTime + 0.25f);
         }
 
         /// <summary>

@@ -418,6 +418,9 @@ namespace ACE.Server.Managers
 
         public static bool TryMutateNative(Player player, WorldObject source, WorldObject target, Recipe recipe, uint dataId)
         {
+            if (IsUnarmedArmorPiece(target))
+                SeedUnarmedArmorWeaponStats(target);
+
             // legacy method, unused by default
             switch (dataId)
             {
@@ -672,6 +675,9 @@ namespace ACE.Server.Managers
 
             if (incItemTinkered.Contains(dataId))
                 HandleTinkerLog(source, target);
+
+            if (IsUnarmedArmorPiece(target))
+                RefreshUnarmedArmorLongDesc(player, target);
 
             return true;
         }
@@ -1495,6 +1501,9 @@ namespace ACE.Server.Managers
             //if (useMutateNative)
             //    return TryMutateNative(player, source, target, recipe, dataId);
 
+            if (IsUnarmedArmorPiece(target))
+                SeedUnarmedArmorWeaponStats(target);
+
             var numTimesTinkered = target.NumTimesTinkered;
 
             var mutationScript = MutationCache.GetMutation(dataId);
@@ -1510,6 +1519,9 @@ namespace ACE.Server.Managers
             if (numTimesTinkered != target.NumTimesTinkered)
                 HandleTinkerLog(source, target);
 
+            if (result && IsUnarmedArmorPiece(target))
+                RefreshUnarmedArmorLongDesc(player, target);
+
             modified.Add(target.Guid.Full);
 
             return result;
@@ -1521,6 +1533,131 @@ namespace ACE.Server.Managers
                 target.TinkerLog += ",";
 
             target.TinkerLog += (uint?)source.MaterialType ?? source.WeenieClassId;
+        }
+
+        private const string UnarmedArmorLongDescHeader = "[Unarmed Combat]";
+
+        private static void RefreshUnarmedArmorLongDesc(Player player, WorldObject target)
+        {
+            var longDesc = BuildUnarmedArmorLongDesc(target);
+            if (player != null)
+                player.UpdateProperty(target, PropertyString.LongDesc, longDesc);
+            else
+                target.LongDesc = longDesc;
+        }
+
+        private static void SeedUnarmedArmorWeaponStats(WorldObject target)
+        {
+            if (target.Damage == null)
+                target.Damage = target.UnarmedBaseDamage;
+
+            if (target.DamageVariance == null)
+                target.DamageVariance = target.UnarmedDamageVariance;
+
+            if (target.W_DamageType == DamageType.Undef && target.UnarmedDamageType != null)
+                target.W_DamageType = (DamageType)target.UnarmedDamageType.Value;
+
+            target.DamageMod ??= 1.0;
+            target.WeaponOffense ??= 1.0;
+            target.WeaponDefense ??= 1.0;
+            target.WeaponMissileDefense ??= 1.0;
+            target.WeaponMagicDefense ??= 1.0;
+        }
+
+        private static string BuildUnarmedArmorLongDesc(WorldObject target)
+        {
+            var baseDesc = StripGeneratedUnarmedArmorLongDesc(target.LongDesc ?? "");
+            var block = GetUnarmedArmorLongDescBlock(target);
+
+            if (string.IsNullOrWhiteSpace(baseDesc))
+                return block;
+
+            return baseDesc.TrimEnd() + "\n\n" + block;
+        }
+
+        private static string StripGeneratedUnarmedArmorLongDesc(string longDesc)
+        {
+            if (string.IsNullOrWhiteSpace(longDesc))
+                return "";
+
+            var cleaned = Regex.Replace(longDesc, @"\n{0,2}\[Unarmed Combat\].*?(?=\n{2,}|\z)", "", RegexOptions.Singleline);
+
+            // Remove the older lootgen text so the refreshed block does not duplicate it.
+            cleaned = Regex.Replace(cleaned, @"\n{0,2}These (gauntlets|boots|shoes|gloves) grant .*?unarmed attacks \(no weapon equipped\)\.\nOffense: .*?(?=\n{2,}|\z)", "", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            return cleaned.TrimEnd();
+        }
+
+        private static string GetUnarmedArmorLongDescBlock(WorldObject target)
+        {
+            var validLocs = (EquipMask)(target.ValidLocations ?? 0);
+            var isHand = validLocs.HasFlag(EquipMask.HandWear);
+            var slotType = isHand ? "gauntlets" : "boots";
+            var attackStyle = isHand ? "punches" : "kicks";
+
+            var damage = target.Damage ?? target.UnarmedBaseDamage ?? 0;
+            var variance = target.DamageVariance ?? target.UnarmedDamageVariance ?? 0.0;
+            var damageType = (DamageType)(target.UnarmedDamageType ?? (int)target.W_DamageType);
+            var damageTypeName = GetUnarmedArmorDamageTypeName(damageType);
+
+            var damageMod = target.DamageMod ?? 1.0;
+            var offense = target.WeaponOffense ?? 1.0;
+            var defense = target.WeaponDefense ?? 1.0;
+            var missileDefense = target.WeaponMissileDefense ?? 1.0;
+            var magicDefense = target.WeaponMagicDefense ?? 1.0;
+            var speed = target.WeaponTime ?? 0;
+
+            var block =
+                $"{UnarmedArmorLongDescHeader}\n" +
+                $"These {slotType} grant {damage} {damageTypeName} damage for unarmed {attackStyle} while no weapon is equipped.\n" +
+                $"Variance: {variance:0.00}  Damage Mod: {damageMod:0.00}x  Speed: {speed}\n" +
+                $"Offense: {offense:0.000}  Melee Defense: {defense:0.000}  Missile Defense: {missileDefense:0.000}  Magic Defense: {magicDefense:0.000}";
+
+            var imbues = GetUnarmedArmorImbueText(target);
+            if (!string.IsNullOrWhiteSpace(imbues))
+                block += $"\nImbue: {imbues}";
+
+            return block;
+        }
+
+        private static string GetUnarmedArmorDamageTypeName(DamageType damageType)
+        {
+            return damageType switch
+            {
+                DamageType.Fire     => "fire",
+                DamageType.Cold     => "frost",
+                DamageType.Acid     => "acid",
+                DamageType.Electric => "lightning",
+                DamageType.Pierce   => "piercing",
+                DamageType.Bludgeon => "bludgeoning",
+                DamageType.Slash    => "slashing",
+                DamageType.Nether   => "nether",
+                _                   => "physical",
+            };
+        }
+
+        private static string GetUnarmedArmorImbueText(WorldObject target)
+        {
+            var effects = GetImbuedEffects(target);
+            if (effects == ImbuedEffectType.Undef)
+                return null;
+
+            var names = new List<string>();
+            foreach (ImbuedEffectType effect in Enum.GetValues(typeof(ImbuedEffectType)))
+            {
+                if (effect == ImbuedEffectType.Undef)
+                    continue;
+
+                if (effects.HasFlag(effect))
+                    names.Add(GetImbuedEffectDisplayName(effect));
+            }
+
+            return names.Count > 0 ? string.Join(", ", names) : null;
+        }
+
+        private static string GetImbuedEffectDisplayName(ImbuedEffectType effect)
+        {
+            return Regex.Replace(effect.ToString(), "([a-z])([A-Z])", "$1 $2");
         }
 
         public static uint MaterialDualDID = 0x27000000;

@@ -410,6 +410,9 @@ namespace ACE.Server.WorldObjects
             var animSpeed = baseSpeed * animSpeedMod;
 
             var swingAnimation = GetSwingAnimation();
+            if (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
+                animSpeed *= GetUnarmedComboAttackSpeedMultiplier();
+
             var animLength = MotionTable.GetAnimationLength(MotionTableId, CurrentMotionState.Stance, swingAnimation, animSpeed);
             //Console.WriteLine($"AnimSpeed: {animSpeed}, AnimLength: {animLength}");
 

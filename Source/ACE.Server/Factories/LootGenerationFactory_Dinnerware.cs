@@ -111,6 +111,8 @@ namespace ACE.Server.Factories
 
             wo.UnlimitedUse = true;
             wo.ItemType |= ItemType.MissileWeapon;
+            wo.ValidLocations = EquipMask.MissileWeapon;
+            wo.DefaultCombatStyle = CombatStyle.ThrownWeapon;
             wo.WeaponSkill = Skill.MissileWeapons;
             wo.W_WeaponType = WeaponType.Thrown;
             wo.W_DamageType = ThrowableDinnerwareDamageTypes[ThreadSafeRandom.Next(0, ThrowableDinnerwareDamageTypes.Length - 1)];
