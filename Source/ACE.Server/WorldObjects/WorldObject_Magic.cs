@@ -40,7 +40,7 @@ namespace ACE.Server.WorldObjects
         /// <summary>
         /// Instantly casts a spell for a WorldObject with optional damage modifier (ie. spell traps, procs)
         /// </summary>
-        public void TryCastSpell(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, bool tryResist, float damageModifier)
+        public void TryCastSpell(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, bool tryResist, float damageModifier, WorldObject projectileOrigin = null)
         {
             // TODO: look into further normalizing this / caster / weapon
 
@@ -61,10 +61,10 @@ namespace ACE.Server.WorldObjects
                 var fellows = targetPlayer.Fellowship.GetFellowshipMembers();
 
                 foreach (var fellow in fellows.Values)
-                    TryCastSpell_Inner(spell, fellow, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, damageModifier);
+                    TryCastSpell_Inner(spell, fellow, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, damageModifier, projectileOrigin);
             }
             else
-                TryCastSpell_Inner(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, damageModifier);
+                TryCastSpell_Inner(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, damageModifier, projectileOrigin);
         }
 
         public void TryCastSpell_Inner(Spell spell, WorldObject target, WorldObject itemCaster = null, WorldObject weapon = null, bool isWeaponSpell = false, bool fromProc = false, bool tryResist = true)
@@ -72,7 +72,7 @@ namespace ACE.Server.WorldObjects
             TryCastSpell_Inner(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, tryResist, 1.0f);
         }
 
-        public void TryCastSpell_Inner(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, bool tryResist, float damageModifier)
+        public void TryCastSpell_Inner(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, bool tryResist, float damageModifier, WorldObject projectileOrigin = null)
         {
             // verify before resist, still consumes source item
             if (spell.MetaSpellType == SpellType.Dispel && !VerifyDispelPKStatus(itemCaster, target))
@@ -83,7 +83,7 @@ namespace ACE.Server.WorldObjects
                 return;
 
             // if not resisted, cast spell
-            HandleCastSpell(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, damageModifier: damageModifier);
+            HandleCastSpell(spell, target, itemCaster, weapon, isWeaponSpell, fromProc, damageModifier: damageModifier, projectileOrigin: projectileOrigin);
         }
 
         /// <summary>
@@ -281,7 +281,7 @@ namespace ACE.Server.WorldObjects
         /// <summary>
         /// Creates a spell based on MetaSpellType
         /// </summary>
-        protected bool HandleCastSpell(Spell spell, WorldObject target, WorldObject itemCaster = null, WorldObject weapon = null, bool isWeaponSpell = false, bool fromProc = false, bool equip = false, float damageModifier = 1.0f)
+        protected bool HandleCastSpell(Spell spell, WorldObject target, WorldObject itemCaster = null, WorldObject weapon = null, bool isWeaponSpell = false, bool fromProc = false, bool equip = false, float damageModifier = 1.0f, WorldObject projectileOrigin = null)
         {
             var targetCreature = !spell.IsSelfTargeted || spell.IsFellowshipSpell ? target as Creature : this as Creature;
 
@@ -327,7 +327,7 @@ namespace ACE.Server.WorldObjects
                 case SpellType.LifeProjectile:
                 case SpellType.EnchantmentProjectile:
 
-                    HandleCastSpell_Projectile(spell, targetCreature, itemCaster, weapon, isWeaponSpell, fromProc, damageModifier);
+                    HandleCastSpell_Projectile(spell, targetCreature, itemCaster, weapon, isWeaponSpell, fromProc, damageModifier, projectileOrigin);
                     break;
 
                 case SpellType.PortalLink:
@@ -1031,7 +1031,7 @@ namespace ACE.Server.WorldObjects
         /// <summary>
         /// Handles casting SpellType.Projectile / LifeProjectile / EnchantmentProjectile spells
         /// </summary>
-        private void HandleCastSpell_Projectile(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, float damageModifier)
+        private void HandleCastSpell_Projectile(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, float damageModifier, WorldObject projectileOrigin = null)
         {
             uint damage = 0;
             var caster = this as Creature;
@@ -1073,7 +1073,7 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            CreateSpellProjectiles(spell, target, weapon, isWeaponSpell, fromProc, damage, damageModifier);
+            CreateSpellProjectiles(spell, target, weapon, isWeaponSpell, fromProc, damage, damageModifier, projectileOrigin);
 
             if (spell.School == MagicSchool.LifeMagic)
             {
@@ -1645,7 +1645,7 @@ namespace ACE.Server.WorldObjects
         /// <summary>
         /// Creates and launches the projectiles for a spell
         /// </summary>
-        public List<SpellProjectile> CreateSpellProjectiles(Spell spell, WorldObject target, WorldObject weapon, bool isWeaponSpell = false, bool fromProc = false, uint lifeProjectileDamage = 0, float damageModifier = 1.0f)
+        public List<SpellProjectile> CreateSpellProjectiles(Spell spell, WorldObject target, WorldObject weapon, bool isWeaponSpell = false, bool fromProc = false, uint lifeProjectileDamage = 0, float damageModifier = 1.0f, WorldObject projectileOrigin = null)
         {
             if (spell.NumProjectiles == 0)
             {
@@ -1655,11 +1655,13 @@ namespace ACE.Server.WorldObjects
 
             var spellType = SpellProjectile.GetProjectileSpellType(spell.Id);
 
-            var origins = CalculateProjectileOrigins(spell, spellType, target);
+            var originObject = projectileOrigin ?? this;
 
-            var velocity = CalculateProjectileVelocity(spell, target, spellType, origins[0]);
+            var origins = originObject.CalculateProjectileOrigins(spell, spellType, target);
 
-            return LaunchSpellProjectiles(spell, target, spellType, weapon, isWeaponSpell, fromProc, origins, velocity, lifeProjectileDamage, damageModifier);
+            var velocity = originObject.CalculateProjectileVelocity(spell, target, spellType, origins[0]);
+
+            return LaunchSpellProjectiles(spell, target, spellType, weapon, isWeaponSpell, fromProc, origins, velocity, lifeProjectileDamage, damageModifier, projectileOrigin);
         }
 
         public const float ProjHeight = 2.0f / 3.0f;
@@ -1895,7 +1897,7 @@ namespace ACE.Server.WorldObjects
             return dir * speed;
         }
 
-        public List<SpellProjectile> LaunchSpellProjectiles(Spell spell, WorldObject target, ProjectileSpellType spellType, WorldObject weapon, bool isWeaponSpell, bool fromProc, List<Vector3> origins, Vector3 velocity, uint lifeProjectileDamage = 0, float damageModifier = 1.0f)
+        public List<SpellProjectile> LaunchSpellProjectiles(Spell spell, WorldObject target, ProjectileSpellType spellType, WorldObject weapon, bool isWeaponSpell, bool fromProc, List<Vector3> origins, Vector3 velocity, uint lifeProjectileDamage = 0, float damageModifier = 1.0f, WorldObject projectileOrigin = null)
         {
             var useGravity = spellType == ProjectileSpellType.Arc;
 
@@ -1903,7 +1905,9 @@ namespace ACE.Server.WorldObjects
 
             var spellProjectiles = new List<SpellProjectile>();
 
-            var casterLoc = PhysicsObj.Position.ACEPosition();
+            var originObject = projectileOrigin ?? this;
+
+            var casterLoc = originObject.PhysicsObj.Position.ACEPosition();
             var targetLoc = target?.PhysicsObj.Position.ACEPosition();
 
             for (var i = 0; i < origins.Count; i++)
@@ -1923,7 +1927,7 @@ namespace ACE.Server.WorldObjects
                 var rotate = casterLoc.Rotation;
                 if (target != null)
                 {
-                    var qDir = PhysicsObj.Position.GetOffset(target.PhysicsObj.Position);
+                    var qDir = originObject.PhysicsObj.Position.GetOffset(target.PhysicsObj.Position);
                     rotate = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (float)Math.Atan2(-qDir.X, qDir.Y));
                 }
 

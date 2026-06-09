@@ -49,11 +49,12 @@ namespace ACE.Server.Factories
             ACE.Server.Factories.Enum.WeenieClassName.ace43383_netherstaff,
         };
 
-        public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical)
+        public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
         {
             // this function is only used by test methods, and is not part of regular lootgen
             var treasureRoll = new TreasureRoll(TreasureItemType.Caster);
             treasureRoll.WeaponType = TreasureWeaponType.Caster;
+            treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
             treasureRoll.Wcid = CasterWcids.Roll(profile.Tier);
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
@@ -68,7 +69,7 @@ namespace ACE.Server.Factories
             if (LifeCasterWcids.Contains((ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId) && wo.W_DamageType == DamageType.Undef)
                 wo.W_DamageType = DamageType.Health;
             else
-                TryMutateLifeCaster(wo, profile);
+                TryMutateLifeCaster(wo, profile, roll);
 
             // mutate ManaConversionMod
             var mutationFilter = MutationCache.GetMutation("Casters.caster.txt");
@@ -146,12 +147,16 @@ namespace ACE.Server.Factories
 
             // long description
             wo.LongDesc = GetLongDesc(wo);
+            if (wo.W_DamageType == DamageType.Health)
+                wo.LongDesc = $"Life Spells\r\n\r\n{wo.LongDesc}";
 
             // Archmagi: 5% chance on any T6+ magical caster with a bound spell.
             // Runtime rolls this item's 1-5% ProcSpellRate to chain the same valid
             // harmful single-target spell from the player to a different nearby target.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ArchmagiEnabled
-                && isMagical && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && wo.SpellDID.HasValue && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)
+                && isMagical && wo.SpellDID.HasValue
+                && (IsForcedWeaponModifier(roll, "archmagi")
+                    || (!HasForcedWeaponModifier(roll) && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)))
             {
                 var procChance = ThreadSafeRandom.Next(0.01f, 0.05f);
 
@@ -170,9 +175,9 @@ namespace ACE.Server.Factories
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.HierophantEnabled
                 && isMagical
                 && wo.W_DamageType == DamageType.Health
-                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.HierophantMinTier
                 && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.HierophantDropChance)
+                && (IsForcedWeaponModifier(roll, "hierophant")
+                    || (!HasForcedWeaponModifier(roll) && profile.Tier >= ACE.Server.Managers.DerpACEConfig.HierophantMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.HierophantDropChance)))
             {
                 var healBoost = ThreadSafeRandom.Next(
                     ACE.Server.Managers.DerpACEConfig.HierophantHealBoostMin,
@@ -240,19 +245,21 @@ namespace ACE.Server.Factories
             return $"Casters.caster_{elementalStr}.txt";
         }
 
-        private static void TryMutateLifeCaster(WorldObject wo, TreasureDeath profile)
+        private static void TryMutateLifeCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
         {
             if (!DerpACEConfig.EnableCustomWeapons || !DerpACEConfig.LifeCasterEnabled)
                 return;
 
-            if (profile.Tier < DerpACEConfig.LifeCasterMinTier)
+            var forcedLifeCaster = IsForcedWeaponModifier(roll, "hierophant");
+
+            if (!forcedLifeCaster && profile.Tier < DerpACEConfig.LifeCasterMinTier)
                 return;
 
             var wcid = (ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId;
             if (!LifeCasterMutationWcids.Contains(wcid))
                 return;
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= DerpACEConfig.LifeCasterDropChance)
+            if (!forcedLifeCaster && ThreadSafeRandom.Next(0.0f, 1.0f) >= DerpACEConfig.LifeCasterDropChance)
                 return;
 
             var family = GetLifeCasterFamily(wcid);
@@ -260,7 +267,7 @@ namespace ACE.Server.Factories
             wo.W_DamageType = DamageType.Health;
             wo.WieldSkillType = (int)Skill.LifeMagic;
             wo.Name = $"Martyr {family.Name}";
-            wo.Use = $"This {family.Name} has been sanctified to aid Life Magic.";
+            wo.Use = $"Life Spells: This {family.Name} has been sanctified to aid Life Magic.";
 
             if (family.Setup != 0)
                 wo.SetupTableId = family.Setup;

@@ -78,7 +78,8 @@ namespace ACE.Server.WorldObjects
                         if (playerWielder != null && playerWielder.IsUnarmedArmorPiece(item) && !playerWielder.IsUnarmedArmorActive(item))
                             continue;
 
-                        item.TryProcItem(attacker, target, selfTarget);
+                        var sourceRingAtTarget = (item.ItemType & ItemType.Jewelry) != 0;
+                        item.TryProcItem(attacker, target, selfTarget, sourceRingAtTarget);
                     }
                 }
                 else

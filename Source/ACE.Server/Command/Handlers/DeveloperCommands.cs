@@ -779,6 +779,47 @@ namespace ACE.Server.Command.Handlers
                 session.Player.AddTitle((uint)title);
         }
 
+        [CommandHandler("playertitle", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 2, "Sets or clears a custom visible player title.", "<player> <title text|clear>")]
+        [CommandHandler("setplayertitle", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 2, "Sets or clears a custom visible player title.", "<player> <title text|clear>")]
+        public static void HandlePlayerTitle(Session session, params string[] parameters)
+        {
+            var target = PlayerManager.GetOnlinePlayer(parameters[0]);
+            if (target == null)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Player '{parameters[0]}' was not found online.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var title = string.Join(" ", parameters.Skip(1)).Trim();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat("Usage: /playertitle <player> <title text|clear>", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var clear = title.Equals("clear", StringComparison.OrdinalIgnoreCase)
+                || title.Equals("remove", StringComparison.OrdinalIgnoreCase)
+                || title.Equals("reset", StringComparison.OrdinalIgnoreCase);
+
+            if (clear)
+            {
+                target.UpdateProperty(target, PropertyString.Template, null, true);
+                target.SaveBiotaToDatabase();
+
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Cleared custom player title for {target.Name}.", ChatMessageType.Broadcast));
+                PlayerManager.BroadcastToAuditChannel(session.Player, $"{session.Player.Name} cleared custom player title for {target.Name}.");
+                return;
+            }
+
+            target.UpdateProperty(target, PropertyInt.CharacterTitleId, null, true);
+            target.UpdateProperty(target, PropertyString.Template, title, true);
+            target.SaveBiotaToDatabase();
+
+            session.Network.EnqueueSend(new GameMessageSystemChat($"Set custom player title for {target.Name}: {title}", ChatMessageType.Broadcast));
+            target.SendMessage($"Your custom title has been set to: {title}");
+            PlayerManager.BroadcastToAuditChannel(session.Player, $"{session.Player.Name} set custom player title for {target.Name}: {title}");
+        }
+
 
         // ==================================
         // Experience
@@ -2286,13 +2327,81 @@ namespace ACE.Server.Command.Handlers
             log.Info($"Physics ObjMaint Audit Completed. Errors - objectTable: {objectTableErrors}, visibleObjectTable: {visibleObjectTableErrors}, voyeurTable: {voyeurTableErrors}");
         }
 
-        [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid or classname> <tier>")]
+        [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid, classname, or weapon> <tier> [luck=0-1] [mutator=name]")]
         public static void HandleLootGen(Session session, params string[] parameters)
         {
             WorldObject wo = null;
 
-            // create base item
-            if (uint.TryParse(parameters[0], out var wcid))
+            int tier = 1;
+            if (parameters.Length > 1)
+                int.TryParse(parameters[1], out tier);
+
+            var lootQualityMod = 0.0f;
+            string forcedWeaponMutator = null;
+
+            for (var i = 1; i < parameters.Length; i++)
+            {
+                var parameter = parameters[i];
+                var separator = parameter.IndexOf('=');
+                if (separator <= 0)
+                    continue;
+
+                var key = parameter.Substring(0, separator).ToLowerInvariant();
+                var value = parameter.Substring(separator + 1);
+
+                switch (key)
+                {
+                    case "tier":
+                    case "t":
+                        int.TryParse(value, out tier);
+                        break;
+
+                    case "luck":
+                    case "quality":
+                    case "q":
+                        if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out lootQualityMod))
+                        {
+                            session.Network.EnqueueSend(new GameMessageSystemChat($"Invalid loot quality/luck value: {value}", ChatMessageType.Broadcast));
+                            return;
+                        }
+
+                        if (lootQualityMod > 1.0f && lootQualityMod <= 100.0f)
+                            lootQualityMod /= 100.0f;
+
+                        lootQualityMod = Math.Clamp(lootQualityMod, 0.0f, 0.99f);
+                        break;
+
+                    case "mutator":
+                    case "mod":
+                    case "affix":
+                        if (!LootGenerationFactory.TryResolveWeaponMutator(value, out forcedWeaponMutator))
+                        {
+                            session.Network.EnqueueSend(new GameMessageSystemChat($"Unknown weapon mutator '{value}'. Options: {LootGenerationFactory.GetWeaponMutatorNames()}", ChatMessageType.Broadcast));
+                            return;
+                        }
+                        break;
+                }
+            }
+
+            if (tier < 1 || tier > 8)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Loot Tier must be a number between 1 and 8", ChatMessageType.Broadcast));
+                return;
+            }
+
+            var profile = new TreasureDeath()
+            {
+                Tier = tier,
+                LootQualityMod = lootQualityMod
+            };
+
+            var randomWeapon = parameters[0].Equals("weapon", StringComparison.OrdinalIgnoreCase)
+                || parameters[0].Equals("randomweapon", StringComparison.OrdinalIgnoreCase)
+                || parameters[0].Equals("random_weapon", StringComparison.OrdinalIgnoreCase);
+
+            if (randomWeapon)
+                wo = LootGenerationFactory.CreateWeapon(profile, true, forcedWeaponMutator);
+            else if (uint.TryParse(parameters[0], out var wcid))
                 wo = WorldObjectFactory.CreateNewWorldObject(wcid);
             else
                 wo = WorldObjectFactory.CreateNewWorldObject(parameters[0]);
@@ -2303,29 +2412,24 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            int tier = 1;
-            if (parameters.Length > 1)
-                int.TryParse(parameters[1], out tier);
-
-            if (tier < 1 || tier > 8)
-            {
-                session.Network.EnqueueSend(new GameMessageSystemChat($"Loot Tier must be a number between 1 and 8", ChatMessageType.Broadcast));
-                return;
-            }
-
-            if (wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
+            if (!randomWeapon && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
             {
                 session.Network.EnqueueSend(new GameMessageSystemChat($"{wo.Name} ({wo.WeenieClassId}) missing PropertyInt.TsysMutationData", ChatMessageType.Broadcast));
                 return;
             }
 
-            var profile = new TreasureDeath()
-            {
-                Tier = tier,
-                LootQualityMod = 0
-            };
+            var success = randomWeapon || LootGenerationFactory.MutateItem(wo, profile, true, forcedWeaponMutator);
 
-            var success = LootGenerationFactory.MutateItem(wo, profile, true);
+            if (!success)
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat($"{wo.Name} ({wo.WeenieClassId}) could not be mutated by lootgen.", ChatMessageType.Broadcast));
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(forcedWeaponMutator) && !LootGenerationFactory.HasWeaponMutator(wo, forcedWeaponMutator))
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name}, but '{forcedWeaponMutator}' did not apply. Check weapon compatibility or custom weapon config.", ChatMessageType.Broadcast));
+            else
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name} ({wo.WeenieClassId}) at tier {tier}, luck {lootQualityMod:0.##}.", ChatMessageType.Broadcast));
 
             session.Player.TryCreateInInventoryWithNetworking(wo);
         }

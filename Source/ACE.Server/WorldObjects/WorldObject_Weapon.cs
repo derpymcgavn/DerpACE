@@ -980,7 +980,7 @@ namespace ACE.Server.WorldObjects
             return HasProc && ProcSpell == spellID;
         }
 
-        public void TryProcItem(WorldObject attacker, Creature target, bool selfTarget)
+        public void TryProcItem(WorldObject attacker, Creature target, bool selfTarget, bool sourceRingAtTarget = false)
         {
             // roll for a chance of casting spell
             var chance = ProcSpellRate ?? 0.0f;
@@ -1019,9 +1019,12 @@ namespace ACE.Server.WorldObjects
             }
 
             var itemCaster = this is Creature ? null : this;
+            var projectileOrigin = sourceRingAtTarget && !selfTarget && target != null && SpellProjectile.GetProjectileSpellType(spell.Id) == ProjectileSpellType.Ring
+                ? target
+                : null;
 
             if (spell.NonComponentTargetType == ItemType.None)
-                attacker.TryCastSpell(spell, null, itemCaster, itemCaster, true, true);
+                attacker.TryCastSpell(spell, null, itemCaster, itemCaster, true, true, true, 1.0f, projectileOrigin);
             else if (spell.NonComponentTargetType == ItemType.Vestements)
             {
                 // TODO: spell.NonComponentTargetType should probably always go through TryCastSpell_WithItemRedirects,

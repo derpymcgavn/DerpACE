@@ -188,13 +188,30 @@ namespace ACE.Server.Factories
 
         private static bool TryRollWeaponModifier(TreasureDeath profile, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible)
         {
+            return TryRollWeaponModifier(profile, null, ref specialModifierApplied, baseChance, minTier, primaryEligible);
+        }
+
+        private static bool TryRollWeaponModifier(TreasureDeath profile, TreasureRoll roll, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible, params string[] forcedAliases)
+        {
             if (profile == null || profile.Tier < minTier)
-                return false;
+            {
+                if (!IsForcedWeaponModifier(roll, forcedAliases))
+                    return false;
+            }
 
             if (ACE.Server.Managers.DerpACEConfig.LootModifierExclusivePerItem && specialModifierApplied)
                 return false;
 
             if (!primaryEligible)
+                return false;
+
+            if (IsForcedWeaponModifier(roll, forcedAliases))
+            {
+                specialModifierApplied = true;
+                return true;
+            }
+
+            if (HasForcedWeaponModifier(roll))
                 return false;
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= GetAdjustedModifierChance(baseChance))
@@ -204,11 +221,39 @@ namespace ACE.Server.Factories
             return true;
         }
 
-        public static WorldObject CreateMeleeWeapon(TreasureDeath profile, bool isMagical)
+        private static bool IsForcedWeaponModifier(TreasureRoll roll, params string[] aliases)
+        {
+            if (roll == null || string.IsNullOrWhiteSpace(roll.ForcedWeaponMutator) || aliases == null)
+                return false;
+
+            if (!TryResolveWeaponMutator(roll.ForcedWeaponMutator, out var forcedName))
+                forcedName = NormalizeWeaponMutatorName(roll.ForcedWeaponMutator);
+
+            foreach (var alias in aliases)
+            {
+                if (TryResolveWeaponMutator(alias, out var canonicalAlias))
+                {
+                    if (string.Equals(forcedName, canonicalAlias, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                else if (string.Equals(forcedName, NormalizeWeaponMutatorName(alias), StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasForcedWeaponModifier(TreasureRoll roll)
+        {
+            return roll != null && !string.IsNullOrWhiteSpace(roll.ForcedWeaponMutator);
+        }
+
+        public static WorldObject CreateMeleeWeapon(TreasureDeath profile, bool isMagical, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null)
         {
             // this function is only used by test methods, and is not part of regular lootgen
             var treasureRoll = new TreasureRoll(TreasureItemType.Weapon);
-            treasureRoll.WeaponType = WeaponTypeChance.MeleeChances.Roll();
+            treasureRoll.WeaponType = forcedWeaponType ?? WeaponTypeChance.MeleeChances.Roll();
+            treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
             treasureRoll.Wcid = WeaponWcids.Roll(profile, ref treasureRoll.WeaponType);
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
@@ -298,10 +343,12 @@ namespace ACE.Server.Factories
             // Equipping grants 50% translucency, -aggro weight, and +10% sneak attack damage.
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.ThievesDaggerDropChance,
                 ACE.Server.Managers.DerpACEConfig.ThievesDaggerMinTier,
-                roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS))
+                roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS,
+                "thief"))
             {
                 wo.Name = wo.Name + " of the Thief";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
@@ -321,10 +368,12 @@ namespace ACE.Server.Factories
             // Deflect proc: per-incoming-hit chance to reflect 10% of damage back at the attacker.
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.FencerBladeDropChance,
                 ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier,
-                roll.WeaponType == TreasureWeaponType.SwordMS))
+                roll.WeaponType == TreasureWeaponType.SwordMS,
+                "fencer"))
             {
                 var piercePct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.FencerPierceMin,
@@ -357,10 +406,12 @@ namespace ACE.Server.Factories
             // Two-handed axes get the bleed total scaled by RavagerTwoHandMult.
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.RavagerAxeDropChance,
                 ACE.Server.Managers.DerpACEConfig.RavagerAxeMinTier,
-                roll.WeaponType == TreasureWeaponType.Axe || roll.WeaponType == TreasureWeaponType.TwoHandedAxe))
+                roll.WeaponType == TreasureWeaponType.Axe || roll.WeaponType == TreasureWeaponType.TwoHandedAxe,
+                "ravager"))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.RavagerProcMin,
@@ -412,12 +463,14 @@ namespace ACE.Server.Factories
             // Two-handed maces get the penalty scaled by WardenTwoHandMult.
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.WardenMaulDropChance,
                 ACE.Server.Managers.DerpACEConfig.WardenMaulMinTier,
                 roll.WeaponType == TreasureWeaponType.Mace
                     || roll.WeaponType == TreasureWeaponType.MaceJitte
-                    || roll.WeaponType == TreasureWeaponType.TwoHandedMace))
+                    || roll.WeaponType == TreasureWeaponType.TwoHandedMace,
+                "warden"))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.WardenProcMin,
@@ -453,10 +506,12 @@ namespace ACE.Server.Factories
             // On crit hits, restores % of damage as health. On killing blows, restores % of MaxHealth + MaxStamina.
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.ResoluteBladeDropChance,
                 ACE.Server.Managers.DerpACEConfig.ResoluteBladeMinTier,
-                roll.WeaponType == TreasureWeaponType.Sword || roll.WeaponType == TreasureWeaponType.TwoHandedSword))
+                roll.WeaponType == TreasureWeaponType.Sword || roll.WeaponType == TreasureWeaponType.TwoHandedSword,
+                "resolute"))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.ResoluteProcMin,
@@ -489,10 +544,12 @@ namespace ACE.Server.Factories
             // damage on consecutive hits against the same target (see @lootconfig).
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.PolebreakerDropChance,
                 ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier,
-                roll.WeaponType == TreasureWeaponType.Staff))
+                roll.WeaponType == TreasureWeaponType.Staff,
+                "polebreaker"))
             {
                 var stackPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.PolebreakerStackMin,
@@ -577,10 +634,12 @@ namespace ACE.Server.Factories
             // Sentinel's Spear: configurable chance on any T6+ spear (see @lootconfig)
             if (TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.SentinelSpearDropChance,
                 ACE.Server.Managers.DerpACEConfig.SentinelSpearMinTier,
-                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear))
+                roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear,
+                "sentinel"))
             {
                 wo.Name = wo.Name + " of the Sentinel";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);

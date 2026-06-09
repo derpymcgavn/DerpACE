@@ -14,6 +14,12 @@ namespace ACE.Server.Factories.Entity
         public int BaseArmorLevel;
 
         /// <summary>
+        /// Optional admin/test override used by /lootgen to force a named custom weapon modifier.
+        /// Normal lootgen leaves this null and uses the configured RNG chances.
+        /// </summary>
+        public string ForcedWeaponMutator;
+
+        /// <summary>
         /// A cumulative addon to the ItemDifficulty / Arcane Lore requirement
         /// </summary>
         public float ItemDifficulty;

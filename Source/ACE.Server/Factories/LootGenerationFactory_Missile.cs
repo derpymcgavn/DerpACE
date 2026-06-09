@@ -12,16 +12,20 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
-        public static WorldObject CreateMissileWeapon(TreasureDeath profile, bool isMagical, bool mutate = true)
+        public static WorldObject CreateMissileWeapon(TreasureDeath profile, bool isMagical, bool mutate = true, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null)
         {
             // this function is only used by test methods, and is not part of regular lootgen
             var treasureRoll = new TreasureRoll(TreasureItemType.Weapon);
-            treasureRoll.WeaponType = WeaponTypeChance.MissileChances.Roll();
+            treasureRoll.WeaponType = forcedWeaponType ?? WeaponTypeChance.MissileChances.Roll();
+            treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
             treasureRoll.Wcid = WeaponWcids.Roll(profile, ref treasureRoll.WeaponType);
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
 
-            MutateMissileWeapon(wo, profile, isMagical, treasureRoll);
+            if (treasureRoll.WeaponType == TreasureWeaponType.ThrownDinnerware)
+                MutateDinnerware(wo, profile, isMagical, treasureRoll);
+            else
+                MutateMissileWeapon(wo, profile, isMagical, treasureRoll);
             
             return wo;
         }
@@ -109,10 +113,12 @@ namespace ACE.Server.Factories
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.StalkerBowEnabled
                 && TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.StalkerBowDropChance,
                 ACE.Server.Managers.DerpACEConfig.StalkerBowMinTier,
-                roll.WeaponType == TreasureWeaponType.Bow))
+                roll.WeaponType == TreasureWeaponType.Bow,
+                "stalker"))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.StalkerProcMin,
@@ -140,10 +146,12 @@ namespace ACE.Server.Factories
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.BreacherCrossbowEnabled
                 && TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.BreacherCrossbowDropChance,
                 ACE.Server.Managers.DerpACEConfig.BreacherCrossbowMinTier,
-                roll.WeaponType == TreasureWeaponType.Crossbow))
+                roll.WeaponType == TreasureWeaponType.Crossbow,
+                "breacher"))
             {
                 var armorIgnoreChance = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.BreacherArmorIgnoreMin,
@@ -165,10 +173,12 @@ namespace ACE.Server.Factories
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.RicochetAtlatlEnabled
                 && TryRollWeaponModifier(
                 profile,
+                roll,
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.RicochetAtlatlDropChance,
                 ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier,
-                roll.WeaponType == TreasureWeaponType.Atlatl))
+                roll.WeaponType == TreasureWeaponType.Atlatl,
+                "ricochet"))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.RicochetProcMin,

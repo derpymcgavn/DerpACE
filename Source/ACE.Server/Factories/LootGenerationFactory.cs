@@ -982,7 +982,7 @@ namespace ACE.Server.Factories
         /// This is only called by the /lootgen command
         /// Even though this is not called by normal gameplay, it should still produce functionally identical results.
         /// </summary>
-        public static bool MutateItem(WorldObject item, TreasureDeath profile, bool isMagical)
+        public static bool MutateItem(WorldObject item, TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
         {
             // should ideally be split up between getting the item type,
             // and getting the specific mutate function parameters
@@ -1003,6 +1003,7 @@ namespace ACE.Server.Factories
 
             roll.Wcid = (WeenieClassName)item.WeenieClassId;
             roll.BaseArmorLevel = item.ArmorLevel ?? 0;
+            roll.ForcedWeaponMutator = forcedWeaponMutator;
 
             if (roll.Wcid == WeenieClassName.coinstack)
             {

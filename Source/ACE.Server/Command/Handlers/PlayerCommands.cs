@@ -18,6 +18,24 @@ namespace ACE.Server.Command.Handlers
     {
         private static readonly ConcurrentDictionary<uint, TeleportRequest> PendingTeleportRequests = new ConcurrentDictionary<uint, TeleportRequest>();
 
+        [CommandHandler("pop", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
+            "Shows the current server population.",
+            "/pop")]
+        [CommandHandler("population", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
+            "Shows the current server population.",
+            "/population")]
+        public static void HandlePopulation(Session session, params string[] parameters)
+        {
+            var player = session?.Player;
+            if (player == null)
+                return;
+
+            var online = PlayerManager.GetOnlineCount();
+            var maximum = ConfigManager.Config.Server.Network.MaximumAllowedSessions;
+
+            player.SendMessage($"Server population: {online:N0}/{maximum:N0}");
+        }
+
         [CommandHandler("cast-style", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
             "Toggle your spell casting animation style.",
             "/cast-style [npc|normal|toggle|status]")]

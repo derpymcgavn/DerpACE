@@ -12,16 +12,20 @@ namespace ACE.Server.Factories
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
         /// </summary>
-        private static WorldObject CreateWeapon(TreasureDeath profile, bool isMagical)
+        public static WorldObject CreateWeapon(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
         {
             var weaponType = WeaponTypeChance.Roll(profile.Tier);
 
+            if (TryResolveWeaponMutator(forcedWeaponMutator, out var canonicalMutator)
+                && TryGetWeaponMutatorTestType(canonicalMutator, out var forcedWeaponType))
+                weaponType = forcedWeaponType;
+
             if (weaponType.IsMeleeWeapon())
-                return CreateMeleeWeapon(profile, isMagical);
+                return CreateMeleeWeapon(profile, isMagical, weaponType, forcedWeaponMutator);
             else if (weaponType.IsMissileWeapon())
-                return CreateMissileWeapon(profile, isMagical);
+                return CreateMissileWeapon(profile, isMagical, forcedWeaponType: weaponType, forcedWeaponMutator: forcedWeaponMutator);
             else
-                return CreateCaster(profile, isMagical);
+                return CreateCaster(profile, isMagical, forcedWeaponMutator);
         }
 
         private static float RollWeaponSpeedMod(TreasureDeath treasureDeath)
