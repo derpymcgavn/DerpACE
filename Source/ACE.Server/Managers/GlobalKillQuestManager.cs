@@ -175,7 +175,7 @@ namespace ACE.Server.Managers
                 return;
 
             // Match against the actual CreatureType id chosen for the quest.
-            if ((uint)creature.CreatureType != typeId)
+            if (creature?.CreatureType == null || (uint)creature.CreatureType.Value != typeId)
                 return;
 
             var key      = MakeKey(player.Guid.Full, epoch);

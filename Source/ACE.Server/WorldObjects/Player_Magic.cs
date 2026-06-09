@@ -6,6 +6,7 @@ using ACE.Common;
 using ACE.DatLoader;
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
@@ -668,6 +669,9 @@ namespace ACE.Server.WorldObjects
                     MagicState.CastGesture = casterItem.UseUserAnimation;
             }
 
+            if (GetProperty(PropertyBool.UseNpcCastAnimation) == true)
+                MagicState.CastGesture = MotionCommand.CastSpell;
+
             if (RecordCast.Enabled)
             {
                 castChain.AddAction(this, () =>
@@ -1194,10 +1198,9 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
-        /// Archmagi proc: when the player casts a spell whose element matches the wielded Archmagi caster,
-        /// there is a 10% chance to echo the caster's stored lower-level proc spell.
-        /// Ring, Wall, Blast, and Volley AoE spells are excluded.
-        /// Life casters echo a self-heal instead when casting harmful life spells.
+        /// Archmagi proc: when the player casts a harmful single-target spell through an
+        /// Archmagi caster, there is a small per-item chance to chain the same spell from
+        /// the player to a different nearby target at reduced damage.
         /// </summary>
         private void TryProcArchmagi(WorldObject target, Spell spell, WorldObject caster)
         {
@@ -1219,8 +1222,8 @@ namespace ACE.Server.WorldObjects
                 spell.School != MagicSchool.LifeMagic)
                 return;
 
-            // Roll for bounce proc
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastChance)
+            var procChance = Math.Clamp((float)(caster.ProcSpellRate ?? ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance), 0.01f, 0.05f);
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
                 return;
 
             // Exclude self-targeting spells
@@ -1228,7 +1231,6 @@ namespace ACE.Server.WorldObjects
             if (targetCreature == null || targetCreature == this || targetCreature.Location == null)
                 return;
 
-            // Find a bounce target: random enemy within radius, excluding the original target
             var bounceRadius = ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastRadius;
             var nearbyEnemies = new System.Collections.Generic.List<Creature>();
 
@@ -1238,13 +1240,11 @@ namespace ACE.Server.WorldObjects
                 var creatures = CurrentLandblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>();
                 foreach (var creature in creatures)
                 {
-                    // Skip original target, self, and invalid creatures
                     if (creature == targetCreature || creature == this || creature == caster ||
                         !creature.IsAlive || !creature.Attackable || creature.Teleporting || creature.Location == null ||
                         targetCreature.Location.SquaredDistanceTo(creature.Location) > radiusSq)
                         continue;
 
-                    // Ensure they're actually enemies
                     if (CheckPKStatusVsTarget(creature, spell) != null)
                         continue;
 
@@ -1255,25 +1255,25 @@ namespace ACE.Server.WorldObjects
             if (nearbyEnemies.Count == 0)
                 return;
 
-            // Pick random bounce target
             var bounceTarget = nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count - 1)];
 
-            // Queue the bounce cast with slight delay for immersion
             var actionChain = new ActionChain();
             actionChain.AddDelaySeconds(0.15);
             actionChain.AddAction(this, () =>
             {
-                TryCastSpell(spell, bounceTarget, caster, caster, true, true, true, ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier);
+                if (!IsAlive || caster.IsDestroyed || bounceTarget.IsDestroyed || !bounceTarget.IsAlive)
+                    return;
+
+                TryCastSpell(spell, bounceTarget, null, caster, false, true, true, ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier);
             });
             actionChain.EnqueueChain();
 
-            // Broadcast immersive messages
-            var castingMessage = $"{caster.Name}'s spell ripples and bounces to {bounceTarget.Name}!";
+            var castingMessage = $"{caster.Name}'s spell arcs from you to {bounceTarget.Name}, chaining {spell.Name}!";
             var casterMessage = new GameMessageSystemChat(castingMessage, ChatMessageType.Spellcasting);
             Session?.Network.EnqueueSend(casterMessage);
 
-            if (bounceTarget is Player bouncePlayer)
-                bouncePlayer.Session?.Network.EnqueueSend(casterMessage);
+            if (bounceTarget is Player targetPlayer)
+                targetPlayer.Session?.Network.EnqueueSend(casterMessage);
         }
 
         public void TryBurnComponents(Spell spell)

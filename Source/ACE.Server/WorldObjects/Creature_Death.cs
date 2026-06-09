@@ -341,7 +341,14 @@ namespace ACE.Server.WorldObjects
 
                 var damagePercent = totalDamage / totalHealth;
 
-                var totalXP = (XpOverride ?? 0) * damagePercent;
+                var baseXP = XpOverride.GetValueOrDefault();
+                if (baseXP <= 0)
+                {
+                    var level = Math.Max(1, playerDamager.Level ?? 1);
+                    baseXP = Math.Max(100, level * level * 50);
+                }
+
+                var totalXP = baseXP * damagePercent;
                 var xpForKill = (long)Math.Round(totalXP);
 
                 // Simulacrum XP scales with the underlying mob's loot tier, not the cloned player's stats

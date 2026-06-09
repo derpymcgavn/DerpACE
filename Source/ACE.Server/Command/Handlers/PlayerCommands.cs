@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using ACE.Common;
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Command;
 using ACE.Server.DerpAce;
 using ACE.Server.DerpAce.Bank;
@@ -16,6 +17,52 @@ namespace ACE.Server.Command.Handlers
     public static class PlayerCommands
     {
         private static readonly ConcurrentDictionary<uint, TeleportRequest> PendingTeleportRequests = new ConcurrentDictionary<uint, TeleportRequest>();
+
+        [CommandHandler("cast-style", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
+            "Toggle your spell casting animation style.",
+            "/cast-style [npc|normal|toggle|status]")]
+        [CommandHandler("caststyle", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
+            "Toggle your spell casting animation style.",
+            "/caststyle [npc|normal|toggle|status]")]
+        public static void HandleCastStyle(Session session, params string[] parameters)
+        {
+            var player = session?.Player;
+            if (player == null)
+                return;
+
+            var current = player.GetProperty(PropertyBool.UseNpcCastAnimation) == true;
+            var option = parameters.Length > 0 ? parameters[0].ToLowerInvariant() : "toggle";
+
+            switch (option)
+            {
+                case "npc":
+                case "monster":
+                case "on":
+                    current = true;
+                    break;
+                case "normal":
+                case "player":
+                case "off":
+                    current = false;
+                    break;
+                case "status":
+                    player.SendMessage($"Cast style: {(current ? "NPC" : "Normal")}.");
+                    return;
+                case "toggle":
+                    current = !current;
+                    break;
+                default:
+                    player.SendMessage("Usage: /cast-style [npc|normal|toggle|status]");
+                    return;
+            }
+
+            if (current)
+                player.SetProperty(PropertyBool.UseNpcCastAnimation, true);
+            else
+                player.RemoveProperty(PropertyBool.UseNpcCastAnimation);
+
+            player.SendMessage($"Cast style set to {(current ? "NPC" : "Normal")}.");
+        }
 
         [CommandHandler("tp", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
             "Request a player teleport.",

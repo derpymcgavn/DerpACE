@@ -27,7 +27,8 @@ namespace ACE.Server.WorldObjects
         {
             // handle procs directly on this item -- ie. phials
             // this could also be monsters with the proc spell directly on the creature
-            if (HasProc && ProcSpellSelfTargeted == selfTarget)
+            if (GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
+                && HasProc && ProcSpellSelfTargeted == selfTarget)
             {
                 // projectile
                 // monster
@@ -36,7 +37,8 @@ namespace ACE.Server.WorldObjects
 
             // handle proc spells for weapon
             // this could be a melee weapon, or a missile launcher
-            if (weapon != null && weapon.HasProc && weapon.ProcSpellSelfTargeted == selfTarget
+            if (weapon != null && weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
+                && weapon.HasProc && weapon.ProcSpellSelfTargeted == selfTarget
                 && (!(attacker is Player procPlayer) || !procPlayer.IsUnarmedArmorPiece(weapon) || procPlayer.IsUnarmedArmorActive(weapon)))
             {
                 // weapon
@@ -64,6 +66,9 @@ namespace ACE.Server.WorldObjects
                     foreach (var item in wielder.EquippedObjects.Values)
                     {
                         if (item == this || item == weapon || item == attacker)
+                            continue;
+
+                        if (item.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true)
                             continue;
 
                         if (!item.HasProc || item.ProcSpellSelfTargeted != selfTarget)

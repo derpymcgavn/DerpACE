@@ -241,5 +241,8 @@ namespace ACE.Entity.Enum.Properties
         IsHordeMember                    = 9047,
         IsRicochetAtlatl                 = 9048,
         IsRicochetProjectile             = 9049,
+
+        /* DerpACE player preference - use NPC-style spell casting animation */
+        UseNpcCastAnimation              = 9050,
     }
 }
