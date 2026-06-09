@@ -376,14 +376,6 @@ namespace ACE.Server.WorldObjects
         {
             var tryDamage = (int)Math.Round(amount);
 
-            if ((IsHordeMob || IsHordeMember) && tryDamage > 0)
-            {
-                // DerpACE: Horde affix - members forward damage to the leader's shared pool.
-                // Routing must happen before the local body is damaged.
-                if (TryHordeDamageTaken(source, damageType, (uint)tryDamage))
-                    return (uint)tryDamage;
-            }
-
             var damage = -UpdateVitalDelta(Health, -tryDamage);
 
             // TODO: update monster stamina?

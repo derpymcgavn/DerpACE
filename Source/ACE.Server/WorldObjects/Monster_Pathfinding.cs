@@ -219,7 +219,7 @@ namespace ACE.Server.WorldObjects
             if (Location == null)
                 return;
 
-            var baseLandblock = Location.Cell & 0xFFFF0000;
+            var baseLandblock = Location.LandblockId.Landblock;
             var waypointCount = ThreadSafeRandom.Next(ScoutPatrolMinWaypoints, ScoutPatrolMaxWaypoints);
 
             // Start with a random base heading; subsequent waypoints rotate this by
@@ -235,13 +235,13 @@ namespace ACE.Server.WorldObjects
                 for (var attempt = 0; attempt < 4; attempt++)
                 {
                     var radius = (float)ThreadSafeRandom.Next(ScoutRoamRadiusMin, ScoutRoamRadiusMax);
-                    var candidate = new Position(cursor)
-                    {
-                        PositionX = cursor.PositionX + (float)Math.Cos(heading) * radius,
-                        PositionY = cursor.PositionY + (float)Math.Sin(heading) * radius,
-                    };
+                    var candidate = new Position(cursor);
+                    candidate.SetPosition(new Vector3(
+                        cursor.PositionX + (float)Math.Cos(heading) * radius,
+                        cursor.PositionY + (float)Math.Sin(heading) * radius,
+                        cursor.PositionZ));
 
-                    if ((candidate.Cell & 0xFFFF0000) != baseLandblock)
+                    if (candidate.LandblockId.Landblock != baseLandblock)
                     {
                         // Reflect the heading away from the landblock edge and try again.
                         heading += (float)Math.PI * 0.5f;

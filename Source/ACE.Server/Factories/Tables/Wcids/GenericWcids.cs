@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using ACE.Common;
 using ACE.Server.Factories.Entity;
 using ACE.Server.Factories.Enum;
 
@@ -8,6 +9,22 @@ namespace ACE.Server.Factories.Tables.Wcids
 {
     public static class GenericWcids
     {
+        private static readonly HashSet<WeenieClassName> ThrowableDinnerwareWcids = new HashSet<WeenieClassName>
+        {
+            WeenieClassName.bowl,
+            WeenieClassName.chalice,
+            WeenieClassName.cup,
+            WeenieClassName.ewer,
+            WeenieClassName.flagon,
+            WeenieClassName.goblet,
+            WeenieClassName.mug,
+            WeenieClassName.ornamentalbowl,
+            WeenieClassName.dinnerplate,
+            WeenieClassName.stoup,
+            WeenieClassName.tankard,
+            (WeenieClassName)420498,
+        };
+
         private static ChanceTable<WeenieClassName> T1_T2_Chances = new ChanceTable<WeenieClassName>()
         {
             ( WeenieClassName.bowl,           0.09f ),
@@ -75,6 +92,58 @@ namespace ACE.Server.Factories.Tables.Wcids
             tier = Math.Clamp(tier, 1, 6);
 
             return tierChances[tier - 1].Roll();
+        }
+
+        public static WeenieClassName RollThrowable(int tier)
+        {
+            return RollFiltered(tier, true);
+        }
+
+        public static WeenieClassName RollNonThrowable(int tier)
+        {
+            return RollFiltered(tier, false);
+        }
+
+        private static WeenieClassName RollFiltered(int tier, bool throwable)
+        {
+            tier = Math.Clamp(tier, 1, 6);
+
+            var table = tierChances[tier - 1];
+            var total = 0.0f;
+
+            foreach (var entry in table)
+            {
+                if (ThrowableDinnerwareWcids.Contains(entry.result) == throwable)
+                    total += entry.chance;
+            }
+
+            if (total <= 0.0f && !throwable)
+                return WeenieClassName.flasksimple;
+
+            if (total <= 0.0f)
+                return table.Roll();
+
+            var roll = ThreadSafeRandom.Next(0.0f, total);
+            var current = 0.0f;
+
+            foreach (var entry in table)
+            {
+                if (ThrowableDinnerwareWcids.Contains(entry.result) != throwable)
+                    continue;
+
+                current += entry.chance;
+
+                if (roll < current)
+                    return entry.result;
+            }
+
+            foreach (var entry in table)
+            {
+                if (ThrowableDinnerwareWcids.Contains(entry.result) == throwable)
+                    return entry.result;
+            }
+
+            return table.Roll();
         }
 
         private static readonly HashSet<WeenieClassName> _combined = new HashSet<WeenieClassName>();

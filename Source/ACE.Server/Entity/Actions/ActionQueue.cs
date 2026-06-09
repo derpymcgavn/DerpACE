@@ -15,12 +15,12 @@ namespace ACE.Server.Entity.Actions
         private readonly System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
         #endif
 
-        public void RunActions()
+        public void RunActions(int maxActions = int.MaxValue)
         {
-            if (Queue.IsEmpty)
+            if (Queue.IsEmpty || maxActions <= 0)
                 return;
 
-            var count = Queue.Count;
+            var count = maxActions == int.MaxValue ? Queue.Count : maxActions;
 
             for (int i = 0; i < count; i++)
             {

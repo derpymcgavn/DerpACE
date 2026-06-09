@@ -53,7 +53,7 @@ namespace ACE.Server.Factories
         private static WorldObject CreateDinnerware(TreasureDeath profile, bool isMagical)
         {
             var treasureRoll = new TreasureRoll(TreasureItemType.ArtObject);
-            treasureRoll.Wcid = GenericWcids.Roll(profile.Tier);
+            treasureRoll.Wcid = GenericWcids.RollNonThrowable(profile.Tier);
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
             MutateDinnerware(wo, profile, isMagical, treasureRoll);
@@ -107,7 +107,7 @@ namespace ACE.Server.Factories
             const MeleeWeaponSkill statSkill = MeleeWeaponSkill.LightWeapons;
             const TreasureWeaponType statWeaponType = TreasureWeaponType.Dagger;
 
-            roll.WeaponType = TreasureWeaponType.Atlatl;
+            roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
 
             wo.UnlimitedUse = true;
             wo.ItemType |= ItemType.MissileWeapon;
@@ -143,11 +143,45 @@ namespace ACE.Server.Factories
             scriptName = GetOffenseDefenseScript(statSkill, statWeaponType);
             MutationCache.GetMutation(scriptName).TryMutate(wo, profile.Tier);
 
+            ApplyThrowableDinnerwareWieldRequirements(wo, profile.Tier);
+
             if (wo.WeaponTime != null)
             {
                 var weaponSpeedMod = RollWeaponSpeedMod(profile);
                 wo.WeaponTime = (int)(wo.WeaponTime * weaponSpeedMod);
             }
+        }
+
+        private static void ApplyThrowableDinnerwareWieldRequirements(WorldObject wo, int tier)
+        {
+            if (wo == null)
+                return;
+
+            var cap = tier switch
+            {
+                <= 1 => 0,
+                2    => 250,
+                3    => 270,
+                4    => 290,
+                5    => 315,
+                6    => 360,
+                7    => 375,
+                _    => 385,
+            };
+
+            if (cap <= 0)
+            {
+                wo.WieldRequirements = WieldRequirement.Invalid;
+                wo.WieldSkillType = null;
+                wo.WieldDifficulty = null;
+                return;
+            }
+
+            wo.WieldRequirements = WieldRequirement.RawSkill;
+            wo.WieldSkillType = (int)Skill.MissileWeapons;
+            wo.WieldDifficulty = wo.WieldDifficulty.HasValue
+                ? System.Math.Min(wo.WieldDifficulty.Value, cap)
+                : cap;
         }
 
         private static string GetThrowableClaymoreName(DamageType damageType)

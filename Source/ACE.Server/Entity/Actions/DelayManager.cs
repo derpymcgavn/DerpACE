@@ -11,12 +11,16 @@ namespace ACE.Server.Entity.Actions
 
         private readonly SortedSet<DelayAction> delayHeap = new SortedSet<DelayAction>();
 
-        public void RunActions()
+        public void RunActions(int maxActions = int.MaxValue)
         {
-            // While the minimum time of our delayHeap is > our current time, kick off actions
-            bool checkNeeded = true;
+            if (maxActions <= 0)
+                return;
 
-            while (checkNeeded)
+            // While the minimum time of our delayHeap is > our current time, kick off actions
+            var actionsProcessed = 0;
+            var checkNeeded = true;
+
+            while (checkNeeded && actionsProcessed < maxActions)
             {
                 checkNeeded = false;
                 List<DelayAction> toAct = new List<DelayAction>();
@@ -24,7 +28,7 @@ namespace ACE.Server.Entity.Actions
                 // Actions may be added to delayHeap from network queue -- therefore this is needed
                 lock (delayHeap)
                 {
-                    while (delayHeap.Count > 0)
+                    while (delayHeap.Count > 0 && actionsProcessed + toAct.Count < maxActions)
                     {
                         // Find the next (O(1))
                         var min = delayHeap.Min;
@@ -47,6 +51,7 @@ namespace ACE.Server.Entity.Actions
                 foreach (var action in toAct)
                 {
                     Tuple<IActor, IAction> next = action.Act();
+                    actionsProcessed++;
 
                     if (next != null)
                         next.Item1.EnqueueAction(next.Item2);

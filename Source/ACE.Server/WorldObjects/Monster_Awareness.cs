@@ -39,10 +39,6 @@ namespace ACE.Server.WorldObjects
             if (IsScoutMob && AttackTarget is Player playerTarget)
                 BroadcastScoutAlert(playerTarget);
 
-            // DerpACE: Illusionist spawns its decoy copies on first aggro
-            if (IsIllusionistMob && !IsIllusionistCopy)
-                TryIllusionistOnAggro();
-
             //DoAttackStance();
             EmoteManager.OnWakeUp(AttackTarget as Creature);
             EmoteManager.OnNewEnemy(AttackTarget as Creature);
@@ -288,6 +284,9 @@ namespace ACE.Server.WorldObjects
 
             foreach (var creature in PhysicsObj.ObjMaint.GetVisibleTargetsValuesOfTypeCreature())
             {
+                if (IsScoutMob && !IsInSameLoadedLandblockGroup(creature))
+                    continue;
+
                 // ensure attackable
                 if (!creature.Attackable && creature.TargetingTactic == TargetingTactic.None || creature.Teleporting) continue;
 
@@ -707,6 +706,9 @@ namespace ACE.Server.WorldObjects
                 if (nearbyCreature == null || nearbyCreature == this || nearbyCreature.IsAwake)
                     continue;
 
+                if (!IsInSameLoadedLandblockGroup(nearbyCreature))
+                    continue;
+
                 if (nearbyCreature.IsDead || !nearbyCreature.Attackable && nearbyCreature.TargetingTactic == TargetingTactic.None)
                     continue;
 
@@ -733,6 +735,15 @@ namespace ACE.Server.WorldObjects
 
                 Alerted[AttackTarget.Guid.Full] = DateTime.UtcNow;
             }
+        }
+
+        private bool IsInSameLoadedLandblockGroup(Creature creature)
+        {
+            if (creature == null || CurrentLandblock == null || creature.CurrentLandblock == null)
+                return false;
+
+            return CurrentLandblock.CurrentLandblockGroup != null &&
+                   CurrentLandblock.CurrentLandblockGroup == creature.CurrentLandblock.CurrentLandblockGroup;
         }
 
         /// <summary>

@@ -155,7 +155,7 @@ namespace ACE.Server.Factories
 
                 case TreasureItemType.ArtObject:
 
-                    treasureRoll.Wcid = GenericWcids.Roll(treasureDeath.Tier);
+                    treasureRoll.Wcid = GenericWcids.RollNonThrowable(treasureDeath.Tier);
                     break;
 
                 case TreasureItemType.Weapon:
@@ -355,6 +355,11 @@ namespace ACE.Server.Factories
                         case TreasureWeaponType.Atlatl:
 
                             MutateMissileWeapon(wo, treasureDeath, isMagical, treasureRoll);
+                            break;
+
+                        case TreasureWeaponType.ThrownDinnerware:
+
+                            MutateDinnerware(wo, treasureDeath, isMagical, treasureRoll);
                             break;
 
                         default:
@@ -1023,7 +1028,14 @@ namespace ACE.Server.Factories
             }
             else if (GenericWcids.Contains(roll.Wcid))
             {
-                roll.ItemType = TreasureItemType.ArtObject;
+                if (IsThrowableDinnerware(item))
+                {
+                    roll.ItemType = TreasureItemType.Weapon;
+                    roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
+                }
+                else
+                    roll.ItemType = TreasureItemType.ArtObject;
+
                 MutateDinnerware(item, profile, isMagical, roll);
             }
             else if (HeavyWeaponWcids.TryGetValue(roll.Wcid, out var weaponType) ||

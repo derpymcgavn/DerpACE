@@ -46,10 +46,7 @@ namespace ACE.Server.Factories
                 RegisterMutator(new TankMutator());
                 RegisterMutator(new ReaperMutator());
                 RegisterMutator(new NecromancerMutator());
-                RegisterMutator(new MergerMutator());
-                RegisterMutator(new HordeMutator());
                 RegisterMutator(new WarderMutator());
-                RegisterMutator(new IllusionistMutator());
 
                 // TODO: Port Expansion creature types
                 // RegisterMutator(new DrainerMutator());
@@ -143,10 +140,6 @@ namespace ACE.Server.Factories
                             // Only one mutator per creature for now (matches old behavior)
                             // Future: allow stacking mutators with a priority system
 
-                            // DerpACE: Horde — defer member spawning until the leader is in world
-                            if (creature.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHordeMob) == true)
-                                ScheduleHordeMemberSpawn(creature);
-
                             break;
                         }
                     }
@@ -156,17 +149,6 @@ namespace ACE.Server.Factories
                     }
                 }
             }
-        }
-
-        public static void ScheduleHordeMemberSpawn(Creature creature)
-        {
-            if (creature == null || !creature.IsHordeMob)
-                return;
-
-            var chain = new ACE.Server.Entity.Actions.ActionChain();
-            chain.AddDelaySeconds(0.5);
-            chain.AddAction(creature, () => creature.SpawnHordeMembers());
-            chain.EnqueueChain();
         }
 
         /// <summary>
@@ -245,22 +227,10 @@ namespace ACE.Server.Factories
                 case "necro":
                 case "necromancer":
                     return "Necromancer";
-                case "merge":
-                case "merger":
-                case "assimilating":
-                    return "Merger";
-                case "horde":
-                case "swarm":
-                case "swarming":
-                    return "Horde";
                 case "ward":
                 case "warder":
                 case "warding":
                     return "Warder";
-                case "illusion":
-                case "illusionist":
-                case "illusory":
-                    return "Illusionist";
                 default:
                     return name;
             }

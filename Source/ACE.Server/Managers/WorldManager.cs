@@ -47,6 +47,10 @@ namespace ACE.Server.Managers
         public static readonly ActionQueue ActionQueue = new ActionQueue();
         public static readonly DelayManager DelayManager = new DelayManager();
 
+        private const int MaxInboundActionsPerWorldLoop = 500;
+        private const int MaxWorldActionsPerWorldLoop = 1000;
+        private const int MaxDelayActionsPerWorldLoop = 1000;
+
         static WorldManager()
         {
             Physics = new PhysicsEngine(new ObjectMaint(), new SmartBox());
@@ -360,16 +364,16 @@ namespace ACE.Server.Managers
                 ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.PlayerManager_Tick);
 
                 ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.NetworkManager_InboundClientMessageQueueRun);
-                NetworkManager.InboundMessageQueue.RunActions();
+                NetworkManager.InboundMessageQueue.RunActions(MaxInboundActionsPerWorldLoop);
                 ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.NetworkManager_InboundClientMessageQueueRun);
 
                 // This will consist of PlayerEnterWorld actions, as well as other game world actions that require thread safety
                 ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.actionQueue_RunActions);
-                ActionQueue.RunActions();
+                ActionQueue.RunActions(MaxWorldActionsPerWorldLoop);
                 ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.actionQueue_RunActions);
 
                 ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.DelayManager_RunActions);
-                DelayManager.RunActions();
+                DelayManager.RunActions(MaxDelayActionsPerWorldLoop);
                 ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.DelayManager_RunActions);
 
                 ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.UpdateGameWorld);

@@ -52,6 +52,9 @@ namespace ACE.Server.Factories.Tables.Wcids
                 case TreasureWeaponType.Atlatl:
                     return RollAtlatlWcid(treasureDeath);
 
+                case TreasureWeaponType.ThrownDinnerware:
+                    return RollThrownDinnerwareWcid(treasureDeath);
+
                 case TreasureWeaponType.Caster:
                     return RollCaster(treasureDeath);
 
@@ -196,6 +199,11 @@ namespace ACE.Server.Factories.Tables.Wcids
         public static WeenieClassName RollAtlatlWcid(TreasureDeath treasureDeath)
         {
             return AtlatlWcids.Roll(treasureDeath.Tier);
+        }
+
+        public static WeenieClassName RollThrownDinnerwareWcid(TreasureDeath treasureDeath)
+        {
+            return GenericWcids.RollThrowable(treasureDeath.Tier);
         }
 
         public static WeenieClassName RollCaster(TreasureDeath treasureDeath)
