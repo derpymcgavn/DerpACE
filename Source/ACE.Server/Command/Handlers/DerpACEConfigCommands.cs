@@ -936,7 +936,10 @@ namespace ACE.Server.Command.Handlers
                     sb.AppendLine($"    thievesdagger={c.ThievesDaggerEnabled}  sentinel={c.SentinelSpearEnabled}  unarmedelem={c.UnarmedElemEnabled}");
                     sb.AppendLine($"    fencer={c.FencerBladeEnabled}  ravager={c.RavagerAxeEnabled}  warden={c.WardenMaulEnabled}");
                     sb.AppendLine($"    resolute={c.ResoluteBladeEnabled}  polebreaker={c.PolebreakerStaffEnabled}  stalker={c.StalkerBowEnabled}");
-                    sb.AppendLine($"    breacher={c.BreacherCrossbowEnabled}  reaperatlatl={c.ReaperAtlatlEnabled}  elemblast={c.WeaponElemBlastEnabled}");
+                    sb.AppendLine($"    breacher={c.BreacherCrossbowEnabled}  reaperatlatl={c.ReaperAtlatlEnabled}  dartflinger={c.RicochetAtlatlEnabled}");
+                    sb.AppendLine($"    dinnerware={c.DinnerwareWeaponEnabled}  elemblast={c.WeaponElemBlastEnabled}");
+                    sb.AppendLine($"    dinnerware_drop={c.DinnerwareWeaponDropChance:0.###}  dinnerware_mintier={c.DinnerwareWeaponMinTier}");
+                    sb.AppendLine($"    dinnerware_spin={c.DinnerwareSpinDropChance:0.###}  dinnerware_spin_min={c.DinnerwareSpinMinTier}  spin_scale={c.DinnerwareSpinDamageScale:0.###}  spin_radius={c.DinnerwareSpinRadius:0.###}");
                     sb.AppendLine($"  [TP]");
                     sb.AppendLine($"    tp_cost_per_meter         = {c.TpCostPerMeter}");
                     sb.AppendLine($"    tp_min_cost               = {c.TpMinCost}");

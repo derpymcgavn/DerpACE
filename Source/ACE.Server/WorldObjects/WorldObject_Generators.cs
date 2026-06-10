@@ -584,6 +584,20 @@ namespace ACE.Server.WorldObjects
         }
 
         /// <summary>
+        /// Handles a failed spawn attempt before the object ever entered the world.
+        /// This bypasses normal pickup/destruction semantics so a bad placement does
+        /// not keep re-entering the generator lifecycle.
+        /// </summary>
+        public void NotifySpawnFailure(WorldObject failedSpawn)
+        {
+            if (GeneratorProfiles == null || failedSpawn == null)
+                return;
+
+            var generator = GeneratorProfiles.FirstOrDefault(g => g.Spawned.ContainsKey(failedSpawn.Guid.Full));
+            generator?.NotifySpawnFailure(failedSpawn);
+        }
+
+        /// <summary>
         /// Called by ActivateLinks in WorldObject_Links for generators
         /// </summary>
         public void AddGeneratorLinks()

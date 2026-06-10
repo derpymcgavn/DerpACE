@@ -89,8 +89,41 @@ namespace ACE.Server.DerpAce
         public bool ReaperAtlatlEnabled { get; set; } = true;
         [JsonPropertyName("ricochet_atlatl_enabled")]
         public bool RicochetAtlatlEnabled { get; set; } = true;
+        [JsonPropertyName("dinnerware_weapon_enabled")]
+        public bool DinnerwareWeaponEnabled { get; set; } = true;
+        [JsonPropertyName("quickening_dagger_enabled")]
+        public bool QuickeningDaggerEnabled { get; set; } = true;
         [JsonPropertyName("weapon_elem_blast_enabled")]
         public bool WeaponElemBlastEnabled { get; set; } = true;
+
+        [JsonPropertyName("dinnerware_weapon_drop_chance")]
+        public float DinnerwareWeaponDropChance { get; set; } = 0.02f;
+        [JsonPropertyName("dinnerware_weapon_min_tier")]
+        public int DinnerwareWeaponMinTier { get; set; } = 4;
+        [JsonPropertyName("dinnerware_spin_drop_chance")]
+        public float DinnerwareSpinDropChance { get; set; } = 0.08f;
+        [JsonPropertyName("dinnerware_spin_min_tier")]
+        public int DinnerwareSpinMinTier { get; set; } = 3;
+        [JsonPropertyName("dinnerware_spin_damage_scale")]
+        public float DinnerwareSpinDamageScale { get; set; } = 0.20f;
+        [JsonPropertyName("dinnerware_spin_radius")]
+        public float DinnerwareSpinRadius { get; set; } = 5.0f;
+        [JsonPropertyName("quickening_dagger_drop_chance")]
+        public float QuickeningDaggerDropChance { get; set; } = 0.02f;
+        [JsonPropertyName("quickening_dagger_min_tier")]
+        public int QuickeningDaggerMinTier { get; set; } = 5;
+        [JsonPropertyName("quickening_dagger_proc_min")]
+        public int QuickeningDaggerProcMin { get; set; } = 8;
+        [JsonPropertyName("quickening_dagger_proc_max")]
+        public int QuickeningDaggerProcMax { get; set; } = 14;
+        [JsonPropertyName("quickening_dagger_speed_min")]
+        public int QuickeningDaggerSpeedMin { get; set; } = 12;
+        [JsonPropertyName("quickening_dagger_speed_max")]
+        public int QuickeningDaggerSpeedMax { get; set; } = 24;
+        [JsonPropertyName("quickening_dagger_duration_min")]
+        public int QuickeningDaggerDurationMin { get; set; } = 4;
+        [JsonPropertyName("quickening_dagger_duration_max")]
+        public int QuickeningDaggerDurationMax { get; set; } = 7;
 
 
         // Mysterious Stranger

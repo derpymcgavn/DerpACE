@@ -145,7 +145,9 @@ namespace ACE.Server.WorldObjects
 
             var launcher = projectile.ProjectileLauncher;
             var ammo = projectile.ProjectileAmmo;
-            if (launcher?.GetProperty(PropertyBool.IsRicochetAtlatl) != true || ammo == null)
+            if (ammo == null
+                || (launcher?.GetProperty(PropertyBool.IsRicochetAtlatl) != true
+                    && launcher?.GetProperty(PropertyBool.IsDartflingerAtlatl) != true))
                 return;
 
             var procChance = launcher.GetProperty(PropertyFloat.RicochetProcChance) ?? 0.0;
@@ -204,7 +206,7 @@ namespace ACE.Server.WorldObjects
             ricochet.DamageMod = (ricochet.DamageMod ?? 1.0) * damageScale;
 
             sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                $"Your dart ricochets toward {bounceTarget.Name}.",
+                $"Your dart skips toward {bounceTarget.Name}.",
                 ChatMessageType.CombatSelf));
         }
 

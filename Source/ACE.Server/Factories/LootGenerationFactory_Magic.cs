@@ -59,8 +59,15 @@ namespace ACE.Server.Factories
         private static void ApplyLootUiEffects(WorldObject wo, DamageType damageType, bool isMagical)
         {
             var ui = GetLootUiEffects(damageType, isMagical);
-            if (ui != UiEffects.Undef)
-                wo.UiEffects = ui;
+            ApplyLootUiEffect(wo, ui);
+        }
+
+        private static void ApplyLootUiEffect(WorldObject wo, UiEffects uiEffect)
+        {
+            if (wo == null || uiEffect == UiEffects.Undef)
+                return;
+
+            wo.UiEffects = (wo.UiEffects ?? UiEffects.Undef) | uiEffect;
         }
 
         /// <summary>

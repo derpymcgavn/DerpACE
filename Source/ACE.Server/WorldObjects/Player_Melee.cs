@@ -408,10 +408,13 @@ namespace ACE.Server.WorldObjects
             var baseSpeed = GetAnimSpeed();
             var animSpeedMod = IsDualWieldAttack ? 1.2f : 1.0f;     // dual wield swing animation 20% faster
             var animSpeed = baseSpeed * animSpeedMod;
+            var weapon = GetEquippedMeleeWeapon();
 
             var swingAnimation = GetSwingAnimation();
             if (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
                 animSpeed *= GetUnarmedComboAttackSpeedMultiplier();
+            else
+                animSpeed *= GetQuickeningDaggerAttackSpeedMultiplier(weapon);
 
             var animLength = MotionTable.GetAnimationLength(MotionTableId, CurrentMotionState.Stance, swingAnimation, animSpeed);
             //Console.WriteLine($"AnimSpeed: {animSpeed}, AnimLength: {animLength}");

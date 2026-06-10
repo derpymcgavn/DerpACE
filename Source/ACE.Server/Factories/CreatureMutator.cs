@@ -16,6 +16,11 @@ namespace ACE.Server.Factories
         /// <summary>
         /// Unique identifier for this mutator (used in config + commands).
         /// </summary>
+        public abstract string Identifier { get; }
+
+        /// <summary>
+        /// Display name for the mutator.
+        /// </summary>
         public abstract string Name { get; }
 
         /// <summary>

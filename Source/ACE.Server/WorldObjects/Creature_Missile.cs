@@ -169,6 +169,21 @@ namespace ACE.Server.WorldObjects
             projectile.SlayerCreatureType = ammo.SlayerCreatureType;
             projectile.IconOverlayId = ammo.IconOverlayId;
             projectile.UiEffects = ammo.UiEffects;
+
+            if (ammo.PaletteTemplate.HasValue)
+                projectile.PaletteTemplate = ammo.PaletteTemplate;
+            else
+                projectile.RemoveProperty(PropertyInt.PaletteTemplate);
+
+            if (ammo.Shade.HasValue)
+                projectile.Shade = ammo.Shade;
+            else
+                projectile.RemoveProperty(PropertyFloat.Shade);
+
+            if (ammo.ObjScale.HasValue)
+                projectile.ObjScale = ammo.ObjScale;
+            else
+                projectile.RemoveProperty(PropertyFloat.DefaultScale);
         }
 
         public const float ProjSpawnHeight = 0.8454f;

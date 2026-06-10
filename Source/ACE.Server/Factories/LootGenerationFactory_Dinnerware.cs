@@ -32,6 +32,7 @@ namespace ACE.Server.Factories
             WeenieClassName.dinnerplate,
             WeenieClassName.stoup,
             WeenieClassName.tankard,
+            WeenieClassName.discus,
             RageaRangWcid,
         };
 
@@ -93,6 +94,9 @@ namespace ACE.Server.Factories
 
             // long desc
             wo.LongDesc = GetLongDesc(wo);
+
+            if (wo.WeenieClassId == (uint)RageaRangWcid)
+                RemoveLootImbues(wo);
         }
 
         private static bool IsThrowableDinnerware(WorldObject wo)
@@ -106,6 +110,8 @@ namespace ACE.Server.Factories
             // the template is something exotic like the throwable claymore.
             const MeleeWeaponSkill statSkill = MeleeWeaponSkill.LightWeapons;
             const TreasureWeaponType statWeaponType = TreasureWeaponType.Dagger;
+            var specialModifierApplied = false;
+            var isDiscus = wo.WeenieClassId == (uint)WeenieClassName.discus;
 
             roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
 
@@ -119,19 +125,30 @@ namespace ACE.Server.Factories
             ApplyLootUiEffects(wo, wo.W_DamageType, false);
             wo.Biota.PropertiesSpellBook?.Clear();
 
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.RicochetAtlatlEnabled)
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
+                && TryRollWeaponModifier(
+                    profile,
+                    roll,
+                    ref specialModifierApplied,
+                    ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponDropChance,
+                    ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
+                    true,
+                    "dinnerware"))
             {
-                var ricochetProcPct = RollTierScaledInt(
-                    ACE.Server.Managers.DerpACEConfig.RicochetProcMin,
-                    ACE.Server.Managers.DerpACEConfig.RicochetProcMax,
-                    profile.Tier,
-                    ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier);
-                if (ricochetProcPct < 1) ricochetProcPct = 1;
+                wo.Name = isDiscus ? "Whirling Discus of the Banquet" : wo.Name + " of the Banquet";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius);
+                wo.IconOverlayId = 0x06002878u;
+                ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRicochetAtlatl, true);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetProcChance,  ricochetProcPct / 100.0);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetDamageScale, ACE.Server.Managers.DerpACEConfig.RicochetDamageScale);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetRadius,      ACE.Server.Managers.DerpACEConfig.RicochetRadius);
+                if (isDiscus)
+                    wo.Name = "Whirling Discus of the Banquet";
+                wo.LongDesc = (wo.LongDesc ?? "") + (isDiscus
+                    ? "\n\nA whirling discus of banquet metal -- it bites through the air and clips nearby foes on the backswing."
+                    : "\n\nThis dinnerware was raised for the feast instead of the table - each throw lands like a hearty clang of china, crockery, and bad manners.");
             }
 
             if (wo.WeenieClassId == (uint)RageaRangWcid)
@@ -192,11 +209,22 @@ namespace ACE.Server.Factories
                 DamageType.Cold     => "Frostbound Stormwrought Greatblade",
                 DamageType.Acid     => "Acid-Etched Stormwrought Greatblade",
                 DamageType.Electric => "Thundercharged Stormwrought Greatblade",
-                DamageType.Slash    => "Rending Stormwrought Greatblade",
+                DamageType.Slash    => "Slashing Stormwrought Greatblade",
                 DamageType.Pierce   => "Impaling Stormwrought Greatblade",
                 DamageType.Bludgeon => "Crushing Stormwrought Greatblade",
                 _                   => "Stormwrought Greatblade",
             };
+        }
+
+        private static void RemoveLootImbues(WorldObject wo)
+        {
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyInt.ImbuedEffect);
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyInt.ImbuedEffect2);
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyInt.ImbuedEffect3);
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyInt.ImbuedEffect4);
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyInt.ImbuedEffect5);
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyInt.ImbueStackingBits);
+            wo.RemoveProperty(ACE.Entity.Enum.Properties.PropertyString.ImbuerName);
         }
     }
 }

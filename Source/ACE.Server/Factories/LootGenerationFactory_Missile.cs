@@ -138,6 +138,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc,  procPct  / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus, bonusPct / 100.0);
                 wo.IconOverlayId = 0x06002699u;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards the patient hunter -- the *first* shot loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets resets the opportunity.";
             }
@@ -164,11 +165,12 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance, armorIgnoreChance / 100.0);
                 wo.IconOverlayId = 0x06002878u;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
-            // Ricochet Atlatl: configurable chance on T6+ atlatls / dartflingers to bounce a visible dart
+            // Dartflinger: configurable chance on T6+ atlatls to bounce a visible dart
             // into another nearby target after a successful hit (see @lootconfig).
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.RicochetAtlatlEnabled
                 && TryRollWeaponModifier(
@@ -178,7 +180,7 @@ namespace ACE.Server.Factories
                 ACE.Server.Managers.DerpACEConfig.RicochetAtlatlDropChance,
                 ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier,
                 roll.WeaponType == TreasureWeaponType.Atlatl,
-                "ricochet"))
+                "dartflinger", "ricochet"))
             {
                 var procPct = RollTierScaledInt(
                     ACE.Server.Managers.DerpACEConfig.RicochetProcMin,
@@ -187,14 +189,16 @@ namespace ACE.Server.Factories
                     ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier);
                 if (procPct < 1) procPct = 1;
 
-                wo.Name = wo.Name + " of Ricochet";
+                wo.Name = wo.Name + " of the Dartflinger";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRicochetAtlatl, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDartflingerAtlatl, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetProcChance,  procPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetDamageScale, ACE.Server.Managers.DerpACEConfig.RicochetDamageScale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetRadius,      ACE.Server.Managers.DerpACEConfig.RicochetRadius);
                 wo.IconOverlayId = 0x06002860u;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} skips death through the air -- each hit has a {procPct}% chance to ricochet a second dart into another nearby foe for {ACE.Server.Managers.DerpACEConfig.RicochetDamageScale:P0} damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} skips death through the air -- each hit has a {procPct}% chance to send a second dart into another nearby foe for {ACE.Server.Managers.DerpACEConfig.RicochetDamageScale:P0} damage.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.

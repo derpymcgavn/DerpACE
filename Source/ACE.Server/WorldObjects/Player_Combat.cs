@@ -42,6 +42,8 @@ namespace ACE.Server.WorldObjects
 
         private int _unarmedCriticalBoostCharges;
         private DateTime _unarmedAttackSpeedBoostUntil = DateTime.MinValue;
+        private DateTime _quickeningDaggerBoostUntil = DateTime.MinValue;
+        private float _quickeningDaggerSpeedMultiplier = 1.0f;
 
         private const double UnarmedAttackSpeedBoostSeconds = 6.0;
         private const float UnarmedAttackSpeedBoostMultiplier = 1.25f;
@@ -351,7 +353,27 @@ namespace ACE.Server.WorldObjects
             }
 
             // Fencer's Blade: armor pierce proc — deals a portion of what armor blocked as bonus damage
-            // Only applies to Sword weapon type with names: epee, schlager, rapier
+            // Quickening Dagger: successful dagger hits can briefly speed up attack animations.
+            bool quickeningDaggerProc = false;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsQuickeningDagger) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger))
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerProcChance) ?? 0.0;
+                if (procChance > 0.0 && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var speedMultiplier = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerSpeedMultiplier) ?? 1.0);
+                    var duration = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerDuration) ?? 0.0);
+                    if (speedMultiplier > 1.0f && duration > 0.0f)
+                    {
+                        GrantQuickeningDaggerAttackSpeedBoost(speedMultiplier, duration);
+                        quickeningDaggerProc = true;
+                    }
+                }
+            }
+
+            // Fencer's Blade: armor pierce proc - deals a portion of what armor blocked as bonus damage.
+            // Only applies to Sword weapon type with names: epee, schlager, rapier.
             uint fencerPierceBonus = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true
@@ -579,6 +601,60 @@ namespace ACE.Server.WorldObjects
                     var fullDamage = damageEvent.DamageBeforeMitigation;
                     breacherArmorIgnored = (uint)Math.Round(damageEvent.DamageMitigated);
                     damageEvent.Damage = fullDamage;
+                }
+            }
+
+            // Dinnerware: spinning plates/discs can clip nearby enemies on the follow-through.
+            uint dinnerwareSplashHits = 0;
+            uint dinnerwareSplashTotal = 0;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Thrown))
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance) ?? 0.0;
+                if (procChance > 0.0 && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                {
+                    var splashScale = Math.Clamp((float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale) ?? 0.0), 0.05f, 0.35f);
+                    var splashRadius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius) ?? 5.0));
+                    var radiusSq = splashRadius * splashRadius;
+
+                    var splashDamage = Math.Max(1.0f, damageEvent.Damage * splashScale);
+                    var splashTargets = new List<Creature>();
+                    var worldObjects = CurrentLandblock?.GetAllWorldObjectsForDiagnostics();
+                    if (worldObjects != null && target.Location != null)
+                    {
+                        splashTargets = worldObjects
+                            .OfType<Creature>()
+                            .Where(c => c != null
+                                        && c != target
+                                        && c != this
+                                        && c.IsAlive
+                                        && c.Attackable
+                                        && c.IsMonster
+                                        && !c.Teleporting
+                                        && c.Location != null
+                                        && target.Location.SquaredDistanceTo(c.Location) <= radiusSq)
+                            .OrderBy(c => target.Location.SquaredDistanceTo(c.Location))
+                            .Take(3)
+                            .ToList();
+                    }
+
+                    foreach (var splashTarget in splashTargets)
+                    {
+                        splashTarget.TakeDamage(this, damageEvent.DamageType, splashDamage, false);
+                        splashTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
+                        dinnerwareSplashHits++;
+                        dinnerwareSplashTotal += (uint)Math.Round(splashDamage);
+                    }
+
+                    if (dinnerwareSplashHits > 0)
+                    {
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
+                        if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                                $"Your dinnerware spins through {dinnerwareSplashHits} nearby foe(s), dealing {dinnerwareSplashTotal} splash damage.",
+                                ChatMessageType.CombatSelf));
+                    }
                 }
             }
 
@@ -848,6 +924,14 @@ namespace ACE.Server.WorldObjects
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
                         $"Your point finds the seam in {target.Name}'s armor, drawing {fencerPierceBonus} more blood.",
+                        ChatMessageType.CombatSelf));
+                }
+
+                if (quickeningDaggerProc)
+                {
+                    ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillUpYellow);
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "Your dagger quickens in your hand.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -1266,11 +1350,26 @@ namespace ACE.Server.WorldObjects
             _unarmedAttackSpeedBoostUntil = DateTime.UtcNow.AddSeconds(UnarmedAttackSpeedBoostSeconds);
         }
 
+        private void GrantQuickeningDaggerAttackSpeedBoost(float speedMultiplier, float durationSeconds)
+        {
+            _quickeningDaggerSpeedMultiplier = Math.Clamp(speedMultiplier, 1.0f, 1.35f);
+            _quickeningDaggerBoostUntil = DateTime.UtcNow.AddSeconds(Math.Clamp(durationSeconds, 1.0f, 12.0f));
+        }
+
         private float GetUnarmedComboAttackSpeedMultiplier()
         {
             return DateTime.UtcNow <= _unarmedAttackSpeedBoostUntil
                 ? UnarmedAttackSpeedBoostMultiplier
                 : 1.0f;
+        }
+
+        private float GetQuickeningDaggerAttackSpeedMultiplier(WorldObject weapon)
+        {
+            return DateTime.UtcNow <= _quickeningDaggerBoostUntil
+                && weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsQuickeningDagger) == true
+                && WeaponIsType(weapon, WeaponType.Dagger)
+                    ? _quickeningDaggerSpeedMultiplier
+                    : 1.0f;
         }
 
         private void TryApplyUnarmedStun(Creature target)
@@ -1500,12 +1599,48 @@ namespace ACE.Server.WorldObjects
 
         public int TakeDamage(WorldObject source, DamageEvent damageEvent)
         {
+            if (damageEvent.ShieldMod != 1.0f && TryProcShieldThornsResist(source, damageEvent))
+                return 0;
+
             var damageTaken = TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
 
             if (damageTaken > 0 && damageEvent.ShieldMod != 1.0f)
                 TryProcShieldAffixesOnBlock(source, damageEvent, (uint)damageTaken);
 
             return damageTaken;
+        }
+
+        private bool TryProcShieldThornsResist(WorldObject source, DamageEvent damageEvent)
+        {
+            if (source is not Creature attacker || attacker.IsDead || IsDead || damageEvent.Damage <= 0)
+                return false;
+
+            var shield = GetEquippedShield();
+            if (shield?.GetProperty(PropertyBool.IsThornsShield) != true)
+                return false;
+
+            var procChance = shield.GetProperty(PropertyFloat.ShieldThornsProcChance) ?? 0.0;
+            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                return false;
+
+            var preventedDamage = (uint)Math.Max(0, Math.Round(damageEvent.Damage));
+            var reflectPct = shield.GetProperty(PropertyFloat.ShieldThornsReflectPct) ?? 0.0;
+            var reflectDamage = (float)Math.Round(preventedDamage * reflectPct);
+
+            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.ShieldUpBlue);
+
+            if (reflectDamage >= 1.0f)
+            {
+                attacker.TakeDamage(this, damageEvent.DamageType, reflectDamage);
+                attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
+            }
+
+            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your {shield.NameWithMaterial} turns aside {preventedDamage} damage and reflects {(uint)Math.Max(0, reflectDamage)} damage back at {attacker.Name}. [Thorns]",
+                    ChatMessageType.CombatSelf));
+
+            return true;
         }
 
         private void TryProcShieldAffixesOnBlock(WorldObject source, DamageEvent damageEvent, uint damageTaken)
@@ -1516,23 +1651,6 @@ namespace ACE.Server.WorldObjects
             var shield = GetEquippedShield();
             if (shield == null)
                 return;
-
-            if (shield.GetProperty(PropertyBool.IsThornsShield) == true)
-            {
-                var reflectPct = shield.GetProperty(PropertyFloat.ShieldThornsReflectPct) ?? 0.0;
-                var reflectDamage = (float)Math.Round(damageTaken * reflectPct);
-
-                if (reflectDamage >= 1.0f)
-                {
-                    attacker.TakeDamage(this, damageEvent.DamageType, reflectDamage);
-                    attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
-
-                    if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
-                        Session.Network.EnqueueSend(new GameMessageSystemChat(
-                            $"Your {shield.NameWithMaterial} reflects {(uint)reflectDamage} damage back at {attacker.Name}. [Thorns]",
-                            ChatMessageType.CombatSelf));
-                }
-            }
 
             if (shield.GetProperty(PropertyBool.IsBashingShield) != true)
                 return;

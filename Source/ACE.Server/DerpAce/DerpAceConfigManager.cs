@@ -141,7 +141,23 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.BreacherCrossbowEnabled = c.BreacherCrossbowEnabled;
             DerpACEConfig.ReaperAtlatlEnabled     = c.ReaperAtlatlEnabled;
             DerpACEConfig.RicochetAtlatlEnabled   = c.RicochetAtlatlEnabled;
+            DerpACEConfig.DinnerwareWeaponEnabled = c.DinnerwareWeaponEnabled;
+            DerpACEConfig.QuickeningDaggerEnabled = c.QuickeningDaggerEnabled;
             DerpACEConfig.WeaponElemBlastEnabled  = c.WeaponElemBlastEnabled;
+            DerpACEConfig.DinnerwareWeaponDropChance = c.DinnerwareWeaponDropChance;
+            DerpACEConfig.DinnerwareWeaponMinTier     = c.DinnerwareWeaponMinTier;
+            DerpACEConfig.DinnerwareSpinDropChance    = c.DinnerwareSpinDropChance;
+            DerpACEConfig.DinnerwareSpinMinTier       = c.DinnerwareSpinMinTier;
+            DerpACEConfig.DinnerwareSpinDamageScale   = c.DinnerwareSpinDamageScale;
+            DerpACEConfig.DinnerwareSpinRadius        = c.DinnerwareSpinRadius;
+            DerpACEConfig.QuickeningDaggerDropChance  = c.QuickeningDaggerDropChance;
+            DerpACEConfig.QuickeningDaggerMinTier     = c.QuickeningDaggerMinTier;
+            DerpACEConfig.QuickeningDaggerProcMin     = c.QuickeningDaggerProcMin;
+            DerpACEConfig.QuickeningDaggerProcMax     = c.QuickeningDaggerProcMax;
+            DerpACEConfig.QuickeningDaggerSpeedMin    = c.QuickeningDaggerSpeedMin;
+            DerpACEConfig.QuickeningDaggerSpeedMax    = c.QuickeningDaggerSpeedMax;
+            DerpACEConfig.QuickeningDaggerDurationMin = c.QuickeningDaggerDurationMin;
+            DerpACEConfig.QuickeningDaggerDurationMax = c.QuickeningDaggerDurationMax;
 
             // ── Teleport ─────────────────────────────────────────────────────
             TpConfig.CostPerMeter = c.TpCostPerMeter;

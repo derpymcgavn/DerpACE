@@ -243,5 +243,10 @@ namespace ACE.Entity.Enum.Properties
         /* DerpACE Shield affixes */
         IsThornsShield                   = 9051,
         IsBashingShield                  = 9052,
+
+        /* DerpACE weapon affixes */
+        IsDartflingerAtlatl              = 9053,
+        IsDinnerwareWeapon               = 9054,
+        IsQuickeningDagger               = 9055,
     }
 }

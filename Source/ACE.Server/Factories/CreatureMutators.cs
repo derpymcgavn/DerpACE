@@ -12,6 +12,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class VampiricMutator : CreatureMutator
     {
+        public override string Identifier => "vampiric";
         public override string Name => "Vampiric";
         public override string Description => "Lifesteals a percentage of damage dealt to players.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsVampiricMob;
@@ -53,6 +54,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class ThiefMutator : CreatureMutator
     {
+        public override string Identifier => "thieving";
         public override string Name => "Thieving";
         public override string Description => "Steals tradenotes from players and drops a loot chest on death.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsThiefMob;
@@ -91,6 +93,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class ScoutMutator : CreatureMutator
     {
+        public override string Identifier => "scout";
         public override string Name => "Scout";
         public override string Description => "Increases aggro range, perception, and announces player presence.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsScoutMob;
@@ -139,6 +142,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class SimulacrumMutator : CreatureMutator
     {
+        public override string Identifier => "simulacrum";
         public override string Name => "Simulacrum";
         public override string Description => "Copies a random nearby player when spawned (only applies to Simulacrum creature type).";
         public override PropertyBool? MutatorFlag => PropertyBool.IsSimulacrumMob;
@@ -182,6 +186,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class NocturnalMutator : CreatureMutator
     {
+        public override string Identifier => "nocturnal";
         public override string Name => "Nocturnal";
         public override string Description => "Hunts after dark â€” boosted damage and overpower.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsNocturnalMob;
@@ -216,6 +221,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class ExplodingMutator : CreatureMutator
     {
+        public override string Identifier => "exploding";
         public override string Name => "Exploding";
         public override string Description => "Explodes on death, casting an elemental ring spell at nearby players.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsExplodingMob;
@@ -265,6 +271,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class HealerMutator : CreatureMutator
     {
+        public override string Identifier => "healer";
         public override string Name => "Healer";
         public override string Description => "Casts Heal Other on wounded allies nearby.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsHealerMob;
@@ -300,6 +307,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class TankMutator : CreatureMutator
     {
+        public override string Identifier => "tank";
         public override string Name => "Tank";
         public override string Description => "High HP, physical damage reduction, bonus healing received, and skilled with light weapons & shields.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsTankMob;
@@ -361,6 +369,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class ReaperMutator : CreatureMutator
     {
+        public override string Identifier => "reaper";
         public override string Name => "Reaper";
         public override string Description => "Death-aspected: deals bonus damage and drains health on every hit.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsReaperMob;
@@ -399,6 +408,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class NecromancerMutator : CreatureMutator
     {
+        public override string Identifier => "necromancer";
         public override string Name => "Necromancer";
         public override string Description => "Curses victims with a lingering nether damage-over-time on hit.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsNecromancerMob;
@@ -437,6 +447,7 @@ namespace ACE.Server.Factories
     /// </summary>
     public class WarderMutator : CreatureMutator
     {
+        public override string Identifier => "warder";
         public override string Name => "Warder";
         public override string Description => "Wards nearby creatures, blocking offensive spells cast against them.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsWarderMob;

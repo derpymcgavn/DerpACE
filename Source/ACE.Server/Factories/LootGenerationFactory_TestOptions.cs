@@ -15,6 +15,11 @@ namespace ACE.Server.Factories
             ["thieves"] = "thief",
             ["shadow"] = "thief",
 
+            ["quickening"] = "quickening",
+            ["quick"] = "quickening",
+            ["haste"] = "quickening",
+            ["swift"] = "quickening",
+
             ["fencer"] = "fencer",
             ["duelist"] = "fencer",
             ["duelistblade"] = "fencer",
@@ -44,9 +49,16 @@ namespace ACE.Server.Factories
             ["breacher"] = "breacher",
             ["breachercrossbow"] = "breacher",
 
-            ["ricochet"] = "ricochet",
-            ["ricochetatlatl"] = "ricochet",
-            ["dartflinger"] = "ricochet",
+            ["dinnerware"] = "dinnerware",
+            ["discus"] = "dinnerware",
+            ["throwware"] = "dinnerware",
+            ["banquet"] = "dinnerware",
+            ["porcelain"] = "dinnerware",
+
+            ["dartflinger"] = "dartflinger",
+            ["dartflingers"] = "dartflinger",
+            ["ricochet"] = "dartflinger",
+            ["ricochetatlatl"] = "dartflinger",
 
             ["archmagi"] = "archmagi",
             ["archmage"] = "archmagi",
@@ -59,6 +71,7 @@ namespace ACE.Server.Factories
         private static readonly Dictionary<string, TreasureWeaponType> WeaponMutatorTestTypes = new Dictionary<string, TreasureWeaponType>(StringComparer.OrdinalIgnoreCase)
         {
             ["thief"] = TreasureWeaponType.Dagger,
+            ["quickening"] = TreasureWeaponType.Dagger,
             ["fencer"] = TreasureWeaponType.SwordMS,
             ["ravager"] = TreasureWeaponType.Axe,
             ["warden"] = TreasureWeaponType.Mace,
@@ -67,7 +80,8 @@ namespace ACE.Server.Factories
             ["sentinel"] = TreasureWeaponType.Spear,
             ["stalker"] = TreasureWeaponType.Bow,
             ["breacher"] = TreasureWeaponType.Crossbow,
-            ["ricochet"] = TreasureWeaponType.Atlatl,
+            ["dinnerware"] = TreasureWeaponType.ThrownDinnerware,
+            ["dartflinger"] = TreasureWeaponType.Atlatl,
             ["archmagi"] = TreasureWeaponType.Caster,
             ["hierophant"] = TreasureWeaponType.Caster,
         };
@@ -87,6 +101,7 @@ namespace ACE.Server.Factories
             return string.Join(", ", new[]
             {
                 "thief",
+                "quickening/haste",
                 "fencer/duelist",
                 "ravager",
                 "warden/concussive",
@@ -95,7 +110,8 @@ namespace ACE.Server.Factories
                 "sentinel",
                 "stalker",
                 "breacher",
-                "ricochet",
+                "dinnerware/discus/banquet",
+                "dartflinger/ricochet",
                 "archmagi",
                 "hierophant/life"
             });
@@ -114,6 +130,7 @@ namespace ACE.Server.Factories
             return canonicalName switch
             {
                 "thief"       => wo.GetProperty(PropertyBool.IsThievesDagger) == true,
+                "quickening"  => wo.GetProperty(PropertyBool.IsQuickeningDagger) == true,
                 "fencer"      => wo.GetProperty(PropertyBool.IsFencerBlade) == true,
                 "ravager"     => wo.GetProperty(PropertyBool.IsRavagersAxe) == true,
                 "warden"      => wo.GetProperty(PropertyBool.IsWardensMaul) == true,
@@ -122,7 +139,11 @@ namespace ACE.Server.Factories
                 "sentinel"    => wo.GetProperty(PropertyBool.IsSentinelSpear) == true,
                 "stalker"     => wo.GetProperty(PropertyBool.IsStalkersBow) == true,
                 "breacher"    => wo.GetProperty(PropertyBool.IsBreachersCrossbow) == true,
-                "ricochet"    => wo.GetProperty(PropertyBool.IsRicochetAtlatl) == true,
+                "dinnerware"  => wo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true,
+                "dartflinger" => wo.GetProperty(PropertyBool.IsRicochetAtlatl) == true
+                                 || wo.GetProperty(PropertyBool.IsDartflingerAtlatl) == true,
+                "ricochet"    => wo.GetProperty(PropertyBool.IsRicochetAtlatl) == true
+                                 || wo.GetProperty(PropertyBool.IsDartflingerAtlatl) == true,
                 "archmagi"    => wo.GetProperty(PropertyBool.IsArchmagiCaster) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
                 _             => false,

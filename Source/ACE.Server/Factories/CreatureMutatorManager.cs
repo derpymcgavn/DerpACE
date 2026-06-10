@@ -57,7 +57,7 @@ namespace ACE.Server.Factories
                     try
                     {
                         mutator.Initialize();
-                        log.Info($"  Registered mutator: {mutator.Name} (Enabled={mutator.Enabled}, MinTier={mutator.MinTier}, Chance={mutator.Chance:P1})");
+                        log.Info($"  Registered mutator: {mutator.Identifier} ({mutator.Name}) (Enabled={mutator.Enabled}, MinTier={mutator.MinTier}, Chance={mutator.Chance:P1})");
                     }
                     catch (Exception ex)
                     {
@@ -106,10 +106,10 @@ namespace ACE.Server.Factories
             if (mutator == null)
                 throw new ArgumentNullException(nameof(mutator));
 
-            if (_mutators.ContainsKey(mutator.Name))
-                throw new InvalidOperationException($"Mutator '{mutator.Name}' is already registered.");
+            if (_mutators.ContainsKey(mutator.Identifier))
+                throw new InvalidOperationException($"Mutator '{mutator.Identifier}' is already registered.");
 
-            _mutators[mutator.Name] = mutator;
+            _mutators[mutator.Identifier] = mutator;
         }
 
         /// <summary>
@@ -156,9 +156,24 @@ namespace ACE.Server.Factories
         /// </summary>
         public static CreatureMutator GetMutator(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                return null;
+
             lock (_lock)
             {
                 _mutators.TryGetValue(name, out var mutator);
+                if (mutator != null)
+                    return mutator;
+
+                var resolved = ResolveAlias(name);
+                if (!string.Equals(resolved, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    _mutators.TryGetValue(resolved, out mutator);
+                    if (mutator != null)
+                        return mutator;
+                }
+
+                _mutators.TryGetValue(name?.Trim().ToLowerInvariant(), out mutator);
                 return mutator;
             }
         }
@@ -196,41 +211,41 @@ namespace ACE.Server.Factories
                 case "vamp":
                 case "vampire":
                 case "vampiric":
-                    return "Vampiric";
+                    return "vampiric";
                 case "thief":
                 case "thieving":
-                    return "Thieving";
+                    return "thieving";
                 case "scout":
                 case "scouting":
-                    return "Scout";
+                    return "scout";
                 case "sim":
                 case "simulacrum":
-                    return "Simulacrum";
+                    return "simulacrum";
                 case "noc":
                 case "nocturnal":
-                    return "Nocturnal";
+                    return "nocturnal";
                 case "boom":
                 case "explode":
                 case "exploding":
-                    return "Exploding";
+                    return "exploding";
                 case "heal":
                 case "healer":
                 case "medic":
-                    return "Healer";
+                    return "healer";
                 case "tank":
                 case "guardian":
                 case "defender":
-                    return "Tank";
+                    return "tank";
                 case "reap":
                 case "reaper":
-                    return "Reaper";
+                    return "reaper";
                 case "necro":
                 case "necromancer":
-                    return "Necromancer";
+                    return "necromancer";
                 case "ward":
                 case "warder":
                 case "warding":
-                    return "Warder";
+                    return "warder";
                 default:
                     return name;
             }
@@ -286,7 +301,7 @@ namespace ACE.Server.Factories
                 foreach (var mutator in _mutators.Values.OrderBy(m => m.Name))
                 {
                     var status = mutator.Enabled ? "ENABLED" : "DISABLED";
-                    lines.Add($"  [{status}] {mutator.Name}: {mutator.Description}");
+                    lines.Add($"  [{status}] {mutator.Identifier} ({mutator.Name}): {mutator.Description}");
                     lines.Add($"       MinTier={mutator.MinTier}, Chance={mutator.Chance:P1}");
                 }
 

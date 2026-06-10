@@ -119,6 +119,11 @@ namespace ACE.Server.Entity
         /// </summary>
         public DateTime NextAvailable { get; set; } = DateTime.UtcNow;
 
+        private int spawnFailureCount;
+        private static readonly TimeSpan SpawnFailureBackoffBase = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan SpawnFailureBackoffMax = TimeSpan.FromMinutes(15);
+        private const int SpawnFailureDisableThreshold = 3;
+
         /// <summary>
         /// Returns TRUE if this profile is not currently on timed-out as a result of being notified of destruction/pick-up
         /// </summary>
@@ -563,8 +568,43 @@ namespace ACE.Server.Entity
                 return;
 
             Spawned.Remove(woi.Guid.Full);
+            spawnFailureCount = 0;
 
             NextAvailable = DateTime.UtcNow.AddSeconds(Delay);
+        }
+
+        /// <summary>
+        /// Handles a spawn attempt that failed before the object entered the world.
+        /// This removes the object from the active spawn bookkeeping and applies a
+        /// short backoff. After repeated failures the profile is parked to avoid
+        /// hammering an invalid spawn point.
+        /// </summary>
+        public void NotifySpawnFailure(WorldObject failedSpawn)
+        {
+            if (failedSpawn == null)
+                return;
+
+            if (!Spawned.Remove(failedSpawn.Guid.Full))
+                return;
+
+            spawnFailureCount++;
+
+            if (spawnFailureCount >= SpawnFailureDisableThreshold)
+            {
+                SpawnQueue.Clear();
+                NextAvailable = DateTime.MaxValue;
+
+                log.Warn($"[GENERATOR] 0x{Generator.Guid}:{Generator.WeenieClassId} {Generator.Name}.NotifySpawnFailure(): disabled profile {LinkId} after {spawnFailureCount} consecutive spawn placement failures for {failedSpawn.Name} (0x{failedSpawn.Guid.Full:X8}).");
+                return;
+            }
+
+            var delaySeconds = Math.Min(
+                SpawnFailureBackoffMax.TotalSeconds,
+                Math.Max(SpawnFailureBackoffBase.TotalSeconds, Delay > 0 ? Delay : (float)SpawnFailureBackoffBase.TotalSeconds) * spawnFailureCount);
+
+            NextAvailable = DateTime.UtcNow.AddSeconds(delaySeconds);
+
+            log.Warn($"[GENERATOR] 0x{Generator.Guid}:{Generator.WeenieClassId} {Generator.Name}.NotifySpawnFailure(): backing off {delaySeconds:0}s after failed spawn of {failedSpawn.Name} (0x{failedSpawn.Guid.Full:X8}) from profile {LinkId}.");
         }
 
         public void Reset()
@@ -622,6 +662,7 @@ namespace ACE.Server.Entity
         {
             Spawned.Clear();
             SpawnQueue.Clear();
+            spawnFailureCount = 0;
 
             NextAvailable = DateTime.UtcNow;
 

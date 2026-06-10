@@ -56,7 +56,24 @@ namespace ACE.Server.Managers
         public static bool BreacherCrossbowEnabled { get; set; } = true;
         public static bool ReaperAtlatlEnabled     { get; set; } = true;
         public static bool RicochetAtlatlEnabled   { get; set; } = true;
+        public static bool DinnerwareWeaponEnabled { get; set; } = true;
+        public static bool QuickeningDaggerEnabled { get; set; } = true;
         public static bool WeaponElemBlastEnabled  { get; set; } = true;
+
+        public static float DinnerwareWeaponDropChance { get; set; } = 0.02f;
+        public static int DinnerwareWeaponMinTier { get; set; } = 4;
+        public static float DinnerwareSpinDropChance { get; set; } = 0.08f;
+        public static int DinnerwareSpinMinTier { get; set; } = 3;
+        public static float DinnerwareSpinDamageScale { get; set; } = 0.20f;
+        public static float DinnerwareSpinRadius { get; set; } = 5.0f;
+        public static float QuickeningDaggerDropChance { get; set; } = 0.02f;
+        public static int QuickeningDaggerMinTier { get; set; } = 5;
+        public static int QuickeningDaggerProcMin { get; set; } = 8;
+        public static int QuickeningDaggerProcMax { get; set; } = 14;
+        public static int QuickeningDaggerSpeedMin { get; set; } = 12;
+        public static int QuickeningDaggerSpeedMax { get; set; } = 24;
+        public static int QuickeningDaggerDurationMin { get; set; } = 4;
+        public static int QuickeningDaggerDurationMax { get; set; } = 7;
         // ──────────────────────────────────────────────────────────────────────
         // Defender's Shield
         // ──────────────────────────────────────────────────────────────────────

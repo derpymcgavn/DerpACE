@@ -353,6 +353,7 @@ namespace ACE.Server.Factories
                 wo.Name = wo.Name + " of the Thief";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
                 wo.IconUnderlayId = 0x060065FC;
+                ApplyLootUiEffect(wo, UiEffects.Poisoned);
 
                 // require Specialized Sneak Attack (WieldRequirement.Training, difficulty = 3 = Specialized)
                 wo.WieldRequirements = WieldRequirement.Training;
@@ -360,6 +361,44 @@ namespace ACE.Server.Factories
                 wo.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} was honed in shadow — while equipped, you appear translucent and monsters are less likely to notice you. Sneak attacks have a 10% chance to proc an additional 10% bonus damage.";
+            }
+
+            // Quickening Dagger: dagger hits can grant a short attack-animation haste window.
+            if (ACE.Server.Managers.DerpACEConfig.QuickeningDaggerEnabled
+                && TryRollWeaponModifier(
+                    profile,
+                    roll,
+                    ref specialModifierApplied,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerDropChance,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerMinTier,
+                    roll.WeaponType == TreasureWeaponType.Dagger || roll.WeaponType == TreasureWeaponType.DaggerMS,
+                    "quickening"))
+            {
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerProcMin,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerMinTier);
+                var speedPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerSpeedMin,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerSpeedMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerMinTier);
+                var duration = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerDurationMin,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerDurationMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.QuickeningDaggerMinTier);
+
+                wo.Name = wo.Name + " of Quickening";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsQuickeningDagger, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerProcChance, procPct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerSpeedMultiplier, 1.0 + speedPct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerDuration, duration);
+                wo.IconOverlayId = 0x06002699u;
+                ApplyLootUiEffect(wo, UiEffects.Lightning | UiEffects.BoostStamina);
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} twitches ahead of the hand — each hit has a {procPct}% chance to quicken your attacks by {speedPct}% for {duration} seconds.";
             }
 
             // Fencer's Blade: configurable chance on T6+ épée / rapier / schlager (see @lootconfig)
@@ -397,6 +436,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc, pierceProc / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance,   deflectChance / 100.0);
                 wo.IconOverlayId = 0x06002699u;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling — each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
             }
@@ -436,6 +476,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc, procPct / 100.0);
                 wo.IconOverlayId = 0x06002878u;
+                ApplyLootUiEffect(wo, isHammer ? UiEffects.Bludgeoning : UiEffects.Slashing);
 
                 if (isHammer)
                 {
@@ -498,6 +539,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussPenalty,  penalty);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussDuration, duration);
                 wo.IconOverlayId = 0x06002878u;
+                ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is forged for crushing guards — each strike has a {procPct}% chance to concuss the target, reducing their effective defense skill by {penalty} for {duration} seconds.{(isTwoHandedMace ? " The two-handed swing rattles bone." : "")}";
             }
@@ -535,6 +577,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealPct,      healPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct, killBurst);
                 wo.IconOverlayId = 0x06002860u;
+                ApplyLootUiEffect(wo, UiEffects.BoostHealth);
 
                 var killBurstPct = (int)Math.Round(killBurst * 100.0);
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is honed for the long fight — critical hits have a {procPct}% chance to restore {healPct}% of the damage dealt as health to the wielder. Killing blows surge with {killBurstPct}% of your maximum health and stamina.{(isTwoHandedSword ? " The two-handed grip drinks deeper from the slain." : "")}";
@@ -569,6 +612,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerStackBonus, stackPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks,  maxStacks);
                 wo.IconOverlayId = 0x06002699u;
+                ApplyLootUiEffect(wo, UiEffects.BoostMana | UiEffects.BoostStamina);
 
                 var totalPct = stackPct * maxStacks;
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} finds a deadly rhythm — each consecutive hit on the same target adds +{stackPct}% bonus damage, stacking up to {maxStacks} times (+{totalPct}% at full stack). Switching targets or letting the target die resets the chain.";
@@ -644,7 +688,7 @@ namespace ACE.Server.Factories
                 wo.Name = wo.Name + " of the Sentinel";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);
                 wo.IconOverlayId = 0x06002699;
-                wo.UiEffects = ACE.Entity.Enum.UiEffects.BoostStamina;
+                ApplyLootUiEffect(wo, UiEffects.BoostStamina);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} hums with a guardian's resolve — each strike has a 10% chance to drain 10% of the target's stamina, returning a quarter of it to the wielder.";
             }
