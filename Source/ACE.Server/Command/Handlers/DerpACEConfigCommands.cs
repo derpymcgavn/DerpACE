@@ -930,8 +930,7 @@ namespace ACE.Server.Command.Handlers
                     sb.AppendLine($"  [Mutator Toggles]");
                     sb.AppendLine($"    nocturnal={c.NocturnalMobEnabled}  exploding={c.ExplodingMobEnabled}  vampiric={c.VampiricMobEnabled}  thief={c.ThiefMobEnabled}");
                     sb.AppendLine($"    scout={c.ScoutMobEnabled}  simulacrum={c.SimulacrumMobEnabled}  healer={c.HealerMobEnabled}  tank={c.TankMobEnabled}");
-                    sb.AppendLine($"    reaper={c.ReaperMobEnabled}  necromancer={c.NecromancerMobEnabled}  merger={c.MergerMobEnabled}  horde={c.HordeMobEnabled}");
-                    sb.AppendLine($"    warder={c.WarderMobEnabled}  illusionist={c.IllusionistMobEnabled}");
+                    sb.AppendLine($"    reaper={c.ReaperMobEnabled}  necromancer={c.NecromancerMobEnabled}  warder={c.WarderMobEnabled}");
                     sb.AppendLine($"  [Weapon / LootGen Toggles]");
                     sb.AppendLine($"    defender={c.DefenderShieldEnabled}  archmagi={c.ArchmagiEnabled}  hierophant={c.HierophantEnabled}");
                     sb.AppendLine($"    thievesdagger={c.ThievesDaggerEnabled}  sentinel={c.SentinelSpearEnabled}  unarmedelem={c.UnarmedElemEnabled}");

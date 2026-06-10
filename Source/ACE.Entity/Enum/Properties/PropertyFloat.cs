@@ -279,5 +279,10 @@ namespace ACE.Entity.Enum.Properties
         RicochetProcChance             = 9028,  // chance on missile hit to launch a ricochet dart
         RicochetDamageScale            = 9029,  // damage multiplier applied to the ricochet projectile
         RicochetRadius                 = 9030,  // nearby target search radius in yards
+
+        /* DerpACE Shield affixes */
+        ShieldThornsReflectPct         = 9031,  // fraction of blocked hit damage reflected to attacker
+        ShieldBashingProcChance        = 9032,  // chance on shield block to bash the attacker
+        ShieldBashingHealthPct         = 9033,  // fraction of defender current health dealt on bash
     }
 }

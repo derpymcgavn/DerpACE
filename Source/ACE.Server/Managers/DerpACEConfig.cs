@@ -34,10 +34,7 @@ namespace ACE.Server.Managers
         public static bool TankMobEnabled          { get; set; } = true;
         public static bool ReaperMobEnabled        { get; set; } = true;
         public static bool NecromancerMobEnabled   { get; set; } = true;
-        public static bool MergerMobEnabled        { get; set; } = true;
-        public static bool HordeMobEnabled         { get; set; } = true;
         public static bool WarderMobEnabled        { get; set; } = true;
-        public static bool IllusionistMobEnabled   { get; set; } = true;
 
         // ══════════════════════════════════════════════════════════════════════
         // Per-Custom-Weapon Toggles  (also gated by EnableCustomWeapons above)
@@ -626,44 +623,11 @@ namespace ACE.Server.Managers
         /// <summary>Total nether DoT damage dealt over its duration (split across ticks). Default 60.</summary>
         public static float NecromancerDotTotal { get; set; } = 60.0f;
 
-        /// <summary>Per-spawn chance (0-1) for the Merger affix. Default 0.0005 (1 in 2000).</summary>
-        public static float MergerMobChance { get; set; } = 0.0005f;
-
-        /// <summary>Max times a single Merger may absorb a same-WCID neighbor. Default 8.</summary>
-        public static int MergerMaxMerges { get; set; } = 8;
-
-        /// <summary>Radius (meters) a Merger searches for a same-WCID neighbor on heartbeat. Default 10.</summary>
-        public static float MergerSearchRange { get; set; } = 10.0f;
-
-        /// <summary>Seconds between Merger absorb attempts. Default 12.</summary>
-        public static float MergerCooldownSeconds { get; set; } = 12.0f;
-
-        /// <summary>Per-spawn chance (0-1) for the Horde affix. Default 0.0005 (1 in 2000).</summary>
-        public static float HordeMobChance { get; set; } = 0.0005f;
-
-        /// <summary>Minimum starting swarm size for a Horde. Default 3.</summary>
-        public static int HordeMinSize { get; set; } = 3;
-
-        /// <summary>Maximum starting swarm size for a Horde. Default 6.</summary>
-        public static int HordeMaxSize { get; set; } = 6;
-
         /// <summary>Per-spawn chance (0-1) for the Warder affix. Default 0.0005 (1 in 2000).</summary>
         public static float WarderMobChance { get; set; } = 0.0005f;
 
         /// <summary>Radius (meters) a Warder's ward extends to nearby creatures. Default 8.</summary>
         public static float WarderRange { get; set; } = 8.0f;
-
-        /// <summary>Per-spawn chance (0-1) for the Illusionist affix. Default 0.0005 (1 in 2000).</summary>
-        public static float IllusionistMobChance { get; set; } = 0.0005f;
-
-        /// <summary>Number of 1-HP copies an Illusionist spawns on first sight of a player. Default 10.</summary>
-        public static int IllusionistCopyCount { get; set; } = 10;
-
-        /// <summary>Radius (meters) around the Illusionist that copies are scattered into. Default 6.</summary>
-        public static float IllusionistCopyRadius { get; set; } = 6.0f;
-
-        /// <summary>Seconds between Illusionist swap attempts. Default 6.</summary>
-        public static float IllusionistSwapCooldownSeconds { get; set; } = 6.0f;
 
         // ---------- Mutator Derpcoin Reward System ----------
 

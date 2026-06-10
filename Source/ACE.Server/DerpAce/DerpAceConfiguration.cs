@@ -55,14 +55,8 @@ namespace ACE.Server.DerpAce
         public bool ReaperMobEnabled { get; set; } = true;
         [JsonPropertyName("mob_necromancer_enabled")]
         public bool NecromancerMobEnabled { get; set; } = true;
-        [JsonPropertyName("mob_merger_enabled")]
-        public bool MergerMobEnabled { get; set; } = true;
-        [JsonPropertyName("mob_horde_enabled")]
-        public bool HordeMobEnabled { get; set; } = true;
         [JsonPropertyName("mob_warder_enabled")]
         public bool WarderMobEnabled { get; set; } = true;
-        [JsonPropertyName("mob_illusionist_enabled")]
-        public bool IllusionistMobEnabled { get; set; } = true;
 
         // ── Per-Custom-Weapon Toggles ─────────────────────────────────────────
         [JsonPropertyName("defender_shield_enabled")]
@@ -192,32 +186,10 @@ namespace ACE.Server.DerpAce
         public float NecromancerDotChance { get; set; } = 0.30f;
         [JsonPropertyName("mob_necromancer_dot_total")]
         public float NecromancerDotTotal { get; set; } = 60.0f;
-        [JsonPropertyName("mob_merger_chance")]
-        public float MergerMobChance { get; set; } = 0.0005f;
-        [JsonPropertyName("mob_merger_max_merges")]
-        public int MergerMaxMerges { get; set; } = 8;
-        [JsonPropertyName("mob_merger_search_range")]
-        public float MergerSearchRange { get; set; } = 10.0f;
-        [JsonPropertyName("mob_merger_cooldown_seconds")]
-        public float MergerCooldownSeconds { get; set; } = 12.0f;
-        [JsonPropertyName("mob_horde_chance")]
-        public float HordeMobChance { get; set; } = 0.0005f;
-        [JsonPropertyName("mob_horde_min_size")]
-        public int HordeMinSize { get; set; } = 3;
-        [JsonPropertyName("mob_horde_max_size")]
-        public int HordeMaxSize { get; set; } = 6;
         [JsonPropertyName("mob_warder_chance")]
         public float WarderMobChance { get; set; } = 0.0005f;
         [JsonPropertyName("mob_warder_range")]
         public float WarderRange { get; set; } = 8.0f;
-        [JsonPropertyName("mob_illusionist_chance")]
-        public float IllusionistMobChance { get; set; } = 0.0005f;
-        [JsonPropertyName("mob_illusionist_copy_count")]
-        public int IllusionistCopyCount { get; set; } = 10;
-        [JsonPropertyName("mob_illusionist_copy_radius")]
-        public float IllusionistCopyRadius { get; set; } = 6.0f;
-        [JsonPropertyName("mob_illusionist_swap_cooldown_seconds")]
-        public float IllusionistSwapCooldownSeconds { get; set; } = 6.0f;
 
         // Derpcoin Reward System
         [JsonPropertyName("derpcoin_wcid")]

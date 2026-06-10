@@ -123,10 +123,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.TankMobEnabled         = c.TankMobEnabled;
             DerpACEConfig.ReaperMobEnabled       = c.ReaperMobEnabled;
             DerpACEConfig.NecromancerMobEnabled  = c.NecromancerMobEnabled;
-            DerpACEConfig.MergerMobEnabled       = c.MergerMobEnabled;
-            DerpACEConfig.HordeMobEnabled        = c.HordeMobEnabled;
             DerpACEConfig.WarderMobEnabled       = c.WarderMobEnabled;
-            DerpACEConfig.IllusionistMobEnabled  = c.IllusionistMobEnabled;
 
             // ── Per-Custom-Weapon Toggles ─────────────────────────────────────
             DerpACEConfig.DefenderShieldEnabled   = c.DefenderShieldEnabled;
@@ -199,19 +196,8 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.NecromancerMobChance        = c.NecromancerMobChance;
             DerpACEConfig.NecromancerDotChance        = c.NecromancerDotChance;
             DerpACEConfig.NecromancerDotTotal         = c.NecromancerDotTotal;
-            DerpACEConfig.MergerMobChance             = c.MergerMobChance;
-            DerpACEConfig.MergerMaxMerges             = c.MergerMaxMerges;
-            DerpACEConfig.MergerSearchRange           = c.MergerSearchRange;
-            DerpACEConfig.MergerCooldownSeconds       = c.MergerCooldownSeconds;
-            DerpACEConfig.HordeMobChance              = c.HordeMobChance;
-            DerpACEConfig.HordeMinSize                = c.HordeMinSize;
-            DerpACEConfig.HordeMaxSize                = c.HordeMaxSize;
             DerpACEConfig.WarderMobChance             = c.WarderMobChance;
             DerpACEConfig.WarderRange                 = c.WarderRange;
-            DerpACEConfig.IllusionistMobChance        = c.IllusionistMobChance;
-            DerpACEConfig.IllusionistCopyCount        = c.IllusionistCopyCount;
-            DerpACEConfig.IllusionistCopyRadius       = c.IllusionistCopyRadius;
-            DerpACEConfig.IllusionistSwapCooldownSeconds = c.IllusionistSwapCooldownSeconds;
 
             // ── Derpcoin ──────────────────────────────────────────────────────
             DerpACEConfig.DerpcoinWcid             = c.DerpcoinWcid;

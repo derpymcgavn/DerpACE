@@ -13,6 +13,7 @@ using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
+using ACE.Server.Command.Handlers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 
@@ -356,6 +357,8 @@ namespace ACE.Server.WorldObjects
                     xpForKill = GetSimulacrumXp(xpForKill);
 
                 playerDamager.EarnXP(xpForKill, XpType.Kill);
+
+                MorphicCommands.HandleCreatureKilled(playerDamager, this);
 
                 // notify global kill quest tracker
                 GlobalKillQuestManager.OnCreatureKilled(playerDamager, this, xpForKill);

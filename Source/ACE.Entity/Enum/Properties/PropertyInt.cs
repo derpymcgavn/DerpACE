@@ -681,14 +681,6 @@ namespace ACE.Entity.Enum.Properties
         // DerpACE: Nomad unarmed proc type stamped onto gauntlets/shoes
         // 0 = none, 1 = Cleave Flurry (2-4 extra fast strikes), 2 = Healing Strike (dmg + self-heal)
         NomadProcType                            = 9030,
-        // DerpACE: number of times a Merger mob has absorbed a same-WCID neighbor
-        MergerMergeCount                         = 9031,
-        // DerpACE: current Horde swarm population (number of "members" remaining)
-        HordeSwarmCount                          = 9032,
-        // DerpACE: initial Horde swarm size at spawn (immutable reference for fraction math)
-        HordeSwarmInitialCount                   = 9037,
-        // DerpACE: number of illusionist copies currently alive (tracked on the original)
-        IllusionistCopyCount                     = 9033,
         // DerpACE: Aura system - up to 3 looping PlayScript particle effect slots.
         // A missing or zero value means the slot is inactive.
         AuraPlayScript1                          = 9034,
@@ -696,6 +688,8 @@ namespace ACE.Entity.Enum.Properties
         AuraPlayScript3                          = 9036,
         // DerpACE: loot tier (1-8) for vendor random-loot stock. Set by admin via @props or @vendortier.
         VendorLootTier                           = 9038,
+        // DerpACE: Olthoi morphic system - previous unlocked form before current form
+        MorphicPreviousCreatureWCID              = 9039,
     }
 
     public static class PropertyIntExtensions

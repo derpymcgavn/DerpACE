@@ -102,5 +102,8 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Mail system */
         PlayerMailbox                  = 9010,
+
+        /* DerpACE Olthoi morphic system - comma-delimited unlocked creature WCIDs */
+        MorphicUnlockedForms           = 9011,
     }
 }

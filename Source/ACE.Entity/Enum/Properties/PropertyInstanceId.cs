@@ -76,6 +76,5 @@ namespace ACE.Entity.Enum.Properties
         PCAPRecordedObjectIID            = 8000,
         PCAPRecordedParentIID            = 8008,
 
-        HordeLeader                      = 9001,
     }
 }

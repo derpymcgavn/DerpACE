@@ -17,6 +17,42 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
+        private static void TryMutateShieldAffixes(WorldObject wo, TreasureDeath profile)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !wo.IsShield || profile.Tier < 3)
+                return;
+
+            var rolledAffixes = new System.Collections.Generic.List<string>();
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            {
+                var reflectPct = ThreadSafeRandom.Next(1, 8) / 100.0;
+
+                wo.SetProperty(PropertyBool.IsThornsShield, true);
+                wo.SetProperty(PropertyFloat.ShieldThornsReflectPct, reflectPct);
+                rolledAffixes.Add("of Thorns");
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOn a shield block, this shield reflects {reflectPct:P0} of the damage taken back at the attacker.";
+            }
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            {
+                wo.SetProperty(PropertyBool.IsBashingShield, true);
+                wo.SetProperty(PropertyFloat.ShieldBashingProcChance, 0.10);
+                wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, 0.10);
+                rolledAffixes.Add("of Bashing");
+
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOn a shield block, this shield has a 10% chance to bash the attacker, knocking monsters back and dealing 10% of your current health as bludgeoning damage.";
+            }
+
+            if (rolledAffixes.Count == 0)
+                return;
+
+            var suffix = rolledAffixes[ThreadSafeRandom.Next(0, rolledAffixes.Count - 1)];
+            if (!wo.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                wo.Name = $"{wo.Name} {suffix}";
+        }
+
         /// <summary>
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
@@ -119,6 +155,8 @@ namespace ACE.Server.Factories
                 wo.UiEffects = ACE.Entity.Enum.UiEffects.Fire;
                 wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge — enemies are more likely to target its bearer.";
             }
+
+            TryMutateShieldAffixes(wo, profile);
         }
 
 

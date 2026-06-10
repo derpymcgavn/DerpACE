@@ -12,6 +12,7 @@ using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
+using ACE.Server.Command.Handlers;
 using ACE.Server.Network.Structure;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
@@ -40,6 +41,7 @@ namespace ACE.Server.WorldObjects
             var topDamager = DamageHistory.GetTopDamager(false);
 
             HandlePKDeathBroadcast(lastDamager, topDamager);
+            MorphicCommands.HandleMorphicDeath(this);
 
             var deathMessage = base.OnDeath(lastDamager, damageType, criticalHit);
 

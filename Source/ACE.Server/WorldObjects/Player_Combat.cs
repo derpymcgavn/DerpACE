@@ -1312,6 +1312,35 @@ namespace ACE.Server.WorldObjects
             target.NextMoveTime = Math.Max(target.NextMoveTime, Timers.RunningTime + 0.25f);
         }
 
+        private void TryApplyShieldBashKnockback(Creature target)
+        {
+            if (target == null || !target.IsMonster || Location == null || target.Location == null)
+                return;
+
+            var dx = target.Location.PositionX - Location.PositionX;
+            var dy = target.Location.PositionY - Location.PositionY;
+            var distance = Math.Sqrt(dx * dx + dy * dy);
+
+            if (distance <= 0.01)
+            {
+                dx = 0;
+                dy = 1;
+                distance = 1;
+            }
+
+            var newPosition = new ACE.Entity.Position(target.Location)
+            {
+                PositionX = target.Location.PositionX + (float)(dx / distance) * UnarmedKnockbackDistance,
+                PositionY = target.Location.PositionY + (float)(dy / distance) * UnarmedKnockbackDistance,
+            };
+
+            if (newPosition.Landblock != target.Location.Landblock)
+                return;
+
+            target.FakeTeleport(newPosition);
+            target.NextMoveTime = Math.Max(target.NextMoveTime, Timers.RunningTime + 0.25f);
+        }
+
         /// <summary>
         /// Returns the BaseDamageMod for a truly-unarmed player attack (no weapon, no hand/foot armor).
         ///
@@ -1471,7 +1500,61 @@ namespace ACE.Server.WorldObjects
 
         public int TakeDamage(WorldObject source, DamageEvent damageEvent)
         {
-            return TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
+            var damageTaken = TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
+
+            if (damageTaken > 0 && damageEvent.ShieldMod != 1.0f)
+                TryProcShieldAffixesOnBlock(source, damageEvent, (uint)damageTaken);
+
+            return damageTaken;
+        }
+
+        private void TryProcShieldAffixesOnBlock(WorldObject source, DamageEvent damageEvent, uint damageTaken)
+        {
+            if (source is not Creature attacker || attacker.IsDead || IsDead)
+                return;
+
+            var shield = GetEquippedShield();
+            if (shield == null)
+                return;
+
+            if (shield.GetProperty(PropertyBool.IsThornsShield) == true)
+            {
+                var reflectPct = shield.GetProperty(PropertyFloat.ShieldThornsReflectPct) ?? 0.0;
+                var reflectDamage = (float)Math.Round(damageTaken * reflectPct);
+
+                if (reflectDamage >= 1.0f)
+                {
+                    attacker.TakeDamage(this, damageEvent.DamageType, reflectDamage);
+                    attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
+
+                    if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                        Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            $"Your {shield.NameWithMaterial} reflects {(uint)reflectDamage} damage back at {attacker.Name}. [Thorns]",
+                            ChatMessageType.CombatSelf));
+                }
+            }
+
+            if (shield.GetProperty(PropertyBool.IsBashingShield) != true)
+                return;
+
+            var bashChance = shield.GetProperty(PropertyFloat.ShieldBashingProcChance) ?? 0.0;
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= bashChance)
+                return;
+
+            var healthPct = shield.GetProperty(PropertyFloat.ShieldBashingHealthPct) ?? 0.10;
+            var bashDamage = (float)Math.Round(Health.Current * healthPct);
+            if (bashDamage < 1.0f)
+                return;
+
+            attacker.TakeDamage(this, DamageType.Bludgeon, bashDamage);
+            attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidRightFront);
+            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.ShieldUpBlue);
+            TryApplyShieldBashKnockback(attacker);
+
+            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your {shield.NameWithMaterial} bashes {attacker.Name} for {(uint)bashDamage} bludgeoning damage. [Bashing]",
+                    ChatMessageType.CombatSelf));
         }
 
         /// <summary>

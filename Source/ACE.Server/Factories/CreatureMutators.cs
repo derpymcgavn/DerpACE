@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ACE.Common;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -432,91 +432,6 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Merger affix â€” periodically absorbs a nearby same-WCID creature, growing larger and stronger.
-    /// Heartbeat logic is in Creature_Affixes.cs.
-    /// </summary>
-    public class MergerMutator : CreatureMutator
-    {
-        public override string Name => "Merger";
-        public override string Description => "Absorbs nearby same-type creatures, growing larger and stronger with each merge.";
-        public override PropertyBool? MutatorFlag => PropertyBool.IsMergerMob;
-        public override string NamePrefix => "Assimilating";
-
-        public MergerMutator()
-        {
-            MinTier = DerpACEConfig.MobModifierMinTier;
-            Chance = DerpACEConfig.MergerMobChance;
-            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.MergerMobEnabled;
-        }
-
-        protected override void Apply(Creature creature, int tier)
-        {
-            // Start a bit beefier so it survives long enough to merge
-            if (creature.Health != null && creature.Health.MaxValue > 0)
-            {
-                var hpBoost = (uint)(creature.Health.MaxValue * 0.25);
-                creature.Health.StartingValue += hpBoost;
-                creature.Health.Current = creature.Health.MaxValue;
-            }
-
-            // Visual tell: yellow-green and a touch larger; will grow further per merge
-            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.15f;
-            creature.PaletteTemplate = (int)PaletteTemplate.Yellow;
-            creature.Shade = 0.5;
-
-            creature.SetProperty(PropertyInt.MergerMergeCount, 0);
-        }
-    }
-
-    /// <summary>
-    /// DerpACE: Horde affix â€” represents a small swarm; takes multiple kills to bring down
-    /// and announces shrinkage in combat chat. Per-hit "swarm member" tracking is in Creature_Affixes.cs.
-    /// </summary>
-    public class HordeMutator : CreatureMutator
-    {
-        public override string Name => "Horde";
-        public override string Description => "A swarm â€” multiple members must be killed to defeat it.";
-        public override PropertyBool? MutatorFlag => PropertyBool.IsHordeMob;
-        public override string NamePrefix => "Swarming";
-
-        public HordeMutator()
-        {
-            MinTier = DerpACEConfig.MobModifierMinTier;
-            Chance = DerpACEConfig.HordeMobChance;
-            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.HordeMobEnabled;
-        }
-
-        protected override void Apply(Creature creature, int tier)
-        {
-            var minSize = Math.Max(2, DerpACEConfig.HordeMinSize);
-            var maxSize = Math.Max(minSize, DerpACEConfig.HordeMaxSize);
-            var size = ThreadSafeRandom.Next(minSize, maxSize);
-
-            creature.SetProperty(PropertyInt.HordeSwarmCount, size);
-            creature.SetProperty(PropertyInt.HordeSwarmInitialCount, size);
-
-            // Scale the shared health pool: leader's MaxHP = single-body HP Ã— pack size
-            if (creature.Health != null && creature.Health.MaxValue > 0)
-            {
-                var baseMax = creature.Health.MaxValue;
-                var newMax = (uint)Math.Min(uint.MaxValue, (ulong)baseMax * (uint)size);
-                creature.Health.StartingValue += (newMax - baseMax);
-                creature.Health.Current = creature.Health.MaxValue;
-            }
-
-            // XP bonus reflects the full pack; awarded on leader death only
-            var xpOverride = creature.GetProperty(PropertyInt.XpOverride) ?? 0;
-            if (xpOverride > 0)
-                creature.SetProperty(PropertyInt.XpOverride, (int)Math.Min(int.MaxValue, (long)xpOverride * size));
-
-            // Visual tell: orange tint and noticeably larger
-            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.5f;
-            creature.PaletteTemplate = (int)PaletteTemplate.Orange;
-            creature.Shade = 0.6;
-        }
-    }
-
-    /// <summary>
     /// DerpACE: Warder affix â€” wards nearby creatures, blocking offensive spells cast against them.
     /// Spell-cast block is enforced in Player_Magic.CreatePlayerSpell.
     /// </summary>
@@ -560,35 +475,5 @@ namespace ACE.Server.Factories
         }
     }
 
-    /// <summary>
-    /// DerpACE: Illusionist affix â€” on first sight of a player, spawns N 1-HP copies of itself.
-    /// Periodically swaps positions with a random surviving copy, making the real one hard to pin down.
-    /// Copy spawning + swap logic lives in Creature_Affixes.cs (TryIllusionistOnAggro / TryIllusionistSwap).
-    /// </summary>
-    public class IllusionistMutator : CreatureMutator
-    {
-        public override string Name => "Illusionist";
-        public override string Description => "Spawns 1-HP copies of itself and periodically swaps places with one.";
-        public override PropertyBool? MutatorFlag => PropertyBool.IsIllusionistMob;
-        public override string NamePrefix => "Illusory";
-
-        public IllusionistMutator()
-        {
-            MinTier = DerpACEConfig.MobModifierMinTier;
-            Chance = DerpACEConfig.IllusionistMobChance;
-            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.IllusionistMobEnabled;
-        }
-
-        protected override void Apply(Creature creature, int tier)
-        {
-            // Visual tell: purple shimmer, slightly translucent feel via shade
-            creature.PaletteTemplate = (int)PaletteTemplate.Purple;
-            creature.Shade = 0.7;
-            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.05f;
-
-            // Reset copy bookkeeping so a fresh spawn re-summons its illusions on first aggro
-            creature.SetProperty(PropertyInt.IllusionistCopyCount, 0);
-        }
-    }
 }
 

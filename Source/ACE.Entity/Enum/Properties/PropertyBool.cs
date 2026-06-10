@@ -233,16 +233,15 @@ namespace ACE.Entity.Enum.Properties
         /* DerpACE Creature Affixes (ported from ACE.BaseMod Expansion) */
         IsReaperMob                      = 9040,
         IsNecromancerMob                 = 9041,
-        IsMergerMob                      = 9042,
-        IsHordeMob                       = 9043,
         IsWarderMob                      = 9044,
-        IsIllusionistMob                 = 9045,
-        IsIllusionistCopy                = 9046,
-        IsHordeMember                    = 9047,
         IsRicochetAtlatl                 = 9048,
         IsRicochetProjectile             = 9049,
 
         /* DerpACE player preference - use NPC-style spell casting animation */
         UseNpcCastAnimation              = 9050,
+
+        /* DerpACE Shield affixes */
+        IsThornsShield                   = 9051,
+        IsBashingShield                  = 9052,
     }
 }
