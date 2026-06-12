@@ -250,7 +250,28 @@ namespace ACE.Server.WorldObjects
             }
 
             if (coverage.Count == 0 && ClothingBase.HasValue)
-                return base.CalculateObjDesc();
+                return ApplyShadowCloneObjDesc(base.CalculateObjDesc());
+
+            return ApplyShadowCloneObjDesc(objDesc);
+        }
+
+        private ACE.Entity.ObjDesc ApplyShadowCloneObjDesc(ACE.Entity.ObjDesc objDesc)
+        {
+            if (!(this is CombatPet combatPet) || !combatPet.IsShadowClone)
+                return objDesc;
+
+            const uint shadowCloneTexture = 0x05002C54;
+            var textureChanges = objDesc.TextureChanges.ToList();
+
+            foreach (var texture in textureChanges)
+            {
+                objDesc.AddTextureChange(new PropertiesTextureMap
+                {
+                    PartIndex = texture.PartIndex,
+                    OldTexture = texture.NewTexture,
+                    NewTexture = shadowCloneTexture,
+                });
+            }
 
             return objDesc;
         }

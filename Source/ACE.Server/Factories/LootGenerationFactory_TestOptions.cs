@@ -50,7 +50,9 @@ namespace ACE.Server.Factories
             ["breachercrossbow"] = "breacher",
 
             ["dinnerware"] = "dinnerware",
-            ["discus"] = "dinnerware",
+            ["discus"] = "discus",
+            ["warriorprincess"] = "discus",
+            ["warriorprincesscall"] = "discus",
             ["throwware"] = "dinnerware",
             ["banquet"] = "dinnerware",
             ["porcelain"] = "dinnerware",
@@ -60,8 +62,19 @@ namespace ACE.Server.Factories
             ["ricochet"] = "dartflinger",
             ["ricochetatlatl"] = "dartflinger",
 
+            ["reaper"] = "reaper",
+            ["reapers"] = "reaper",
+            ["reaperatlatl"] = "reaper",
+            ["reapersatlatl"] = "reaper",
+
             ["archmagi"] = "archmagi",
             ["archmage"] = "archmagi",
+
+            ["shadowclone"] = "shadowclone",
+            ["shadowcaster"] = "shadowclone",
+            ["voidshadow"] = "shadowclone",
+            ["umbral"] = "shadowclone",
+            ["mirror"] = "shadowclone",
 
             ["hierophant"] = "hierophant",
             ["life"] = "hierophant",
@@ -81,8 +94,11 @@ namespace ACE.Server.Factories
             ["stalker"] = TreasureWeaponType.Bow,
             ["breacher"] = TreasureWeaponType.Crossbow,
             ["dinnerware"] = TreasureWeaponType.ThrownDinnerware,
+            ["discus"] = TreasureWeaponType.Discus,
             ["dartflinger"] = TreasureWeaponType.Atlatl,
+            ["reaper"] = TreasureWeaponType.Atlatl,
             ["archmagi"] = TreasureWeaponType.Caster,
+            ["shadowclone"] = TreasureWeaponType.Caster,
             ["hierophant"] = TreasureWeaponType.Caster,
         };
 
@@ -110,9 +126,12 @@ namespace ACE.Server.Factories
                 "sentinel",
                 "stalker",
                 "breacher",
-                "dinnerware/discus/banquet",
+                "dinnerware/banquet",
+                "discus/warriorprincess",
                 "dartflinger/ricochet",
+                "reaper",
                 "archmagi",
+                "shadowclone/voidshadow",
                 "hierophant/life"
             });
         }
@@ -140,11 +159,15 @@ namespace ACE.Server.Factories
                 "stalker"     => wo.GetProperty(PropertyBool.IsStalkersBow) == true,
                 "breacher"    => wo.GetProperty(PropertyBool.IsBreachersCrossbow) == true,
                 "dinnerware"  => wo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true,
+                "discus"      => wo.WeenieClassId == (uint)WeenieClassName.discus
+                                 && wo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true,
                 "dartflinger" => wo.GetProperty(PropertyBool.IsRicochetAtlatl) == true
                                  || wo.GetProperty(PropertyBool.IsDartflingerAtlatl) == true,
                 "ricochet"    => wo.GetProperty(PropertyBool.IsRicochetAtlatl) == true
                                  || wo.GetProperty(PropertyBool.IsDartflingerAtlatl) == true,
+                "reaper"      => wo.GetProperty(PropertyBool.IsReapersAtlatl) == true,
                 "archmagi"    => wo.GetProperty(PropertyBool.IsArchmagiCaster) == true,
+                "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
                 _             => false,
             };

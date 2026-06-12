@@ -111,9 +111,11 @@ namespace ACE.Server.Factories
             const MeleeWeaponSkill statSkill = MeleeWeaponSkill.LightWeapons;
             const TreasureWeaponType statWeaponType = TreasureWeaponType.Dagger;
             var specialModifierApplied = false;
-            var isDiscus = wo.WeenieClassId == (uint)WeenieClassName.discus;
+            var isDiscus = roll.WeaponType == TreasureWeaponType.Discus
+                || wo.WeenieClassId == (uint)WeenieClassName.discus;
 
-            roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
+            if (!isDiscus)
+                roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
 
             wo.UnlimitedUse = true;
             wo.ItemType |= ItemType.MissileWeapon;
@@ -125,7 +127,8 @@ namespace ACE.Server.Factories
             ApplyLootUiEffects(wo, wo.W_DamageType, false);
             wo.Biota.PropertiesSpellBook?.Clear();
 
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+            if (isDiscus
+                || ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
                 && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
                 && TryRollWeaponModifier(
                     profile,
@@ -136,19 +139,23 @@ namespace ACE.Server.Factories
                     true,
                     "dinnerware"))
             {
-                wo.Name = isDiscus ? "Whirling Discus of the Banquet" : wo.Name + " of the Banquet";
+                var spinProcChance = isDiscus || IsForcedWeaponModifier(roll, "dinnerware")
+                    ? 1.0f
+                    : ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance;
+
+                wo.Name = isDiscus ? "Warrior Princess's Call" : wo.Name + " of the Banquet";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon, true);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance, spinProcChance);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius);
                 wo.IconOverlayId = 0x06002878u;
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
                 if (isDiscus)
-                    wo.Name = "Whirling Discus of the Banquet";
+                    wo.Name = "Warrior Princess's Call";
                 wo.LongDesc = (wo.LongDesc ?? "") + (isDiscus
-                    ? "\n\nA whirling discus of banquet metal -- it bites through the air and clips nearby foes on the backswing."
-                    : "\n\nThis dinnerware was raised for the feast instead of the table - each throw lands like a hearty clang of china, crockery, and bad manners.");
+                    ? "\n\nA warrior's discus answers the hand that throws it -- it bites through the air, then ricochets through nearby foes for 50%, 25%, 10%, and 5% damage."
+                    : "\n\nThis dinnerware was raised for the feast instead of the table - each throw can carom through nearby foes for 50%, 25%, 10%, and 5% damage, ringing out with china, crockery, and bad manners.");
             }
 
             if (wo.WeenieClassId == (uint)RageaRangWcid)

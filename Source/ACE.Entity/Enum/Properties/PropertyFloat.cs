@@ -223,9 +223,9 @@ namespace ACE.Entity.Enum.Properties
         PCAPRecordeOmegaZ              = 8018,
 
         /* DerpACE Fencer's Blade — per-weapon proc values */
-        FencerArmorPiercePct           = 9001,  // fraction of mitigated damage restored on pierce proc
-        FencerArmorPierceProc          = 9002,  // per-hit proc chance for armor pierce
-        FencerDeflectChance            = 9003,  // per-hit chance to deflect incoming damage back
+        FencerArmorPiercePct           = 9001,  // fraction of mitigated damage restored on exploit/riposte proc
+        FencerArmorPierceProc          = 9002,  // per-hit proc chance for exploit opening
+        FencerDeflectChance            = 9003,  // per-evade / incoming-hit chance to riposte
 
         /* DerpACE Ravager's Axe — per-weapon proc values */
         RavagerBleedProc               = 9004,  // per-hit chance to apply a bleed DoT
@@ -295,5 +295,11 @@ namespace ACE.Entity.Enum.Properties
         QuickeningDaggerProcChance     = 9038,  // chance on dagger hit to grant haste
         QuickeningDaggerSpeedMultiplier= 9039,  // attack animation speed multiplier while active
         QuickeningDaggerDuration       = 9040,  // duration of haste in seconds
+
+        /* DerpACE Shadow Clone Caster - nether staff combat-pet decoy */
+        ShadowCloneProcChance          = 9041,  // chance on nether projectile hit to summon a shadow clone
+        ShadowCloneCooldownSeconds     = 9042,  // cooldown after a successful summon
+        ShadowCloneDurationSeconds     = 9043,  // combat pet lifespan
+        ShadowCloneDamageScale         = 9044,  // clone outgoing spell damage multiplier
     }
 }

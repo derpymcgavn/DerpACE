@@ -65,11 +65,18 @@ namespace ACE.Server.Factories
 
         private static void MutateCaster(WorldObject wo, TreasureDeath profile, bool isMagical, TreasureRoll roll)
         {
+            var forcedShadowCloneCaster = IsForcedWeaponModifier(roll, "shadowclone");
+
             // Ensure custom life caster templates always use the life-damage mutation path.
             if (LifeCasterWcids.Contains((ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId) && wo.W_DamageType == DamageType.Undef)
                 wo.W_DamageType = DamageType.Health;
             else
                 TryMutateLifeCaster(wo, profile, roll);
+
+            // Forced shadow-clone lootgen must be a nether caster, otherwise the
+            // projectile hit hook never sees DamageType.Nether.
+            if (forcedShadowCloneCaster)
+                wo.W_DamageType = DamageType.Nether;
 
             // mutate ManaConversionMod
             var mutationFilter = MutationCache.GetMutation("Casters.caster.txt");
@@ -201,6 +208,34 @@ namespace ACE.Server.Factories
                     + $"\n\nBlessed by the Hierophants — beneficial healing cast through this staff is amplified by {healBoost:P0}."
                     + $"\nWhen you heal yourself or an ally, there is a {ACE.Server.Managers.DerpACEConfig.HierophantHotProcChance:P0} chance to bless the target with a regenerating ward restoring up to {hotPct:P0} of their health over {ACE.Server.Managers.DerpACEConfig.HierophantHotDurationSeconds:0}s."
                     + $"\nEach heal also echoes a {fellowEcho:P0} bonus heal to nearby fellowship members within {ACE.Server.Managers.DerpACEConfig.HierophantFellowEchoRange:0}m.";
+            }
+
+            // Shadow Clone: nether-caster utility affix. It summons a short-lived additional
+            // combat pet that mirrors harmful void projectile/ring casts at reduced damage.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && isMagical
+                && wo.W_DamageType == DamageType.Nether
+                && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
+                && (forcedShadowCloneCaster
+                    || (!HasForcedWeaponModifier(roll) && profile.Tier >= 6 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.03f)))
+            {
+                var procChance = forcedShadowCloneCaster ? 1.0f : 0.04f;
+                const float cooldownSeconds = 120.0f;
+                const float durationSeconds = 25.0f;
+                const float damageScale = 0.35f;
+
+                wo.Name = wo.Name + " of the Umbral Mirror";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneCaster, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneProcChance, procChance);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneCooldownSeconds, cooldownSeconds);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDurationSeconds, durationSeconds);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDamageScale, damageScale);
+                wo.IconOverlayId = 0x06002860;
+                ApplyLootUiEffects(wo, wo.W_DamageType, true);
+
+                wo.LongDesc = (wo.LongDesc ?? "")
+                    + $"\n\nAn umbral mirror coils inside this caster - harmful nether projectile hits have a {procChance:P0} chance to summon a shadow of you for {durationSeconds:0}s."
+                    + $"\nThe shadow fights alongside your normal pet, mirrors your harmful void projectile and ring casts at {damageScale:P0} damage, and can trigger at most once every {cooldownSeconds:0}s.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental caster T5+ to proc a level-3 blast.

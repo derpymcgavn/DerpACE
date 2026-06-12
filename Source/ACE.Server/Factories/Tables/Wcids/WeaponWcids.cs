@@ -55,6 +55,9 @@ namespace ACE.Server.Factories.Tables.Wcids
                 case TreasureWeaponType.ThrownDinnerware:
                     return RollThrownDinnerwareWcid(treasureDeath);
 
+                case TreasureWeaponType.Discus:
+                    return WeenieClassName.discus;
+
                 case TreasureWeaponType.Caster:
                     return RollCaster(treasureDeath);
 

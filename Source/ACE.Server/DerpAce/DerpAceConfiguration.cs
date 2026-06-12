@@ -282,9 +282,9 @@ namespace ACE.Server.DerpAce
 
         // Hierophant
         [JsonPropertyName("hierophant_drop_chance")]
-        public float HierophantDropChance { get; set; } = 0.10f;
+        public float HierophantDropChance { get; set; } = 0.04f;
         [JsonPropertyName("hierophant_min_tier")]
-        public int HierophantMinTier { get; set; } = 2;
+        public int HierophantMinTier { get; set; } = 5;
         [JsonPropertyName("hierophant_heal_boost_min")]
         public float HierophantHealBoostMin { get; set; } = 0.01f;
         [JsonPropertyName("hierophant_heal_boost_max")]
@@ -294,13 +294,13 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("hierophant_hot_pct_min")]
         public float HierophantHotPctMin { get; set; } = 0.01f;
         [JsonPropertyName("hierophant_hot_pct_max")]
-        public float HierophantHotPctMax { get; set; } = 0.25f;
+        public float HierophantHotPctMax { get; set; } = 0.15f;
         [JsonPropertyName("hierophant_hot_duration_seconds")]
         public float HierophantHotDurationSeconds { get; set; } = 12.0f;
         [JsonPropertyName("hierophant_hot_tick_interval")]
         public float HierophantHotTickInterval { get; set; } = 3.0f;
         [JsonPropertyName("hierophant_fellow_echo_pct")]
-        public float HierophantFellowEchoPct { get; set; } = 0.20f;
+        public float HierophantFellowEchoPct { get; set; } = 0.12f;
         [JsonPropertyName("hierophant_fellow_echo_range")]
         public float HierophantFellowEchoRange { get; set; } = 30.0f;
         [JsonPropertyName("hierophant_aggro_bonus")]
@@ -348,17 +348,17 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("fencer_blade_min_tier")]
         public int FencerBladeMinTier { get; set; } = 5;
         [JsonPropertyName("fencer_pierce_min")]
-        public int FencerPierceMin { get; set; } = 2;
+        public int FencerPierceMin { get; set; } = 12;
         [JsonPropertyName("fencer_pierce_max")]
-        public int FencerPierceMax { get; set; } = 8;
+        public int FencerPierceMax { get; set; } = 20;
         [JsonPropertyName("fencer_pierce_proc_min")]
-        public int FencerPierceProcMin { get; set; } = 2;
+        public int FencerPierceProcMin { get; set; } = 8;
         [JsonPropertyName("fencer_pierce_proc_max")]
-        public int FencerPierceProcMax { get; set; } = 6;
+        public int FencerPierceProcMax { get; set; } = 12;
         [JsonPropertyName("fencer_deflect_min")]
-        public int FencerDeflectMin { get; set; } = 1;
+        public int FencerDeflectMin { get; set; } = 4;
         [JsonPropertyName("fencer_deflect_max")]
-        public int FencerDeflectMax { get; set; } = 2;
+        public int FencerDeflectMax { get; set; } = 8;
 
         // Ravager Axe
         [JsonPropertyName("ravager_axe_drop_chance")]
@@ -436,13 +436,13 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("polebreaker_min_tier")]
         public int PolebreakerMinTier { get; set; } = 5;
         [JsonPropertyName("polebreaker_stack_min")]
-        public int PolebreakerStackMin { get; set; } = 1;
+        public int PolebreakerStackMin { get; set; } = 3;
         [JsonPropertyName("polebreaker_stack_max")]
-        public int PolebreakerStackMax { get; set; } = 2;
+        public int PolebreakerStackMax { get; set; } = 5;
         [JsonPropertyName("polebreaker_max_stack_min")]
-        public int PolebreakerMaxStackMin { get; set; } = 3;
+        public int PolebreakerMaxStackMin { get; set; } = 4;
         [JsonPropertyName("polebreaker_max_stack_max")]
-        public int PolebreakerMaxStackMax { get; set; } = 5;
+        public int PolebreakerMaxStackMax { get; set; } = 6;
         [JsonPropertyName("polebreaker_aggro_bonus")]
         public float PolebreakerStaffAggroBonus { get; set; } = 0.2f;
 

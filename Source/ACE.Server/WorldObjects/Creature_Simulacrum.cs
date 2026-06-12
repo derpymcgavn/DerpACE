@@ -5,6 +5,7 @@ using System.Linq;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
+using ACE.Server.Entity;
 using ACE.Server.Factories;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects.Entity;
@@ -26,6 +27,9 @@ namespace ACE.Server.WorldObjects
 
         private bool _simulacrumCopied;
         private uint _simulacrumSourcePlayerGuid;
+        private const int ShadowClonePaletteTemplate = (int)ACE.Entity.Enum.PaletteTemplate.Black;
+        private const double ShadowCloneShade = 0.15;
+        private const float ShadowCloneTranslucency = 0.35f;
 
         /// <summary>
         /// True if this creature is configured as a simulacrum mob.
@@ -104,6 +108,38 @@ namespace ACE.Server.WorldObjects
             {
                 // Standard behavior: copy the attack target
                 TryCopyFromPlayer(targetPlayer);
+            }
+        }
+
+        public void CopyShadowCloneFromPlayer(Player player)
+        {
+            if (player == null)
+                return;
+
+            try
+            {
+                SetupTableId = player.SetupTableId;
+                MotionTableId = player.MotionTableId;
+                PhysicsTableId = player.PhysicsTableId;
+                SoundTableId = player.SoundTableId;
+                CombatTableDID = player.CombatTableDID;
+
+                CopyAppearanceFromPlayer(player);
+                CopyAttributesAndVitalsFromPlayer(player);
+                CopySkillsFromPlayer(player);
+                CopyVoidProjectileSpellsFromPlayer(player);
+                CopyEquipmentFromPlayer(player);
+                ApplyShadowCloneVisuals();
+
+                PaletteTemplate = ShadowClonePaletteTemplate;
+                Shade = ShadowCloneShade;
+                Translucency = ShadowCloneTranslucency;
+
+                EnqueueBroadcast(new GameMessageObjDescEvent(this));
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[ShadowClone] Failed to copy player {player.Name} onto {Name}: {ex}");
             }
         }
 
@@ -222,6 +258,35 @@ namespace ACE.Server.WorldObjects
             Biota.PropertiesSpellBook = new Dictionary<int, float>(p.Biota.PropertiesSpellBook);
         }
 
+        private void CopyVoidProjectileSpellsFromPlayer(Player p)
+        {
+            Biota.PropertiesSpellBook = new Dictionary<int, float>();
+
+            if (p.Biota.PropertiesSpellBook == null)
+                return;
+
+            foreach (var kv in p.Biota.PropertiesSpellBook)
+            {
+                var spell = new Spell((uint)kv.Key);
+                if (!IsShadowCloneVoidProjectileSpell(spell))
+                    continue;
+
+                Biota.PropertiesSpellBook[kv.Key] = kv.Value;
+            }
+        }
+
+        private static bool IsShadowCloneVoidProjectileSpell(Spell spell)
+        {
+            if (spell == null || spell.School != MagicSchool.VoidMagic || !spell.IsHarmful)
+                return false;
+
+            var spellType = SpellProjectile.GetProjectileSpellType(spell.Id);
+            return spellType == ProjectileSpellType.Bolt ||
+                   spellType == ProjectileSpellType.Streak ||
+                   spellType == ProjectileSpellType.Arc ||
+                   spellType == ProjectileSpellType.Ring;
+        }
+
         private void CopyEquipmentFromPlayer(Player p)
         {
             // Snapshot equipped items and recreate them on the simulacrum. Clones are tagged
@@ -253,6 +318,22 @@ namespace ACE.Server.WorldObjects
                 {
                     log.Warn($"[Simulacrum] Failed to clone equipment {src.Name} ({src.WeenieClassId}): {ex.Message}");
                 }
+            }
+        }
+
+        private void ApplyShadowCloneVisuals()
+        {
+            var armorSlots = EquipMask.Armor | EquipMask.Extremity | EquipMask.Clothing;
+
+            foreach (var item in EquippedObjects.Values)
+            {
+                var slot = item.CurrentWieldedLocation ?? item.ValidLocations;
+                if (slot == null || (slot.Value & armorSlots) == 0)
+                    continue;
+
+                item.PaletteTemplate = ShadowClonePaletteTemplate;
+                item.Shade = ShadowCloneShade;
+                item.Translucency = ShadowCloneTranslucency;
             }
         }
 

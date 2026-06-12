@@ -126,6 +126,7 @@ namespace ACE.Server.WorldObjects
                     }
 
                     TryLaunchRicochet(worldObject, sourcePlayer, targetCreature);
+                    TryLaunchDinnerwareBounces(worldObject, sourcePlayer, targetCreature);
                 }
             }
 
@@ -208,6 +209,133 @@ namespace ACE.Server.WorldObjects
             sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
                 $"Your dart skips toward {bounceTarget.Name}.",
                 ChatMessageType.CombatSelf));
+        }
+
+        private static void TryLaunchDinnerwareBounces(WorldObject projectile, Player sourcePlayer, Creature firstTarget)
+        {
+            if (sourcePlayer == null || firstTarget == null)
+                return;
+
+            if (projectile.GetProperty(PropertyBool.IsDinnerwareBounceProjectile) == true)
+                return;
+
+            var ammo = projectile.ProjectileAmmo;
+            if (ammo == null)
+                return;
+
+            var dinnerwareSource = projectile.GetProperty(PropertyBool.IsDinnerwareWeapon) == true
+                ? projectile
+                : ammo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true
+                    ? ammo
+                    : projectile.ProjectileLauncher?.GetProperty(PropertyBool.IsDinnerwareWeapon) == true
+                        ? projectile.ProjectileLauncher
+                        : null;
+
+            if (dinnerwareSource == null)
+                return;
+
+            var procChance = dinnerwareSource.GetProperty(PropertyFloat.DinnerwareSpinProcChance) ?? 0.0;
+            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                return;
+
+            var radius = Math.Max(1.0f, (float)(dinnerwareSource.GetProperty(PropertyFloat.DinnerwareSpinRadius) ?? 5.0));
+            var radiusSq = radius * radius;
+
+            var landblock = firstTarget.CurrentLandblock ?? sourcePlayer.CurrentLandblock;
+            if (landblock == null || firstTarget.Location == null)
+                return;
+
+            var firstLandblock = firstTarget.Location.Cell & 0xFFFF0000;
+            var candidates = landblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Creature>()
+                .Where(c => c != null
+                            && c != firstTarget
+                            && c != sourcePlayer
+                            && c.IsAlive
+                            && c.Attackable
+                            && c.IsMonster
+                            && !c.Teleporting
+                            && c.Location != null
+                            && (c.Location.Cell & 0xFFFF0000) == firstLandblock)
+                .ToList();
+
+            var bounceTargets = new System.Collections.Generic.List<Creature>();
+            var currentTarget = firstTarget;
+            while (bounceTargets.Count < 4 && currentTarget?.Location != null)
+            {
+                var nextTarget = candidates
+                    .Where(c => !bounceTargets.Contains(c)
+                                && currentTarget.Location.SquaredDistanceTo(c.Location) <= radiusSq)
+                    .OrderBy(c => currentTarget.Location.SquaredDistanceTo(c.Location))
+                    .FirstOrDefault();
+
+                if (nextTarget == null)
+                    break;
+
+                bounceTargets.Add(nextTarget);
+                currentTarget = nextTarget;
+            }
+
+            if (bounceTargets.Count == 0)
+                return;
+
+            var damageScales = new[] { 0.50, 0.25, 0.10, 0.05 };
+            var launchedNames = new System.Collections.Generic.List<string>();
+            var actionChain = new ActionChain();
+            Creature previousTarget = firstTarget;
+
+            for (var i = 0; i < bounceTargets.Count; i++)
+            {
+                var bounceTarget = bounceTargets[i];
+                var bounceOrigin = previousTarget;
+                var damageScale = damageScales[Math.Min(i, damageScales.Length - 1)];
+                var delay = 0.16f * i;
+
+                if (delay > 0)
+                    actionChain.AddDelaySeconds(delay);
+
+                actionChain.AddAction(sourcePlayer, () =>
+                {
+                    if (sourcePlayer.IsDead || bounceOrigin == null || bounceTarget == null || !bounceTarget.IsAlive || bounceOrigin.Location == null || bounceTarget.Location == null)
+                        return;
+
+                    var origin = bounceOrigin.Location.Pos;
+                    origin.Z += bounceOrigin.Height + 0.25f;
+
+                    var dest = bounceTarget.Location.Pos;
+                    dest.Z += bounceTarget.Height * 0.75f;
+
+                    var dir = Vector3.Normalize(dest - origin);
+                    if (!dir.IsValid())
+                        return;
+
+                    var angle = Math.Atan2(-dir.X, dir.Y);
+                    var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (float)angle);
+                    var velocity = sourcePlayer.GetProjectileVelocity(bounceTarget, origin, dir, dest, sourcePlayer.GetProjectileSpeed(), out _);
+                    if (!velocity.IsValid() || velocity == Vector3.Zero)
+                        return;
+
+                    bounceOrigin.ApplyVisualEffects(PlayScript.ProjectileCollision);
+                    var bounce = sourcePlayer.LaunchProjectile(projectile.ProjectileLauncher ?? ammo, ammo, bounceTarget, origin, rotation, velocity);
+                    if (bounce == null)
+                        return;
+
+                    bounce.SetProperty(PropertyBool.IsDinnerwareBounceProjectile, true);
+                    bounce.DamageMod = (bounce.DamageMod ?? 1.0) * damageScale;
+                });
+
+                launchedNames.Add($"{bounceTarget.Name} ({damageScale:P0})");
+                previousTarget = bounceTarget;
+            }
+
+            if (launchedNames.Count > 0)
+            {
+                firstTarget.ApplyVisualEffects(PlayScript.ProjectileCollision);
+                sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your dinnerware caroms toward {string.Join(", ", launchedNames)}.",
+                    ChatMessageType.CombatSelf));
+                actionChain.EnqueueChain();
+            }
         }
 
         public static void OnCollideEnvironment(WorldObject worldObject)

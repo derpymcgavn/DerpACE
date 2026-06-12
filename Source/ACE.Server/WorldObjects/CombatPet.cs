@@ -142,7 +142,7 @@ namespace ACE.Server.WorldObjects
 
         private Creature GetOwnerPreferredTarget()
         {
-            if (!PropertyManager.GetBool("pet_attack_selected_enabled").Item || P_PetOwner == null)
+            if ((!_isShadowClone && !PropertyManager.GetBool("pet_attack_selected_enabled").Item) || P_PetOwner == null)
                 return null;
 
             return (P_PetOwner.AttackTarget as Creature)

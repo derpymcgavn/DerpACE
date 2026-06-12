@@ -22,7 +22,6 @@ namespace ACE.Server.Factories.Tables.Wcids
             WeenieClassName.dinnerplate,
             WeenieClassName.stoup,
             WeenieClassName.tankard,
-            WeenieClassName.discus,
             (WeenieClassName)420498,
         };
 
@@ -40,7 +39,6 @@ namespace ACE.Server.Factories.Tables.Wcids
             ( WeenieClassName.dinnerplate,    0.08f ),
             ( WeenieClassName.stoup,          0.13f ),
             ( WeenieClassName.tankard,        0.11f ),
-            ( WeenieClassName.discus,         0.02f ),
             ( (WeenieClassName)420498,        0.02f ),
         };
 
@@ -58,7 +56,6 @@ namespace ACE.Server.Factories.Tables.Wcids
             ( WeenieClassName.dinnerplate,    0.08f ),
             ( WeenieClassName.stoup,          0.05f ),
             ( WeenieClassName.tankard,        0.05f ),
-            ( WeenieClassName.discus,         0.02f ),
             ( (WeenieClassName)420498,        0.02f ),
         };
 
@@ -76,7 +73,6 @@ namespace ACE.Server.Factories.Tables.Wcids
             ( WeenieClassName.dinnerplate,    0.13f ),
             ( WeenieClassName.stoup,          0.00f ),
             ( WeenieClassName.tankard,        0.00f ),
-            ( WeenieClassName.discus,         0.03f ),
             ( (WeenieClassName)420498,        0.02f ),
         };
 

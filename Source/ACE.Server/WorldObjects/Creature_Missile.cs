@@ -170,6 +170,23 @@ namespace ACE.Server.WorldObjects
             projectile.IconOverlayId = ammo.IconOverlayId;
             projectile.UiEffects = ammo.UiEffects;
 
+            if (ammo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true)
+            {
+                projectile.SetProperty(PropertyBool.IsDinnerwareWeapon, true);
+
+                var dinnerwareProcChance = ammo.GetProperty(PropertyFloat.DinnerwareSpinProcChance);
+                if (dinnerwareProcChance.HasValue)
+                    projectile.SetProperty(PropertyFloat.DinnerwareSpinProcChance, dinnerwareProcChance.Value);
+
+                var dinnerwareDamageScale = ammo.GetProperty(PropertyFloat.DinnerwareSpinDamageScale);
+                if (dinnerwareDamageScale.HasValue)
+                    projectile.SetProperty(PropertyFloat.DinnerwareSpinDamageScale, dinnerwareDamageScale.Value);
+
+                var dinnerwareRadius = ammo.GetProperty(PropertyFloat.DinnerwareSpinRadius);
+                if (dinnerwareRadius.HasValue)
+                    projectile.SetProperty(PropertyFloat.DinnerwareSpinRadius, dinnerwareRadius.Value);
+            }
+
             if (ammo.PaletteTemplate.HasValue)
                 projectile.PaletteTemplate = ammo.PaletteTemplate;
             else

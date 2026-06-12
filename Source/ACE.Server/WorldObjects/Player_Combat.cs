@@ -36,6 +36,7 @@ namespace ACE.Server.WorldObjects
         // Polebreaker Staff (DerpACE) — transient consecutive-hit chain state (resets on logout/restart)
         public uint LastPolebreakerTargetGuid { get; set; } = 0;
         public int PolebreakerStackCount { get; set; } = 0;
+        public DateTime PolebreakerBreakGuardCooldownUntil { get; set; } = DateTime.MinValue;
 
         // DerpACE Nomad — recursion guard so Cleave Flurry extra strikes don't proc themselves
         private bool _nomadProcInProgress;
@@ -50,6 +51,10 @@ namespace ACE.Server.WorldObjects
         private const float UnarmedCriticalBoostDamageMultiplier = 0.35f;
         private const double UnarmedStunSeconds = 1.25;
         private const float UnarmedKnockbackDistance = 2.0f;
+        private const float PolebreakerPowerThreshold = 0.70f;
+        private const uint PolebreakerBreakGuardPenalty = 15;
+        private const int PolebreakerBreakGuardDuration = 5;
+        private const int PolebreakerBreakGuardCooldown = 12;
 
         // DerpACE: Unarmed combo system for tracking punch/kick combos
         private UnarmedComboSystem _unarmedComboSystem;
@@ -352,9 +357,7 @@ namespace ACE.Server.WorldObjects
                 thievesDaggerBonus = (uint)Math.Round(bonus);
             }
 
-            // Fencer's Blade: armor pierce proc — deals a portion of what armor blocked as bonus damage
             // Quickening Dagger: successful dagger hits can briefly speed up attack animations.
-            bool quickeningDaggerProc = false;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsQuickeningDagger) == true
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger))
@@ -367,7 +370,6 @@ namespace ACE.Server.WorldObjects
                     if (speedMultiplier > 1.0f && duration > 0.0f)
                     {
                         GrantQuickeningDaggerAttackSpeedBoost(speedMultiplier, duration);
-                        quickeningDaggerProc = true;
                     }
                 }
             }
@@ -604,60 +606,6 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            // Dinnerware: spinning plates/discs can clip nearby enemies on the follow-through.
-            uint dinnerwareSplashHits = 0;
-            uint dinnerwareSplashTotal = 0;
-            if (damageEvent.HasDamage
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Thrown))
-            {
-                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance) ?? 0.0;
-                if (procChance > 0.0 && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
-                {
-                    var splashScale = Math.Clamp((float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale) ?? 0.0), 0.05f, 0.35f);
-                    var splashRadius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius) ?? 5.0));
-                    var radiusSq = splashRadius * splashRadius;
-
-                    var splashDamage = Math.Max(1.0f, damageEvent.Damage * splashScale);
-                    var splashTargets = new List<Creature>();
-                    var worldObjects = CurrentLandblock?.GetAllWorldObjectsForDiagnostics();
-                    if (worldObjects != null && target.Location != null)
-                    {
-                        splashTargets = worldObjects
-                            .OfType<Creature>()
-                            .Where(c => c != null
-                                        && c != target
-                                        && c != this
-                                        && c.IsAlive
-                                        && c.Attackable
-                                        && c.IsMonster
-                                        && !c.Teleporting
-                                        && c.Location != null
-                                        && target.Location.SquaredDistanceTo(c.Location) <= radiusSq)
-                            .OrderBy(c => target.Location.SquaredDistanceTo(c.Location))
-                            .Take(3)
-                            .ToList();
-                    }
-
-                    foreach (var splashTarget in splashTargets)
-                    {
-                        splashTarget.TakeDamage(this, damageEvent.DamageType, splashDamage, false);
-                        splashTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
-                        dinnerwareSplashHits++;
-                        dinnerwareSplashTotal += (uint)Math.Round(splashDamage);
-                    }
-
-                    if (dinnerwareSplashHits > 0)
-                    {
-                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
-                        if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
-                            Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                $"Your dinnerware spins through {dinnerwareSplashHits} nearby foe(s), dealing {dinnerwareSplashTotal} splash damage.",
-                                ChatMessageType.CombatSelf));
-                    }
-                }
-            }
-
             // Stalker's Bow: opening-shot proc - first time this attacker hits a target, roll a chance for bonus damage (see @lootconfig)
             // Only applies to Bow weapon type
             uint stalkerBonusApplied = 0;
@@ -729,14 +677,18 @@ namespace ACE.Server.WorldObjects
             // Applies to flagged staff weapon types.
             uint polebreakerBonus = 0;
             int polebreakerStacks = 0;
+            uint polebreakerBreakGuardPenalty = 0;
+            int polebreakerBreakGuardDuration = 0;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Staff))
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Staff)
+                && PowerLevel >= PolebreakerPowerThreshold)
             {
                 var stackPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerStackBonus) ?? 0.0;
                 var maxStacks = (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks) ?? 0.0);
                 if (stackPct > 0 && maxStacks > 0)
                 {
+                    var now = DateTime.UtcNow;
                     if (LastPolebreakerTargetGuid == target.Guid.Full)
                         PolebreakerStackCount = Math.Min(PolebreakerStackCount + 1, maxStacks);
                     else
@@ -756,11 +708,33 @@ namespace ACE.Server.WorldObjects
                             polebreakerBonus = (uint)Math.Round(bonus);
                         }
                     }
+
+                    if (polebreakerStacks >= maxStacks && now >= PolebreakerBreakGuardCooldownUntil)
+                    {
+                        polebreakerBreakGuardPenalty = PolebreakerBreakGuardPenalty;
+                        polebreakerBreakGuardDuration = PolebreakerBreakGuardDuration;
+                        var newUntil = now.AddSeconds(polebreakerBreakGuardDuration);
+
+                        if (target.ConcussedUntil > now && target.ConcussedPenalty >= polebreakerBreakGuardPenalty)
+                            target.ConcussedUntil = newUntil;
+                        else
+                        {
+                            target.ConcussedPenalty = polebreakerBreakGuardPenalty;
+                            target.ConcussedUntil = newUntil;
+                        }
+
+                        PolebreakerBreakGuardCooldownUntil = now.AddSeconds(PolebreakerBreakGuardCooldown);
+                        PolebreakerStackCount = 1;
+                        polebreakerStacks = maxStacks;
+
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
+                        PlayPolebreakerBreakGuardSlam();
+                    }
                 }
             }
             else if (damageEvent.HasDamage)
             {
-                // any non-Polebreaker hit breaks the chain
+                // any non-qualifying hit breaks the rhythm
                 LastPolebreakerTargetGuid = 0;
                 PolebreakerStackCount = 0;
             }
@@ -923,15 +897,7 @@ namespace ACE.Server.WorldObjects
                 {
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownRed);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Your point finds the seam in {target.Name}'s armor, drawing {fencerPierceBonus} more blood.",
-                        ChatMessageType.CombatSelf));
-                }
-
-                if (quickeningDaggerProc)
-                {
-                    ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillUpYellow);
-                    Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        "Your dagger quickens in your hand.",
+                        $"You exploit an opening in {target.Name}'s armor, drawing {fencerPierceBonus} more blood.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -982,6 +948,13 @@ namespace ACE.Server.WorldObjects
                     var polebreakerName = damageEvent.Weapon?.Name ?? "weapon";
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
                         $"Your {polebreakerName} finds its rhythm against {target.Name} - strike {polebreakerStacks} draws {polebreakerBonus} more.",
+                        ChatMessageType.CombatSelf));
+                }
+
+                if (polebreakerBreakGuardPenalty > 0)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"You bring the staff down in an overhead slam, breaking {target.Name}'s guard by {polebreakerBreakGuardPenalty} for {polebreakerBreakGuardDuration} seconds.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -1266,6 +1239,48 @@ namespace ACE.Server.WorldObjects
             var difficulty = creatureAttacker.GetCreatureSkill(creatureAttacker.GetCurrentWeaponSkill()).Current;
             // attackMod?
             Proficiency.OnSuccessUse(this, defenseSkill, difficulty);
+
+            if (attackType == CombatType.Melee)
+            {
+                var fencerWeapon = GetEquippedWeapon();
+                var evadeBase = Math.Max(8.0f, fencerWeapon?.Damage ?? 0);
+                TryProcFencerRiposte(creatureAttacker, evadeBase, true);
+            }
+        }
+
+        private void TryProcFencerRiposte(Creature attacker, float baseAmount, bool fromEvade)
+        {
+            if (attacker == null || !attacker.IsAlive || baseAmount <= 0)
+                return;
+
+            var fencerWeapon = GetEquippedWeapon();
+            if (fencerWeapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) != true
+                || !WeaponIsType(fencerWeapon, WeaponType.Sword))
+                return;
+
+            var riposteChance = fencerWeapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0;
+            if (riposteChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= riposteChance)
+                return;
+
+            var ripostePct = Math.Clamp((float)(fencerWeapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.15), 0.05f, 0.25f);
+            var riposteAmount = (float)Math.Round(baseAmount * ripostePct);
+            var cap = attacker is Player ? 15.0f : 60.0f;
+            riposteAmount = Math.Min(riposteAmount, cap);
+
+            if (riposteAmount < 1.0f)
+                return;
+
+            attacker.TakeDamage(this, DamageType.Pierce, riposteAmount);
+            attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
+            ApplyVisualEffects(fromEvade ? ACE.Entity.Enum.PlayScript.SkillUpPurple : ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
+
+            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+            {
+                var cue = fromEvade ? "evade and riposte" : "turn the blow aside and riposte";
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"You {cue}, piercing {attacker.Name} for {(uint)riposteAmount} damage [Fencer's Blade].",
+                    ChatMessageType.CombatSelf));
+            }
         }
 
         public BaseDamageMod GetBaseDamageMod(WorldObject damageSource)
@@ -1353,7 +1368,42 @@ namespace ACE.Server.WorldObjects
         private void GrantQuickeningDaggerAttackSpeedBoost(float speedMultiplier, float durationSeconds)
         {
             _quickeningDaggerSpeedMultiplier = Math.Clamp(speedMultiplier, 1.0f, 1.35f);
-            _quickeningDaggerBoostUntil = DateTime.UtcNow.AddSeconds(Math.Clamp(durationSeconds, 1.0f, 12.0f));
+            var clampedDuration = Math.Clamp(durationSeconds, 1.0f, 12.0f);
+            _quickeningDaggerBoostUntil = DateTime.UtcNow.AddSeconds(clampedDuration);
+
+            var expiresAt = _quickeningDaggerBoostUntil;
+            var expireChain = new ActionChain();
+            expireChain.AddDelaySeconds(clampedDuration);
+            expireChain.AddAction(this, () =>
+            {
+                if (_quickeningDaggerBoostUntil != expiresAt || DateTime.UtcNow < expiresAt || IsDead)
+                    return;
+
+                _quickeningDaggerSpeedMultiplier = 1.0f;
+                ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownYellow);
+
+                if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "The quickness fades from your dagger hand.",
+                        ChatMessageType.CombatSelf));
+            });
+            expireChain.EnqueueChain();
+        }
+
+        private void PlayPolebreakerBreakGuardSlam()
+        {
+            if (IsDead || CurrentMotionState == null)
+                return;
+
+            var returnStance = CurrentMotionState.Stance;
+            if (returnStance == MotionStance.Invalid)
+                returnStance = MotionStance.TwoHandedStaffCombat;
+
+            var actionChain = new ActionChain();
+            EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.Ready, (MotionCommand)returnStance, 1.0f, 0.35f);
+            EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.Fishing, MotionCommand.Ready, 1.0f, 0.55f);
+            EnqueueMotion_Force(actionChain, returnStance, MotionCommand.Ready, MotionCommand.NonCombat, 1.0f, 0.35f);
+            actionChain.EnqueueChain();
         }
 
         private float GetUnarmedComboAttackSpeedMultiplier()
@@ -2004,29 +2054,11 @@ namespace ACE.Server.WorldObjects
             // DerpACE: helper handles cloak + (when proc_on_hit_enabled) every other equipped proc item.
             Cloak.TryProcAllEquipped(this, source, equippedCloak, percent);
 
-            // Fencer's Blade: deflect proc — reflects 10% of incoming damage back at the attacker
-            if (source is Creature fencerAttacker && fencerAttacker.IsAlive && damageTaken > 0)
-            {
-                var fencerWeapon = GetEquippedWeapon();
-                if (fencerWeapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true)
-                {
-                    var deflectChance = fencerWeapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0;
-                    if (ThreadSafeRandom.Next(0.0f, 1.0f) < deflectChance)
-                    {
-                        var reflectAmount = (float)Math.Round(damageTaken * 0.10);
-                        if (reflectAmount >= 1.0f)
-                        {
-                            fencerAttacker.TakeDamage(this, DamageType.Pierce, reflectAmount);
-                            fencerAttacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
-                            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.AetheriaLevelUp);
-                            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
-                                Session.Network.EnqueueSend(new GameMessageSystemChat(
-                                    $"Deflected! {(uint)reflectAmount} damage redirected at {fencerAttacker.Name} [Fencer's Blade]",
-                                    ChatMessageType.CombatSelf));
-                        }
-                    }
-                }
-            }
+            if (source is Creature fencerRiposteAttacker
+                && fencerRiposteAttacker.IsAlive
+                && damageTaken > 0
+                && (damageType & (DamageType.Slash | DamageType.Pierce | DamageType.Bludgeon)) != 0)
+                TryProcFencerRiposte(fencerRiposteAttacker, damageTaken, false);
 
             // if player attacker, update PK timer
             if (source is Player attacker)

@@ -23,7 +23,8 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Bow,      0.04f ),
             ( TreasureWeaponType.Crossbow, 0.04f ),
             ( TreasureWeaponType.Atlatl,   0.03f ),
-            ( TreasureWeaponType.ThrownDinnerware, 0.01f ),
+            ( TreasureWeaponType.ThrownDinnerware, 0.0075f ),
+            ( TreasureWeaponType.Discus,   0.0025f ),
             ( TreasureWeaponType.Caster,   0.04f ),
         };
 
@@ -42,7 +43,8 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Bow,      0.09f ),
             ( TreasureWeaponType.Crossbow, 0.09f ),
             ( TreasureWeaponType.Atlatl,   0.06f ),
-            ( TreasureWeaponType.ThrownDinnerware, 0.03f ),
+            ( TreasureWeaponType.ThrownDinnerware, 0.02f ),
+            ( TreasureWeaponType.Discus,   0.01f ),
             ( TreasureWeaponType.Caster,   0.10f ),
         };
 
@@ -64,7 +66,8 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Bow,             0.07f ),
             ( TreasureWeaponType.Crossbow,        0.07f ),
             ( TreasureWeaponType.Atlatl,          0.04f ),
-            ( TreasureWeaponType.ThrownDinnerware, 0.02f ),
+            ( TreasureWeaponType.ThrownDinnerware, 0.015f ),
+            ( TreasureWeaponType.Discus,          0.005f ),
             ( TreasureWeaponType.Caster,          0.07f ),
             ( TreasureWeaponType.TwoHandedWeapon, 0.10f ),      // see TreasureWeaponType for an explanation of why this is here,
                                                                 // and not deeper in WeaponWcids.cs
@@ -95,7 +98,8 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Bow,             0.25f ),
             ( TreasureWeaponType.Crossbow,        0.25f ),
             ( TreasureWeaponType.Atlatl,          0.25f ),
-            ( TreasureWeaponType.ThrownDinnerware, 0.25f ),
+            ( TreasureWeaponType.ThrownDinnerware, 0.15f ),
+            ( TreasureWeaponType.Discus,          0.10f ),
         };
 
         private static readonly List<ChanceTable<TreasureWeaponType>> weaponTiers = new List<ChanceTable<TreasureWeaponType>>()

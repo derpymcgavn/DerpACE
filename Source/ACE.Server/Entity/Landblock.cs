@@ -820,6 +820,15 @@ namespace ACE.Server.Entity
 
         private bool AddWorldObjectInternal(WorldObject wo)
         {
+            if (IsRemovedSwarmingRynthidMutatorSpawn(wo))
+            {
+                if (wo.Generator != null)
+                    wo.Generator.NotifySpawnFailure(wo);
+
+                wo.Destroy(false);
+                return false;
+            }
+
             if (LandblockManager.CurrentlyTickingLandblockGroupsMultiThreaded)
             {
                 if (CurrentLandblockGroup != null && CurrentLandblockGroup != LandblockManager.CurrentMultiThreadedTickingLandblockGroup.Value)
@@ -922,6 +931,22 @@ namespace ACE.Server.Entity
             }
 
             return true;
+        }
+
+        private static bool IsRemovedSwarmingRynthidMutatorSpawn(WorldObject wo)
+        {
+            if (wo == null || wo.WeenieType != WeenieType.Creature)
+                return false;
+
+            switch (wo.WeenieClassId)
+            {
+                case 51747: // Rynthid Minion of Rage
+                case 51757: // Raging Rynthid Sorcerer
+                case 51759: // Rynthid Sorcerer
+                    return wo.Name?.StartsWith("Swarming ", StringComparison.OrdinalIgnoreCase) == true;
+                default:
+                    return false;
+            }
         }
 
         public void RemoveWorldObject(ObjectGuid objectId, bool adjacencyMove = false, bool fromPickup = false, bool showError = true)

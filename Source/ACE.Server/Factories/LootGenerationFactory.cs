@@ -358,6 +358,7 @@ namespace ACE.Server.Factories
                             break;
 
                         case TreasureWeaponType.ThrownDinnerware:
+                        case TreasureWeaponType.Discus:
 
                             MutateDinnerware(wo, treasureDeath, isMagical, treasureRoll);
                             break;

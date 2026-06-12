@@ -97,6 +97,7 @@ namespace ACE.Server.Factories
                 case TreasureWeaponType.Bow:             return "bow";
                 case TreasureWeaponType.Crossbow:        return "crossbow";
                 case TreasureWeaponType.Atlatl:          return "atlatl";
+                case TreasureWeaponType.Discus:          return "discus";
                 default:                                 return "weapon";
             }
         }
@@ -137,7 +138,7 @@ namespace ACE.Server.Factories
             if (profile == null || profile.Tier < minTier)
                 return;
 
-            // Don't overwrite an existing proc (Archmagi, unarmed elemental, etc.)
+            // Don't overwrite an existing proc (Archmagi, item-native procs, etc.)
             if (wo.ProcSpell.HasValue && wo.ProcSpell.Value != 0)
                 return;
 
@@ -157,7 +158,6 @@ namespace ACE.Server.Factories
                 DamageType.Cold     => ACE.Entity.Enum.SpellId.FrostBolt3,
                 DamageType.Acid     => ACE.Entity.Enum.SpellId.AcidBlast3,
                 DamageType.Electric => ACE.Entity.Enum.SpellId.LightningBlast3,
-                DamageType.Nether   => ACE.Entity.Enum.SpellId.NetherBlast3,
                 _                   => null
             };
 
@@ -172,13 +172,34 @@ namespace ACE.Server.Factories
             wo.ProcSpellRate = procRate;
             wo.ProcSpellSelfTargeted = false;
 
+            ApplyLootUiEffects(wo, wo.W_DamageType, true);
+
+            wo.IconOverlayId = wo.W_DamageType switch
+            {
+                DamageType.Acid     => 0x0600667Bu,
+                DamageType.Electric => 0x06006680u,
+                DamageType.Fire     => 0x06005B3Au,
+                DamageType.Cold     => 0x06005B3Eu,
+                _                   => wo.IconOverlayId
+            };
+
+            var nameSuffix = wo.W_DamageType switch
+            {
+                DamageType.Fire     => "of Cinders",
+                DamageType.Cold     => "of Rime",
+                DamageType.Acid     => "of Vitriol",
+                DamageType.Electric => "of Tempests",
+                _                   => null
+            };
+            if (nameSuffix != null && (wo.Name == null || !wo.Name.EndsWith(nameSuffix, StringComparison.OrdinalIgnoreCase)))
+                wo.Name = wo.Name + " " + nameSuffix;
+
             var elemName = wo.W_DamageType switch
             {
                 DamageType.Fire     => "flame",
                 DamageType.Cold     => "frost",
                 DamageType.Acid     => "acid",
                 DamageType.Electric => "lightning",
-                DamageType.Nether   => "nether",
                 _                   => "elemental"
             };
 
@@ -441,6 +462,14 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling — each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
             }
 
+            if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true)
+            {
+                var fencerPierceProc = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc) ?? 0.0) * 100.0;
+                var fencerPiercePct = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.0) * 100.0;
+                var fencerRiposteChance = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0) * 100.0;
+                wo.LongDesc = GetLongDesc(wo) + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling -- each strike has a {fencerPierceProc:0}% chance to exploit an opening, dealing bonus damage equal to {fencerPiercePct:0}% of what the target's armor stopped. It also has a {fencerRiposteChance:0}% chance to riposte incoming melee pressure with a precise counterthrust.";
+            }
+
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
             // Bleed total damage = bleedPct% of the triggering hit, spread evenly across RavagerBleedTicks at RavagerBleedInterval seconds.
             // Two-handed axes get the bleed total scaled by RavagerTwoHandMult.
@@ -615,12 +644,12 @@ namespace ACE.Server.Factories
                 ApplyLootUiEffect(wo, UiEffects.BoostMana | UiEffects.BoostStamina);
 
                 var totalPct = stackPct * maxStacks;
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} finds a deadly rhythm — each consecutive hit on the same target adds +{stackPct}% bonus damage, stacking up to {maxStacks} times (+{totalPct}% at full stack). Switching targets or letting the target die resets the chain.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} finds a deadly rhythm -- attacks made at 70% power or higher add +{stackPct}% bonus damage on consecutive hits against the same target, stacking up to {maxStacks} times (+{totalPct}% at full stack). At full rhythm, Break Guard drives the staff down in an overhead slam, lowering the target's defense by 15 for 5 seconds, then resets the rhythm. Non-qualifying attacks, switching targets, or letting the target die resets the chain.";
             }
 
-            // Unarmed elemental cast-on-strike: configurable % of magical elemental fist weapons roll a proc (see @lootconfig).
-            // Proc rate is randomized between unarmed.procmin and unarmed.procmax to reflect weapon-to-weapon variation.
-            if (roll.WeaponType == TreasureWeaponType.Unarmed && isMagical
+            // Legacy unarmed-only elemental proc is disabled; universal elemental procs are rolled below.
+            // Kept in place for now so old tuning references can be retired separately.
+            if (false && roll.WeaponType == TreasureWeaponType.Unarmed && isMagical
                 && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.UnarmedElemDropChance)
             {
                 var elemSpell = wo.W_DamageType switch

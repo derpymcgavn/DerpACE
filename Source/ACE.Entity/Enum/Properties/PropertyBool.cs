@@ -248,5 +248,7 @@ namespace ACE.Entity.Enum.Properties
         IsDartflingerAtlatl              = 9053,
         IsDinnerwareWeapon               = 9054,
         IsQuickeningDagger               = 9055,
+        IsDinnerwareBounceProjectile     = 9056,
+        IsShadowCloneCaster              = 9057,
     }
 }

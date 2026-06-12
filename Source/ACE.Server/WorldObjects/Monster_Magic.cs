@@ -340,7 +340,10 @@ namespace ACE.Server.WorldObjects
                 case MagicSchool.WarMagic:
                 case MagicSchool.VoidMagic:
 
-                    HandleCastSpell(spell, target, caster);
+                    var damageModifier = this is CombatPet combatPet && combatPet.IsShadowClone
+                        ? combatPet.ShadowCloneDamageScale
+                        : 1.0f;
+                    HandleCastSpell(spell, target, caster, damageModifier: damageModifier);
                     break;
             }
         }

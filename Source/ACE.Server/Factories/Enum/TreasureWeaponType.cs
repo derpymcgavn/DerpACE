@@ -22,6 +22,7 @@ namespace ACE.Server.Factories.Enum
         Crossbow,
         Atlatl,
         ThrownDinnerware,
+        Discus,
 
         Caster,
 
@@ -77,6 +78,7 @@ namespace ACE.Server.Factories.Enum
                 case TreasureWeaponType.Crossbow:
                 case TreasureWeaponType.Atlatl:
                 case TreasureWeaponType.ThrownDinnerware:
+                case TreasureWeaponType.Discus:
                     return true;
             }
             return false;
@@ -123,6 +125,7 @@ namespace ACE.Server.Factories.Enum
                     return "crossbow";
                 case TreasureWeaponType.Atlatl:
                 case TreasureWeaponType.ThrownDinnerware:
+                case TreasureWeaponType.Discus:
                     return "atlatl";
                 case TreasureWeaponType.Caster:
                     return "caster";

@@ -22,7 +22,8 @@ namespace ACE.Server.Factories
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
 
-            if (treasureRoll.WeaponType == TreasureWeaponType.ThrownDinnerware)
+            if (treasureRoll.WeaponType == TreasureWeaponType.ThrownDinnerware
+                || treasureRoll.WeaponType == TreasureWeaponType.Discus)
                 MutateDinnerware(wo, profile, isMagical, treasureRoll);
             else
                 MutateMissileWeapon(wo, profile, isMagical, treasureRoll);
@@ -170,6 +171,40 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
+            // Reaper's Atlatl: atlatl-only kill-fed sustain. Separate from Dartflinger.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ReaperAtlatlEnabled
+                && TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                ACE.Server.Managers.DerpACEConfig.ReaperAtlatlDropChance,
+                ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier,
+                roll.WeaponType == TreasureWeaponType.Atlatl,
+                "reaper"))
+            {
+                var procPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.ReaperProcMin,
+                    ACE.Server.Managers.DerpACEConfig.ReaperProcMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier);
+                var healPct = RollTierScaledInt(
+                    ACE.Server.Managers.DerpACEConfig.ReaperHealMin,
+                    ACE.Server.Managers.DerpACEConfig.ReaperHealMax,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.ReaperAtlatlMinTier);
+                if (procPct < 1) procPct = 1;
+                if (healPct < 1) healPct = 1;
+
+                wo.Name = wo.Name + " of the Reaper";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc, procPct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct, healPct / 100.0);
+                wo.IconOverlayId = 0x0600285Fu;
+                ApplyLootUiEffect(wo, UiEffects.Nether);
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} feeds on endings -- killing blows have a {procPct}% chance to restore {healPct}% of your maximum health.";
+            }
+
             // Dartflinger: configurable chance on T6+ atlatls to bounce a visible dart
             // into another nearby target after a successful hit (see @lootconfig).
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.RicochetAtlatlEnabled
@@ -179,7 +214,8 @@ namespace ACE.Server.Factories
                 ref specialModifierApplied,
                 ACE.Server.Managers.DerpACEConfig.RicochetAtlatlDropChance,
                 ACE.Server.Managers.DerpACEConfig.RicochetAtlatlMinTier,
-                roll.WeaponType == TreasureWeaponType.Atlatl,
+                roll.WeaponType == TreasureWeaponType.Atlatl
+                    && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl) != true,
                 "dartflinger", "ricochet"))
             {
                 var procPct = RollTierScaledInt(

@@ -319,6 +319,16 @@ namespace ACE.Server.WorldObjects
                 else
                 {
                     DamageTarget(creatureTarget, damage.Value, critical, critDefended, overpower);
+
+                    if ((Spell.DamageType == DamageType.Nether || Spell.School == MagicSchool.VoidMagic) && player != null && targetPlayer == null)
+                    {
+                        var shadowCloneCaster = ProjectileLauncher?.GetProperty(PropertyBool.IsShadowCloneCaster) == true
+                            ? ProjectileLauncher
+                            : player.GetEquippedWand();
+
+                        if (shadowCloneCaster?.GetProperty(PropertyBool.IsShadowCloneCaster) == true)
+                            player.TryProcShadowCloneCaster(shadowCloneCaster, creatureTarget);
+                    }
                 }
 
                 // if this SpellProjectile has a TargetEffect, play it on successful hit
@@ -696,6 +706,7 @@ namespace ACE.Server.WorldObjects
 
             var sourceCreature = ProjectileSource as Creature;
             var sourcePlayer = ProjectileSource as Player;
+            var sourcePetOwner = sourcePlayer == null && ProjectileSource is CombatPet combatPet ? combatPet.P_PetOwner : null;
 
             var pkBattle = sourcePlayer != null && targetPlayer != null;
 
@@ -825,6 +836,14 @@ namespace ACE.Server.WorldObjects
 
                     if (!sourcePlayer.SquelchManager.Squelches.Contains(target, ChatMessageType.Magic))
                         sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(attackerMsg, ChatMessageType.Magic));
+                }
+                else if (sourcePetOwner != null)
+                {
+                    var critProt = critDefended ? " Their critical hit was avoided with augmentation!" : "";
+                    var attackerMsg = $"{critMsg}{overpowerMsg}Your shadow {verb} {target.Name} for {amount} points with {Spell.Name}.{critProt}";
+
+                    if (!sourcePetOwner.SquelchManager.Squelches.Contains(target, ChatMessageType.Magic))
+                        sourcePetOwner.Session?.Network.EnqueueSend(new GameMessageSystemChat(attackerMsg, ChatMessageType.Magic));
                 }
 
                 if (targetPlayer != null)

@@ -1019,7 +1019,7 @@ namespace ACE.Server.WorldObjects
             }
 
             var itemCaster = this is Creature ? null : this;
-            var projectileOrigin = sourceRingAtTarget && !selfTarget && target != null && SpellProjectile.GetProjectileSpellType(spell.Id) == ProjectileSpellType.Ring
+            var projectileOrigin = !selfTarget && target != null && SpellProjectile.GetProjectileSpellType(spell.Id) == ProjectileSpellType.Ring
                 ? target
                 : null;
 
@@ -1033,7 +1033,7 @@ namespace ACE.Server.WorldObjects
                 attacker.TryCastSpell_WithRedirects(spell, target, itemCaster, itemCaster, true, true);
             }
             else
-                attacker.TryCastSpell(spell, target, itemCaster, itemCaster, true, true);
+                attacker.TryCastSpell(spell, target, itemCaster, itemCaster, true, true, true, 1.0f, projectileOrigin);
         }
 
         private bool? isMasterable;

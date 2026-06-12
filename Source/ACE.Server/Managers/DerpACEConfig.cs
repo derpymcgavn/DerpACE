@@ -122,11 +122,11 @@ namespace ACE.Server.Managers
         // Hierophant Caster (support life-staff variant of Martyr Staff)
         // ──────────────────────────────────────────────────────────────────────
 
-        /// <summary>Chance per eligible life caster (e.g. Martyr Staff) to roll the Hierophant variant. Default 0.10 = 10%.</summary>
-        public static float HierophantDropChance { get; set; } = 0.10f;
+        /// <summary>Chance per eligible life caster (e.g. Martyr Staff) to roll the Hierophant variant. Default 0.04 = 4%.</summary>
+        public static float HierophantDropChance { get; set; } = 0.04f;
 
-        /// <summary>Minimum treasure tier required. Default 2.</summary>
-        public static int HierophantMinTier { get; set; } = 2;
+        /// <summary>Minimum treasure tier required. Default 5.</summary>
+        public static int HierophantMinTier { get; set; } = 5;
 
         /// <summary>Minimum heal-boost multiplier rolled at loot time (added to 1.0). Default 0.01 = +1%.</summary>
         public static float HierophantHealBoostMin { get; set; } = 0.01f;
@@ -140,8 +140,8 @@ namespace ACE.Server.Managers
         /// <summary>Minimum HoT magnitude rolled at loot time (fraction of target MaxHealth granted over the duration). Default 0.01 = 1%.</summary>
         public static float HierophantHotPctMin { get; set; } = 0.01f;
 
-        /// <summary>Maximum HoT magnitude rolled at loot time. Default 0.25 = 25%.</summary>
-        public static float HierophantHotPctMax { get; set; } = 0.25f;
+        /// <summary>Maximum HoT magnitude rolled at loot time. Default 0.15 = 15%.</summary>
+        public static float HierophantHotPctMax { get; set; } = 0.15f;
 
         /// <summary>Total HoT duration in seconds.</summary>
         public static float HierophantHotDurationSeconds { get; set; } = 12.0f;
@@ -149,8 +149,8 @@ namespace ACE.Server.Managers
         /// <summary>HoT tick interval in seconds.</summary>
         public static float HierophantHotTickInterval { get; set; } = 3.0f;
 
-        /// <summary>Bonus fellowship-echo heal as fraction of the primary heal applied to each fellow-in-range. Default 0.20 = 20%.</summary>
-        public static float HierophantFellowEchoPct { get; set; } = 0.20f;
+        /// <summary>Bonus fellowship-echo heal as fraction of the primary heal applied to each fellow-in-range. Default 0.12 = 12%.</summary>
+        public static float HierophantFellowEchoPct { get; set; } = 0.12f;
 
         /// <summary>Maximum range (meters) within which fellowship members receive the echo heal. Default 30.</summary>
         public static float HierophantFellowEchoRange { get; set; } = 30.0f;
@@ -233,23 +233,23 @@ namespace ACE.Server.Managers
         /// <summary>Minimum treasure tier required. Default 2.</summary>
         public static int FencerBladeMinTier { get; set; } = 5;
 
-        /// <summary>Minimum armor pierce % rolled at loot time (integer). Default 1.</summary>
-        public static int FencerPierceMin { get; set; } = 2;
+        /// <summary>Minimum exploit-opening % rolled at loot time (integer). Default 12.</summary>
+        public static int FencerPierceMin { get; set; } = 12;
 
-        /// <summary>Maximum armor pierce % rolled at loot time (integer). Default 5.</summary>
-        public static int FencerPierceMax { get; set; } = 8;
+        /// <summary>Maximum exploit-opening % rolled at loot time (integer). Default 20.</summary>
+        public static int FencerPierceMax { get; set; } = 20;
 
-        /// <summary>Minimum pierce proc chance % rolled at loot time (integer). Default 1.</summary>
-        public static int FencerPierceProcMin { get; set; } = 2;
+        /// <summary>Minimum exploit-opening proc chance % rolled at loot time (integer). Default 8.</summary>
+        public static int FencerPierceProcMin { get; set; } = 8;
 
-        /// <summary>Maximum pierce proc chance % rolled at loot time (integer). Default 4.</summary>
-        public static int FencerPierceProcMax { get; set; } = 6;
+        /// <summary>Maximum exploit-opening proc chance % rolled at loot time (integer). Default 12.</summary>
+        public static int FencerPierceProcMax { get; set; } = 12;
 
-        /// <summary>Minimum deflect proc chance % rolled at loot time (integer). Default 1.</summary>
-        public static int FencerDeflectMin { get; set; } = 1;
+        /// <summary>Minimum riposte proc chance % rolled at loot time (integer). Default 4.</summary>
+        public static int FencerDeflectMin { get; set; } = 4;
 
-        /// <summary>Maximum deflect proc chance % rolled at loot time (integer). Default 2.</summary>
-        public static int FencerDeflectMax { get; set; } = 2;
+        /// <summary>Maximum riposte proc chance % rolled at loot time (integer). Default 8.</summary>
+        public static int FencerDeflectMax { get; set; } = 8;
 
         // ──────────────────────────────────────────────────────────────────────
         // Ravager's Axe (Axe / TwoHandedAxe)
@@ -369,17 +369,17 @@ namespace ACE.Server.Managers
         /// <summary>Minimum treasure tier required. Default 2.</summary>
         public static int PolebreakerMinTier { get; set; } = 5;
 
-        /// <summary>Minimum per-stack damage bonus % rolled at loot time (integer). Default 1.</summary>
-        public static int PolebreakerStackMin { get; set; } = 1;
+        /// <summary>Minimum per-stack damage bonus % rolled at loot time (integer). Default 3.</summary>
+        public static int PolebreakerStackMin { get; set; } = 3;
 
-        /// <summary>Maximum per-stack damage bonus % rolled at loot time (integer). Default 3.</summary>
-        public static int PolebreakerStackMax { get; set; } = 2;
+        /// <summary>Maximum per-stack damage bonus % rolled at loot time (integer). Default 5.</summary>
+        public static int PolebreakerStackMax { get; set; } = 5;
 
         /// <summary>Minimum max-stack count rolled at loot time (integer). Default 4.</summary>
-        public static int PolebreakerMaxStackMin { get; set; } = 3;
+        public static int PolebreakerMaxStackMin { get; set; } = 4;
 
         /// <summary>Maximum max-stack count rolled at loot time (integer). Default 6.</summary>
-        public static int PolebreakerMaxStackMax { get; set; } = 5;
+        public static int PolebreakerMaxStackMax { get; set; } = 6;
 
         /// <summary>Targeting weight added to the staff-wielder (stacking DPS pull). Default 0.2.</summary>
         public static float PolebreakerStaffAggroBonus { get; set; } = 0.2f;
