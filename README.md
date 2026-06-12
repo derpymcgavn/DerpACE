@@ -43,6 +43,64 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
+### Current Loot Mutator Specs (June 12, 2026)
+This section is the current operator-facing summary for lootgen mutators and commands. Older patch notes below are historical and may describe earlier balance values.
+
+#### Admin Commands
+| Command | Purpose |
+|---|---|
+| `@lootconfig list` | Prints runtime loot, mutator, armor, mob, and vendor tuning values. |
+| `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Example: `@lootconfig set sentinel.cooldown 14`. |
+| `@lootgen <weapon|shield> <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon or shield and can force a compatible mutator. Examples: `@lootgen weapon 7 mutator=discus`, `@lootgen shield 7 mutator=bashing`. |
+| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`. |
+| `testlootgen -info` | Console examples for bulk loot generation. |
+| `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
+
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `hierophant`; shields use `defender`, `thorns`, `bashing`.
+
+#### Weapon And Caster Mutators
+| Mutator | Eligible loot | Current effect |
+|---|---|---|
+| `thief` | Daggers | Requires specialized Sneak Attack. Sneak attacks can add bonus damage and open a hidden seam, reducing target defense briefly. Lowers monster targeting weight. |
+| `quickening` | Daggers | On hit, can speed the wielder's attack animation for a short duration. No start visual; expiration gives feedback. |
+| `fencer` | SwordMS: epee, rapier, schlager | Chance to recover part of armor-mitigated damage as bonus damage, plus a small riposte chance against incoming melee pressure. |
+| `ravager` | Axes and two-handed axes | Axes bleed over ticks. Hammer-named axe variants use a crushing guard/stamina hit instead. |
+| `warden` | Maces, jittes, two-handed maces | Chance to concuss the target, lowering effective defense for a short duration. |
+| `resolute` | Swords and two-handed swords | Critical hits can heal from damage dealt; killing blows give a small health/stamina burst. |
+| `polebreaker` | Staves | Hits at 70%+ power build same-target rhythm. At full rhythm, Break Guard plays a fast overhead slam, applies a defense penalty, resets rhythm, and starts a visible cooldown. |
+| `sentinel` | Spears and two-handed spears | Goldleaf Sentinel. Hits at configured power or higher build same-target poise. At full stacks, drains target stamina, returns part of it, gives short damage reduction, and starts a visible cooldown. |
+| `stalker` | Bows | First registered hit on a target can gain bonus damage. |
+| `breacher` | Crossbows | Always recovers a small part of armor-mitigated damage as bonus pierce damage. |
+| `dartflinger` | Dart flinger atlatl family only | Ricochet-style bounce behavior for dartflingers. Separate from standard atlatls. |
+| `reaper` | Standard atlatls only | Killing blows can restore a small percentage of max health. Does not roll on dartflingers. |
+| `dinnerware` | Throwable dinnerware | Banquet spin/bounce behavior. Projectiles visually bounce up to 5 targets with falling damage: 100%, 50%, 25%, 10%, 5%. |
+| `discus` | Discus WCID 8211 as missile loot | Most are plain discus. About 1 in 100 rolls become `Discus of the Warrior Princess's Call`, using dinnerware bounce behavior with discus combat log flavor at a 5-8% proc rate. Lootgen strips admin-added spell/proc/resistance/crit extras so damage stays in line with dinnerware. |
+| `archmagi` | Casters | Chance on successful cast to echo an additional same-family spell. |
+| `hierophant` | Life casters / Martyr staff family | Heal support caster with heal boost, HoT chance, fellowship echo, and healer aggro tuning. |
+| `shadowclone` | Void casters only | Umbral Mirror caster can summon a temporary shadow clone combat ally on a 120 second visible cooldown. Clone uses shadow visuals and void/ring style spell support. |
+| `blast` | Rare elemental weapon overlay | T5+ elemental weapons can rarely also roll a level-3 blast-on-strike proc. Nether is excluded from general caster/weapon blast rolls. Ring procs cast from the player toward the target location. |
+
+#### Shield Mutators
+| Mutator | Current effect |
+|---|---|
+| Defender | Adds monster targeting weight to the shield bearer. |
+| Thorns | Reflects a small percentage of damage actually taken on shield-blocked hits. Kept low to avoid runaway reflect builds. |
+| Bashing | Requires specialized Shield. On block, can deal shield-AL-scaled bash damage, push the attacker back 10 feet, and interrupt a monster spell windup with fizzle feedback. |
+
+#### Important `@lootconfig` Keys
+| Family | Keys |
+|---|---|
+| Thief | `thief.drop`, `thief.tier`, `thief.proc`, `thief.bonus`, `thief.aggro`, `thief.seampenalty`, `thief.seamduration` |
+| Goldleaf Sentinel | `sentinel.drop`, `sentinel.tier`, `sentinel.power`, `sentinel.stacks`, `sentinel.drain`, `sentinel.return`, `sentinel.cooldown`, `sentinel.poisedur`, `sentinel.poisedr`, `sentinel.aggro` |
+| Polebreaker | `polebreaker.drop`, `polebreaker.tier`, `polebreaker.stackmin`, `polebreaker.stackmax`, `polebreaker.maxstackmin`, `polebreaker.maxstackmax` |
+| Dinnerware / Discus | `dinnerware.drop`, `dinnerware.tier`, `dinnerware.spin`, `dinnerware.spintier`, `dinnerware.scale`, `dinnerware.radius` |
+| Dartflinger / Ricochet | `ricochet.drop`, `ricochet.tier`, `ricochet.procmin`, `ricochet.procmax`, `ricochet.scale`, `ricochet.radius` |
+| Quickening | `quickening.drop`, `quickening.tier`, `quickening.procmin`, `quickening.procmax`, `quickening.speedmin`, `quickening.speedmax`, `quickening.durmin`, `quickening.durmax` |
+| Elemental blast | `blast.mintier`, `blast.chancemin`, `blast.chancemax`, `blast.ratemin`, `blast.ratemax` |
+
+#### Custom Clothing Base Pipeline
+Custom clothing JSON filenames now identify the custom `ClothingBase` id. Save files under `Source/ACE.Server/Data/CustomClothingBase/<clothingBaseId>[_label].json`; the loader uses the filename id so custom clothing items can add new entries instead of overwriting portal defaults. Use `@cbexport <id> [label]`, edit the JSON, then run `@cbreload` or restart.
+
 ### Recent Patch Notes (Vendor Random Loot by Town Tier)
 Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.
 

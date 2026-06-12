@@ -188,6 +188,12 @@ namespace ACE.Server.Managers
         /// <summary>Targeting weight subtracted from the dagger-bearer. Default 0.4.</summary>
         public static float ThievesDaggerAggroPenalty { get; set; } = 0.3f;
 
+        /// <summary>Defense skill penalty applied by the hidden seam. Default 5.</summary>
+        public static uint ThievesDaggerSeamPenalty { get; set; } = 5;
+
+        /// <summary>Duration in seconds for the hidden seam defense penalty. Default 4.</summary>
+        public static int ThievesDaggerSeamDuration { get; set; } = 4;
+
         // ──────────────────────────────────────────────────────────────────────
         // Sentinel's Spear
         // ──────────────────────────────────────────────────────────────────────
@@ -201,11 +207,26 @@ namespace ACE.Server.Managers
         /// <summary>Chance per hit to fire the stamina drain proc (0–1). Default 0.10 = 10%.</summary>
         public static float SentinelSpearProcChance { get; set; } = 0.08f;
 
+        /// <summary>Minimum attack power fraction required to build Goldleaf Poise. Default 0.70 = 70%.</summary>
+        public static float SentinelSpearPowerThreshold { get; set; } = 0.70f;
+
+        /// <summary>Number of consecutive same-target qualifying hits required to trigger Goldleaf Poise. Default 3.</summary>
+        public static int SentinelSpearMaxStacks { get; set; } = 3;
+
         /// <summary>Fraction of target's current stamina drained per proc (0–1). Default 0.10 = 10%.</summary>
-        public static float SentinelSpearDrainPct { get; set; } = 0.08f;
+        public static float SentinelSpearDrainPct { get; set; } = 0.10f;
 
         /// <summary>Multiplier applied to drained stamina before restoring it to the wielder. Default 1.25 = 125%.</summary>
-        public static float SentinelSpearReturnMult { get; set; } = 1.0f;
+        public static float SentinelSpearReturnMult { get; set; } = 0.25f;
+
+        /// <summary>Visible cooldown duration in seconds after Goldleaf Poise triggers. Default 12.</summary>
+        public static int SentinelSpearCooldownSeconds { get; set; } = 12;
+
+        /// <summary>Damage reduction window duration in seconds after Goldleaf Poise triggers. Default 5.</summary>
+        public static int SentinelSpearPoiseDurationSeconds { get; set; } = 5;
+
+        /// <summary>Incoming damage reduction while Goldleaf Poise is active. Default 0.05 = 5%.</summary>
+        public static float SentinelSpearPoiseDamageReduction { get; set; } = 0.05f;
 
         /// <summary>Targeting weight added to the spear-bearer (off-tank). Default 0.25.</summary>
         public static float SentinelSpearAggroBonus { get; set; } = 0.25f;

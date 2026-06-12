@@ -31,11 +31,19 @@ namespace ACE.Server.Command.Handlers
             "  thief.proc            ThievesDaggerProcChance (float 0-1)\n" +
             "  thief.bonus           ThievesDaggerProcBonus (float 0-1)\n" +
             "  thief.aggro           ThievesDaggerAggroPenalty (float)\n" +
+            "  thief.seampenalty     ThievesDaggerSeamPenalty (int)\n" +
+            "  thief.seamduration    ThievesDaggerSeamDuration (int seconds)\n" +
             "  sentinel.drop         SentinelSpearDropChance (float 0-1)\n" +
             "  sentinel.tier         SentinelSpearMinTier (int)\n" +
-            "  sentinel.proc         SentinelSpearProcChance (float 0-1)\n" +
+            "  sentinel.proc         SentinelSpearProcChance (legacy float 0-1)\n" +
+            "  sentinel.power        SentinelSpearPowerThreshold (float 0-1)\n" +
+            "  sentinel.stacks       SentinelSpearMaxStacks (int)\n" +
             "  sentinel.drain        SentinelSpearDrainPct (float 0-1)\n" +
             "  sentinel.return       SentinelSpearReturnMult (float)\n" +
+            "  sentinel.cooldown     SentinelSpearCooldownSeconds (int seconds)\n" +
+            "  sentinel.poisedur     SentinelSpearPoiseDurationSeconds (int seconds)\n" +
+            "  sentinel.poisedr      SentinelSpearPoiseDamageReduction (float 0-0.5)\n" +
+            "  sentinel.aggro        SentinelSpearAggroBonus (float)\n" +
             "  unarmed.drop          UnarmedElemDropChance (float 0-1)\n" +
             "  unarmed.procmin       UnarmedElemProcMin (int %)\n" +
             "  unarmed.procmax       UnarmedElemProcMax (int %)\n" +
@@ -99,6 +107,26 @@ namespace ACE.Server.Command.Handlers
             "  reaper.procmax        ReaperProcMax (int %)\n" +
             "  reaper.healmin        ReaperHealMin (int % MaxHealth)\n" +
             "  reaper.healmax        ReaperHealMax (int % MaxHealth)\n" +
+            "  ricochet.drop         RicochetAtlatlDropChance (float 0-1)\n" +
+            "  ricochet.tier         RicochetAtlatlMinTier (int)\n" +
+            "  ricochet.procmin      RicochetProcMin (int %)\n" +
+            "  ricochet.procmax      RicochetProcMax (int %)\n" +
+            "  ricochet.scale        RicochetDamageScale (float 0-1)\n" +
+            "  ricochet.radius       RicochetRadius (float meters)\n" +
+            "  dinnerware.drop       DinnerwareWeaponDropChance (float 0-1)\n" +
+            "  dinnerware.tier       DinnerwareWeaponMinTier (int)\n" +
+            "  dinnerware.spin       DinnerwareSpinDropChance (float 0-1)\n" +
+            "  dinnerware.spintier   DinnerwareSpinMinTier (int)\n" +
+            "  dinnerware.scale      DinnerwareSpinDamageScale (float)\n" +
+            "  dinnerware.radius     DinnerwareSpinRadius (float meters)\n" +
+            "  quickening.drop       QuickeningDaggerDropChance (float 0-1)\n" +
+            "  quickening.tier       QuickeningDaggerMinTier (int)\n" +
+            "  quickening.procmin    QuickeningDaggerProcMin (int %)\n" +
+            "  quickening.procmax    QuickeningDaggerProcMax (int %)\n" +
+            "  quickening.speedmin   QuickeningDaggerSpeedMin (int %)\n" +
+            "  quickening.speedmax   QuickeningDaggerSpeedMax (int %)\n" +
+            "  quickening.durmin     QuickeningDaggerDurationMin (int seconds)\n" +
+            "  quickening.durmax     QuickeningDaggerDurationMax (int seconds)\n" +
             "  lootmod.mult          LootModifierGlobalDropMultiplier (float 0-2)\n" +
             "  lootmod.exclusive     LootModifierExclusivePerItem (bool)\n" +
             "  lootmod.interchange   LootModifierInterchangeable (bool)\n" +
@@ -153,11 +181,19 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  thief.proc      = {DerpACEConfig.ThievesDaggerProcChance:P0}  ({DerpACEConfig.ThievesDaggerProcChance})");
                 sb.AppendLine($"  thief.bonus     = {DerpACEConfig.ThievesDaggerProcBonus:P0}  ({DerpACEConfig.ThievesDaggerProcBonus})");
                 sb.AppendLine($"  thief.aggro     = {DerpACEConfig.ThievesDaggerAggroPenalty}");
+                sb.AppendLine($"  thief.seampenalty = {DerpACEConfig.ThievesDaggerSeamPenalty}");
+                sb.AppendLine($"  thief.seamduration = {DerpACEConfig.ThievesDaggerSeamDuration}s");
                 sb.AppendLine($"  sentinel.drop   = {DerpACEConfig.SentinelSpearDropChance:P0}  ({DerpACEConfig.SentinelSpearDropChance})");
                 sb.AppendLine($"  sentinel.tier   = {DerpACEConfig.SentinelSpearMinTier}");
-                sb.AppendLine($"  sentinel.proc   = {DerpACEConfig.SentinelSpearProcChance:P0}  ({DerpACEConfig.SentinelSpearProcChance})");
+                sb.AppendLine($"  sentinel.proc   = {DerpACEConfig.SentinelSpearProcChance:P0}  ({DerpACEConfig.SentinelSpearProcChance}) legacy");
+                sb.AppendLine($"  sentinel.power  = {DerpACEConfig.SentinelSpearPowerThreshold:P0}  ({DerpACEConfig.SentinelSpearPowerThreshold})");
+                sb.AppendLine($"  sentinel.stacks = {DerpACEConfig.SentinelSpearMaxStacks}");
                 sb.AppendLine($"  sentinel.drain  = {DerpACEConfig.SentinelSpearDrainPct:P0}  ({DerpACEConfig.SentinelSpearDrainPct})");
                 sb.AppendLine($"  sentinel.return = {DerpACEConfig.SentinelSpearReturnMult}");
+                sb.AppendLine($"  sentinel.cooldown = {DerpACEConfig.SentinelSpearCooldownSeconds}s");
+                sb.AppendLine($"  sentinel.poisedur = {DerpACEConfig.SentinelSpearPoiseDurationSeconds}s");
+                sb.AppendLine($"  sentinel.poisedr = {DerpACEConfig.SentinelSpearPoiseDamageReduction:P0}  ({DerpACEConfig.SentinelSpearPoiseDamageReduction})");
+                sb.AppendLine($"  sentinel.aggro  = {DerpACEConfig.SentinelSpearAggroBonus}");
                 sb.AppendLine($"  unarmed.drop    = {DerpACEConfig.UnarmedElemDropChance:P0}  ({DerpACEConfig.UnarmedElemDropChance})");
                 sb.AppendLine($"  unarmed.procmin = {DerpACEConfig.UnarmedElemProcMin}%");
                 sb.AppendLine($"  unarmed.procmax = {DerpACEConfig.UnarmedElemProcMax}%");
@@ -221,6 +257,26 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  reaper.procmax       = {DerpACEConfig.ReaperProcMax}%");
                 sb.AppendLine($"  reaper.healmin       = {DerpACEConfig.ReaperHealMin}%");
                 sb.AppendLine($"  reaper.healmax       = {DerpACEConfig.ReaperHealMax}%");
+                sb.AppendLine($"  ricochet.drop        = {DerpACEConfig.RicochetAtlatlDropChance:P0}  ({DerpACEConfig.RicochetAtlatlDropChance})");
+                sb.AppendLine($"  ricochet.tier        = {DerpACEConfig.RicochetAtlatlMinTier}");
+                sb.AppendLine($"  ricochet.procmin     = {DerpACEConfig.RicochetProcMin}%");
+                sb.AppendLine($"  ricochet.procmax     = {DerpACEConfig.RicochetProcMax}%");
+                sb.AppendLine($"  ricochet.scale       = {DerpACEConfig.RicochetDamageScale:P0}  ({DerpACEConfig.RicochetDamageScale})");
+                sb.AppendLine($"  ricochet.radius      = {DerpACEConfig.RicochetRadius}m");
+                sb.AppendLine($"  dinnerware.drop      = {DerpACEConfig.DinnerwareWeaponDropChance:P0}  ({DerpACEConfig.DinnerwareWeaponDropChance})");
+                sb.AppendLine($"  dinnerware.tier      = {DerpACEConfig.DinnerwareWeaponMinTier}");
+                sb.AppendLine($"  dinnerware.spin      = {DerpACEConfig.DinnerwareSpinDropChance:P0}  ({DerpACEConfig.DinnerwareSpinDropChance})");
+                sb.AppendLine($"  dinnerware.spintier  = {DerpACEConfig.DinnerwareSpinMinTier}");
+                sb.AppendLine($"  dinnerware.scale     = {DerpACEConfig.DinnerwareSpinDamageScale:P0}  ({DerpACEConfig.DinnerwareSpinDamageScale})");
+                sb.AppendLine($"  dinnerware.radius    = {DerpACEConfig.DinnerwareSpinRadius}m");
+                sb.AppendLine($"  quickening.drop      = {DerpACEConfig.QuickeningDaggerDropChance:P0}  ({DerpACEConfig.QuickeningDaggerDropChance})");
+                sb.AppendLine($"  quickening.tier      = {DerpACEConfig.QuickeningDaggerMinTier}");
+                sb.AppendLine($"  quickening.procmin   = {DerpACEConfig.QuickeningDaggerProcMin}%");
+                sb.AppendLine($"  quickening.procmax   = {DerpACEConfig.QuickeningDaggerProcMax}%");
+                sb.AppendLine($"  quickening.speedmin  = {DerpACEConfig.QuickeningDaggerSpeedMin}%");
+                sb.AppendLine($"  quickening.speedmax  = {DerpACEConfig.QuickeningDaggerSpeedMax}%");
+                sb.AppendLine($"  quickening.durmin    = {DerpACEConfig.QuickeningDaggerDurationMin}s");
+                sb.AppendLine($"  quickening.durmax    = {DerpACEConfig.QuickeningDaggerDurationMax}s");
                 sb.AppendLine($"  lootmod.mult         = {DerpACEConfig.LootModifierGlobalDropMultiplier}");
                 sb.AppendLine($"  lootmod.exclusive    = {DerpACEConfig.LootModifierExclusivePerItem}");
                 sb.AppendLine($"  lootmod.interchange  = {DerpACEConfig.LootModifierInterchangeable}");
@@ -326,6 +382,14 @@ namespace ACE.Server.Command.Handlers
                         if (!TryFloat(out var ta)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.ThievesDaggerAggroPenalty = ta;
                         break;
+                    case "thief.seampenalty":
+                        if (!TryInt(out var tspen)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ThievesDaggerSeamPenalty = (uint)Math.Max(0, tspen);
+                        break;
+                    case "thief.seamduration":
+                        if (!TryInt(out var tsdur)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ThievesDaggerSeamDuration = Math.Max(1, tsdur);
+                        break;
 
                     case "sentinel.drop":
                         if (!TryFloat(out var sdr)) { BadValue(session, key, "float"); return; }
@@ -339,13 +403,37 @@ namespace ACE.Server.Command.Handlers
                         if (!TryFloat(out var sp)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.SentinelSpearProcChance = sp;
                         break;
+                    case "sentinel.power":
+                        if (!TryFloat(out var spow)) { BadValue(session, key, "float 0-1"); return; }
+                        DerpACEConfig.SentinelSpearPowerThreshold = Math.Clamp(spow, 0f, 1f);
+                        break;
+                    case "sentinel.stacks":
+                        if (!TryInt(out var sstacks)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.SentinelSpearMaxStacks = Math.Max(1, sstacks);
+                        break;
                     case "sentinel.drain":
                         if (!TryFloat(out var sdn)) { BadValue(session, key, "float"); return; }
-                        DerpACEConfig.SentinelSpearDrainPct = sdn;
+                        DerpACEConfig.SentinelSpearDrainPct = Math.Clamp(sdn, 0f, 1f);
                         break;
                     case "sentinel.return":
                         if (!TryFloat(out var sr)) { BadValue(session, key, "float"); return; }
-                        DerpACEConfig.SentinelSpearReturnMult = sr;
+                        DerpACEConfig.SentinelSpearReturnMult = Math.Clamp(sr, 0f, 2f);
+                        break;
+                    case "sentinel.cooldown":
+                        if (!TryInt(out var scool)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.SentinelSpearCooldownSeconds = Math.Max(1, scool);
+                        break;
+                    case "sentinel.poisedur":
+                        if (!TryInt(out var spdur)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.SentinelSpearPoiseDurationSeconds = Math.Max(1, spdur);
+                        break;
+                    case "sentinel.poisedr":
+                        if (!TryFloat(out var spdr)) { BadValue(session, key, "float 0-0.5"); return; }
+                        DerpACEConfig.SentinelSpearPoiseDamageReduction = Math.Clamp(spdr, 0f, 0.5f);
+                        break;
+                    case "sentinel.aggro":
+                        if (!TryFloat(out var saggro)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.SentinelSpearAggroBonus = saggro;
                         break;
 
                     case "unarmed.drop":
@@ -604,6 +692,89 @@ namespace ACE.Server.Command.Handlers
                     case "reaper.healmax":
                         if (!TryInt(out var rahmax)) { BadValue(session, key, "int"); return; }
                         DerpACEConfig.ReaperHealMax = rahmax;
+                        break;
+
+                    case "ricochet.drop":
+                        if (!TryFloat(out var ricdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RicochetAtlatlDropChance = ricdrop;
+                        break;
+                    case "ricochet.tier":
+                        if (!TryInt(out var rictier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RicochetAtlatlMinTier = rictier;
+                        break;
+                    case "ricochet.procmin":
+                        if (!TryInt(out var ricpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RicochetProcMin = ricpmin;
+                        break;
+                    case "ricochet.procmax":
+                        if (!TryInt(out var ricpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.RicochetProcMax = ricpmax;
+                        break;
+                    case "ricochet.scale":
+                        if (!TryFloat(out var ricscale)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RicochetDamageScale = Math.Clamp(ricscale, 0f, 1f);
+                        break;
+                    case "ricochet.radius":
+                        if (!TryFloat(out var ricradius)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.RicochetRadius = Math.Max(1f, ricradius);
+                        break;
+
+                    case "dinnerware.drop":
+                        if (!TryFloat(out var dwdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.DinnerwareWeaponDropChance = dwdrop;
+                        break;
+                    case "dinnerware.tier":
+                        if (!TryInt(out var dwtier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.DinnerwareWeaponMinTier = dwtier;
+                        break;
+                    case "dinnerware.spin":
+                        if (!TryFloat(out var dwspin)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.DinnerwareSpinDropChance = Math.Clamp(dwspin, 0f, 1f);
+                        break;
+                    case "dinnerware.spintier":
+                        if (!TryInt(out var dwspintier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.DinnerwareSpinMinTier = dwspintier;
+                        break;
+                    case "dinnerware.scale":
+                        if (!TryFloat(out var dwscale)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.DinnerwareSpinDamageScale = Math.Max(0f, dwscale);
+                        break;
+                    case "dinnerware.radius":
+                        if (!TryFloat(out var dwradius)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.DinnerwareSpinRadius = Math.Max(1f, dwradius);
+                        break;
+
+                    case "quickening.drop":
+                        if (!TryFloat(out var qdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.QuickeningDaggerDropChance = qdrop;
+                        break;
+                    case "quickening.tier":
+                        if (!TryInt(out var qtier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerMinTier = qtier;
+                        break;
+                    case "quickening.procmin":
+                        if (!TryInt(out var qpmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerProcMin = qpmin;
+                        break;
+                    case "quickening.procmax":
+                        if (!TryInt(out var qpmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerProcMax = qpmax;
+                        break;
+                    case "quickening.speedmin":
+                        if (!TryInt(out var qsmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerSpeedMin = qsmin;
+                        break;
+                    case "quickening.speedmax":
+                        if (!TryInt(out var qsmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerSpeedMax = qsmax;
+                        break;
+                    case "quickening.durmin":
+                        if (!TryInt(out var qdmin)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerDurationMin = Math.Max(1, qdmin);
+                        break;
+                    case "quickening.durmax":
+                        if (!TryInt(out var qdmax)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.QuickeningDaggerDurationMax = Math.Max(1, qdmax);
                         break;
 
                     case "lootmod.mult":

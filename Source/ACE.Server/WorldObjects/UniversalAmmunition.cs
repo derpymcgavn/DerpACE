@@ -28,14 +28,11 @@ namespace ACE.Server.WorldObjects
     {
         public const uint UniversalWeenieClassId = 2000600;
 
-        // Tuned 1 below Deadly Prismatic for each launcher family.
-        private const int BowMaxDamage      = 13;
-        private const int CrossbowMaxDamage = 14;
-        private const int AtlatlMaxDamage   = 13;
+        // Tuned 1 below the 40 max-damage Deadly Prismatic scale.
+        private const int AetherialMaxDamage = 39;
         private const float PrismaticVariance = 0.20f;
 
         // Fallback when GetBaseDamage is called on the item itself (no launcher context).
-        private const int FallbackMaxDamage = 13;
         private const ACE.Entity.Enum.AmmoType DefaultAmmoType = ACE.Entity.Enum.AmmoType.Arrow;
 
         public UniversalAmmunition(Weenie weenie, ObjectGuid guid) : base(weenie, guid)
@@ -64,8 +61,7 @@ namespace ACE.Server.WorldObjects
 
             // Default base damage / variance — overridden per-launcher in GetBaseDamage()
             // when fired as a projectile, but kept on the item so appraisal looks sensible.
-            if ((GetProperty(PropertyInt.Damage) ?? 0) == 0)
-                SetProperty(PropertyInt.Damage, FallbackMaxDamage);
+            SetProperty(PropertyInt.Damage, AetherialMaxDamage);
 
             SetProperty(PropertyFloat.DamageVariance, PrismaticVariance);
         }
@@ -128,14 +124,14 @@ namespace ACE.Server.WorldObjects
 
             // Crossbow family (Bolts)
             if ((ammoType & (global::ACE.Entity.Enum.AmmoType.Bolt | global::ACE.Entity.Enum.AmmoType.BoltCrystal | global::ACE.Entity.Enum.AmmoType.BoltChorizite)) != 0)
-                return CrossbowMaxDamage;
+                return AetherialMaxDamage;
 
             // Atlatl family (Darts)
             if ((ammoType & (global::ACE.Entity.Enum.AmmoType.Atlatl | global::ACE.Entity.Enum.AmmoType.AtlatlCrystal | global::ACE.Entity.Enum.AmmoType.AtlatlChorizite)) != 0)
-                return AtlatlMaxDamage;
+                return AetherialMaxDamage;
 
             // Bow family (Arrows) — default
-            return BowMaxDamage;
+            return AetherialMaxDamage;
         }
 
         private static ACE.Entity.Enum.AmmoType? GetAmmoTypeForLauncher(WorldObject launcher)

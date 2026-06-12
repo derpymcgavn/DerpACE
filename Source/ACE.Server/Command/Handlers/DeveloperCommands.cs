@@ -2327,7 +2327,7 @@ namespace ACE.Server.Command.Handlers
             log.Info($"Physics ObjMaint Audit Completed. Errors - objectTable: {objectTableErrors}, visibleObjectTable: {visibleObjectTableErrors}, voyeurTable: {voyeurTableErrors}");
         }
 
-        [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid, classname, or weapon> <tier> [luck=0-1] [mutator=name]")]
+        [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid, classname, weapon, or shield> <tier> [luck=0-1] [mutator=name]")]
         public static void HandleLootGen(Session session, params string[] parameters)
         {
             WorldObject wo = null;
@@ -2337,7 +2337,8 @@ namespace ACE.Server.Command.Handlers
                 int.TryParse(parameters[1], out tier);
 
             var lootQualityMod = 0.0f;
-            string forcedWeaponMutator = null;
+            string forcedMutator = null;
+            var forcedMutatorIsShield = false;
 
             for (var i = 1; i < parameters.Length; i++)
             {
@@ -2374,9 +2375,17 @@ namespace ACE.Server.Command.Handlers
                     case "mutator":
                     case "mod":
                     case "affix":
-                        if (!LootGenerationFactory.TryResolveWeaponMutator(value, out forcedWeaponMutator))
+                        if (LootGenerationFactory.TryResolveWeaponMutator(value, out forcedMutator))
                         {
-                            session.Network.EnqueueSend(new GameMessageSystemChat($"Unknown weapon mutator '{value}'. Options: {LootGenerationFactory.GetWeaponMutatorNames()}", ChatMessageType.Broadcast));
+                            forcedMutatorIsShield = false;
+                        }
+                        else if (LootGenerationFactory.TryResolveShieldMutator(value, out forcedMutator))
+                        {
+                            forcedMutatorIsShield = true;
+                        }
+                        else
+                        {
+                            session.Network.EnqueueSend(new GameMessageSystemChat($"Unknown mutator '{value}'. Weapon options: {LootGenerationFactory.GetWeaponMutatorNames()}. Shield options: {LootGenerationFactory.GetShieldMutatorNames()}", ChatMessageType.Broadcast));
                             return;
                         }
                         break;
@@ -2399,8 +2408,14 @@ namespace ACE.Server.Command.Handlers
                 || parameters[0].Equals("randomweapon", StringComparison.OrdinalIgnoreCase)
                 || parameters[0].Equals("random_weapon", StringComparison.OrdinalIgnoreCase);
 
+            var randomShield = parameters[0].Equals("shield", StringComparison.OrdinalIgnoreCase)
+                || parameters[0].Equals("randomshield", StringComparison.OrdinalIgnoreCase)
+                || parameters[0].Equals("random_shield", StringComparison.OrdinalIgnoreCase);
+
             if (randomWeapon)
-                wo = LootGenerationFactory.CreateWeapon(profile, true, forcedWeaponMutator);
+                wo = LootGenerationFactory.CreateWeapon(profile, true, forcedMutator);
+            else if (randomShield)
+                wo = LootGenerationFactory.CreateShield(profile, true, forcedMutator);
             else if (uint.TryParse(parameters[0], out var wcid))
                 wo = WorldObjectFactory.CreateNewWorldObject(wcid);
             else
@@ -2412,13 +2427,13 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            if (!randomWeapon && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
+            if (!randomWeapon && !randomShield && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
             {
                 session.Network.EnqueueSend(new GameMessageSystemChat($"{wo.Name} ({wo.WeenieClassId}) missing PropertyInt.TsysMutationData", ChatMessageType.Broadcast));
                 return;
             }
 
-            var success = randomWeapon || LootGenerationFactory.MutateItem(wo, profile, true, forcedWeaponMutator);
+            var success = randomWeapon || randomShield || LootGenerationFactory.MutateItem(wo, profile, true, forcedMutator);
 
             if (!success)
             {
@@ -2426,8 +2441,9 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(forcedWeaponMutator) && !LootGenerationFactory.HasWeaponMutator(wo, forcedWeaponMutator))
-                session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name}, but '{forcedWeaponMutator}' did not apply. Check weapon compatibility or custom weapon config.", ChatMessageType.Broadcast));
+            if (!string.IsNullOrWhiteSpace(forcedMutator)
+                && !(forcedMutatorIsShield ? LootGenerationFactory.HasShieldMutator(wo, forcedMutator) : LootGenerationFactory.HasWeaponMutator(wo, forcedMutator)))
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name}, but '{forcedMutator}' did not apply. Check item compatibility or custom loot config.", ChatMessageType.Broadcast));
             else
                 session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name} ({wo.WeenieClassId}) at tier {tier}, luck {lootQualityMod:0.##}.", ChatMessageType.Broadcast));
 

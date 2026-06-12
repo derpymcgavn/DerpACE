@@ -313,6 +313,8 @@ namespace ACE.Server.WorldObjects
             // are broadcast. The client rejects ammo by exact AmmoType, not flags.
             if (item.IsAmmoLauncher && GetEquippedAmmo() is UniversalAmmunition equippedUniversalAmmo)
                 equippedUniversalAmmo.SyncToLauncher(item);
+            else if (wieldedLocation == EquipMask.MissileAmmo && item is UniversalAmmunition universalAmmo)
+                universalAmmo.SyncToLauncher(GetEquippedMissileLauncher());
 
             if (!TryEquipObjectWithBroadcasting(item, wieldedLocation))
                 return false;

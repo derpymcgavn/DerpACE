@@ -330,10 +330,13 @@ namespace ACE.Server.WorldObjects
 
             if (launchedNames.Count > 0)
             {
+                var isDiscus = dinnerwareSource.WeenieClassId == (uint)ACE.Server.Factories.Enum.WeenieClassName.discus;
+                var message = isDiscus
+                    ? $"Your discus answers the warrior princess's call, ricocheting toward {string.Join(", ", launchedNames)}."
+                    : $"Your dinnerware caroms toward {string.Join(", ", launchedNames)}.";
+
                 firstTarget.ApplyVisualEffects(PlayScript.ProjectileCollision);
-                sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"Your dinnerware caroms toward {string.Join(", ", launchedNames)}.",
-                    ChatMessageType.CombatSelf));
+                sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(message, ChatMessageType.CombatSelf));
                 actionChain.EnqueueChain();
             }
         }

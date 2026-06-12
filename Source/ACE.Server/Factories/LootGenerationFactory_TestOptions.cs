@@ -102,6 +102,25 @@ namespace ACE.Server.Factories
             ["hierophant"] = TreasureWeaponType.Caster,
         };
 
+        private static readonly Dictionary<string, string> ShieldMutatorAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["defender"] = "defender",
+            ["defenders"] = "defender",
+            ["defendersshield"] = "defender",
+            ["challenge"] = "defender",
+
+            ["thorns"] = "thorns",
+            ["thorn"] = "thorns",
+            ["thornshield"] = "thorns",
+            ["thornbound"] = "thorns",
+
+            ["bashing"] = "bashing",
+            ["bash"] = "bashing",
+            ["bashshield"] = "bashing",
+            ["shieldbash"] = "bashing",
+            ["breaker"] = "bashing",
+        };
+
         public static bool TryResolveWeaponMutator(string name, out string canonicalName)
         {
             canonicalName = null;
@@ -133,6 +152,26 @@ namespace ACE.Server.Factories
                 "archmagi",
                 "shadowclone/voidshadow",
                 "hierophant/life"
+            });
+        }
+
+        public static bool TryResolveShieldMutator(string name, out string canonicalName)
+        {
+            canonicalName = null;
+
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            return ShieldMutatorAliases.TryGetValue(NormalizeWeaponMutatorName(name), out canonicalName);
+        }
+
+        public static string GetShieldMutatorNames()
+        {
+            return string.Join(", ", new[]
+            {
+                "defender",
+                "thorns/thornbound",
+                "bashing/shieldbash"
             });
         }
 
@@ -170,6 +209,20 @@ namespace ACE.Server.Factories
                 "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
                 _             => false,
+            };
+        }
+
+        public static bool HasShieldMutator(WorldObject wo, string mutatorName)
+        {
+            if (wo == null || !TryResolveShieldMutator(mutatorName, out var canonicalName))
+                return false;
+
+            return canonicalName switch
+            {
+                "defender" => wo.GetProperty(PropertyBool.IsDefendersShield) == true,
+                "thorns"   => wo.GetProperty(PropertyBool.IsThornsShield) == true,
+                "bashing"  => wo.GetProperty(PropertyBool.IsBashingShield) == true,
+                _          => false,
             };
         }
 

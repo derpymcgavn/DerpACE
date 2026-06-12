@@ -56,14 +56,7 @@ namespace ACE.Server.WorldObjects
         private const double UnarmedStunSeconds = 1.25;
         private const float UnarmedKnockbackDistance = 2.0f;
         private const float ShieldBashKnockbackDistance = 10.0f;
-        private const float GoldleafSentinelPowerThreshold = 0.70f;
-        private const int GoldleafSentinelMaxStacks = 3;
         public const int GoldleafSentinelCooldownId = 2014;
-        private const int GoldleafSentinelCooldown = 12;
-        private const int GoldleafSentinelPoiseDuration = 5;
-        private const float GoldleafSentinelDrainPct = 0.10f;
-        private const float GoldleafSentinelReturnPct = 0.25f;
-        private const float GoldleafSentinelDamageReduction = 0.05f;
         private const float PolebreakerPowerThreshold = 0.70f;
         public const int PolebreakerBreakGuardCooldownId = 2019;
         private const float PolebreakerBreakGuardSlamSpeed = 3.0f;
@@ -361,6 +354,8 @@ namespace ACE.Server.WorldObjects
 
             // Thief's Dagger: configurable proc chance / bonus on dagger sneak attacks (see @lootconfig).
             uint thievesDaggerBonus = 0;
+            uint thievesDaggerSeamPenalty = 0;
+            int thievesDaggerSeamDuration = 0;
             if (damageEvent.HasDamage
                 && damageEvent.SneakAttackMod > 1.0f
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
@@ -370,6 +365,17 @@ namespace ACE.Server.WorldObjects
                 var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;
                 damageEvent.Damage += bonus;
                 thievesDaggerBonus = (uint)Math.Round(bonus);
+
+                thievesDaggerSeamPenalty = ACE.Server.Managers.DerpACEConfig.ThievesDaggerSeamPenalty;
+                thievesDaggerSeamDuration = Math.Max(1, ACE.Server.Managers.DerpACEConfig.ThievesDaggerSeamDuration);
+                var newUntil = DateTime.UtcNow.AddSeconds(thievesDaggerSeamDuration);
+                if (target.ConcussedUntil > DateTime.UtcNow && target.ConcussedPenalty >= thievesDaggerSeamPenalty)
+                    target.ConcussedUntil = newUntil;
+                else
+                {
+                    target.ConcussedPenalty = thievesDaggerSeamPenalty;
+                    target.ConcussedUntil = newUntil;
+                }
             }
 
             // Quickening Dagger: successful dagger hits can briefly speed up attack animations.
@@ -414,15 +420,21 @@ namespace ACE.Server.WorldObjects
             uint sentinelStaminaReturned = 0;
             int goldleafStacks = 0;
             bool goldleafPoiseTriggered = false;
+            var goldleafPowerThreshold = Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearPowerThreshold, 0.0f, 1.0f);
+            var goldleafMaxStacks = Math.Max(1, ACE.Server.Managers.DerpACEConfig.SentinelSpearMaxStacks);
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear) == true
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Spear, WeaponType.TwoHanded)
-                && PowerLevel >= GoldleafSentinelPowerThreshold)
+                && PowerLevel >= goldleafPowerThreshold)
             {
                 var now = DateTime.UtcNow;
+                var goldleafCooldown = Math.Max(1, ACE.Server.Managers.DerpACEConfig.SentinelSpearCooldownSeconds);
+                var goldleafPoiseDuration = Math.Max(1, ACE.Server.Managers.DerpACEConfig.SentinelSpearPoiseDurationSeconds);
+                var goldleafDrainPct = Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearDrainPct, 0.0f, 1.0f);
+                var goldleafReturnPct = Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearReturnMult, 0.0f, 2.0f);
 
                 if (LastGoldleafSentinelTargetGuid == target.Guid.Full)
-                    GoldleafSentinelStackCount = Math.Min(GoldleafSentinelStackCount + 1, GoldleafSentinelMaxStacks);
+                    GoldleafSentinelStackCount = Math.Min(GoldleafSentinelStackCount + 1, goldleafMaxStacks);
                 else
                 {
                     LastGoldleafSentinelTargetGuid = target.Guid.Full;
@@ -431,26 +443,26 @@ namespace ACE.Server.WorldObjects
 
                 goldleafStacks = GoldleafSentinelStackCount;
 
-                if (goldleafStacks >= GoldleafSentinelMaxStacks && now >= GoldleafSentinelCooldownUntil)
+                if (goldleafStacks >= goldleafMaxStacks && now >= GoldleafSentinelCooldownUntil)
                 {
                     if (target.Stamina.Current > 0)
                     {
-                        var drain = (int)Math.Round(target.Stamina.Current * GoldleafSentinelDrainPct);
+                        var drain = (int)Math.Round(target.Stamina.Current * goldleafDrainPct);
                         if (drain < 1) drain = 1;
                         sentinelStaminaDrained = (uint)-target.UpdateVitalDelta(target.Stamina, -drain);
                     }
 
-                    var restore = (int)Math.Round(sentinelStaminaDrained * GoldleafSentinelReturnPct);
+                    var restore = (int)Math.Round(sentinelStaminaDrained * goldleafReturnPct);
                     if (restore >= 1)
                     {
                         UpdateVitalDelta(Stamina, restore);
                         sentinelStaminaReturned = (uint)restore;
                     }
 
-                    _goldleafPoiseUntil = now.AddSeconds(GoldleafSentinelPoiseDuration);
-                    GoldleafSentinelCooldownUntil = now.AddSeconds(GoldleafSentinelCooldown);
+                    _goldleafPoiseUntil = now.AddSeconds(goldleafPoiseDuration);
+                    GoldleafSentinelCooldownUntil = now.AddSeconds(goldleafCooldown);
                     damageEvent.Weapon.CooldownId = GoldleafSentinelCooldownId;
-                    damageEvent.Weapon.CooldownDuration = GoldleafSentinelCooldown;
+                    damageEvent.Weapon.CooldownDuration = goldleafCooldown;
                     EnchantmentManager.StartCooldown(damageEvent.Weapon);
 
                     GoldleafSentinelStackCount = 0;
@@ -892,6 +904,9 @@ namespace ACE.Server.WorldObjects
                 if ((sneakBonusApplied > 0 || thievesDaggerBonus > 0)
                     && !SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                 {
+                    if (thievesDaggerSeamPenalty > 0)
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownBlack);
+
                     string sneakLine;
                     if (thievesDaggerBonus > 0 && sneakBonusApplied > 0)
                         sneakLine = $"You strike unseen — {sneakBonusApplied} damage from the shadows, your blade drinking deep for {thievesDaggerBonus} more.";
@@ -899,6 +914,9 @@ namespace ACE.Server.WorldObjects
                         sneakLine = $"Your blade drinks deep from the shadows — {thievesDaggerBonus} damage flows from the unseen blow.";
                     else
                         sneakLine = $"You strike unseen — {sneakBonusApplied} of the wound comes from the shadows.";
+
+                    if (thievesDaggerSeamPenalty > 0)
+                        sneakLine += $" A hidden seam opens in {target.Name}'s guard for {thievesDaggerSeamDuration} seconds.";
 
                     Session.Network.EnqueueSend(new GameMessageSystemChat(sneakLine, ChatMessageType.CombatSelf));
                 }
@@ -964,7 +982,7 @@ namespace ACE.Server.WorldObjects
                 else if (goldleafStacks > 1)
                 {
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Your spear settles into proper form against {target.Name} - Goldleaf Poise {goldleafStacks}/{GoldleafSentinelMaxStacks}.",
+                        $"Your spear settles into proper form against {target.Name} - Goldleaf Poise {goldleafStacks}/{Math.Max(1, ACE.Server.Managers.DerpACEConfig.SentinelSpearMaxStacks)}.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -1712,7 +1730,7 @@ namespace ACE.Server.WorldObjects
         public int TakeDamage(WorldObject source, DamageEvent damageEvent)
         {
             if (DateTime.UtcNow <= _goldleafPoiseUntil && source is Creature && damageEvent.Damage > 0)
-                damageEvent.Damage *= 1.0f - GoldleafSentinelDamageReduction;
+                damageEvent.Damage *= 1.0f - Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearPoiseDamageReduction, 0.0f, 0.5f);
 
             var damageTaken = TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
 

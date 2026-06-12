@@ -68,7 +68,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.ItemUseable]         = (int)Usable.No;
             w.PropertiesInt[PropertyInt.UiEffects]           = (int)UiEffects.BoostStamina;
             w.PropertiesInt[PropertyInt.Value]               = 100;
-            w.PropertiesInt[PropertyInt.Damage]              = 40;
+            w.PropertiesInt[PropertyInt.Damage]              = 39;
             w.PropertiesInt[PropertyInt.DamageType]          = (int)DamageType.Base;
             // Advertise one exact launcher family so the client accepts the ammo header.
             // UniversalAmmunition stamps the exact launcher AmmoType at equip time.
@@ -93,7 +93,7 @@ namespace ACE.Server.DerpAce
 
             // --- floats ---
             w.PropertiesFloat[PropertyFloat.WeaponLength]    = 0;
-            w.PropertiesFloat[PropertyFloat.DamageVariance]  = 0.3;
+            w.PropertiesFloat[PropertyFloat.DamageVariance]  = 0.2;
             w.PropertiesFloat[PropertyFloat.MaximumVelocity] = 0;
             w.PropertiesFloat[PropertyFloat.WeaponDefense]   = 1;
             w.PropertiesFloat[PropertyFloat.WeaponOffense]   = 1;

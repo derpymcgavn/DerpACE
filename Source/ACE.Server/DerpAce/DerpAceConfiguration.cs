@@ -319,6 +319,10 @@ namespace ACE.Server.DerpAce
         public float ThievesDaggerProcBonus { get; set; } = 0.10f;
         [JsonPropertyName("thief_dagger_aggro_penalty")]
         public float ThievesDaggerAggroPenalty { get; set; } = 0.3f;
+        [JsonPropertyName("thief_dagger_seam_penalty")]
+        public uint ThievesDaggerSeamPenalty { get; set; } = 5;
+        [JsonPropertyName("thief_dagger_seam_duration")]
+        public int ThievesDaggerSeamDuration { get; set; } = 4;
 
         // Sentinel Spear
         [JsonPropertyName("sentinel_spear_drop_chance")]
@@ -327,10 +331,20 @@ namespace ACE.Server.DerpAce
         public int SentinelSpearMinTier { get; set; } = 5;
         [JsonPropertyName("sentinel_spear_proc_chance")]
         public float SentinelSpearProcChance { get; set; } = 0.08f;
+        [JsonPropertyName("sentinel_spear_power_threshold")]
+        public float SentinelSpearPowerThreshold { get; set; } = 0.70f;
+        [JsonPropertyName("sentinel_spear_max_stacks")]
+        public int SentinelSpearMaxStacks { get; set; } = 3;
         [JsonPropertyName("sentinel_spear_drain_pct")]
-        public float SentinelSpearDrainPct { get; set; } = 0.08f;
+        public float SentinelSpearDrainPct { get; set; } = 0.10f;
         [JsonPropertyName("sentinel_spear_return_mult")]
-        public float SentinelSpearReturnMult { get; set; } = 1.0f;
+        public float SentinelSpearReturnMult { get; set; } = 0.25f;
+        [JsonPropertyName("sentinel_spear_cooldown_seconds")]
+        public int SentinelSpearCooldownSeconds { get; set; } = 12;
+        [JsonPropertyName("sentinel_spear_poise_duration_seconds")]
+        public int SentinelSpearPoiseDurationSeconds { get; set; } = 5;
+        [JsonPropertyName("sentinel_spear_poise_damage_reduction")]
+        public float SentinelSpearPoiseDamageReduction { get; set; } = 0.05f;
         [JsonPropertyName("sentinel_spear_aggro_bonus")]
         public float SentinelSpearAggroBonus { get; set; } = 0.25f;
 

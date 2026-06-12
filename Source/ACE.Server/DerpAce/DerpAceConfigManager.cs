@@ -263,12 +263,19 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ThievesDaggerProcChance     = c.ThievesDaggerProcChance;
             DerpACEConfig.ThievesDaggerProcBonus      = c.ThievesDaggerProcBonus;
             DerpACEConfig.ThievesDaggerAggroPenalty   = c.ThievesDaggerAggroPenalty;
+            DerpACEConfig.ThievesDaggerSeamPenalty    = c.ThievesDaggerSeamPenalty;
+            DerpACEConfig.ThievesDaggerSeamDuration   = c.ThievesDaggerSeamDuration;
 
             DerpACEConfig.SentinelSpearDropChance     = c.SentinelSpearDropChance;
             DerpACEConfig.SentinelSpearMinTier        = c.SentinelSpearMinTier;
             DerpACEConfig.SentinelSpearProcChance     = c.SentinelSpearProcChance;
+            DerpACEConfig.SentinelSpearPowerThreshold = c.SentinelSpearPowerThreshold;
+            DerpACEConfig.SentinelSpearMaxStacks      = c.SentinelSpearMaxStacks;
             DerpACEConfig.SentinelSpearDrainPct       = c.SentinelSpearDrainPct;
             DerpACEConfig.SentinelSpearReturnMult     = c.SentinelSpearReturnMult;
+            DerpACEConfig.SentinelSpearCooldownSeconds = c.SentinelSpearCooldownSeconds;
+            DerpACEConfig.SentinelSpearPoiseDurationSeconds = c.SentinelSpearPoiseDurationSeconds;
+            DerpACEConfig.SentinelSpearPoiseDamageReduction = c.SentinelSpearPoiseDamageReduction;
             DerpACEConfig.SentinelSpearAggroBonus     = c.SentinelSpearAggroBonus;
 
             DerpACEConfig.UnarmedElemDropChance       = c.UnarmedElemDropChance;

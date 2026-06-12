@@ -13,44 +13,149 @@ using ACE.Server.Factories.Tables.Wcids;
 using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
+using WeenieClassName = ACE.Server.Factories.Enum.WeenieClassName;
+
 namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
-        private static void TryMutateShieldAffixes(WorldObject wo, TreasureDeath profile)
+        private static readonly WeenieClassName[] ShieldLootWcids =
         {
-            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !wo.IsShield || profile.Tier < 3)
+            WeenieClassName.buckler,
+            WeenieClassName.shieldkite,
+            WeenieClassName.shieldround,
+            WeenieClassName.shieldkitelarge,
+            WeenieClassName.shieldroundlarge,
+            WeenieClassName.shieldtower,
+            WeenieClassName.shieldcovenant,
+            WeenieClassName.ace37291_olthoishield,
+        };
+
+        public static WorldObject CreateShield(TreasureDeath profile, bool isMagical, string forcedShieldMutator = null)
+        {
+            var treasureRoll = new TreasureRoll(TreasureItemType.Armor)
+            {
+                Wcid = ShieldLootWcids[ThreadSafeRandom.Next(0, ShieldLootWcids.Length - 1)],
+                ForcedWeaponMutator = forcedShieldMutator
+            };
+
+            treasureRoll.ArmorType = GetShieldArmorType(treasureRoll.Wcid);
+
+            var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
+            treasureRoll.BaseArmorLevel = wo.ArmorLevel ?? 0;
+
+            MutateArmor(wo, profile, isMagical, treasureRoll);
+
+            return wo;
+        }
+
+        private static TreasureArmorType GetShieldArmorType(WeenieClassName wcid)
+        {
+            return wcid switch
+            {
+                WeenieClassName.shieldcovenant => TreasureArmorType.Covenant,
+                WeenieClassName.ace37291_olthoishield => TreasureArmorType.Olthoi,
+                _ => TreasureArmorType.Undef,
+            };
+        }
+
+        private static void TryMutateShieldAffixes(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !wo.IsShield)
                 return;
 
             var rolledAffixes = new System.Collections.Generic.List<string>();
+            var hasForcedShieldMutator = TryResolveShieldMutator(roll?.ForcedWeaponMutator, out var forcedShieldMutator);
+
+            if (hasForcedShieldMutator)
+            {
+                switch (forcedShieldMutator)
+                {
+                    case "defender":
+                        ApplyDefenderShield(wo);
+                        break;
+                    case "thorns":
+                        ApplyThornsShield(wo);
+                        AddShieldSuffix(wo, "of Thorns");
+                        break;
+                    case "bashing":
+                        ApplyBashingShield(wo);
+                        AddShieldSuffix(wo, "of Bashing");
+                        break;
+                }
+
+                return;
+            }
+
+            if (ACE.Server.Managers.DerpACEConfig.DefenderShieldEnabled
+                && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
+            {
+                ApplyDefenderShield(wo);
+            }
+
+            if (profile.Tier < 3)
+                return;
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
             {
-                var reflectPct = ThreadSafeRandom.Next(2, 6) / 100.0;
-
-                wo.SetProperty(PropertyBool.IsThornsShield, true);
-                wo.SetProperty(PropertyFloat.ShieldThornsReflectPct, reflectPct);
-                ApplyLootUiEffect(wo, UiEffects.Poisoned);
+                ApplyThornsShield(wo);
                 rolledAffixes.Add("of Thorns");
-
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOn a shield block, this shield reflects {reflectPct:P0} of the damage you take back at the attacker.";
             }
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
             {
-                wo.SetProperty(PropertyBool.IsBashingShield, true);
-                wo.SetProperty(PropertyFloat.ShieldBashingProcChance, 0.10);
-                wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, 0.10);
-                ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
+                ApplyBashingShield(wo);
                 rolledAffixes.Add("of Bashing");
-
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker, knocking monsters back, dealing damage based on shield armor level, and interrupting monster spell windups.";
             }
 
             if (rolledAffixes.Count == 0)
                 return;
 
             var suffix = rolledAffixes[ThreadSafeRandom.Next(0, rolledAffixes.Count - 1)];
+            AddShieldSuffix(wo, suffix);
+        }
+
+        private static void ApplyDefenderShield(WorldObject wo)
+        {
+            if (!wo.Name.StartsWith("Defender's ", StringComparison.OrdinalIgnoreCase))
+                wo.Name = "Defender's " + wo.Name;
+
+            wo.SetProperty(PropertyBool.IsDefendersShield, true);
+            wo.IconOverlayId = 0x06002878u;
+            ApplyLootUiEffect(wo, UiEffects.BoostHealth);
+
+            if ((wo.LongDesc ?? "").Contains("protective challenge", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge - enemies are more likely to target its bearer.";
+        }
+
+        private static void ApplyThornsShield(WorldObject wo)
+        {
+            var reflectPct = ThreadSafeRandom.Next(2, 6) / 100.0;
+
+            wo.SetProperty(PropertyBool.IsThornsShield, true);
+            wo.SetProperty(PropertyFloat.ShieldThornsReflectPct, reflectPct);
+            wo.IconOverlayId = 0x0600667Bu;
+            ApplyLootUiEffect(wo, UiEffects.Poisoned);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOn a shield block, this shield reflects {reflectPct:P0} of the damage you take back at the attacker.";
+        }
+
+        private static void ApplyBashingShield(WorldObject wo)
+        {
+            wo.SetProperty(PropertyBool.IsBashingShield, true);
+            wo.SetProperty(PropertyFloat.ShieldBashingProcChance, 0.10);
+            wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, 0.10);
+            wo.IconOverlayId = 0x06002878u;
+            ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker, knocking monsters back, dealing damage based on shield armor level, and interrupting monster spell windups.";
+        }
+
+        private static void AddShieldSuffix(WorldObject wo, string suffix)
+        {
             if (!wo.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 wo.Name = $"{wo.Name} {suffix}";
         }
@@ -147,18 +252,7 @@ namespace ACE.Server.Factories
                 TryMutateUnarmedDamage(wo, profile);
             }
 
-            // Defender's shield: configurable chance on any T6+ shield drop (see @lootconfig)
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.DefenderShieldEnabled
-                && wo.IsShield && profile.Tier >= ACE.Server.Managers.DerpACEConfig.DefenderShieldMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.DefenderShieldDropChance)
-            {
-                wo.Name = "Defender's " + wo.Name;
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDefendersShield, true);
-                wo.IconOverlayId = 0x06002878;
-                ApplyLootUiEffect(wo, UiEffects.BoostHealth);
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge — enemies are more likely to target its bearer.";
-            }
-
-            TryMutateShieldAffixes(wo, profile);
+            TryMutateShieldAffixes(wo, profile, roll);
         }
 
 

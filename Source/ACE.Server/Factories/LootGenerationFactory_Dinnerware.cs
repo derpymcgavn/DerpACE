@@ -48,6 +48,10 @@ namespace ACE.Server.Factories
             DamageType.Electric,
         };
 
+        private const float WarriorPrincessCallDropChance = 0.01f;
+        private const float WarriorPrincessCallProcMin = 0.05f;
+        private const float WarriorPrincessCallProcMax = 0.08f;
+
         /// <summary>
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
@@ -95,6 +99,7 @@ namespace ACE.Server.Factories
 
             // long desc
             wo.LongDesc = GetLongDesc(wo);
+            AppendThrowableDinnerwareMutatorDesc(wo);
 
             if (wo.WeenieClassId == (uint)RageaRangWcid)
                 RemoveLootImbues(wo);
@@ -130,35 +135,41 @@ namespace ACE.Server.Factories
             ApplyLootUiEffects(wo, wo.W_DamageType, false);
             wo.Biota.PropertiesSpellBook?.Clear();
 
-            if (isDiscus
-                || ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
-                && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
-                && TryRollWeaponModifier(
-                    profile,
-                    roll,
-                    ref specialModifierApplied,
-                    ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponDropChance,
-                    ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
-                    true,
-                    "dinnerware"))
+            var applyDinnerwareMutator = isDiscus
+                ? ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                  && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
+                  && TryRollWeaponModifier(
+                      profile,
+                      roll,
+                      ref specialModifierApplied,
+                      WarriorPrincessCallDropChance,
+                      ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
+                      true,
+                      "discus")
+                : ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                  && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
+                  && TryRollWeaponModifier(
+                      profile,
+                      roll,
+                      ref specialModifierApplied,
+                      ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponDropChance,
+                      ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
+                      true,
+                      "dinnerware");
+
+            if (applyDinnerwareMutator)
             {
-                var spinProcChance = isDiscus || IsForcedWeaponModifier(roll, "dinnerware")
-                    ? 1.0f
+                var spinProcChance = isDiscus
+                    ? ThreadSafeRandom.Next(WarriorPrincessCallProcMin, WarriorPrincessCallProcMax)
                     : ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance;
 
-                wo.Name = isDiscus ? "Warrior Princess's Call" : wo.Name + " of the Banquet";
+                wo.Name = isDiscus ? "Discus of the Warrior Princess's Call" : wo.Name + " of the Banquet";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance, spinProcChance);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius);
                 wo.IconOverlayId = 0x06002878u;
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
-
-                if (isDiscus)
-                    wo.Name = "Warrior Princess's Call";
-                wo.LongDesc = (wo.LongDesc ?? "") + (isDiscus
-                    ? "\n\nA warrior's discus answers the hand that throws it -- it bites through the air, then ricochets through nearby foes for 50%, 25%, 10%, and 5% damage."
-                    : "\n\nThis dinnerware was raised for the feast instead of the table - each throw can carom through nearby foes for 50%, 25%, 10%, and 5% damage, ringing out with china, crockery, and bad manners.");
             }
 
             if (wo.WeenieClassId == (uint)RageaRangWcid)
@@ -211,6 +222,17 @@ namespace ACE.Server.Factories
                 : cap;
         }
 
+        private static void AppendThrowableDinnerwareMutatorDesc(WorldObject wo)
+        {
+            if (wo?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon) != true)
+                return;
+
+            var isDiscus = wo.WeenieClassId == (uint)WeenieClassName.discus;
+            wo.LongDesc = (wo.LongDesc ?? "") + (isDiscus
+                ? "\n\nThis discus carries the call of a warrior princess - each throw can ricochet through nearby foes for 50%, 25%, 10%, and 5% damage."
+                : "\n\nThis dinnerware was raised for the feast instead of the table - each throw can carom through nearby foes for 50%, 25%, 10%, and 5% damage, ringing out with china, crockery, and bad manners.");
+        }
+
         private static void SanitizeLootDiscus(WorldObject wo)
         {
             if (wo == null)
@@ -234,6 +256,9 @@ namespace ACE.Server.Factories
             wo.WeaponDefense = null;
             wo.WeaponMissileDefense = null;
             wo.WeaponMagicDefense = null;
+            wo.CriticalFrequency = null;
+            wo.ResistanceModifierType = null;
+            wo.ResistanceModifier = null;
 
             RemoveLootImbues(wo);
             wo.RemoveProperty(PropertyInt.ImbueStackingBits);
