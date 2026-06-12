@@ -73,7 +73,9 @@ namespace ACE.DatLoader
             if (FileCache.TryGetValue(fileId, out FileType result))
                 return (T)result;
 
-            var datReader = GetReaderForFile(fileId);
+            DatReader datReader = null;
+            if (AllFiles.ContainsKey(fileId) || typeof(T) != typeof(ClothingTable) || ClothingTableMergeHook == null)
+                datReader = GetReaderForFile(fileId);
 
             var obj = new T();
 

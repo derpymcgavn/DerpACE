@@ -37,6 +37,10 @@ namespace ACE.Server.WorldObjects
         public uint LastPolebreakerTargetGuid { get; set; } = 0;
         public int PolebreakerStackCount { get; set; } = 0;
         public DateTime PolebreakerBreakGuardCooldownUntil { get; set; } = DateTime.MinValue;
+        public uint LastGoldleafSentinelTargetGuid { get; set; } = 0;
+        public int GoldleafSentinelStackCount { get; set; } = 0;
+        public DateTime GoldleafSentinelCooldownUntil { get; set; } = DateTime.MinValue;
+        private DateTime _goldleafPoiseUntil = DateTime.MinValue;
 
         // DerpACE Nomad — recursion guard so Cleave Flurry extra strikes don't proc themselves
         private bool _nomadProcInProgress;
@@ -51,7 +55,18 @@ namespace ACE.Server.WorldObjects
         private const float UnarmedCriticalBoostDamageMultiplier = 0.35f;
         private const double UnarmedStunSeconds = 1.25;
         private const float UnarmedKnockbackDistance = 2.0f;
+        private const float ShieldBashKnockbackDistance = 10.0f;
+        private const float GoldleafSentinelPowerThreshold = 0.70f;
+        private const int GoldleafSentinelMaxStacks = 3;
+        public const int GoldleafSentinelCooldownId = 2014;
+        private const int GoldleafSentinelCooldown = 12;
+        private const int GoldleafSentinelPoiseDuration = 5;
+        private const float GoldleafSentinelDrainPct = 0.10f;
+        private const float GoldleafSentinelReturnPct = 0.25f;
+        private const float GoldleafSentinelDamageReduction = 0.05f;
         private const float PolebreakerPowerThreshold = 0.70f;
+        public const int PolebreakerBreakGuardCooldownId = 2019;
+        private const float PolebreakerBreakGuardSlamSpeed = 3.0f;
         private const uint PolebreakerBreakGuardPenalty = 15;
         private const int PolebreakerBreakGuardDuration = 5;
         private const int PolebreakerBreakGuardCooldown = 12;
@@ -394,26 +409,59 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            // Sentinel's Spear: configurable proc/drain/return (see @lootconfig)
-            // Applies to spear family, including two-handed spears.
+            // Goldleaf Sentinel: measured high-power spear rhythm into a brief poise window.
             uint sentinelStaminaDrained = 0;
             uint sentinelStaminaReturned = 0;
+            int goldleafStacks = 0;
+            bool goldleafPoiseTriggered = false;
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear) == true
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Spear, WeaponType.TwoHanded)
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.SentinelSpearProcChance
-                && target.Stamina.Current > 0)
+                && PowerLevel >= GoldleafSentinelPowerThreshold)
             {
-                var drain = (int)Math.Round(target.Stamina.Current * ACE.Server.Managers.DerpACEConfig.SentinelSpearDrainPct);
-                if (drain < 1) drain = 1;
-                var actualDrain = (uint)-target.UpdateVitalDelta(target.Stamina, -drain);
-                sentinelStaminaDrained = actualDrain;
-                var restore = (int)Math.Round(actualDrain * ACE.Server.Managers.DerpACEConfig.SentinelSpearReturnMult);
-                if (restore >= 1)
+                var now = DateTime.UtcNow;
+
+                if (LastGoldleafSentinelTargetGuid == target.Guid.Full)
+                    GoldleafSentinelStackCount = Math.Min(GoldleafSentinelStackCount + 1, GoldleafSentinelMaxStacks);
+                else
                 {
-                    UpdateVitalDelta(Stamina, restore);
-                    sentinelStaminaReturned = (uint)restore;
+                    LastGoldleafSentinelTargetGuid = target.Guid.Full;
+                    GoldleafSentinelStackCount = 1;
                 }
+
+                goldleafStacks = GoldleafSentinelStackCount;
+
+                if (goldleafStacks >= GoldleafSentinelMaxStacks && now >= GoldleafSentinelCooldownUntil)
+                {
+                    if (target.Stamina.Current > 0)
+                    {
+                        var drain = (int)Math.Round(target.Stamina.Current * GoldleafSentinelDrainPct);
+                        if (drain < 1) drain = 1;
+                        sentinelStaminaDrained = (uint)-target.UpdateVitalDelta(target.Stamina, -drain);
+                    }
+
+                    var restore = (int)Math.Round(sentinelStaminaDrained * GoldleafSentinelReturnPct);
+                    if (restore >= 1)
+                    {
+                        UpdateVitalDelta(Stamina, restore);
+                        sentinelStaminaReturned = (uint)restore;
+                    }
+
+                    _goldleafPoiseUntil = now.AddSeconds(GoldleafSentinelPoiseDuration);
+                    GoldleafSentinelCooldownUntil = now.AddSeconds(GoldleafSentinelCooldown);
+                    damageEvent.Weapon.CooldownId = GoldleafSentinelCooldownId;
+                    damageEvent.Weapon.CooldownDuration = GoldleafSentinelCooldown;
+                    EnchantmentManager.StartCooldown(damageEvent.Weapon);
+
+                    GoldleafSentinelStackCount = 0;
+                    LastGoldleafSentinelTargetGuid = 0;
+                    goldleafPoiseTriggered = true;
+                }
+            }
+            else if (damageEvent.HasDamage)
+            {
+                LastGoldleafSentinelTargetGuid = 0;
+                GoldleafSentinelStackCount = 0;
             }
 
             // Ravager's Axe: configurable proc to apply a bleed DoT (see @lootconfig)
@@ -724,6 +772,9 @@ namespace ACE.Server.WorldObjects
                         }
 
                         PolebreakerBreakGuardCooldownUntil = now.AddSeconds(PolebreakerBreakGuardCooldown);
+                        damageEvent.Weapon.CooldownId = PolebreakerBreakGuardCooldownId;
+                        damageEvent.Weapon.CooldownDuration = PolebreakerBreakGuardCooldown;
+                        EnchantmentManager.StartCooldown(damageEvent.Weapon);
                         PolebreakerStackCount = 1;
                         polebreakerStacks = maxStacks;
 
@@ -901,13 +952,19 @@ namespace ACE.Server.WorldObjects
                         ChatMessageType.CombatSelf));
                 }
 
-                // Sentinel's Spear: stamina siphon — phrased as the spear "drinking" their wind
-                if (sentinelStaminaDrained > 0)
+                // Goldleaf Sentinel: measured poise for spear users
+                if (goldleafPoiseTriggered)
                 {
                     target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthDownYellow);
                     ApplyVisualEffects(ACE.Entity.Enum.PlayScript.HealthUpYellow);
                     Session.Network.EnqueueSend(new GameMessageSystemChat(
-                        $"Your spear drinks the wind from {target.Name} — {sentinelStaminaDrained} stamina drained, {sentinelStaminaReturned} restored to you.",
+                        $"You settle into Goldleaf Poise, breaking {target.Name}'s rhythm for {sentinelStaminaDrained} stamina and restoring {sentinelStaminaReturned} to yourself.",
+                        ChatMessageType.CombatSelf));
+                }
+                else if (goldleafStacks > 1)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"Your spear settles into proper form against {target.Name} - Goldleaf Poise {goldleafStacks}/{GoldleafSentinelMaxStacks}.",
                         ChatMessageType.CombatSelf));
                 }
 
@@ -1401,8 +1458,13 @@ namespace ACE.Server.WorldObjects
 
             var actionChain = new ActionChain();
             EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.Ready, (MotionCommand)returnStance, 1.0f, 0.35f);
-            EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.Fishing, MotionCommand.Ready, 1.0f, 0.55f);
+            EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.Fishing, MotionCommand.Ready, PolebreakerBreakGuardSlamSpeed, 0.55f);
             EnqueueMotion_Force(actionChain, returnStance, MotionCommand.Ready, MotionCommand.NonCombat, 1.0f, 0.35f);
+            actionChain.AddAction(this, () =>
+            {
+                if (!IsDead && CombatMode != CombatMode.NonCombat)
+                    SetCombatMode(CombatMode);
+            });
             actionChain.EnqueueChain();
         }
 
@@ -1450,8 +1512,8 @@ namespace ACE.Server.WorldObjects
 
             var newPosition = new ACE.Entity.Position(target.Location)
             {
-                PositionX = target.Location.PositionX + (float)(dx / distance) * UnarmedKnockbackDistance,
-                PositionY = target.Location.PositionY + (float)(dy / distance) * UnarmedKnockbackDistance,
+                PositionX = target.Location.PositionX + (float)(dx / distance) * ShieldBashKnockbackDistance,
+                PositionY = target.Location.PositionY + (float)(dy / distance) * ShieldBashKnockbackDistance,
             };
 
             if (newPosition.Landblock != target.Location.Landblock)
@@ -1649,48 +1711,44 @@ namespace ACE.Server.WorldObjects
 
         public int TakeDamage(WorldObject source, DamageEvent damageEvent)
         {
-            if (damageEvent.ShieldMod != 1.0f && TryProcShieldThornsResist(source, damageEvent))
-                return 0;
+            if (DateTime.UtcNow <= _goldleafPoiseUntil && source is Creature && damageEvent.Damage > 0)
+                damageEvent.Damage *= 1.0f - GoldleafSentinelDamageReduction;
 
             var damageTaken = TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
 
             if (damageTaken > 0 && damageEvent.ShieldMod != 1.0f)
+            {
+                TryProcShieldThornsReflect(source, damageEvent, (uint)damageTaken);
                 TryProcShieldAffixesOnBlock(source, damageEvent, (uint)damageTaken);
+            }
 
             return damageTaken;
         }
 
-        private bool TryProcShieldThornsResist(WorldObject source, DamageEvent damageEvent)
+        private void TryProcShieldThornsReflect(WorldObject source, DamageEvent damageEvent, uint damageTaken)
         {
             if (source is not Creature attacker || attacker.IsDead || IsDead || damageEvent.Damage <= 0)
-                return false;
+                return;
 
             var shield = GetEquippedShield();
             if (shield?.GetProperty(PropertyBool.IsThornsShield) != true)
-                return false;
+                return;
 
-            var procChance = shield.GetProperty(PropertyFloat.ShieldThornsProcChance) ?? 0.0;
-            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
-                return false;
-
-            var preventedDamage = (uint)Math.Max(0, Math.Round(damageEvent.Damage));
             var reflectPct = shield.GetProperty(PropertyFloat.ShieldThornsReflectPct) ?? 0.0;
-            var reflectDamage = (float)Math.Round(preventedDamage * reflectPct);
+            if (reflectPct <= 0.0)
+                return;
 
-            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.ShieldUpBlue);
+            var reflectDamage = (float)Math.Round(damageTaken * reflectPct);
+            if (reflectDamage < 1.0f)
+                return;
 
-            if (reflectDamage >= 1.0f)
-            {
-                attacker.TakeDamage(this, damageEvent.DamageType, reflectDamage);
-                attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
-            }
+            attacker.TakeDamage(this, damageEvent.DamageType, reflectDamage);
+            attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftFront);
 
             if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                 Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"Your {shield.NameWithMaterial} turns aside {preventedDamage} damage and reflects {(uint)Math.Max(0, reflectDamage)} damage back at {attacker.Name}. [Thorns]",
+                    $"Your {shield.NameWithMaterial} reflects {(uint)Math.Max(0, reflectDamage)} damage back at {attacker.Name}. [Thorns]",
                     ChatMessageType.CombatSelf));
-
-            return true;
         }
 
         private void TryProcShieldAffixesOnBlock(WorldObject source, DamageEvent damageEvent, uint damageTaken)
@@ -1705,12 +1763,18 @@ namespace ACE.Server.WorldObjects
             if (shield.GetProperty(PropertyBool.IsBashingShield) != true)
                 return;
 
+            var shieldSkill = GetCreatureSkill(Skill.Shield);
+            if (shieldSkill.AdvancementClass != SkillAdvancementClass.Specialized)
+                return;
+
             var bashChance = shield.GetProperty(PropertyFloat.ShieldBashingProcChance) ?? 0.0;
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= bashChance)
                 return;
 
             var healthPct = shield.GetProperty(PropertyFloat.ShieldBashingHealthPct) ?? 0.10;
-            var bashDamage = (float)Math.Round(Health.Current * healthPct);
+            var healthCap = Health.Current * healthPct;
+            var armorLevel = shield.ArmorLevel ?? 0;
+            var bashDamage = (float)Math.Round(Math.Min(healthCap, Math.Max(1.0, armorLevel / 10.0)));
             if (bashDamage < 1.0f)
                 return;
 
@@ -1718,10 +1782,11 @@ namespace ACE.Server.WorldObjects
             attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidRightFront);
             ApplyVisualEffects(ACE.Entity.Enum.PlayScript.ShieldUpBlue);
             TryApplyShieldBashKnockback(attacker);
+            var interrupted = attacker.TryInterruptMagicWindup(this);
 
             if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
                 Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"Your {shield.NameWithMaterial} bashes {attacker.Name} for {(uint)bashDamage} bludgeoning damage. [Bashing]",
+                    $"Your {shield.NameWithMaterial} bashes {attacker.Name} for {(uint)bashDamage} bludgeoning damage{(interrupted ? " and interrupts its spell" : "")}. [Bashing]",
                     ChatMessageType.CombatSelf));
         }
 

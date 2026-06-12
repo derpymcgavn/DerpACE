@@ -281,10 +281,10 @@ namespace ACE.Entity.Enum.Properties
         RicochetRadius                 = 9030,  // nearby target search radius in yards
 
         /* DerpACE Shield affixes */
-        ShieldThornsReflectPct         = 9031,  // fraction of resisted blocked hit damage reflected to attacker
+        ShieldThornsReflectPct         = 9031,  // fraction of blocked hit damage taken reflected to attacker
         ShieldBashingProcChance        = 9032,  // chance on shield block to bash the attacker
-        ShieldBashingHealthPct         = 9033,  // fraction of defender current health dealt on bash
-        ShieldThornsProcChance         = 9034,  // chance on shield block to resist all incoming hit damage
+        ShieldBashingHealthPct         = 9033,  // maximum fraction of defender current health dealt on bash
+        ShieldThornsProcChance         = 9034,  // legacy: old chance on shield block to resist all incoming hit damage
 
         /* DerpACE dinnerware affixes */
         DinnerwareSpinProcChance       = 9035,  // chance on hit to splash spinning dinnerware to nearby foes

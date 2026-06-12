@@ -230,6 +230,8 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneCooldownSeconds, cooldownSeconds);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDurationSeconds, durationSeconds);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDamageScale, damageScale);
+                wo.CooldownId = Player.ShadowCloneCasterCooldownId;
+                wo.CooldownDuration = cooldownSeconds;
                 wo.IconOverlayId = 0x06002860;
                 ApplyLootUiEffects(wo, wo.W_DamageType, true);
 

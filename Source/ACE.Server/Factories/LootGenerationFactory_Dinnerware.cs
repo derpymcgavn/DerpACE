@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ACE.Common;
 using ACE.Database.Models.World;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Factories.Entity;
 using ACE.Server.Factories.Enum;
@@ -116,6 +117,8 @@ namespace ACE.Server.Factories
 
             if (!isDiscus)
                 roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
+            else
+                SanitizeLootDiscus(wo);
 
             wo.UnlimitedUse = true;
             wo.ItemType |= ItemType.MissileWeapon;
@@ -206,6 +209,50 @@ namespace ACE.Server.Factories
             wo.WieldDifficulty = wo.WieldDifficulty.HasValue
                 ? System.Math.Min(wo.WieldDifficulty.Value, cap)
                 : cap;
+        }
+
+        private static void SanitizeLootDiscus(WorldObject wo)
+        {
+            if (wo == null)
+                return;
+
+            wo.TsysMutationData ??= 0x11000005;
+
+            wo.Biota.PropertiesSpellBook?.Clear();
+            wo.ProcSpell = null;
+            wo.ProcSpellRate = null;
+            wo.ProcSpellSelfTargeted = false;
+
+            wo.ItemMaxMana = null;
+            wo.ItemCurMana = null;
+            wo.ItemManaCost = null;
+            wo.ManaRate = null;
+            wo.ItemSpellcraft = null;
+            wo.ItemDifficulty = null;
+            wo.ItemUseable = null;
+
+            wo.WeaponDefense = null;
+            wo.WeaponMissileDefense = null;
+            wo.WeaponMagicDefense = null;
+
+            RemoveLootImbues(wo);
+            wo.RemoveProperty(PropertyInt.ImbueStackingBits);
+
+            wo.WieldRequirements2 = WieldRequirement.Invalid;
+            wo.WieldSkillType2 = null;
+            wo.WieldDifficulty2 = null;
+            wo.WieldRequirements3 = WieldRequirement.Invalid;
+            wo.WieldSkillType3 = null;
+            wo.WieldDifficulty3 = null;
+            wo.WieldRequirements4 = WieldRequirement.Invalid;
+            wo.WieldSkillType4 = null;
+            wo.WieldDifficulty4 = null;
+
+            wo.UseRequiresSkill = null;
+            wo.UseRequiresSkillLevel = null;
+            wo.UseRequiresSkillSpec = null;
+            wo.UseRequiresLevel = null;
+            wo.ActivationResponse = ActivationResponse.Use;
         }
 
         private static string GetThrowableClaymoreName(DamageType damageType)

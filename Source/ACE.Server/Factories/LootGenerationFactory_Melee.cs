@@ -640,11 +640,13 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerStackBonus, stackPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks,  maxStacks);
+                wo.CooldownId = Player.PolebreakerBreakGuardCooldownId;
+                wo.CooldownDuration = 12.0;
                 wo.IconOverlayId = 0x06002699u;
                 ApplyLootUiEffect(wo, UiEffects.BoostMana | UiEffects.BoostStamina);
 
                 var totalPct = stackPct * maxStacks;
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} finds a deadly rhythm -- attacks made at 70% power or higher add +{stackPct}% bonus damage on consecutive hits against the same target, stacking up to {maxStacks} times (+{totalPct}% at full stack). At full rhythm, Break Guard drives the staff down in an overhead slam, lowering the target's defense by 15 for 5 seconds, then resets the rhythm. Non-qualifying attacks, switching targets, or letting the target die resets the chain.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} finds a deadly rhythm -- attacks made at 70% power or higher add +{stackPct}% bonus damage on consecutive hits against the same target, stacking up to {maxStacks} times (+{totalPct}% at full stack). At full rhythm, Break Guard drives the staff down in an overhead slam, lowering the target's defense by 15 for 5 seconds, then resets the rhythm and starts a 12 second cooldown. Non-qualifying attacks, switching targets, or letting the target die resets the chain.";
             }
 
             // Legacy unarmed-only elemental proc is disabled; universal elemental procs are rolled below.
@@ -714,12 +716,14 @@ namespace ACE.Server.Factories
                 roll.WeaponType == TreasureWeaponType.Spear || roll.WeaponType == TreasureWeaponType.TwoHandedSpear,
                 "sentinel"))
             {
-                wo.Name = wo.Name + " of the Sentinel";
+                wo.Name = wo.Name + " of the Goldleaf Sentinel";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);
+                wo.CooldownId = Player.GoldleafSentinelCooldownId;
+                wo.CooldownDuration = 12.0;
                 wo.IconOverlayId = 0x06002699;
                 ApplyLootUiEffect(wo, UiEffects.BoostStamina);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} hums with a guardian's resolve — each strike has a 10% chance to drain 10% of the target's stamina, returning a quarter of it to the wielder.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards proper form - attacks made at 70% power or higher build Goldleaf Poise on consecutive hits against the same target. At 3 stacks, it drains 10% of the target's current stamina, restores 25% of the drained stamina to the wielder, grants 5 seconds of 5% damage reduction, then starts a 12 second cooldown.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.

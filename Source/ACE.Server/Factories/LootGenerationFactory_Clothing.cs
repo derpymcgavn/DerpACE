@@ -26,16 +26,14 @@ namespace ACE.Server.Factories
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
             {
-                var procPct = ThreadSafeRandom.Next(1, 7) / 100.0;
-                var reflectPct = ThreadSafeRandom.Next(10, 25) / 100.0;
+                var reflectPct = ThreadSafeRandom.Next(2, 6) / 100.0;
 
                 wo.SetProperty(PropertyBool.IsThornsShield, true);
-                wo.SetProperty(PropertyFloat.ShieldThornsProcChance, procPct);
                 wo.SetProperty(PropertyFloat.ShieldThornsReflectPct, reflectPct);
                 ApplyLootUiEffect(wo, UiEffects.Poisoned);
                 rolledAffixes.Add("of Thorns");
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOn a shield block, this shield has a {procPct:P0} chance to resist the attack's damage and reflect {reflectPct:P0} of the prevented damage back at the attacker.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOn a shield block, this shield reflects {reflectPct:P0} of the damage you take back at the attacker.";
             }
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
@@ -46,7 +44,7 @@ namespace ACE.Server.Factories
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
                 rolledAffixes.Add("of Bashing");
 
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOn a shield block, this shield has a 10% chance to bash the attacker, knocking monsters back and dealing 10% of your current health as bludgeoning damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker, knocking monsters back, dealing damage based on shield armor level, and interrupting monster spell windups.";
             }
 
             if (rolledAffixes.Count == 0)

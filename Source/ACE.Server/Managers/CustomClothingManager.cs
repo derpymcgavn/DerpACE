@@ -146,7 +146,10 @@ namespace ACE.Server.Managers
                     }
 
                     if (!IsClothingBaseId(table.Id))
-                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' Id 0x{table.Id:X8} ({table.Id}) is outside the ClothingBase range [0x10000000, 0x10FFFFFF]; loading anyway.");
+                    {
+                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' Id 0x{table.Id:X8} ({table.Id}) is outside the ClothingBase range [0x10000000, 0x10FFFFFF]. Skipped.");
+                        continue;
+                    }
 
                     _custom[table.Id] = table;
                     loaded++;

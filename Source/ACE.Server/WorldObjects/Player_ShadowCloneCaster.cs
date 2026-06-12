@@ -11,6 +11,8 @@ namespace ACE.Server.WorldObjects
 {
     public partial class Player
     {
+        public const int ShadowCloneCasterCooldownId = 2057;
+
         private static readonly uint[] ShadowClonePetShellWcids =
         {
             49000, // acid zombie combat pet (50)
@@ -47,14 +49,17 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            _shadowCloneCasterCooldownUntil = now.AddSeconds(cooldownSeconds);
-
             if (!clone.InitShadowClone(this, target, durationSeconds, damageScale))
             {
                 clone.Destroy();
                 Session?.Network.EnqueueSend(new GameMessageSystemChat("Your shadow strains against the void, but cannot take shape.", ChatMessageType.Magic));
                 return;
             }
+
+            _shadowCloneCasterCooldownUntil = now.AddSeconds(cooldownSeconds);
+            caster.CooldownId = ShadowCloneCasterCooldownId;
+            caster.CooldownDuration = cooldownSeconds;
+            EnchantmentManager.StartCooldown(caster);
 
             Session?.Network.EnqueueSend(new GameMessageSystemChat("Your shadow tears free and joins the fight.", ChatMessageType.Magic));
         }

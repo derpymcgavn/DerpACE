@@ -56,6 +56,10 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         private Spell CurrentSpell { get; set; }
 
+        private uint MagicWindupToken { get; set; }
+
+        private double MagicWindupUntil { get; set; }
+
         private bool TryRollSpell()
         {
             CurrentSpell = null;
@@ -158,11 +162,18 @@ namespace ACE.Server.WorldObjects
             }
 
             var preCastTime = PreCastMotion(AttackTarget);
+            var castToken = ++MagicWindupToken;
+            MagicWindupUntil = Timers.RunningTime + preCastTime;
 
             var actionChain = new ActionChain();
             actionChain.AddDelaySeconds(preCastTime);
             actionChain.AddAction(this, () =>
             {
+                if (castToken != MagicWindupToken)
+                    return;
+
+                MagicWindupUntil = 0.0;
+
                 if (IsDead || AttackTarget == null || target.IsDead)
                     return;
 
@@ -184,6 +195,28 @@ namespace ACE.Server.WorldObjects
             var postDelay = ThreadSafeRandom.Next(0.0f, powerupTime);
 
             NextMoveTime = NextAttackTime = PrevAttackTime + postCastTime + postDelay;
+        }
+
+        public bool TryInterruptMagicWindup(WorldObject interrupter)
+        {
+            if (IsDead || MagicWindupUntil <= Timers.RunningTime)
+                return false;
+
+            MagicWindupToken++;
+            MagicWindupUntil = 0.0;
+            CurrentSpell = null;
+
+            ApplyVisualEffects(PlayScript.Fizzle);
+            EnqueueBroadcast(new GameMessageSound(Guid, Sound.Fizzle, 1.0f));
+            PostCastMotion();
+
+            var delay = ThreadSafeRandom.Next(0.75f, 1.25f);
+            NextMoveTime = NextAttackTime = Math.Max(NextAttackTime, Timers.RunningTime + delay);
+
+            if (interrupter is Player player)
+                player.SendMessage($"{Name}'s spell is broken by your shield bash. [Bashing]", ChatMessageType.CombatSelf);
+
+            return true;
         }
 
         private bool UseMana()
