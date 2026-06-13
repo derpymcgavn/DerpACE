@@ -428,6 +428,9 @@ namespace ACE.Server.WorldObjects
             if (item.HasItemSet)
                 DequipItemFromSet(item);
 
+            if (wieldedLocation.HasFlag(EquipMask.HandWear) && Food.IsCookingGloves(item))
+                Food.RemoveWellFedFromGloves(this, item);
+
             if (item.GearMaxHealth != null || item.GearMaxStamina != null || item.GearMaxMana != null)
                 HandleMaxHealthUpdate();
 

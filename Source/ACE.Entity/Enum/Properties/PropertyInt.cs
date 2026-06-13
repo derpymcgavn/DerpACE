@@ -690,6 +690,8 @@ namespace ACE.Entity.Enum.Properties
         VendorLootTier                           = 9038,
         // DerpACE: Olthoi morphic system - previous unlocked form before current form
         MorphicPreviousCreatureWCID              = 9039,
+        // DerpACE: cooking glove progress toward Well Fed.
+        WellFedFoodCount                         = 9040,
     }
 
     public static class PropertyIntExtensions

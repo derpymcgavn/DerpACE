@@ -60,6 +60,8 @@ namespace ACE.Server.Command.Handlers
         private static readonly ConcurrentDictionary<uint, string> PendingModes = new ConcurrentDictionary<uint, string>();
         // GUID -> whether the pending commitment requested the -nh (no non-humans) restricted race pool.
         private static readonly ConcurrentDictionary<uint, bool> PendingNoNonHuman = new ConcurrentDictionary<uint, bool>();
+        // GUID -> whether the pending commitment requested blind progression.
+        private static readonly ConcurrentDictionary<uint, bool> PendingBlind = new ConcurrentDictionary<uint, bool>();
         private const int ConfirmWindowSeconds = 30;
 
         [CommandHandler("ironman", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
@@ -68,6 +70,7 @@ namespace ACE.Server.Command.Handlers
             "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 420 with above-average protections while unarmored)\n" +
             "  add -nh to 'on' or 'nomad' to exclude non-human heritages, rolling only\n" +
             "            Aluvian, Gharundim, Sho, Viamontian, Umbraen, Penumbraen, Undead, or Empyrean\n" +
+            "  add -blind to hide future skill milestones and auto-spend XP as the build grows\n" +
             "confirm   - finalize Ironman conversion. Cannot be undone.\n" +
             "char      - view your character progression milestones\n" +
             "top       - show the Ironman leaderboard\n" +
@@ -96,7 +99,7 @@ namespace ACE.Server.Command.Handlers
                     return;
                 }
 
-                player.SendMessage("Usage: /ironman on [-nh] | nomad [-nh] | confirm");
+                player.SendMessage("Usage: /ironman on [-nh] [-blind] | nomad [-nh] [-blind] | confirm");
                 return;
             }
 
@@ -107,6 +110,10 @@ namespace ACE.Server.Command.Handlers
                 string.Equals(p, "-nh", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(p, "nh", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(p, "nonhuman", StringComparison.OrdinalIgnoreCase));
+
+            var blind = parameters.Skip(1).Any(p =>
+                string.Equals(p, "-blind", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "blind", StringComparison.OrdinalIgnoreCase));
 
             // Handle read-only commands first (bypass enrollment checks)
             switch (sub)
@@ -157,9 +164,11 @@ namespace ACE.Server.Command.Handlers
                     PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     PendingModes[player.Guid.Full] = "standard";
                     PendingNoNonHuman[player.Guid.Full] = noNonHuman;
+                    PendingBlind[player.Guid.Full] = blind;
                     player.SendMessage(
                         $"WARNING: Ironman mode is permanent and will wipe your inventory, spellbook, " +
-                        $"and reroll your attributes/skills.{(noNonHuman ? " Heritage will exclude non-humans." : "")} " +
+                        $"and reroll your attributes/skills.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
+                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP." : "")} " +
                         $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
@@ -168,11 +177,13 @@ namespace ACE.Server.Command.Handlers
                     PendingConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     PendingModes[player.Guid.Full] = "nomad";
                     PendingNoNonHuman[player.Guid.Full] = noNonHuman;
+                    PendingBlind[player.Guid.Full] = blind;
                     player.SendMessage(
                         $"WARNING: Ironman NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
                         $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
                         $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
-                        $"AL of 450 (average); worn armor is only half effective.{(noNonHuman ? " Heritage will exclude non-humans." : "")} " +
+                        $"AL of 450 (average); worn armor is only half effective.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
+                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP." : "")} " +
                         $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
@@ -181,6 +192,7 @@ namespace ACE.Server.Command.Handlers
                     if (!PendingConfirms.TryRemove(player.Guid.Full, out var expires))
                     {
                         PendingNoNonHuman.TryRemove(player.Guid.Full, out _);
+                        PendingBlind.TryRemove(player.Guid.Full, out _);
                         player.SendMessage("You have no pending Ironman commitment. Type /ironman on or /ironman nomad first.");
                         return;
                     }
@@ -188,17 +200,19 @@ namespace ACE.Server.Command.Handlers
                     {
                         PendingModes.TryRemove(player.Guid.Full, out _);
                         PendingNoNonHuman.TryRemove(player.Guid.Full, out _);
+                        PendingBlind.TryRemove(player.Guid.Full, out _);
                         player.SendMessage("Your Ironman commitment window has expired. Type /ironman on or /ironman nomad again.");
                         return;
                     }
                     PendingModes.TryRemove(player.Guid.Full, out var pendingMode);
                     PendingNoNonHuman.TryRemove(player.Guid.Full, out var pendingNoNonHuman);
+                    PendingBlind.TryRemove(player.Guid.Full, out var pendingBlind);
                     var isNomad = string.Equals(pendingMode, "nomad", StringComparison.OrdinalIgnoreCase);
 
                     if (isNomad)
-                        IronmanFactory.InitializeIronmanNomad(player, pendingNoNonHuman);
+                        IronmanFactory.InitializeIronmanNomad(player, pendingNoNonHuman, pendingBlind);
                     else
-                        IronmanFactory.InitializeIronman(player, pendingNoNonHuman);
+                        IronmanFactory.InitializeIronman(player, pendingNoNonHuman, pendingBlind);
 
                     // Global announcement for Ironman activation
                     var pathLabel = isNomad ? "NOMAD Ironman" : "Ironman";
@@ -209,7 +223,7 @@ namespace ACE.Server.Command.Handlers
                     break;
 
                 default:
-                    player.SendMessage("Usage: /ironman on [-nh] | nomad [-nh] | confirm");
+                    player.SendMessage("Usage: /ironman on [-nh] [-blind] | nomad [-nh] [-blind] | confirm");
                     break;
             }
         }
@@ -240,6 +254,7 @@ namespace ACE.Server.Command.Handlers
         private static void ShowIronmanStatus(ACE.Server.WorldObjects.Player player)
         {
             var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0;
+            var isBlind = player.GetProperty(PropertyBool.IsIronmanBlind) == true;
             var planStr = player.GetProperty(PropertyString.IronmanPlan) ?? "";
             var lifeMilestones = IronmanFactory.GetHardcoreLifeMilestones();
             var claimedLifeMilestones = IronmanFactory.GetClaimedHardcoreLifeMilestones(player);
@@ -286,6 +301,8 @@ namespace ACE.Server.Command.Handlers
             var sb = new StringBuilder();
             sb.AppendLine("=== Ironman Status ===");
             sb.AppendLine($"  Hardcore lives remaining: {lives}");
+            if (isBlind)
+                sb.AppendLine("  Blind progression: ON");
             sb.AppendLine();
 
             if (applied.Count > 0)
@@ -297,7 +314,7 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine();
             }
 
-            if (pending.Count > 0)
+            if (!isBlind && pending.Count > 0)
             {
                 sb.AppendLine("  Upcoming milestones:");
                 foreach (var kv in pending)
@@ -309,7 +326,7 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine();
             }
 
-            if (notObtainable.Count > 0)
+            if (!isBlind && notObtainable.Count > 0)
             {
                 notObtainable.Sort((a, b) => a.displayName.CompareTo(b.displayName));
                 sb.AppendLine("  Not obtainable:");

@@ -51,12 +51,12 @@ This section is the current operator-facing summary for lootgen mutators and com
 |---|---|
 | `@lootconfig list` | Prints runtime loot, mutator, armor, mob, and vendor tuning values. |
 | `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Example: `@lootconfig set sentinel.cooldown 14`. |
-| `@lootgen <weapon|shield> <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon or shield and can force a compatible mutator. Examples: `@lootgen weapon 7 mutator=discus`, `@lootgen shield 7 mutator=bashing`. |
-| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`. |
+| `@lootgen weapon <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon and can force a compatible weapon/caster mutator. Example: `@lootgen weapon 7 mutator=discus`. |
+| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced shield mutators can be applied to shield WCIDs/classnames. Example: `@lootgen shieldtower 7 luck=1 mutator=bashing`. |
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `hierophant`; shields use `defender`, `thorns`, `bashing`.
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `hierophant`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`.
 
 #### Weapon And Caster Mutators
 | Mutator | Eligible loot | Current effect |

@@ -822,9 +822,9 @@ namespace ACE.Server.Entity
         {
             if (IsRemovedSwarmingRynthidMutatorSpawn(wo))
             {
-                if (wo.Generator != null)
-                    wo.Generator.NotifySpawnFailure(wo);
-
+                // These are stale custom mutator spawns that should no longer enter the world.
+                // Do not notify the generator failure path: that path backs off and logs retry
+                // warnings, while these records are intentionally being suppressed.
                 wo.Destroy(false);
                 return false;
             }
@@ -940,7 +940,11 @@ namespace ACE.Server.Entity
 
             switch (wo.WeenieClassId)
             {
+                case 51728: // Discorporate Rynthid of Rage
                 case 51747: // Rynthid Minion of Rage
+                case 51749: // Rynthid Minion
+                case 51751: // Rynthid Rager
+                case 51755: // Rynthid Slayer
                 case 51757: // Raging Rynthid Sorcerer
                 case 51759: // Rynthid Sorcerer
                     return wo.Name?.StartsWith("Swarming ", StringComparison.OrdinalIgnoreCase) == true;

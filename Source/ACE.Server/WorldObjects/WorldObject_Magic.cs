@@ -672,49 +672,56 @@ namespace ACE.Server.WorldObjects
             if (hierophant?.GetProperty(PropertyBool.IsHierophantCaster) != true)
                 return;
 
+            var hotProc = ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.HierophantHotProcChance;
+            var hotPct = (float)(hierophant.GetProperty(PropertyFloat.HierophantHotPct) ?? 0.0);
+            var hotPossible = hotProc && hotPct > 0.0f && target?.IsAlive == true;
+
+            var echoPct = (float)(hierophant.GetProperty(PropertyFloat.HierophantFellowEchoPct) ?? 0.0);
+            var echoAmount = echoPct > 0.0f ? (int)Math.Round(healAmount * echoPct) : 0;
+            var fellowship = caster.Fellowship;
+            var echoPossible = echoAmount > 0 && fellowship != null;
+            if (!hotPossible && !echoPossible)
+                return;
+
+            if (!caster.TryStartMutatorCooldown(hierophant, Player.HierophantCooldownId, Player.HierophantCooldownSeconds))
+                return;
+
             // Regenerating ward (HoT) proc
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.HierophantHotProcChance)
+            if (hotPossible)
             {
-                var hotPct = (float)(hierophant.GetProperty(PropertyFloat.HierophantHotPct) ?? 0.0);
-                if (hotPct > 0.0f && target?.IsAlive == true)
+                var totalHot = (int)Math.Max(1, target.Health.MaxValue * hotPct);
+                var duration = ACE.Server.Managers.DerpACEConfig.HierophantHotDurationSeconds;
+                var interval = Math.Max(0.5f, ACE.Server.Managers.DerpACEConfig.HierophantHotTickInterval);
+                var ticks = Math.Max(1, (int)Math.Round(duration / interval));
+                var perTick = Math.Max(1, totalHot / ticks);
+
+                var hotTarget = target;
+                var hotChain = new ActionChain();
+                for (var i = 0; i < ticks; i++)
                 {
-                    var totalHot = (int)Math.Max(1, target.Health.MaxValue * hotPct);
-                    var duration = ACE.Server.Managers.DerpACEConfig.HierophantHotDurationSeconds;
-                    var interval = Math.Max(0.5f, ACE.Server.Managers.DerpACEConfig.HierophantHotTickInterval);
-                    var ticks = Math.Max(1, (int)Math.Round(duration / interval));
-                    var perTick = Math.Max(1, totalHot / ticks);
-
-                    var hotTarget = target;
-                    var hotChain = new ActionChain();
-                    for (var i = 0; i < ticks; i++)
+                    hotChain.AddDelaySeconds(interval);
+                    hotChain.AddAction(hotTarget, () =>
                     {
-                        hotChain.AddDelaySeconds(interval);
-                        hotChain.AddAction(hotTarget, () =>
+                        if (hotTarget == null || !hotTarget.IsAlive) return;
+                        var applied = hotTarget.UpdateVitalDelta(hotTarget.Health, perTick);
+                        if (applied > 0)
                         {
-                            if (hotTarget == null || !hotTarget.IsAlive) return;
-                            var applied = hotTarget.UpdateVitalDelta(hotTarget.Health, perTick);
-                            if (applied > 0)
-                            {
-                                hotTarget.DamageHistory.OnHeal((uint)applied);
-                                if (hotTarget is Player tp)
-                                    tp.SendMessage($"The Hierophant's ward restores {applied} health.", ChatMessageType.Magic);
-                            }
-                        });
-                    }
-                    hotChain.EnqueueChain();
-
-                    caster.SendMessage($"Your {hierophant.Name} blesses {(target == caster ? "you" : target.Name)} with a regenerating ward.", ChatMessageType.Magic);
+                            hotTarget.DamageHistory.OnHeal((uint)applied);
+                            if (hotTarget is Player tp)
+                                tp.SendMessage($"The Hierophant's ward restores {applied} health.", ChatMessageType.Magic);
+                        }
+                    });
                 }
+                hotChain.EnqueueChain();
+
+                caster.SendMessage($"Your {hierophant.Name} blesses {(target == caster ? "you" : target.Name)} with a regenerating ward.", ChatMessageType.Magic);
             }
 
             // Fellowship echo: bonus heal to nearby fellows
-            var echoPct = (float)(hierophant.GetProperty(PropertyFloat.HierophantFellowEchoPct) ?? 0.0);
             if (echoPct <= 0.0f) return;
 
-            var fellowship = caster.Fellowship;
             if (fellowship == null) return;
 
-            var echoAmount = (int)Math.Round(healAmount * echoPct);
             if (echoAmount <= 0) return;
 
             var range = ACE.Server.Managers.DerpACEConfig.HierophantFellowEchoRange;

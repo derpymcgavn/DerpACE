@@ -49,6 +49,7 @@ namespace ACE.Server.WorldObjects
         private DateTime _unarmedAttackSpeedBoostUntil = DateTime.MinValue;
         private DateTime _quickeningDaggerBoostUntil = DateTime.MinValue;
         private float _quickeningDaggerSpeedMultiplier = 1.0f;
+        private readonly Dictionary<string, DateTime> _mutatorCooldowns = new Dictionary<string, DateTime>();
 
         private const double UnarmedAttackSpeedBoostSeconds = 6.0;
         private const float UnarmedAttackSpeedBoostMultiplier = 1.25f;
@@ -57,12 +58,46 @@ namespace ACE.Server.WorldObjects
         private const float UnarmedKnockbackDistance = 2.0f;
         private const float ShieldBashKnockbackDistance = 10.0f;
         public const int GoldleafSentinelCooldownId = 2014;
+        public const int ThiefDaggerCooldownId = 2020;
+        public const int QuickeningDaggerCooldownId = 2021;
+        public const int FencerPierceCooldownId = 2022;
+        public const int FencerRiposteCooldownId = 2023;
+        public const int RavagerCooldownId = 2024;
+        public const int WardenCooldownId = 2025;
+        public const int ResoluteHealCooldownId = 2026;
+        public const int ResoluteKillCooldownId = 2027;
+        public const int BreacherCooldownId = 2028;
+        public const int StalkerCooldownId = 2029;
+        public const int ReaperCooldownId = 2030;
+        public const int RicochetCooldownId = 2031;
+        public const int DinnerwareCooldownId = 2032;
+        public const int ShieldThornsCooldownId = 2033;
+        public const int ShieldBashingCooldownId = 2034;
+        public const int HierophantCooldownId = 2035;
+        public const int FencerParryCooldownId = 2036;
         private const float PolebreakerPowerThreshold = 0.70f;
         public const int PolebreakerBreakGuardCooldownId = 2019;
         private const float PolebreakerBreakGuardSlamSpeed = 3.0f;
         private const uint PolebreakerBreakGuardPenalty = 15;
         private const int PolebreakerBreakGuardDuration = 5;
         private const int PolebreakerBreakGuardCooldown = 12;
+        private const double ThiefDaggerCooldownSeconds = 3.0;
+        private const double QuickeningDaggerCooldownSeconds = 10.0;
+        private const double FencerPierceCooldownSeconds = 3.0;
+        private const double FencerRiposteCooldownSeconds = 4.0;
+        private const double FencerParryCooldownSeconds = 4.0;
+        private const double RavagerCooldownSeconds = 6.0;
+        private const double WardenCooldownSeconds = 8.0;
+        private const double ResoluteHealCooldownSeconds = 8.0;
+        private const double ResoluteKillCooldownSeconds = 10.0;
+        private const double BreacherCooldownSeconds = 4.0;
+        private const double StalkerCooldownSeconds = 6.0;
+        private const double ReaperCooldownSeconds = 12.0;
+        public const double RicochetCooldownSeconds = 4.0;
+        public const double DinnerwareCooldownSeconds = 5.0;
+        private const double ShieldThornsCooldownSeconds = 1.0;
+        private const double ShieldBashingCooldownSeconds = 8.0;
+        public const double HierophantCooldownSeconds = 10.0;
 
         // DerpACE: Unarmed combo system for tracking punch/kick combos
         private UnarmedComboSystem _unarmedComboSystem;
@@ -77,6 +112,23 @@ namespace ACE.Server.WorldObjects
         }
 
         public DateTime NextRefillTime;
+
+        public bool TryStartMutatorCooldown(WorldObject source, int cooldownId, double cooldownSeconds)
+        {
+            if (source == null || cooldownId <= 0 || cooldownSeconds <= 0)
+                return true;
+
+            var now = DateTime.UtcNow;
+            var key = $"{source.Guid.Full:X8}:{cooldownId}";
+            if (_mutatorCooldowns.TryGetValue(key, out var readyAt) && readyAt > now)
+                return false;
+
+            _mutatorCooldowns[key] = now.AddSeconds(cooldownSeconds);
+            source.CooldownId = cooldownId;
+            source.CooldownDuration = cooldownSeconds;
+            EnchantmentManager.StartCooldown(source);
+            return true;
+        }
 
         public double LastPkAttackTimestamp
         {
@@ -360,7 +412,8 @@ namespace ACE.Server.WorldObjects
                 && damageEvent.SneakAttackMod > 1.0f
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger)
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance)
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance
+                && TryStartMutatorCooldown(damageEvent.Weapon, ThiefDaggerCooldownId, ThiefDaggerCooldownSeconds))
             {
                 var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;
                 damageEvent.Damage += bonus;
@@ -384,7 +437,9 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerProcChance) ?? 0.0;
-                if (procChance > 0.0 && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                if (procChance > 0.0
+                    && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, QuickeningDaggerCooldownId, QuickeningDaggerCooldownSeconds))
                 {
                     var speedMultiplier = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerSpeedMultiplier) ?? 1.0);
                     var duration = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerDuration) ?? 0.0);
@@ -403,7 +458,8 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Sword))
             {
                 var pierceProc = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < pierceProc)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < pierceProc
+                    && TryStartMutatorCooldown(damageEvent.Weapon, FencerPierceCooldownId, FencerPierceCooldownSeconds))
                 {
                     var piercePct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.0;
                     var bonus = Math.Max(0.0f, damageEvent.DamageMitigated) * (float)piercePct;
@@ -488,7 +544,8 @@ namespace ACE.Server.WorldObjects
                 && (WeaponIsType(damageEvent.Weapon, WeaponType.Axe, WeaponType.TwoHanded) || (WeaponIsType(damageEvent.Weapon, WeaponType.Mace) && WeaponNameContains(damageEvent.Weapon, "hammer"))))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, RavagerCooldownId, RavagerCooldownSeconds))
                 {
                     var bleedPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct) ?? 0.0;
 
@@ -606,7 +663,8 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Mace, WeaponType.TwoHanded))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, WardenCooldownId, WardenCooldownSeconds))
                 {
                     var penalty = (uint)Math.Max(0, (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussPenalty) ?? 0.0));
                     var duration = (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussDuration) ?? 0.0);
@@ -637,7 +695,8 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Sword, WeaponType.TwoHanded))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, ResoluteHealCooldownId, ResoluteHealCooldownSeconds))
                 {
                     var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealPct) ?? 0.0;
                     var heal = (int)Math.Round(damageEvent.Damage * (float)healPct);
@@ -657,7 +716,9 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Crossbow))
             {
                 var ignoreChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance) ?? 0.0;
-                if (ignoreChance > 0 && ThreadSafeRandom.Next(0.0f, 1.0f) < ignoreChance)
+                if (ignoreChance > 0
+                    && ThreadSafeRandom.Next(0.0f, 1.0f) < ignoreChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, BreacherCooldownId, BreacherCooldownSeconds))
                 {
                     // Ignore all armor: restore the full unmitigated damage
                     var fullDamage = damageEvent.DamageBeforeMitigation;
@@ -675,7 +736,8 @@ namespace ACE.Server.WorldObjects
                 && !target.DamageHistory.TotalDamage.ContainsKey(this.Guid))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, StalkerCooldownId, StalkerCooldownSeconds))
                 {
                     var bonusPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus) ?? 0.0;
                     var bonus = damageEvent.Damage * (float)bonusPct;
@@ -1095,7 +1157,7 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Sword, WeaponType.TwoHanded))
             {
                 var burstPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct) ?? 0.0;
-                if (burstPct > 0)
+                if (burstPct > 0 && TryStartMutatorCooldown(damageEvent.Weapon, ResoluteKillCooldownId, ResoluteKillCooldownSeconds))
                 {
                     var hpBurst = (int)Math.Round(Health.MaxValue * burstPct);
                     var stamBurst = (int)Math.Round(Stamina.MaxValue * burstPct);
@@ -1128,7 +1190,8 @@ namespace ACE.Server.WorldObjects
                         procChance = legacyProcChance;
                 }
 
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance)
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, ReaperCooldownId, ReaperCooldownSeconds))
                 {
                     var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct) ?? 0.0;
                     var heal = (int)Math.Round(Health.MaxValue * healPct);
@@ -1317,10 +1380,19 @@ namespace ACE.Server.WorldObjects
 
             if (attackType == CombatType.Melee)
             {
-                var fencerWeapon = GetEquippedWeapon();
+                var fencerWeapon = GetEquippedWeapon(true);
                 var evadeBase = Math.Max(8.0f, fencerWeapon?.Damage ?? 0);
                 TryProcFencerRiposte(creatureAttacker, evadeBase, true);
             }
+        }
+
+        private WorldObject GetOffhandFencerSword()
+        {
+            var offhand = GetDualWieldWeapon();
+            if (offhand?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) != true)
+                return null;
+
+            return WeaponIsType(offhand, WeaponType.Sword) ? offhand : null;
         }
 
         private void TryProcFencerRiposte(Creature attacker, float baseAmount, bool fromEvade)
@@ -1328,13 +1400,16 @@ namespace ACE.Server.WorldObjects
             if (attacker == null || !attacker.IsAlive || baseAmount <= 0)
                 return;
 
-            var fencerWeapon = GetEquippedWeapon();
+            var fencerWeapon = GetEquippedWeapon(true);
             if (fencerWeapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) != true
                 || !WeaponIsType(fencerWeapon, WeaponType.Sword))
                 return;
 
             var riposteChance = fencerWeapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0;
             if (riposteChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= riposteChance)
+                return;
+
+            if (!TryStartMutatorCooldown(fencerWeapon, FencerRiposteCooldownId, FencerRiposteCooldownSeconds))
                 return;
 
             var ripostePct = Math.Clamp((float)(fencerWeapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.15), 0.05f, 0.25f);
@@ -1732,6 +1807,8 @@ namespace ACE.Server.WorldObjects
             if (DateTime.UtcNow <= _goldleafPoiseUntil && source is Creature && damageEvent.Damage > 0)
                 damageEvent.Damage *= 1.0f - Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearPoiseDamageReduction, 0.0f, 0.5f);
 
+            TryApplyOffhandFencerParry(source, damageEvent);
+
             var damageTaken = TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
 
             if (damageTaken > 0 && damageEvent.ShieldMod != 1.0f)
@@ -1741,6 +1818,57 @@ namespace ACE.Server.WorldObjects
             }
 
             return damageTaken;
+        }
+
+        private void TryApplyOffhandFencerParry(WorldObject source, DamageEvent damageEvent)
+        {
+            if (source is not Creature attacker || attacker.IsDead || IsDead || damageEvent.Damage <= 0)
+                return;
+
+            if (damageEvent.CombatType != CombatType.Melee)
+                return;
+
+            var parrySword = GetOffhandFencerSword();
+            if (parrySword == null)
+                return;
+
+            var parryPct = Math.Clamp((float)(parrySword.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct) ?? 0.0), 0.0f, 0.25f);
+            if (parryPct <= 0.0f || ThreadSafeRandom.Next(0.0f, 1.0f) >= parryPct)
+                return;
+
+            if (!TryStartMutatorCooldown(parrySword, FencerParryCooldownId, FencerParryCooldownSeconds))
+                return;
+
+            var parriedDamage = Math.Max(1.0f, (float)Math.Round(damageEvent.Damage * parryPct));
+            damageEvent.Damage = Math.Max(0.0f, damageEvent.Damage - parriedDamage);
+
+            attacker.TakeDamage(this, damageEvent.DamageType, parriedDamage);
+            attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.RegenDownYellow);
+            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillUpPurple);
+
+            TurnToObject(attacker, false);
+            PlayFencerParryPointDown();
+
+            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your {parrySword.NameWithMaterial} snaps low, parrying {(uint)parriedDamage} damage back at {attacker.Name}. [Parry Sword]",
+                    ChatMessageType.CombatSelf));
+        }
+
+        private void PlayFencerParryPointDown()
+        {
+            if (IsDead || CurrentMotionState == null)
+                return;
+
+            var returnStance = CurrentMotionState.Stance;
+            if (returnStance == MotionStance.Invalid)
+                returnStance = MotionStance.SwordCombat;
+
+            var actionChain = new ActionChain();
+            EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.Ready, (MotionCommand)returnStance, 1.0f, 0.20f);
+            EnqueueMotion_Force(actionChain, MotionStance.NonCombat, MotionCommand.PointDown, MotionCommand.Ready, 1.8f, 0.45f);
+            EnqueueMotion_Force(actionChain, returnStance, MotionCommand.Ready, MotionCommand.NonCombat, 1.0f, 0.20f);
+            actionChain.EnqueueChain();
         }
 
         private void TryProcShieldThornsReflect(WorldObject source, DamageEvent damageEvent, uint damageTaken)
@@ -1758,6 +1886,9 @@ namespace ACE.Server.WorldObjects
 
             var reflectDamage = (float)Math.Round(damageTaken * reflectPct);
             if (reflectDamage < 1.0f)
+                return;
+
+            if (!TryStartMutatorCooldown(shield, ShieldThornsCooldownId, ShieldThornsCooldownSeconds))
                 return;
 
             attacker.TakeDamage(this, damageEvent.DamageType, reflectDamage);
@@ -1794,6 +1925,9 @@ namespace ACE.Server.WorldObjects
             var armorLevel = shield.ArmorLevel ?? 0;
             var bashDamage = (float)Math.Round(Math.Min(healthCap, Math.Max(1.0, armorLevel / 10.0)));
             if (bashDamage < 1.0f)
+                return;
+
+            if (!TryStartMutatorCooldown(shield, ShieldBashingCooldownId, ShieldBashingCooldownSeconds))
                 return;
 
             attacker.TakeDamage(this, DamageType.Bludgeon, bashDamage);

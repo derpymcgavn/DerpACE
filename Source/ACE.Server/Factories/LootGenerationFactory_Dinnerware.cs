@@ -97,12 +97,12 @@ namespace ACE.Server.Factories
             if (wo.HasMutateFilter(MutateFilter.Value))
                 MutateValue(wo, profile.Tier, roll);
 
+            if (IsSpecialThrowableTemplate(wo))
+                SanitizeLootThrowableTemplate(wo);
+
             // long desc
             wo.LongDesc = GetLongDesc(wo);
             AppendThrowableDinnerwareMutatorDesc(wo);
-
-            if (wo.WeenieClassId == (uint)RageaRangWcid)
-                RemoveLootImbues(wo);
         }
 
         private static bool IsThrowableDinnerware(WorldObject wo)
@@ -123,7 +123,7 @@ namespace ACE.Server.Factories
             if (!isDiscus)
                 roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
             else
-                SanitizeLootDiscus(wo);
+                SanitizeLootThrowableTemplate(wo);
 
             wo.UnlimitedUse = true;
             wo.ItemType |= ItemType.MissileWeapon;
@@ -233,7 +233,16 @@ namespace ACE.Server.Factories
                 : "\n\nThis dinnerware was raised for the feast instead of the table - each throw can carom through nearby foes for 50%, 25%, 10%, and 5% damage, ringing out with china, crockery, and bad manners.");
         }
 
-        private static void SanitizeLootDiscus(WorldObject wo)
+        private static bool IsSpecialThrowableTemplate(WorldObject wo)
+        {
+            if (wo == null)
+                return false;
+
+            return wo.WeenieClassId == (uint)WeenieClassName.discus
+                || wo.WeenieClassId == (uint)RageaRangWcid;
+        }
+
+        private static void SanitizeLootThrowableTemplate(WorldObject wo)
         {
             if (wo == null)
                 return;

@@ -250,5 +250,9 @@ namespace ACE.Entity.Enum.Properties
         IsQuickeningDagger               = 9055,
         IsDinnerwareBounceProjectile     = 9056,
         IsShadowCloneCaster              = 9057,
+        IsCookingGloves                  = 9058,
+
+        /* DerpACE Ironman Blind submode - hides future skill plan and auto-spends XP */
+        IsIronmanBlind                   = 9059,
     }
 }

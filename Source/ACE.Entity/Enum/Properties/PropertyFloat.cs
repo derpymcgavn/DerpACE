@@ -226,6 +226,7 @@ namespace ACE.Entity.Enum.Properties
         FencerArmorPiercePct           = 9001,  // fraction of mitigated damage restored on exploit/riposte proc
         FencerArmorPierceProc          = 9002,  // per-hit proc chance for exploit opening
         FencerDeflectChance            = 9003,  // per-evade / incoming-hit chance to riposte
+        FencerParryPct                 = 9045,  // offhand chance/reduction/reflect fraction for parry sword behavior
 
         /* DerpACE Ravager's Axe — per-weapon proc values */
         RavagerBleedProc               = 9004,  // per-hit chance to apply a bleed DoT

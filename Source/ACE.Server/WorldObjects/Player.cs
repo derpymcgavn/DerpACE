@@ -530,6 +530,7 @@ namespace ACE.Server.WorldObjects
 
             // DerpACE: clean up aura tick state.
             AuraManager.OnPlayerLogout(this);
+            RemoveWellFedOnLogout();
 
             PlayerManager.AddPlayerToFinalLogoffQueue(this);
 
@@ -634,6 +635,15 @@ namespace ACE.Server.WorldObjects
         }
 
         public double LogOffFinalizedTime;
+
+        private void RemoveWellFedOnLogout()
+        {
+            foreach (var item in new List<WorldObject>(EquippedObjects.Values))
+            {
+                if (Food.IsCookingGloves(item))
+                    Food.RemoveWellFedFromGloves(this, item);
+            }
+        }
 
         public bool ForcedLogOffRequested;
 

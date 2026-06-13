@@ -454,12 +454,18 @@ namespace ACE.Server.Factories
                     ACE.Server.Managers.DerpACEConfig.FencerDeflectMax,
                     profile.Tier,
                     ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier);
+                var parryPct = RollTierScaledInt(
+                    5,
+                    15,
+                    profile.Tier,
+                    ACE.Server.Managers.DerpACEConfig.FencerBladeMinTier);
 
                 wo.Name = wo.Name + " of the Fencer";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct,  piercePct  / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc, pierceProc / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance,   deflectChance / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct,         parryPct / 100.0);
                 wo.IconOverlayId = 0x06002699u;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
@@ -471,7 +477,8 @@ namespace ACE.Server.Factories
                 var fencerPierceProc = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc) ?? 0.0) * 100.0;
                 var fencerPiercePct = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.0) * 100.0;
                 var fencerRiposteChance = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0) * 100.0;
-                wo.LongDesc = GetLongDesc(wo) + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling -- each strike has a {fencerPierceProc:0}% chance to exploit an opening, dealing bonus damage equal to {fencerPiercePct:0}% of what the target's armor stopped. It also has a {fencerRiposteChance:0}% chance to riposte incoming melee pressure with a precise counterthrust.";
+                var fencerParryPct = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct) ?? 0.0) * 100.0;
+                wo.LongDesc = GetLongDesc(wo) + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling -- each strike has a {fencerPierceProc:0}% chance to exploit an opening, dealing bonus damage equal to {fencerPiercePct:0}% of what the target's armor stopped. It also has a {fencerRiposteChance:0}% chance to riposte incoming melee pressure with a precise counterthrust. When held offhand, it becomes a parry sword: {fencerParryPct:0}% chance to reduce and reflect {fencerParryPct:0}% of incoming melee damage.";
             }
 
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)

@@ -2327,7 +2327,7 @@ namespace ACE.Server.Command.Handlers
             log.Info($"Physics ObjMaint Audit Completed. Errors - objectTable: {objectTableErrors}, visibleObjectTable: {visibleObjectTableErrors}, voyeurTable: {voyeurTableErrors}");
         }
 
-        [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid, classname, weapon, or shield> <tier> [luck=0-1] [mutator=name]")]
+        [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid, classname, or weapon> <tier> [luck=0-1] [mutator=name]")]
         public static void HandleLootGen(Session session, params string[] parameters)
         {
             WorldObject wo = null;
@@ -2408,14 +2408,8 @@ namespace ACE.Server.Command.Handlers
                 || parameters[0].Equals("randomweapon", StringComparison.OrdinalIgnoreCase)
                 || parameters[0].Equals("random_weapon", StringComparison.OrdinalIgnoreCase);
 
-            var randomShield = parameters[0].Equals("shield", StringComparison.OrdinalIgnoreCase)
-                || parameters[0].Equals("randomshield", StringComparison.OrdinalIgnoreCase)
-                || parameters[0].Equals("random_shield", StringComparison.OrdinalIgnoreCase);
-
             if (randomWeapon)
                 wo = LootGenerationFactory.CreateWeapon(profile, true, forcedMutator);
-            else if (randomShield)
-                wo = LootGenerationFactory.CreateShield(profile, true, forcedMutator);
             else if (uint.TryParse(parameters[0], out var wcid))
                 wo = WorldObjectFactory.CreateNewWorldObject(wcid);
             else
@@ -2427,13 +2421,15 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            if (!randomWeapon && !randomShield && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
+            var forceShieldMutatorOnShield = forcedMutatorIsShield && wo.IsShield;
+
+            if (!randomWeapon && !forceShieldMutatorOnShield && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
             {
                 session.Network.EnqueueSend(new GameMessageSystemChat($"{wo.Name} ({wo.WeenieClassId}) missing PropertyInt.TsysMutationData", ChatMessageType.Broadcast));
                 return;
             }
 
-            var success = randomWeapon || randomShield || LootGenerationFactory.MutateItem(wo, profile, true, forcedMutator);
+            var success = randomWeapon || LootGenerationFactory.MutateItem(wo, profile, true, forcedMutator);
 
             if (!success)
             {

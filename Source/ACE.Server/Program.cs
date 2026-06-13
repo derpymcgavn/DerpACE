@@ -266,6 +266,9 @@ namespace ACE.Server
             log.Info("Starting DatabaseManager...");
             DatabaseManager.Start();
 
+            log.Info("Initializing CustomSpellManager...");
+            CustomSpellManager.Initialize();
+
             // DerpACE: clean up any IsDeleted characters that never finished purging and
             // any orphan biota_properties_* rows before GuidManager hands out dynamic ids.
             log.Info("Running shard startup cleanup (deleted characters + orphan biota properties)...");

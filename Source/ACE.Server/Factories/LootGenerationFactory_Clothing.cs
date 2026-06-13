@@ -13,52 +13,10 @@ using ACE.Server.Factories.Tables.Wcids;
 using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
-using WeenieClassName = ACE.Server.Factories.Enum.WeenieClassName;
-
 namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
-        private static readonly WeenieClassName[] ShieldLootWcids =
-        {
-            WeenieClassName.buckler,
-            WeenieClassName.shieldkite,
-            WeenieClassName.shieldround,
-            WeenieClassName.shieldkitelarge,
-            WeenieClassName.shieldroundlarge,
-            WeenieClassName.shieldtower,
-            WeenieClassName.shieldcovenant,
-            WeenieClassName.ace37291_olthoishield,
-        };
-
-        public static WorldObject CreateShield(TreasureDeath profile, bool isMagical, string forcedShieldMutator = null)
-        {
-            var treasureRoll = new TreasureRoll(TreasureItemType.Armor)
-            {
-                Wcid = ShieldLootWcids[ThreadSafeRandom.Next(0, ShieldLootWcids.Length - 1)],
-                ForcedWeaponMutator = forcedShieldMutator
-            };
-
-            treasureRoll.ArmorType = GetShieldArmorType(treasureRoll.Wcid);
-
-            var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
-            treasureRoll.BaseArmorLevel = wo.ArmorLevel ?? 0;
-
-            MutateArmor(wo, profile, isMagical, treasureRoll);
-
-            return wo;
-        }
-
-        private static TreasureArmorType GetShieldArmorType(WeenieClassName wcid)
-        {
-            return wcid switch
-            {
-                WeenieClassName.shieldcovenant => TreasureArmorType.Covenant,
-                WeenieClassName.ace37291_olthoishield => TreasureArmorType.Olthoi,
-                _ => TreasureArmorType.Undef,
-            };
-        }
-
         private static void TryMutateShieldAffixes(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
         {
             if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !wo.IsShield)
@@ -148,7 +106,7 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyBool.IsBashingShield, true);
             wo.SetProperty(PropertyFloat.ShieldBashingProcChance, 0.10);
             wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, 0.10);
-            wo.IconOverlayId = 0x06002878u;
+            wo.IconOverlayId = 0x06001B3Cu;
             ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
             wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker, knocking monsters back, dealing damage based on shield armor level, and interrupting monster spell windups.";
@@ -250,9 +208,80 @@ namespace ACE.Server.Factories
             if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
             {
                 TryMutateUnarmedDamage(wo, profile);
+                TryMutateCookingGloves(wo, profile);
             }
 
             TryMutateShieldAffixes(wo, profile, roll);
+        }
+
+        private static void TryMutateCookingGloves(WorldObject wo, TreasureDeath profile)
+        {
+            if (wo == null || profile == null)
+                return;
+
+            var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
+            if (!validLocs.HasFlag(EquipMask.HandWear))
+                return;
+
+            if (profile.Tier < 4)
+                return;
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.08f)
+                return;
+
+            wo.SetProperty(PropertyBool.IsCookingGloves, true);
+            wo.Name = $"{wo.Name} of the Culinarian";
+            wo.IconUnderlayId = 0x06001B3Cu;
+            ApplyLootUiEffect(wo, UiEffects.BoostStamina);
+            AddSpecializedCookingWieldRequirement(wo);
+            wo.CooldownId = Food.WellFedCooldownId;
+            wo.CooldownDuration = Food.WellFedDurationSeconds;
+
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nRequires specialized Cooking to wear.\nWhile worn, these gloves track each food item you eat. Every tenth meal grants Well Fed for 2 hours, increasing all primary attributes by 5. Removing the gloves or logging out removes the buff, but the gloves continue cooling down in real time.";
+        }
+
+        private static void AddSpecializedCookingWieldRequirement(WorldObject wo)
+        {
+            var skill = (int)Skill.Cooking;
+            var difficulty = (int)SkillAdvancementClass.Specialized;
+
+            if (IsSpecializedCookingRequirement(wo.WieldRequirements, wo.WieldSkillType, wo.WieldDifficulty) ||
+                IsSpecializedCookingRequirement(wo.WieldRequirements2, wo.WieldSkillType2, wo.WieldDifficulty2) ||
+                IsSpecializedCookingRequirement(wo.WieldRequirements3, wo.WieldSkillType3, wo.WieldDifficulty3) ||
+                IsSpecializedCookingRequirement(wo.WieldRequirements4, wo.WieldSkillType4, wo.WieldDifficulty4))
+                return;
+
+            if (wo.WieldRequirements == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements = WieldRequirement.Training;
+                wo.WieldSkillType = skill;
+                wo.WieldDifficulty = difficulty;
+            }
+            else if (wo.WieldRequirements2 == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements2 = WieldRequirement.Training;
+                wo.WieldSkillType2 = skill;
+                wo.WieldDifficulty2 = difficulty;
+            }
+            else if (wo.WieldRequirements3 == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements3 = WieldRequirement.Training;
+                wo.WieldSkillType3 = skill;
+                wo.WieldDifficulty3 = difficulty;
+            }
+            else if (wo.WieldRequirements4 == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements4 = WieldRequirement.Training;
+                wo.WieldSkillType4 = skill;
+                wo.WieldDifficulty4 = difficulty;
+            }
+        }
+
+        private static bool IsSpecializedCookingRequirement(WieldRequirement requirement, int? skillType, int? difficulty)
+        {
+            return requirement == WieldRequirement.Training &&
+                   skillType == (int)Skill.Cooking &&
+                   difficulty >= (int)SkillAdvancementClass.Specialized;
         }
 
 

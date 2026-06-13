@@ -181,6 +181,9 @@ namespace ACE.Server.WorldObjects
             if (bounceTarget == null)
                 return;
 
+            if (!sourcePlayer.TryStartMutatorCooldown(launcher, Player.RicochetCooldownId, Player.RicochetCooldownSeconds))
+                return;
+
             var origin = firstTarget.Location.Pos;
             origin.Z += firstTarget.Height * 0.5f;
 
@@ -277,6 +280,9 @@ namespace ACE.Server.WorldObjects
             }
 
             if (bounceTargets.Count == 0)
+                return;
+
+            if (!sourcePlayer.TryStartMutatorCooldown(dinnerwareSource, Player.DinnerwareCooldownId, Player.DinnerwareCooldownSeconds))
                 return;
 
             var damageScales = new[] { 0.50, 0.25, 0.10, 0.05 };

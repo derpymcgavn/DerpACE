@@ -203,7 +203,7 @@ namespace ACE.Server.Factories
 
         // ---------- Public entry point ----------
 
-        public static void InitializeIronman(Player player, bool noNonHuman = false)
+        public static void InitializeIronman(Player player, bool noNonHuman = false, bool blind = false)
         {
             if (player == null) return;
 
@@ -225,7 +225,7 @@ namespace ACE.Server.Factories
                 player.SendMessage("Ironman step 1/6: rerolling heritage, appearance, attributes, and skills...");
                 RollHeritageAndAppearance(player, noNonHuman);
                 RollAttributes(player);
-                rolledPrimary = RollSkills(player);
+                rolledPrimary = RollSkills(player, blind: blind);
             });
 
             chain.AddDelaySeconds(1.0);
@@ -274,6 +274,7 @@ namespace ACE.Server.Factories
 
                 // Final pass after all conversion actions so every remaining item is correctly tagged.
                 TagAllPossessions(player);
+                AutoSpendBlindIronmanXp(player);
 
                 player.SendMessage(DerpACEConfig.IronmanWelcomeMessage);
                 for (var i = 0; i < 6; i++)
@@ -294,6 +295,7 @@ namespace ACE.Server.Factories
             // Hardcore + flag + visual
             ApplyHardcore(player);
             ApplyIronmanFlag(player);
+            ApplyIronmanBlindFlag(player, blind);
         }
 
         // ---------- Nomad public entry point ----------
@@ -309,7 +311,7 @@ namespace ACE.Server.Factories
         /// Starter gear still flows through GiveStarterGear (the equip restrictions block
         /// nomads from actually wielding weapons granted to the Light Weapons skill).
         /// </summary>
-        public static void InitializeIronmanNomad(Player player, bool noNonHuman = false)
+        public static void InitializeIronmanNomad(Player player, bool noNonHuman = false, bool blind = false)
         {
             if (player == null) return;
 
@@ -328,7 +330,7 @@ namespace ACE.Server.Factories
                 player.SendMessage("Nomad step 1/6: rerolling heritage, appearance, random attributes, and skills...");
                 RollHeritageAndAppearance(player, noNonHuman);
                 RollAttributesRandom(player);
-                RollSkills(player, forcedWeaponSkill: Skill.LightWeapons, forcedWeaponIsMagic: false, specializeArcaneLore: true);
+                RollSkills(player, forcedWeaponSkill: Skill.LightWeapons, forcedWeaponIsMagic: false, specializeArcaneLore: true, blind: blind);
             });
 
             chain.AddDelaySeconds(1.0);
@@ -370,6 +372,7 @@ namespace ACE.Server.Factories
                 GiveStarterGear(player);
                 GiveNomadGauntletsAndShoes(player);
                 TagAllPossessions(player);
+                AutoSpendBlindIronmanXp(player);
 
                 player.SendMessage("As a Nomad, you cannot wield weapons or casters. Your damage will come from elemental gauntlets and shoes.");
                 player.SendMessage(DerpACEConfig.IronmanWelcomeMessage);
@@ -391,6 +394,7 @@ namespace ACE.Server.Factories
             ApplyHardcore(player);
             ApplyIronmanFlag(player);
             ApplyIronmanNomadFlag(player);
+            ApplyIronmanBlindFlag(player, blind);
         }
 
         private static void ApplyIronmanNomadFlag(Player player)
@@ -614,8 +618,10 @@ namespace ACE.Server.Factories
         /// Resets all skills, builds a level-milestone plan, and immediately applies any skills
         /// due at the character's current level.  Returns the rolled primary skill.
         /// </summary>
-        public static Skill RollSkills(Player player, Skill forcedWeaponSkill = Skill.None, bool forcedWeaponIsMagic = false, bool specializeArcaneLore = false)
+        public static Skill RollSkills(Player player, Skill forcedWeaponSkill = Skill.None, bool forcedWeaponIsMagic = false, bool specializeArcaneLore = false, bool blind = false)
         {
+            var showDebug = player.Session != null && !blind;
+
             // Reset every skill to Untrained (refunds credits + xp for trained/spec'd skills)
             foreach (Skill skill in System.Enum.GetValues(typeof(Skill)))
             {
@@ -641,7 +647,7 @@ namespace ACE.Server.Factories
             // Set starting skill credits to 52 for level 1 Ironman
             player.AvailableSkillCredits = 52;
 
-            if (player.Session != null)
+            if (showDebug)
                 player.SendMessage($"[Ironman Debug] Starting with {player.AvailableSkillCredits} skill credits", ChatMessageType.System);
 
             // Now train base skills at no cost (they're pre-trained at level 1)
@@ -652,7 +658,7 @@ namespace ACE.Server.Factories
                 {
                     player.TrainSkill(baseSkill, 0); // 0 cost for base skills - DO NOT SPECIALIZE
 
-                    if (player.Session != null)
+                    if (showDebug)
                         player.SendMessage($"[Ironman Debug] Pre-trained {baseSkill} (0 credits, TRAINED only)", ChatMessageType.System);
                 }
             }
@@ -668,7 +674,7 @@ namespace ACE.Server.Factories
                         player.SpecializeSkill(Skill.ArcaneLore, specCost, false);
                         SendIronmanSkillUpdate(player, Skill.ArcaneLore);
 
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Nomad Debug] Specialized Arcane Lore ({specCost} credits). Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                     }
                 }
@@ -690,7 +696,7 @@ namespace ACE.Server.Factories
                 // Verify we have enough credits for train + spec
                 var totalWeaponCost = trainCost + specCost;
 
-                if (player.Session != null)
+                if (showDebug)
                     player.SendMessage($"[Ironman Debug] Attempting weapon {rolledWeapon.Skill}: train ({trainCost}) + spec ({specCost}) = {totalWeaponCost} total. Available: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
 
                 if ((player.AvailableSkillCredits ?? 0) >= totalWeaponCost)
@@ -700,12 +706,12 @@ namespace ACE.Server.Factories
                     {
                         bool specSuccess = player.SpecializeSkill(rolledWeapon.Skill, specCost, false);
 
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Ironman Debug] Weapon {rolledWeapon.Skill}: train={trainSuccess}, spec={specSuccess}. Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                     }
                     else
                     {
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Ironman Debug] FAILED to train weapon {rolledWeapon.Skill}! Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                     }
                 }
@@ -716,12 +722,12 @@ namespace ACE.Server.Factories
                     {
                         bool trainSuccess = player.TrainSkill(rolledWeapon.Skill, trainCost);
 
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Ironman Debug] Weapon {rolledWeapon.Skill}: trained only ({trainCost}), train={trainSuccess}. Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                     }
                     else
                     {
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Ironman Debug] Cannot afford weapon {rolledWeapon.Skill} train cost ({trainCost}). Available: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                     }
                 }
@@ -748,11 +754,11 @@ namespace ACE.Server.Factories
                                 plan[Skill.ManaConversion] = 0;
                                 SendIronmanSkillUpdate(player, Skill.ManaConversion);
 
-                                if (player.Session != null)
+                                if (showDebug)
                                     player.SendMessage($"[Ironman Debug] Auto-trained Mana Conversion for magic spec ({mcTrainCost} credits). Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                             }
                         }
-                        else if (player.Session != null)
+                        else if (showDebug)
                         {
                             player.SendMessage($"[Ironman Debug] Cannot afford Mana Conversion ({mcTrainCost} credits, have {player.AvailableSkillCredits ?? 0}); magic spec will be mana-starved.", ChatMessageType.System);
                         }
@@ -807,12 +813,12 @@ namespace ACE.Server.Factories
                             trainedAtCreation.Add(primaryOption.Skill);
                             SendIronmanSkillUpdate(player, primaryOption.Skill);
 
-                            if (player.Session != null)
+                            if (showDebug)
                                 player.SendMessage($"[Ironman Debug] Trained {primaryOption.Skill} ({trainCost} credits). Remaining: {player.AvailableSkillCredits ?? 0}", ChatMessageType.System);
                         }
                         else
                         {
-                            if (player.Session != null)
+                            if (showDebug)
                                 player.SendMessage($"[Ironman Debug] FAILED to train {primaryOption.Skill} (tried {trainCost} credits, have {player.AvailableSkillCredits ?? 0})", ChatMessageType.System);
                         }
                     }
@@ -820,7 +826,7 @@ namespace ACE.Server.Factories
                     {
                         // Not enough credits left, this skill will be assigned to a milestone
                         // Don't break - keep checking other skills that might be cheaper
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Ironman Debug] Skipped {primaryOption.Skill} (need {trainCost}, have {player.AvailableSkillCredits ?? 0})", ChatMessageType.System);
                     }
                 }
@@ -849,7 +855,7 @@ namespace ACE.Server.Factories
             int totalCreditsAllocated = 0;
             int currentMilestoneIndex = 0;
 
-            if (player.Session != null)
+            if (showDebug)
                 player.SendMessage($"[Ironman Debug] Assigning {untrainedSkills.Count} untrained skills to milestones...", ChatMessageType.System);
 
             foreach (var (skill, trainCost) in untrainedSkills)
@@ -886,7 +892,7 @@ namespace ACE.Server.Factories
                         totalCreditsAllocated += trainCost;
                         assigned = true;
 
-                        if (player.Session != null)
+                        if (showDebug)
                             player.SendMessage($"[Ironman Debug] Assigned {skill} to level {milestoneLevel} (cost {trainCost}, remaining {remainingCredits - trainCost}/{cumulativeCreditsAtLevel})", ChatMessageType.System);
 
                         break;
@@ -898,7 +904,7 @@ namespace ACE.Server.Factories
                     // Could not find any milestone with enough credits
                     plan[skill] = -2; // never unlock
 
-                    if (player.Session != null)
+                    if (showDebug)
                         player.SendMessage($"[Ironman Debug] {skill} marked as UNOBTAINABLE (cost {trainCost}, max credits {SkillCreditsPerLevel[SkillMilestones[SkillMilestones.Length - 1]]})", ChatMessageType.System);
                 }
             }
@@ -1187,6 +1193,8 @@ namespace ACE.Server.Factories
             // Nomads collect one new element every other level (2,4,6,...,14 => all 7 elements).
             if (player.GetProperty(PropertyBool.IsIronmanNomad) == true && level >= 2 && level <= 14 && level % 2 == 0)
                 GrantNextNomadElement(player);
+
+            AutoSpendBlindIronmanXp(player);
         }
 
         // ---------- Inventory wipe ----------
@@ -1349,6 +1357,58 @@ namespace ACE.Server.Factories
                 player.Name = newName;
                 player.SavePlayerToDatabase();
             }
+        }
+
+        private static void ApplyIronmanBlindFlag(Player player, bool blind)
+        {
+            if (!blind)
+                return;
+
+            player.SetProperty(PropertyBool.IsIronmanBlind, true);
+            player.SendMessage("Blind progression is active. Future skill milestones are hidden, and XP will be spent automatically.", ChatMessageType.System);
+        }
+
+        public static void AutoSpendBlindIronmanXp(Player player)
+        {
+            if (player == null || player.GetProperty(PropertyBool.IsIronmanBlind) != true)
+                return;
+
+            var guard = 0;
+            while ((player.AvailableExperience ?? 0) > 0 && guard++ < 5000)
+            {
+                var nextSkill = player.Skills.Values
+                    .Where(skill => skill.AdvancementClass >= SkillAdvancementClass.Trained && !skill.IsMaxRank)
+                    .OrderBy(skill => skill.Ranks)
+                    .ThenBy(skill => skill.Skill)
+                    .FirstOrDefault();
+
+                if (nextSkill == null)
+                    break;
+
+                var xpToNextRank = player.GetXPBetweenSkillLevels(nextSkill.AdvancementClass, nextSkill.Ranks, nextSkill.Ranks + 1);
+                if (xpToNextRank == null || xpToNextRank == 0)
+                    break;
+
+                var amount = (uint)Math.Min(Math.Min((ulong)Math.Max(player.AvailableExperience ?? 0, 0), xpToNextRank.Value), uint.MaxValue);
+                if (amount == 0)
+                    break;
+
+                player.HandleActionRaiseSkill(nextSkill.Skill, amount);
+            }
+
+            if ((player.AvailableExperience ?? 0) <= 0)
+                return;
+
+            player.SpendAllAvailableVitalXp(player.Health, true);
+            player.SpendAllAvailableVitalXp(player.Stamina, true);
+            player.SpendAllAvailableVitalXp(player.Mana, true);
+
+            player.SpendAllAvailableAttributeXp(player.Strength, true);
+            player.SpendAllAvailableAttributeXp(player.Endurance, true);
+            player.SpendAllAvailableAttributeXp(player.Coordination, true);
+            player.SpendAllAvailableAttributeXp(player.Quickness, true);
+            player.SpendAllAvailableAttributeXp(player.Focus, true);
+            player.SpendAllAvailableAttributeXp(player.Self, true);
         }
 
         // ---------- Item tagging ----------

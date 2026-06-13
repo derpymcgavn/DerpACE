@@ -108,6 +108,9 @@ namespace ACE.Server.WorldObjects
                 Session.Network.EnqueueSend(xpTotalUpdate, xpAvailUpdate);
 
                 CheckForLevelup();
+
+                if (GetProperty(PropertyBool.IsIronmanBlind) == true)
+                    ACE.Server.Factories.IronmanFactory.AutoSpendBlindIronmanXp(this);
             }
 
             if (xpType == XpType.Quest)
