@@ -275,6 +275,19 @@ namespace ACE.Server.WorldObjects
             var ratingMod = BoostValue > 0 ? player.GetHealingRatingMod() : 1.0f;
 
             var boostValue = (int)Math.Round(BoostValue * ratingMod);
+            if (BoostValue > 0)
+            {
+                var culinarianBonus = GetCulinarianRestoreBonus(player, out var perfectMeal);
+                if (culinarianBonus > 0)
+                {
+                    boostValue = (int)Math.Round(boostValue * (1.0 + culinarianBonus));
+
+                    if (perfectMeal)
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                            "Your culinary gloves flare warmly. That meal really hit the spot.",
+                            ChatMessageType.System));
+                }
+            }
 
             var vitalChange = (uint)Math.Abs(player.UpdateVitalDelta(vital, boostValue));
 
@@ -295,6 +308,28 @@ namespace ACE.Server.WorldObjects
                 player.OnDeath(player.DamageHistory.LastDamager, DamageType.Health, false);
                 player.Die();
             }
+        }
+
+        private static double GetCulinarianRestoreBonus(Player player, out bool perfectMeal)
+        {
+            perfectMeal = false;
+
+            var cookingGloves = GetCookingGlovesEquipped(player);
+            if (cookingGloves == null)
+                return 0.0;
+
+            var cooldownRemaining = GetWellFedCooldownRemaining(cookingGloves);
+            if (cooldownRemaining <= 0)
+            {
+                var count = player.GetProperty(PropertyInt.WellFedFoodCount) ?? 0;
+                if (count >= WellFedRequiredMeals - 1)
+                {
+                    perfectMeal = true;
+                    return 0.25;
+                }
+            }
+
+            return Math.Clamp(cookingGloves.GetProperty(PropertyFloat.CulinarianRestoreBonusPct) ?? 0.10, 0.0, 0.25);
         }
 
         public void CastSpell(Player player)

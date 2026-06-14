@@ -6,7 +6,10 @@ namespace ACE.Server.Command.Handlers
 {
     public static class DerpACECustomSpellCommands
     {
-        [CommandHandler("customspells", AccessLevel.Admin, CommandHandlerFlag.ConsoleInvoke, 0,
+        [CommandHandler("customspells", AccessLevel.Admin, CommandHandlerFlag.None, 0,
+            "Manages DerpACE custom spell JSON/SQL files.",
+            "reload\nexport <spellId>\nexportcopy <spellId>\nimport <file.sql>")]
+        [CommandHandler("customspell", AccessLevel.Admin, CommandHandlerFlag.None, 0,
             "Manages DerpACE custom spell JSON/SQL files.",
             "reload\nexport <spellId>\nexportcopy <spellId>\nimport <file.sql>")]
         public static void HandleCustomSpells(Session session, params string[] parameters)

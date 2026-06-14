@@ -110,6 +110,9 @@ namespace ACE.Server.Pathfinding
         /// </summary>
         public static List<Position> FindRoute(Position start, Position end, AgentWidth agentWidth, bool drawRoute = false)
         {
+            if (!IsValidRoutePosition(start) || !IsValidRoutePosition(end))
+                return null;
+
             // Same landblock => single fast-path query.
             if ((start.Cell & 0xFFFF0000) == (end.Cell & 0xFFFF0000))
                 return FindRouteSegment(start, end, start.Cell, agentWidth, drawRoute);
@@ -189,6 +192,9 @@ namespace ACE.Server.Pathfinding
             exitPos = null;
             entryPos = null;
 
+            if (!IsValidRoutePosition(current) || !IsValidRoutePosition(end))
+                return false;
+
             // World offset from current to end (in AC ground units, X east, Y north).
             var dx = (end.LandblockId.LandblockX - current.LandblockId.LandblockX) * 192f + (end.PositionX - current.PositionX);
             var dy = (end.LandblockId.LandblockY - current.LandblockId.LandblockY) * 192f + (end.PositionY - current.PositionY);
@@ -232,29 +238,26 @@ namespace ACE.Server.Pathfinding
             if (hopY > 0) { exitY -= edgeEps; entryY += edgeEps; }
             else if (hopY < 0) { exitY += edgeEps; entryY -= edgeEps; }
 
-            byte newX, newY;
-            try
-            {
-                newX = (byte)(current.LandblockId.LandblockX + hopX);
-                newY = (byte)(current.LandblockId.LandblockY + hopY);
-            }
-            catch
-            {
+            var nextX = current.LandblockId.LandblockX + hopX;
+            var nextY = current.LandblockId.LandblockY + hopY;
+            if (nextX < byte.MinValue || nextX > byte.MaxValue || nextY < byte.MinValue || nextY > byte.MaxValue)
                 return false;
-            }
 
             var exitLb = current.LandblockId;
-            var newLb = new LandblockId(newX, newY);
+            var newLb = new LandblockId((byte)nextX, (byte)nextY);
             uint exitCell = (exitLb.Raw & 0xFFFF0000) | 1u;
             uint entryCell = (newLb.Raw & 0xFFFF0000) | 1u;
 
             exitPos = new Position(exitCell, new Vector3(exitX, exitY, exitZ), Quaternion.Identity);
             entryPos = new Position(entryCell, new Vector3(entryX, entryY, exitZ), Quaternion.Identity);
-            return true;
+            return IsValidRoutePosition(exitPos) && IsValidRoutePosition(entryPos);
         }
 
         private static List<Position> FindRouteSegment(Position start, Position end, uint cellForOutput, AgentWidth agentWidth, bool drawRoute)
         {
+            if (!IsValidRoutePosition(start) || !IsValidRoutePosition(end))
+                return null;
+
             if (!TryGetMesh(start, agentWidth, out var mesh) || mesh is null)
                 return null;
 
@@ -266,21 +269,49 @@ namespace ACE.Server.Pathfinding
             query.FindNearestPoly(new RcVec3f(start.PositionX, start.PositionZ, start.PositionY), halfExtents, m_filter, out long startRef, out var startPt, out _);
             query.FindNearestPoly(new RcVec3f(end.PositionX, end.PositionZ, end.PositionY), halfExtents, m_filter, out long endRef, out var endPt, out _);
 
+            if (startRef == 0 || endRef == 0)
+                return null;
+
             var polys = new List<long>();
             DtStraightPath[] path = new DtStraightPath[MAX_POLYS];
             rc.FindStraightPath(query, startRef, endRef, startPt, endPt, m_filter, true, ref polys, path, out var straightPathCount, MAX_POLYS, 0);
+
+            if (straightPathCount <= 0)
+                return null;
 
             var positionList = new List<Position>();
             for (int i = 0; i < straightPathCount; i++)
             {
                 var entry = path[i];
-                positionList.Add(new Position(cellForOutput, new Vector3(entry.pos.X, entry.pos.Z, entry.pos.Y), Quaternion.Identity));
+                var position = new Position(cellForOutput, new Vector3(entry.pos.X, entry.pos.Z, entry.pos.Y), Quaternion.Identity);
+                if (IsValidRoutePosition(position))
+                    positionList.Add(position);
             }
+
+            if (positionList.Count == 0)
+                return null;
 
             if (drawRoute)
                 DrawRoute(positionList);
 
             return positionList;
+        }
+
+        private static bool IsValidRoutePosition(Position position)
+        {
+            if (position == null)
+                return false;
+
+            return !float.IsNaN(position.PositionX)
+                && !float.IsNaN(position.PositionY)
+                && !float.IsNaN(position.PositionZ)
+                && !float.IsInfinity(position.PositionX)
+                && !float.IsInfinity(position.PositionY)
+                && !float.IsInfinity(position.PositionZ)
+                && position.PositionX >= -1.0f
+                && position.PositionX <= 193.0f
+                && position.PositionY >= -1.0f
+                && position.PositionY <= 193.0f;
         }
 
         public static bool GetRouteDistance(Position start, Position end, AgentWidth agentWidth, out float distance)

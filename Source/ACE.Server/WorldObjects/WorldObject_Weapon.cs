@@ -241,7 +241,10 @@ namespace ACE.Server.WorldObjects
              Ultimately, we decided to resolve the situation through our changes to the treasure system this month. From now on, missile launchers will have a chance of having an innate defensive bonus, but not an offensive one.
              While many old quest weapons still retain their (useless) attack bonus, we will not be putting any new ones into the system.
              */
-            if (weapon == null || weapon.IsRanged /* see note above */)
+            if (weapon == null)
+                return defaultModifier;
+
+            if (weapon.IsRanged && !IsDerpAceAttackBuffThrowable(weapon) /* see note above */)
                 return defaultModifier;
 
             if (IsInactiveUnarmedArmor(wielder, weapon))
@@ -253,6 +256,24 @@ namespace ACE.Server.WorldObjects
                 offenseMod += wielder.EnchantmentManager.GetAttackMod();
 
             return offenseMod;
+        }
+
+        private static bool IsDerpAceAttackBuffThrowable(WorldObject weapon)
+        {
+            if (weapon == null || !weapon.IsThrownWeapon)
+                return false;
+
+            if (weapon.GetProperty(PropertyBool.IsDinnerwareWeapon) == true)
+                return true;
+
+            if (weapon.WeenieClassId == (uint)ACE.Server.Factories.Enum.WeenieClassName.discus)
+                return true;
+
+            var name = weapon.Name ?? "";
+            return name.IndexOf("Stormwrought", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Greatblade", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Rage-a-Rang", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Rage a Rang", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>

@@ -66,6 +66,10 @@ namespace ACE.Server.Factories
         private static void MutateCaster(WorldObject wo, TreasureDeath profile, bool isMagical, TreasureRoll roll)
         {
             var forcedShadowCloneCaster = IsForcedWeaponModifier(roll, "shadowclone");
+            var forcedSkybreakerCaster = IsForcedWeaponModifier(roll, "skybreaker");
+            var forcedStormcallerCaster = IsForcedWeaponModifier(roll, "stormcaller");
+            var forcedOrbitweaverCaster = IsForcedWeaponModifier(roll, "orbitweaver");
+            var forcedConfusionCaster = IsForcedWeaponModifier(roll, "confusion");
 
             // Ensure custom life caster templates always use the life-damage mutation path.
             if (LifeCasterWcids.Contains((ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId) && wo.W_DamageType == DamageType.Undef)
@@ -77,6 +81,12 @@ namespace ACE.Server.Factories
             // projectile hit hook never sees DamageType.Nether.
             if (forcedShadowCloneCaster)
                 wo.W_DamageType = DamageType.Nether;
+            else if (forcedConfusionCaster)
+                wo.W_DamageType = DamageType.Nether;
+            else if (forcedStormcallerCaster)
+                wo.W_DamageType = DamageType.Electric;
+            else if (forcedSkybreakerCaster || forcedOrbitweaverCaster)
+                wo.W_DamageType = DamageType.Fire;
 
             // mutate ManaConversionMod
             var mutationFilter = MutationCache.GetMutation("Casters.caster.txt");
@@ -216,6 +226,7 @@ namespace ACE.Server.Factories
                 && isMagical
                 && wo.W_DamageType == DamageType.Nether
                 && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
+                && !forcedConfusionCaster
                 && (forcedShadowCloneCaster
                     || (!HasForcedWeaponModifier(roll) && profile.Tier >= 6 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.03f)))
             {
@@ -240,8 +251,132 @@ namespace ACE.Server.Factories
                     + $"\nThe shadow fights alongside your normal pet, mirrors your harmful void projectile and ring casts at {damageScale:P0} damage, and can trigger at most once every {cooldownSeconds:0}s.";
             }
 
+            TryMutateVoidConfusionCaster(wo, profile, roll, isMagical);
+
+            TryMutateWarMageSpecialCaster(wo, profile, roll, isMagical);
+
             // Universal blast-on-strike: rare chance for any elemental caster T5+ to proc a level-3 blast.
             TryRollWeaponBlastProc(wo, profile);
+        }
+
+        private static void TryMutateVoidConfusionCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)
+                return;
+
+            if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHierophantCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneCaster) == true)
+                return;
+
+            var forced = IsForcedWeaponModifier(roll, "confusion");
+            if (!forced && (HasForcedWeaponModifier(roll) || profile.Tier < 6 || wo.W_DamageType != DamageType.Nether || ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.025f))
+                return;
+
+            const double cooldownSeconds = 45.0;
+            var maxTargets = ThreadSafeRandom.Next(1, 4);
+            var duration = ThreadSafeRandom.Next(1, 10);
+
+            wo.Name = wo.Name + " of Bedlam";
+            wo.W_DamageType = DamageType.Nether;
+            wo.SpellDID = ACE.Server.Managers.CustomSpellManager.VoidConfusionSpellId;
+            wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsConfusionCaster, true);
+            wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.VoidConfusionTargetCount, maxTargets);
+            wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.VoidConfusionDurationSeconds, duration);
+            wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.VoidConfusionCooldownSeconds, cooldownSeconds);
+            wo.CooldownId = Player.VoidConfusionCooldownId;
+            wo.CooldownDuration = cooldownSeconds;
+            wo.IconOverlayId = 0x06002860;
+            ApplyLootUiEffects(wo, DamageType.Nether, true);
+            wo.ProcSpell = null;
+            wo.ProcSpellRate = null;
+            wo.ProcSpellSelfTargeted = false;
+
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nBedlam: casts Void Confusion. On hit, if the staff is off cooldown, up to {maxTargets} nearby monsters blindly attack other nearby monsters for {duration} seconds. Cooldown: {cooldownSeconds:0} seconds.";
+        }
+
+        private static void TryMutateWarMageSpecialCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)
+                return;
+
+            if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHierophantCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneCaster) == true)
+                return;
+
+            var forcedSkybreaker = IsForcedWeaponModifier(roll, "skybreaker");
+            var forcedStormcaller = IsForcedWeaponModifier(roll, "stormcaller");
+            var forcedOrbitweaver = IsForcedWeaponModifier(roll, "orbitweaver");
+
+            var isWarCaster = wo.W_DamageType != DamageType.Undef
+                && wo.W_DamageType != DamageType.Health
+                && wo.W_DamageType != DamageType.Nether;
+
+            if (!isWarCaster && !(forcedSkybreaker || forcedStormcaller || forcedOrbitweaver))
+                return;
+
+            string mutator;
+            if (forcedSkybreaker)
+                mutator = "skybreaker";
+            else if (forcedStormcaller)
+                mutator = "stormcaller";
+            else if (forcedOrbitweaver)
+                mutator = "orbitweaver";
+            else
+            {
+                if (HasForcedWeaponModifier(roll) || profile.Tier < 6 || ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.025f)
+                    return;
+
+                mutator = ThreadSafeRandom.Next(0, 2) switch
+                {
+                    0 => "skybreaker",
+                    1 => "stormcaller",
+                    _ => "orbitweaver",
+                };
+            }
+
+            ApplyWarMageSpecialCaster(wo, mutator);
+        }
+
+        private static void ApplyWarMageSpecialCaster(WorldObject wo, string mutator)
+        {
+            switch (mutator)
+            {
+                case "skybreaker":
+                    wo.Name = wo.Name + " of the Skybreaker";
+                    wo.W_DamageType = DamageType.Fire;
+                    wo.SpellDID = ACE.Server.Managers.CustomSpellManager.MeteorSquallSpellId;
+                    wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSkybreakerCaster, true);
+                    wo.IconOverlayId = 0x06001036;
+                    ApplyLootUiEffects(wo, DamageType.Fire, true);
+                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nSkybreaker: casts Meteor Squall, an outdoor-only fire spell. The first impact hits normally, then burning fragments rain over nearby monsters for several short ticks.";
+                    break;
+
+                case "stormcaller":
+                    wo.Name = wo.Name + " of the Stormcaller";
+                    wo.W_DamageType = DamageType.Electric;
+                    wo.SpellDID = ACE.Server.Managers.CustomSpellManager.ChainLightningSpellId;
+                    wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStormcallerCaster, true);
+                    wo.IconOverlayId = 0x06001039;
+                    ApplyLootUiEffects(wo, DamageType.Electric, true);
+                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nStormcaller: casts Chain Lightning. The first bolt hits normally, then arcs through up to four additional nearby monsters with reduced damage each jump.";
+                    break;
+
+                case "orbitweaver":
+                    wo.Name = wo.Name + " of the Orbitweaver";
+                    wo.W_DamageType = DamageType.Fire;
+                    wo.SpellDID = ACE.Server.Managers.CustomSpellManager.SpiralStarSpellId;
+                    wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOrbitweaverCaster, true);
+                    wo.IconOverlayId = 0x06001036;
+                    ApplyLootUiEffects(wo, DamageType.Fire, true);
+                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOrbitweaver: casts Spiral Star. The first hit lands normally, then a circling flame star lashes outward from you toward up to five nearby monsters.";
+                    break;
+            }
+
+            wo.ProcSpell = null;
+            wo.ProcSpellRate = null;
+            wo.ProcSpellSelfTargeted = false;
         }
 
         private static void MutateCaster_SpellDID(WorldObject wo, TreasureDeath profile)

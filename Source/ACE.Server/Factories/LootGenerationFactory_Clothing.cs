@@ -205,31 +205,36 @@ namespace ACE.Server.Factories
 
             wo.LongDesc = GetLongDesc(wo);
 
-            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor)
+            if (roll.ItemType == TreasureItemType.Armor || roll.ItemType == TreasureItemType.SocietyArmor || roll.ItemType == TreasureItemType.Clothing)
             {
-                TryMutateUnarmedDamage(wo, profile);
-                TryMutateCookingGloves(wo, profile);
+                TryMutateUnarmedDamage(wo, profile, roll);
+                TryMutateCookingGloves(wo, profile, roll);
             }
 
             TryMutateShieldAffixes(wo, profile, roll);
         }
 
-        private static void TryMutateCookingGloves(WorldObject wo, TreasureDeath profile)
+        private static void TryMutateCookingGloves(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
         {
             if (wo == null || profile == null)
                 return;
+
+            var forced = IsForcedArmorMutator(roll, "culinarian");
 
             var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
             if (!validLocs.HasFlag(EquipMask.HandWear))
                 return;
 
-            if (profile.Tier < 4)
+            if (!forced && profile.Tier < 4)
                 return;
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.08f)
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.08f)
                 return;
+
+            var restoreBonus = GetCulinarianRestoreBonus(profile);
 
             wo.SetProperty(PropertyBool.IsCookingGloves, true);
+            wo.SetProperty(PropertyFloat.CulinarianRestoreBonusPct, restoreBonus);
             wo.Name = $"{wo.Name} of the Culinarian";
             wo.IconUnderlayId = 0x06001B3Cu;
             ApplyLootUiEffect(wo, UiEffects.BoostStamina);
@@ -237,7 +242,20 @@ namespace ACE.Server.Factories
             wo.CooldownId = Food.WellFedCooldownId;
             wo.CooldownDuration = Food.WellFedDurationSeconds;
 
-            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nRequires specialized Cooking to wear.\nWhile worn, these gloves track each food item you eat. Every tenth meal grants Well Fed for 2 hours, increasing all primary attributes by 5. Removing the gloves or logging out removes the buff, but the gloves continue cooling down in real time.";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRequires specialized Cooking to wear.\nWhile worn, food and drink restore {restoreBonus:P0} more health, stamina, or mana. These gloves track each food item you eat; every tenth meal grants Well Fed for 2 hours, increasing all primary attributes by 5. The triggering meal restores 25% more. Removing the gloves or logging out removes the buff, but the gloves continue cooling down in real time.";
+        }
+
+        private static double GetCulinarianRestoreBonus(TreasureDeath profile)
+        {
+            var tier = profile?.Tier ?? 1;
+
+            if (tier >= 8)
+                return ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f ? 0.25 : 0.20;
+
+            if (tier >= 6)
+                return 0.15;
+
+            return 0.10;
         }
 
         private static void AddSpecializedCookingWieldRequirement(WorldObject wo)
@@ -290,10 +308,12 @@ namespace ACE.Server.Factories
         /// DerpACE: Rolls unarmed damage properties on gauntlets and boots.
         /// These properties only apply when the player has no weapon equipped (truly unarmed).
         /// </summary>
-        private static void TryMutateUnarmedDamage(WorldObject wo, TreasureDeath profile)
+        private static void TryMutateUnarmedDamage(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
         {
             if (wo == null || profile == null)
                 return;
+
+            var forced = IsForcedArmorMutator(roll, "unarmed");
 
             // Only applies to gauntlets (HandWear) and boots (FootWear)
             var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
@@ -304,12 +324,12 @@ namespace ACE.Server.Factories
                 return;
 
             // Only T5+ can roll unarmed damage (keep it rare/high-tier)
-            if (profile.Tier < 5)
+            if (!forced && profile.Tier < 5)
                 return;
 
             // 15% chance to roll unarmed damage properties
             var rollChance = 0.15f;
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
                 return;
 
             // Base damage scales with tier: T5=8-12, T6=12-18, T7=18-25, T8=25-35
@@ -437,6 +457,13 @@ namespace ACE.Server.Factories
 
             // Add visual overlay for unarmed-enabled items
             wo.IconOverlayId = 0x06006C1F; // Special marker icon
+        }
+
+        private static bool IsForcedArmorMutator(TreasureRoll roll, string mutatorName)
+        {
+            return roll != null
+                && TryResolveArmorMutator(roll.ForcedWeaponMutator, out var forcedName)
+                && string.Equals(forcedName, mutatorName, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool AssignArmorLevel(WorldObject wo, TreasureDeath profile, TreasureRoll roll)

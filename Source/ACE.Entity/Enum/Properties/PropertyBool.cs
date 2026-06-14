@@ -254,5 +254,11 @@ namespace ACE.Entity.Enum.Properties
 
         /* DerpACE Ironman Blind submode - hides future skill plan and auto-spends XP */
         IsIronmanBlind                   = 9059,
+
+        /* DerpACE war caster special spell affixes */
+        IsSkybreakerCaster               = 9060,
+        IsStormcallerCaster              = 9061,
+        IsOrbitweaverCaster              = 9062,
+        IsConfusionCaster                = 9063,
     }
 }

@@ -75,6 +75,7 @@ namespace ACE.Server.WorldObjects
         public const int ShieldBashingCooldownId = 2034;
         public const int HierophantCooldownId = 2035;
         public const int FencerParryCooldownId = 2036;
+        public const int VoidConfusionCooldownId = 2037;
         private const float PolebreakerPowerThreshold = 0.70f;
         public const int PolebreakerBreakGuardCooldownId = 2019;
         private const float PolebreakerBreakGuardSlamSpeed = 3.0f;

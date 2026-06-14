@@ -594,8 +594,15 @@ namespace ACE.Server.WorldObjects
                 CurrentRouteBurstRemaining--;
             }
 
-            if (RoutePositionTarget == null)
+            if (!IsValidPathPosition(RoutePositionTarget))
             {
+                EndRoute();
+                return;
+            }
+
+            if (Location != null && (RoutePositionTarget.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+            {
+                log.Warn($"{Name} ({Guid}) ended route before unsafe cross-landblock MoveTo: here={Location.Cell:X8}, waypoint={RoutePositionTarget.Cell:X8}");
                 EndRoute();
                 return;
             }

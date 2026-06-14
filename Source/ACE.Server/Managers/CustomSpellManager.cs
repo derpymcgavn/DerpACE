@@ -33,6 +33,18 @@ namespace ACE.Server.Managers
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
         public const uint WellFedSpellId = 65001;
+        public const uint MeteorSquallSpellId = 65002;
+        public const uint SpiralStarSpellId = 65003;
+        public const uint ChainLightningSpellId = 65004;
+        public const uint VoidConfusionSpellId = 65005;
+
+        public static bool IsCustomWarProjectileSpell(uint spellId)
+        {
+            return spellId == MeteorSquallSpellId
+                || spellId == SpiralStarSpellId
+                || spellId == ChainLightningSpellId
+                || spellId == VoidConfusionSpellId;
+        }
 
         private const string ContentDirectoryEnvVar = "DERPACE_CUSTOM_SPELLS_DIR";
         private const uint FirstCustomSpellId = 65001;
@@ -53,14 +65,20 @@ namespace ACE.Server.Managers
             ContentDir = ResolveContentDir(contentDir);
             Directory.CreateDirectory(ContentDir);
             EnsureDefaultWellFedSpell();
+            EnsureDefaultWarMageSpells();
+            EnsureDefaultVoidConfusionSpell();
 
             var loaded = LoadAll();
+            EnsureWarMageSpecialTrajectories();
+            EnsureVoidConfusionVisuals();
             log.Info($"CustomSpellManager: Initialized. Loaded {loaded} custom spell definition(s) from {ContentDir}.");
         }
 
         public static int Reload()
         {
             var loaded = LoadAll();
+            EnsureWarMageSpecialTrajectories();
+            EnsureVoidConfusionVisuals();
             log.Info($"CustomSpellManager: Reloaded {loaded} custom spell definition(s) from {ContentDir}.");
             return loaded;
         }
@@ -391,11 +409,57 @@ namespace ACE.Server.Managers
             if (TryReadInt(element, "NumProjectiles", out var numProjectiles))
                 dbSpell.NumProjectiles = numProjectiles;
 
+            if (TryReadInt(element, "NumProjectilesVariance", out var numProjectilesVariance))
+                dbSpell.NumProjectilesVariance = numProjectilesVariance;
+
+            if (TryReadFloat(element, "SpreadAngle", out var spreadAngle))
+                dbSpell.SpreadAngle = spreadAngle;
+
+            if (TryReadFloat(element, "VerticalAngle", out var verticalAngle))
+                dbSpell.VerticalAngle = verticalAngle;
+
+            if (TryReadFloat(element, "DefaultLaunchAngle", out var defaultLaunchAngle))
+                dbSpell.DefaultLaunchAngle = defaultLaunchAngle;
+
+            if (TryReadBool(element, "NonTracking", out var nonTracking))
+                dbSpell.NonTracking = nonTracking;
+
+            if (TryReadVector3(element, "CreateOffset", out var createOffset))
+            {
+                dbSpell.CreateOffsetOriginX = createOffset.X;
+                dbSpell.CreateOffsetOriginY = createOffset.Y;
+                dbSpell.CreateOffsetOriginZ = createOffset.Z;
+            }
+
+            if (TryReadVector3(element, "Padding", out var padding))
+            {
+                dbSpell.PaddingOriginX = padding.X;
+                dbSpell.PaddingOriginY = padding.Y;
+                dbSpell.PaddingOriginZ = padding.Z;
+            }
+
+            if (TryReadVector3(element, "Dims", out var dims))
+            {
+                dbSpell.DimsOriginX = dims.X;
+                dbSpell.DimsOriginY = dims.Y;
+                dbSpell.DimsOriginZ = dims.Z;
+            }
+
+            if (TryReadVector3(element, "Peturbation", out var peturbation))
+            {
+                dbSpell.PeturbationOriginX = peturbation.X;
+                dbSpell.PeturbationOriginY = peturbation.Y;
+                dbSpell.PeturbationOriginZ = peturbation.Z;
+            }
+
             if (TryReadDouble(element, "DotDuration", out var dotDuration))
                 dbSpell.DotDuration = dotDuration;
 
             if (TryReadUInt(element, "Wcid", out var wcid))
                 dbSpell.Wcid = wcid;
+
+            if (TryReadUIntList(element, "Formula", out var formula))
+                SetSpellBase(spellBase, nameof(SpellBase.Formula), formula);
 
             if (TryGet(element, "SpellBase", out var spellBaseElement) && spellBaseElement.ValueKind == JsonValueKind.Object)
                 ApplySpellBaseProperties(spellBaseElement, spellBase);
@@ -764,6 +828,13 @@ namespace ACE.Server.Managers
             return false;
         }
 
+        private struct JsonVector3
+        {
+            public float X;
+            public float Y;
+            public float Z;
+        }
+
         private static bool TryGet(JsonElement element, string name, out JsonElement value)
         {
             foreach (var property in element.EnumerateObject())
@@ -814,6 +885,33 @@ namespace ACE.Server.Managers
             return false;
         }
 
+        private static bool TryReadBool(JsonElement element, string name, out bool value)
+        {
+            if (!TryGet(element, name, out var property))
+            {
+                value = false;
+                return false;
+            }
+
+            if (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False)
+            {
+                value = property.GetBoolean();
+                return true;
+            }
+
+            if (property.ValueKind == JsonValueKind.String && bool.TryParse(property.GetString(), out value))
+                return true;
+
+            if (TryReadUInt(property, out var raw))
+            {
+                value = raw != 0;
+                return true;
+            }
+
+            value = false;
+            return false;
+        }
+
         private static bool TryReadUInt(JsonElement property, out uint value)
         {
             if (property.ValueKind == JsonValueKind.Number && property.TryGetUInt32(out value))
@@ -860,6 +958,70 @@ namespace ACE.Server.Managers
                 value = (float)parsed;
                 return true;
             }
+
+            value = 0;
+            return false;
+        }
+
+        private static bool TryReadUIntList(JsonElement element, string name, out List<uint> value)
+        {
+            if (TryGet(element, name, out var property) && property.ValueKind == JsonValueKind.Array)
+            {
+                value = new List<uint>();
+                foreach (var item in property.EnumerateArray())
+                {
+                    if (TryReadUInt(item, out var parsed))
+                        value.Add(parsed);
+                }
+
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        private static bool TryReadVector3(JsonElement element, string name, out JsonVector3 value)
+        {
+            if (!TryGet(element, name, out var property))
+            {
+                value = default;
+                return false;
+            }
+
+            if (property.ValueKind == JsonValueKind.Array)
+            {
+                var parts = property.EnumerateArray().ToList();
+                if (parts.Count >= 3
+                    && TryReadFloat(parts[0], out var x)
+                    && TryReadFloat(parts[1], out var y)
+                    && TryReadFloat(parts[2], out var z))
+                {
+                    value = new JsonVector3 { X = x, Y = y, Z = z };
+                    return true;
+                }
+            }
+
+            if (property.ValueKind == JsonValueKind.Object
+                && TryReadFloat(property, "X", out var objX)
+                && TryReadFloat(property, "Y", out var objY)
+                && TryReadFloat(property, "Z", out var objZ))
+            {
+                value = new JsonVector3 { X = objX, Y = objY, Z = objZ };
+                return true;
+            }
+
+            value = default;
+            return false;
+        }
+
+        private static bool TryReadFloat(JsonElement property, out float value)
+        {
+            if (property.ValueKind == JsonValueKind.Number && property.TryGetSingle(out value))
+                return true;
+
+            if (property.ValueKind == JsonValueKind.String)
+                return float.TryParse(property.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 
             value = 0;
             return false;
@@ -922,6 +1084,146 @@ namespace ACE.Server.Managers
             File.WriteAllText(path, DefaultWellFedJson);
         }
 
+        private static void EnsureDefaultWarMageSpells()
+        {
+            var path = Path.Combine(ContentDir, "WarMageSpecials.json");
+            if (File.Exists(path))
+                return;
+
+            File.WriteAllText(path, DefaultWarMageSpecialsJson);
+        }
+
+        private static void EnsureDefaultVoidConfusionSpell()
+        {
+            var path = Path.Combine(ContentDir, "WarMageSpecials.json");
+            if (File.Exists(path)
+                && File.ReadAllText(path).Contains("\"Id\": 65005")
+                && File.ReadAllText(path).Contains("\"BlackMadness\""))
+                return;
+
+            var fallbackPath = Path.Combine(ContentDir, "VoidConfusion.json");
+            if (File.Exists(fallbackPath) && File.ReadAllText(fallbackPath).Contains("\"BlackMadness\""))
+                return;
+
+            File.WriteAllText(fallbackPath, DefaultVoidConfusionJson);
+        }
+
+        private static void EnsureWarMageSpecialTrajectories()
+        {
+            NormalizeProjectileSpell(
+                MeteorSquallSpellId,
+                SpellId.FlameBolt7,
+                "Meteor Squall",
+                DamageType.Fire,
+                baseIntensity: 125,
+                variance: 55,
+                numProjectiles: 1,
+                spreadAngle: 0.0f,
+                nonTracking: true,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 4.5f },
+                padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+
+            NormalizeProjectileSpell(
+                SpiralStarSpellId,
+                SpellId.FlameArc7,
+                "Spiral Star",
+                DamageType.Fire,
+                baseIntensity: 105,
+                variance: 45,
+                numProjectiles: 5,
+                spreadAngle: 360.0f,
+                nonTracking: true,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.25f },
+                padding: new JsonVector3 { X = 0.75f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+
+            NormalizeProjectileSpell(
+                ChainLightningSpellId,
+                SpellId.LightningBolt7,
+                "Chain Lightning",
+                DamageType.Electric,
+                baseIntensity: 115,
+                variance: 45,
+                numProjectiles: 3,
+                spreadAngle: 24.0f,
+                nonTracking: false,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.35f },
+                padding: new JsonVector3 { X = 0.45f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+        }
+
+        private static void NormalizeProjectileSpell(uint spellId, SpellId templateSpellId, string name, DamageType damageType, int baseIntensity, int variance, int numProjectiles, float spreadAngle, bool nonTracking, JsonVector3 createOffset, JsonVector3 padding, JsonVector3 peturbation)
+        {
+            var dbSpell = DatabaseManager.World.GetCachedSpell(spellId);
+            if (dbSpell == null || !DatManager.PortalDat.SpellTable.Spells.TryGetValue(spellId, out _))
+                return;
+
+            var templateDbSpell = DatabaseManager.World.GetCachedSpell((uint)templateSpellId);
+
+            dbSpell.Name = name;
+            dbSpell.Wcid = templateDbSpell?.Wcid ?? dbSpell.Wcid;
+            dbSpell.EType = (uint)damageType;
+            dbSpell.DamageType = (int)damageType;
+            dbSpell.BaseIntensity = baseIntensity;
+            dbSpell.Variance = variance;
+            dbSpell.NumProjectiles = numProjectiles;
+            dbSpell.NumProjectilesVariance = 0;
+            dbSpell.SpreadAngle = spreadAngle;
+            dbSpell.NonTracking = nonTracking;
+            dbSpell.CreateOffsetOriginX = createOffset.X;
+            dbSpell.CreateOffsetOriginY = createOffset.Y;
+            dbSpell.CreateOffsetOriginZ = createOffset.Z;
+            dbSpell.PaddingOriginX = padding.X;
+            dbSpell.PaddingOriginY = padding.Y;
+            dbSpell.PaddingOriginZ = padding.Z;
+            dbSpell.PeturbationOriginX = peturbation.X;
+            dbSpell.PeturbationOriginY = peturbation.Y;
+            dbSpell.PeturbationOriginZ = peturbation.Z;
+
+            GetSpellCache()[spellId] = dbSpell;
+        }
+
+        private static void EnsureVoidConfusionVisuals()
+        {
+            if (new Spell(VoidConfusionSpellId).NotFound)
+            {
+                using var doc = JsonDocument.Parse(DefaultVoidConfusionJson, JsonOptions);
+                if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var entry in customSpells.EnumerateArray())
+                        TryApply(entry, "built-in VoidConfusion.json");
+                }
+            }
+
+            if (!DatManager.PortalDat.SpellTable.Spells.TryGetValue(VoidConfusionSpellId, out var spellBase))
+                return;
+
+            var dbSpell = DatabaseManager.World.GetCachedSpell(VoidConfusionSpellId);
+            if (dbSpell == null)
+                return;
+
+            SetSpellBase(spellBase, nameof(SpellBase.Name), "Void Confusion");
+            SetSpellWords(spellBase, "Void Confusion");
+            SetSpellBase(spellBase, nameof(SpellBase.Desc), "A weak nether bolt that erupts into Bedlam, briefly turning nearby monsters against each other.");
+            SetSpellBase(spellBase, nameof(SpellBase.Icon), 0x06002860u);
+            SetSpellBase(spellBase, nameof(SpellBase.CasterEffect), (uint)PlayScript.SpecialStatePurple);
+            SetSpellBase(spellBase, nameof(SpellBase.TargetEffect), (uint)PlayScript.BlackMadness);
+
+            dbSpell.Name = "Void Confusion";
+            dbSpell.Wcid = DatabaseManager.World.GetCachedSpell((uint)SpellId.NetherBolt7)?.Wcid ?? dbSpell.Wcid;
+            dbSpell.EType = (uint)DamageType.Nether;
+            dbSpell.DamageType = (int)DamageType.Nether;
+            dbSpell.BaseIntensity = 30;
+            dbSpell.Variance = 15;
+            dbSpell.NumProjectiles = 1;
+            dbSpell.NumProjectilesVariance = 0;
+            dbSpell.SpreadAngle = 0;
+            dbSpell.NonTracking = false;
+
+            GetSpellCache()[VoidConfusionSpellId] = dbSpell;
+        }
+
         private const string DefaultWellFedJson =
 @"{
   ""CustomSpells"": [
@@ -936,6 +1238,124 @@ namespace ACE.Server.Managers
       ""StatModVal"": 5,
       ""CasterEffect"": ""EnchantUpYellow"",
       ""TargetEffect"": ""EnchantUpYellow""
+    }
+  ]
+}
+";
+
+        private const string DefaultWarMageSpecialsJson =
+@"{
+  ""CustomSpells"": [
+    {
+      ""Template"": ""FlameBolt7"",
+      ""Id"": 65002,
+      ""Name"": ""Meteor Squall"",
+      ""SpellWords"": ""Meteor Squall"",
+      ""Desc"": ""Calls a burning projectile from the sky. Outdoors only; on impact, embers rain over nearby foes."",
+      ""Icon"": ""0x06001036"",
+      ""EType"": ""Fire"",
+      ""DamageType"": ""Fire"",
+      ""BaseMana"": 72,
+      ""BaseIntensity"": 125,
+      ""Variance"": 55,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": true,
+      ""CreateOffset"": [0, 0, 4.5],
+      ""Padding"": [0, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpRed"",
+      ""TargetEffect"": ""BreatheFlame""
+    },
+    {
+      ""Template"": ""FlameArc7"",
+      ""Id"": 65003,
+      ""Name"": ""Spiral Star"",
+      ""SpellWords"": ""Spiral Star"",
+      ""Desc"": ""Launches a circling flame star that lashes outward from the caster to nearby foes."",
+      ""Icon"": ""0x06001036"",
+      ""EType"": ""Fire"",
+      ""DamageType"": ""Fire"",
+      ""BaseMana"": 68,
+      ""BaseIntensity"": 105,
+      ""Variance"": 45,
+      ""NumProjectiles"": 5,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 360,
+      ""NonTracking"": true,
+      ""CreateOffset"": [0, 0, 0.25],
+      ""Padding"": [0.75, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpOrange"",
+      ""TargetEffect"": ""BreatheFlame""
+    },
+    {
+      ""Template"": ""LightningBolt7"",
+      ""Id"": 65004,
+      ""Name"": ""Chain Lightning"",
+      ""SpellWords"": ""Chain Lightning"",
+      ""Desc"": ""A lightning bolt that leaps through nearby foes, losing strength with each jump."",
+      ""Icon"": ""0x06001039"",
+      ""EType"": ""Electric"",
+      ""DamageType"": ""Electric"",
+      ""BaseMana"": 75,
+      ""BaseIntensity"": 115,
+      ""Variance"": 45,
+      ""NumProjectiles"": 3,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 24,
+      ""NonTracking"": false,
+      ""CreateOffset"": [0, 0, 0.35],
+      ""Padding"": [0.45, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpBlue"",
+      ""TargetEffect"": ""BreatheLightning""
+    },
+    {
+      ""Template"": ""NetherBolt7"",
+      ""Id"": 65005,
+      ""Name"": ""Void Confusion"",
+      ""SpellWords"": ""Void Confusion"",
+      ""Desc"": ""A weak nether bolt that briefly turns nearby monsters against each other."",
+      ""Icon"": ""0x06002860"",
+      ""EType"": ""Nether"",
+      ""DamageType"": ""Nether"",
+      ""BaseMana"": 80,
+      ""BaseIntensity"": 30,
+      ""Variance"": 15,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": false,
+      ""CasterEffect"": ""SpecialStatePurple"",
+      ""TargetEffect"": ""BlackMadness""
+    }
+  ]
+}
+";
+
+        private const string DefaultVoidConfusionJson =
+@"{
+  ""CustomSpells"": [
+    {
+      ""Template"": ""NetherBolt7"",
+      ""Id"": 65005,
+      ""Name"": ""Void Confusion"",
+      ""SpellWords"": ""Void Confusion"",
+      ""Desc"": ""A weak nether bolt that briefly turns nearby monsters against each other."",
+      ""Icon"": ""0x06002860"",
+      ""EType"": ""Nether"",
+      ""DamageType"": ""Nether"",
+      ""BaseMana"": 80,
+      ""BaseIntensity"": 30,
+      ""Variance"": 15,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": false,
+      ""CasterEffect"": ""SpecialStatePurple"",
+      ""TargetEffect"": ""BlackMadness""
     }
   ]
 }

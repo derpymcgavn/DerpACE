@@ -2338,7 +2338,7 @@ namespace ACE.Server.Command.Handlers
 
             var lootQualityMod = 0.0f;
             string forcedMutator = null;
-            var forcedMutatorIsShield = false;
+            string forcedMutatorType = null;
 
             for (var i = 1; i < parameters.Length; i++)
             {
@@ -2377,15 +2377,19 @@ namespace ACE.Server.Command.Handlers
                     case "affix":
                         if (LootGenerationFactory.TryResolveWeaponMutator(value, out forcedMutator))
                         {
-                            forcedMutatorIsShield = false;
+                            forcedMutatorType = "weapon";
                         }
                         else if (LootGenerationFactory.TryResolveShieldMutator(value, out forcedMutator))
                         {
-                            forcedMutatorIsShield = true;
+                            forcedMutatorType = "shield";
+                        }
+                        else if (LootGenerationFactory.TryResolveArmorMutator(value, out forcedMutator))
+                        {
+                            forcedMutatorType = "armor";
                         }
                         else
                         {
-                            session.Network.EnqueueSend(new GameMessageSystemChat($"Unknown mutator '{value}'. Weapon options: {LootGenerationFactory.GetWeaponMutatorNames()}. Shield options: {LootGenerationFactory.GetShieldMutatorNames()}", ChatMessageType.Broadcast));
+                            session.Network.EnqueueSend(new GameMessageSystemChat($"Unknown mutator '{value}'. Weapon options: {LootGenerationFactory.GetWeaponMutatorNames()}. Shield options: {LootGenerationFactory.GetShieldMutatorNames()}. Armor options: {LootGenerationFactory.GetArmorMutatorNames()}", ChatMessageType.Broadcast));
                             return;
                         }
                         break;
@@ -2421,7 +2425,7 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            var forceShieldMutatorOnShield = forcedMutatorIsShield && wo.IsShield;
+            var forceShieldMutatorOnShield = forcedMutatorType == "shield" && wo.IsShield;
 
             if (!randomWeapon && !forceShieldMutatorOnShield && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
             {
@@ -2438,7 +2442,11 @@ namespace ACE.Server.Command.Handlers
             }
 
             if (!string.IsNullOrWhiteSpace(forcedMutator)
-                && !(forcedMutatorIsShield ? LootGenerationFactory.HasShieldMutator(wo, forcedMutator) : LootGenerationFactory.HasWeaponMutator(wo, forcedMutator)))
+                && !(forcedMutatorType == "shield"
+                    ? LootGenerationFactory.HasShieldMutator(wo, forcedMutator)
+                    : forcedMutatorType == "armor"
+                        ? LootGenerationFactory.HasArmorMutator(wo, forcedMutator)
+                        : LootGenerationFactory.HasWeaponMutator(wo, forcedMutator)))
                 session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name}, but '{forcedMutator}' did not apply. Check item compatibility or custom loot config.", ChatMessageType.Broadcast));
             else
                 session.Network.EnqueueSend(new GameMessageSystemChat($"Created {wo.Name} ({wo.WeenieClassId}) at tier {tier}, luck {lootQualityMod:0.##}.", ChatMessageType.Broadcast));

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 using ACE.Common;
@@ -133,6 +135,15 @@ namespace ACE.Server.WorldObjects
 
             if (spell.Wcid == 0)
                 return ProjectileSpellType.Undef;
+
+            if (spellID == CustomSpellManager.MeteorSquallSpellId)
+                return ProjectileSpellType.Arc;
+
+            if (spellID == CustomSpellManager.SpiralStarSpellId)
+                return ProjectileSpellType.Ring;
+
+            if (spellID == CustomSpellManager.ChainLightningSpellId && spell.NumProjectiles > 1)
+                return ProjectileSpellType.Volley;
 
             if (spell.NumProjectiles == 1)
             {
@@ -319,6 +330,7 @@ namespace ACE.Server.WorldObjects
                 else
                 {
                     DamageTarget(creatureTarget, damage.Value, critical, critDefended, overpower);
+                    TryHandleWarMageSpecialSpell(creatureTarget, damage.Value);
 
                     if ((Spell.DamageType == DamageType.Nether || Spell.School == MagicSchool.VoidMagic) && player != null && targetPlayer == null)
                     {
@@ -580,6 +592,246 @@ namespace ACE.Server.WorldObjects
                 ShowInfo(target, Spell, attackSkill, criticalChance, criticalHit, critDefended, overpower, weaponCritDamageMod, skillBonus, baseDamage, critDamageBonus, elementalDamageMod, slayerMod, weaponResistanceMod, resistanceMod, absorbMod, LifeProjectileDamage, lifeMagicDamage, finalDamage);
             }
             return finalDamage;
+        }
+
+        private void TryHandleWarMageSpecialSpell(Creature firstTarget, float primaryDamage)
+        {
+            if (ProjectileSource is not Player sourcePlayer || firstTarget == null || primaryDamage <= 0)
+                return;
+
+            if (firstTarget is Player)
+                return;
+
+            switch (Spell.Id)
+            {
+                case ACE.Server.Managers.CustomSpellManager.ChainLightningSpellId:
+                    LaunchChainLightning(sourcePlayer, firstTarget, primaryDamage);
+                    break;
+                case ACE.Server.Managers.CustomSpellManager.MeteorSquallSpellId:
+                    LaunchMeteorSquall(sourcePlayer, firstTarget, primaryDamage);
+                    break;
+                case ACE.Server.Managers.CustomSpellManager.SpiralStarSpellId:
+                    LaunchSpiralStar(sourcePlayer, firstTarget, primaryDamage);
+                    break;
+                case ACE.Server.Managers.CustomSpellManager.VoidConfusionSpellId:
+                    LaunchVoidConfusion(sourcePlayer, firstTarget);
+                    break;
+            }
+        }
+
+        private void LaunchChainLightning(Player sourcePlayer, Creature firstTarget, float primaryDamage)
+        {
+            var targets = GetNearbyMonsterTargets(sourcePlayer, firstTarget, firstTarget, 12.0f, 4, new HashSet<uint> { firstTarget.Guid.Full });
+            if (targets.Count == 0)
+                return;
+
+            var scales = new[] { 0.70f, 0.50f, 0.35f, 0.25f };
+            var chain = new ActionChain();
+            Creature previous = firstTarget;
+
+            for (var i = 0; i < targets.Count; i++)
+            {
+                var target = targets[i];
+                var origin = previous;
+                var damage = primaryDamage * scales[Math.Min(i, scales.Length - 1)];
+
+                chain.AddDelaySeconds(0.18);
+                chain.AddAction(sourcePlayer, () =>
+                {
+                    origin?.ApplyVisualEffects(PlayScript.BreatheLightning);
+                    ApplySpecialWarDamage(sourcePlayer, target, DamageType.Electric, damage, "Chain Lightning");
+                });
+
+                previous = target;
+            }
+
+            sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Your chain lightning arcs toward {string.Join(", ", targets.Select(t => t.Name))}.",
+                ChatMessageType.Magic));
+            chain.EnqueueChain();
+        }
+
+        private void LaunchMeteorSquall(Player sourcePlayer, Creature firstTarget, float primaryDamage)
+        {
+            if (sourcePlayer.Location?.Indoors == true || firstTarget.Location?.Indoors == true)
+                return;
+
+            var chain = new ActionChain();
+            for (var tick = 1; tick <= 4; tick++)
+            {
+                chain.AddDelaySeconds(0.75);
+                chain.AddAction(sourcePlayer, () =>
+                {
+                    var targets = GetNearbyMonsterTargets(sourcePlayer, firstTarget, firstTarget, 8.0f, 3, new HashSet<uint>());
+                    foreach (var target in targets)
+                    {
+                        firstTarget.ApplyVisualEffects(PlayScript.EnchantUpRed);
+                        ApplySpecialWarDamage(sourcePlayer, target, DamageType.Fire, primaryDamage * 0.18f, "Meteor Squall");
+                    }
+                });
+            }
+
+            sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                "The sky breaks open. Burning fragments begin to fall.",
+                ChatMessageType.Magic));
+            chain.EnqueueChain();
+        }
+
+        private void LaunchVoidConfusion(Player sourcePlayer, Creature firstTarget)
+        {
+            var confusionCaster = ProjectileLauncher?.GetProperty(PropertyBool.IsConfusionCaster) == true
+                ? ProjectileLauncher
+                : sourcePlayer.GetEquippedWand();
+
+            if (confusionCaster?.GetProperty(PropertyBool.IsConfusionCaster) != true)
+                return;
+
+            var cooldownSeconds = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionCooldownSeconds) ?? 45.0, 10.0, 120.0);
+            var duration = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionDurationSeconds) ?? 4.0, 1.0, 10.0);
+            var maxTargets = Math.Clamp((int)Math.Round(confusionCaster.GetProperty(PropertyFloat.VoidConfusionTargetCount) ?? 1.0), 1, 4);
+
+            var confused = GetNearbyMonsterTargets(sourcePlayer, firstTarget, firstTarget, 12.0f, maxTargets, null);
+            if (!confused.Contains(firstTarget))
+                confused.Insert(0, firstTarget);
+            confused = confused.Distinct().Take(maxTargets).ToList();
+
+            var applied = new List<string>();
+            var pairs = new List<(Creature Mob, Creature Target)>();
+            foreach (var mob in confused)
+            {
+                var target = PickConfusionTarget(sourcePlayer, mob, confused);
+                if (target == null)
+                    continue;
+
+                pairs.Add((mob, target));
+                applied.Add($"{mob.Name}->{target.Name}");
+            }
+
+            if (applied.Count == 0)
+            {
+                sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "The void twists their thoughts, but finds no nearby monsters for them to blame.",
+                    ChatMessageType.Magic));
+                return;
+            }
+
+            if (!sourcePlayer.TryStartMutatorCooldown(confusionCaster, Player.VoidConfusionCooldownId, cooldownSeconds))
+            {
+                sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    "The staff's bedlam has not gathered again.",
+                    ChatMessageType.Magic));
+                return;
+            }
+
+            sourcePlayer.ApplyVisualEffects(PlayScript.SpecialStatePurple);
+            var chain = new ActionChain();
+            foreach (var pair in pairs)
+            {
+                chain.AddDelaySeconds(0.12);
+                chain.AddAction(sourcePlayer, () =>
+                {
+                    pair.Mob.ApplyVoidConfusion(pair.Target, duration);
+                    pair.Target.ApplyVisualEffects(PlayScript.BlackMadness);
+                    pair.Target.ApplyVisualEffects(PlayScript.SkillDownVoid);
+                });
+            }
+            chain.EnqueueChain();
+
+            sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Void confusion takes hold for {duration:0.#}s: {string.Join(", ", applied)}.",
+                ChatMessageType.Magic));
+        }
+
+        private static Creature PickConfusionTarget(Player sourcePlayer, Creature mob, List<Creature> preferredTargets)
+        {
+            if (mob?.Location == null)
+                return null;
+
+            var preferred = preferredTargets
+                .Where(c => c != null && c != mob && c.IsAlive && c.Location != null && sourcePlayer.CanDamage(c))
+                .OrderBy(c => mob.Location.SquaredDistanceTo(c.Location))
+                .FirstOrDefault();
+
+            if (preferred != null)
+                return preferred;
+
+            return GetNearbyMonsterTargets(sourcePlayer, mob, mob, 10.0f, 1, new HashSet<uint> { mob.Guid.Full }).FirstOrDefault();
+        }
+
+        private void LaunchSpiralStar(Player sourcePlayer, Creature firstTarget, float primaryDamage)
+        {
+            var targets = GetNearbyMonsterTargets(sourcePlayer, sourcePlayer, sourcePlayer, 14.0f, 5, new HashSet<uint> { firstTarget.Guid.Full });
+            if (targets.Count == 0)
+                return;
+
+            var chain = new ActionChain();
+            foreach (var target in targets)
+            {
+                var damage = primaryDamage * 0.42f;
+
+                chain.AddDelaySeconds(0.14);
+                chain.AddAction(sourcePlayer, () =>
+                {
+                    sourcePlayer.ApplyVisualEffects(PlayScript.EnchantUpOrange);
+                    ApplySpecialWarDamage(sourcePlayer, target, DamageType.Fire, damage, "Spiral Star");
+                });
+            }
+
+            sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"A spiral star circles outward toward {string.Join(", ", targets.Select(t => t.Name))}.",
+                ChatMessageType.Magic));
+            chain.EnqueueChain();
+        }
+
+        private static List<Creature> GetNearbyMonsterTargets(Player sourcePlayer, WorldObject center, WorldObject sortFrom, float radius, int maxTargets, HashSet<uint> excluded)
+        {
+            var results = new List<Creature>();
+            var landblock = center?.CurrentLandblock ?? sourcePlayer?.CurrentLandblock;
+            if (sourcePlayer == null || landblock == null || center?.Location == null)
+                return results;
+
+            var radiusSq = radius * radius;
+            var baseLandblock = center.Location.Cell & 0xFFFF0000;
+
+            results = landblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Creature>()
+                .Where(c => c != null
+                            && c != sourcePlayer
+                            && c.IsAlive
+                            && c.Attackable
+                            && c.IsMonster
+                            && !c.Teleporting
+                            && c.Location != null
+                            && (c.Location.Cell & 0xFFFF0000) == baseLandblock
+                            && center.Location.SquaredDistanceTo(c.Location) <= radiusSq
+                            && (excluded == null || !excluded.Contains(c.Guid.Full))
+                            && sourcePlayer.CanDamage(c))
+                .OrderBy(c => (sortFrom?.Location ?? center.Location).SquaredDistanceTo(c.Location))
+                .Take(maxTargets)
+                .ToList();
+
+            if (excluded != null)
+            {
+                foreach (var target in results)
+                    excluded.Add(target.Guid.Full);
+            }
+
+            return results;
+        }
+
+        private static void ApplySpecialWarDamage(Player sourcePlayer, Creature target, DamageType damageType, float damage, string spellName)
+        {
+            if (sourcePlayer == null || target == null || target.IsDead || target is Player || !sourcePlayer.CanDamage(target))
+                return;
+
+            target.ApplyVisualEffects(damageType == DamageType.Electric ? PlayScript.BreatheLightning : PlayScript.BreatheFlame);
+            var amount = target.TakeDamage(sourcePlayer, damageType, Math.Max(1.0f, damage));
+            sourcePlayer.OnAttackMonster(target);
+
+            if (amount > 0)
+                sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"{spellName} hits {target.Name} for {amount} points.",
+                    ChatMessageType.Magic));
         }
 
         public float GetAbsorbMod(Creature target)

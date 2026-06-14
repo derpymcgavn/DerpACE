@@ -52,11 +52,11 @@ This section is the current source of truth for lootgen mutators and commands. O
 | `@lootconfig list` | Prints runtime loot, mutator, armor, mob, and vendor tuning values. |
 | `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Example: `@lootconfig set sentinel.cooldown 14`. |
 | `@lootgen weapon <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon and can force a compatible weapon/caster mutator. Example: `@lootgen weapon 7 mutator=discus`. |
-| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced shield mutators can be applied to shield WCIDs/classnames. Example: `@lootgen shieldtower 7 luck=1 mutator=bashing`. |
+| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced weapon, shield, and armor/clothing mutators can be applied to compatible WCIDs/classnames. Examples: `@lootgen shieldtower 7 luck=1 mutator=bashing`, `@lootgen glovescloth 7 mutator=culinarian`. |
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `hierophant`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`.
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`; armor/clothing WCIDs/classnames use `culinarian` and `unarmed`.
 
 #### Weapon And Caster Mutators
 | Mutator | Eligible loot | Current effect |
@@ -78,6 +78,10 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `archmagi` | Casters | Chance on successful cast to echo an additional same-family spell. |
 | `hierophant` | Life casters / Martyr staff family | Heal support caster with heal boost, HoT chance, fellowship echo, and healer aggro tuning. |
 | `shadowclone` | Void casters only | Umbral Mirror caster can summon a temporary shadow clone combat ally on a 120 second visible cooldown. Clone uses shadow visuals and void/ring style spell support. |
+| `confusion` | Void casters only | Bedlam caster replaces its spell with `Void Confusion` (`65005`): a weak nether bolt that, on cooldown, makes 1-4 nearby monsters blindly attack other nearby monsters for 1-10 seconds. Visible cooldown defaults to 45 seconds. |
+| `skybreaker` | War casters | Replaces the caster spell with custom spell `Meteor Squall` (`65002`): outdoor-only fire projectile; impact is normal, then fire rains over nearby monsters in short capped ticks. |
+| `stormcaller` | War casters | Replaces the caster spell with custom spell `Chain Lightning` (`65004`): first bolt is normal, then arcs through up to four additional nearby monsters at 70%, 50%, 35%, and 25% damage. |
+| `orbitweaver` | War casters | Replaces the caster spell with custom spell `Spiral Star` (`65003`): first hit is normal, then a circling flame star lashes outward from the caster toward up to five nearby monsters. |
 | `blast` | Rare elemental weapon overlay | T5+ elemental weapons can rarely also roll a level-3 blast-on-strike proc. Nether is excluded from general caster/weapon blast rolls. Ring procs cast from the player toward the target location. |
 
 #### Shield Mutators
@@ -86,6 +90,12 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Defender | Adds monster targeting weight to the shield bearer. |
 | Thorns | Reflects a small percentage of damage actually taken on shield-blocked hits. Kept low to avoid runaway reflect builds. |
 | Bashing | Requires specialized Shield. On block, can deal shield-AL-scaled bash damage, push the attacker back 10 feet, and interrupt a monster spell windup with fizzle feedback. |
+
+#### Armor And Clothing Mutators
+| Mutator | Eligible loot | Current effect |
+|---|---|---|
+| `culinarian` | Handwear, including cloth gloves | Requires specialized Cooking. While worn, food/drink restores 10-20% more health, stamina, or mana, with a rare T8 25% roll. Every tenth meal uses a 25% restore bonus and grants Well Fed for 2 hours; the glove cooldown is visible and persists in real time. |
+| `unarmed` | Handwear and footwear | Adds unarmed surrogate damage, damage type, variance, offense/defense, speed, icon overlay, and combat UI effect for truly unarmed attacks. |
 
 #### Important `@lootconfig` Keys
 | Family | Keys |

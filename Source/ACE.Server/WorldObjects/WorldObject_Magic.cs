@@ -74,6 +74,17 @@ namespace ACE.Server.WorldObjects
 
         public void TryCastSpell_Inner(Spell spell, WorldObject target, WorldObject itemCaster, WorldObject weapon, bool isWeaponSpell, bool fromProc, bool tryResist, float damageModifier, WorldObject projectileOrigin = null)
         {
+            if (spell.Id == ACE.Server.Managers.CustomSpellManager.MeteorSquallSpellId
+                && (Location?.Indoors == true || target?.Location?.Indoors == true))
+            {
+                if (this is Player player)
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        "The sky cannot answer here.",
+                        ChatMessageType.Magic));
+
+                return;
+            }
+
             // verify before resist, still consumes source item
             if (spell.MetaSpellType == SpellType.Dispel && !VerifyDispelPKStatus(itemCaster, target))
                 return;
@@ -1983,7 +1994,7 @@ namespace ACE.Server.WorldObjects
 
                 sp.EnqueueBroadcast(new GameMessageScript(sp.Guid, PlayScript.Launch, sp.GetProjectileScriptIntensity(spellType)));
 
-                if (!IsProjectileVisible(sp))
+                if (!CustomSpellManager.IsCustomWarProjectileSpell(spell.Id) && !IsProjectileVisible(sp))
                 {
                     sp.OnCollideEnvironment();
                     continue;

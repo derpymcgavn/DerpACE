@@ -79,6 +79,25 @@ namespace ACE.Server.Factories
             ["hierophant"] = "hierophant",
             ["life"] = "hierophant",
             ["martyr"] = "hierophant",
+
+            ["skybreaker"] = "skybreaker",
+            ["meteor"] = "skybreaker",
+            ["meteorsquall"] = "skybreaker",
+            ["squall"] = "skybreaker",
+
+            ["stormcaller"] = "stormcaller",
+            ["chainlightning"] = "stormcaller",
+            ["chain"] = "stormcaller",
+
+            ["orbitweaver"] = "orbitweaver",
+            ["spiralstar"] = "orbitweaver",
+            ["spiral"] = "orbitweaver",
+            ["orbit"] = "orbitweaver",
+
+            ["confusion"] = "confusion",
+            ["voidconfusion"] = "confusion",
+            ["bedlam"] = "confusion",
+            ["maddening"] = "confusion",
         };
 
         private static readonly Dictionary<string, TreasureWeaponType> WeaponMutatorTestTypes = new Dictionary<string, TreasureWeaponType>(StringComparer.OrdinalIgnoreCase)
@@ -100,6 +119,10 @@ namespace ACE.Server.Factories
             ["archmagi"] = TreasureWeaponType.Caster,
             ["shadowclone"] = TreasureWeaponType.Caster,
             ["hierophant"] = TreasureWeaponType.Caster,
+            ["skybreaker"] = TreasureWeaponType.Caster,
+            ["stormcaller"] = TreasureWeaponType.Caster,
+            ["orbitweaver"] = TreasureWeaponType.Caster,
+            ["confusion"] = TreasureWeaponType.Caster,
         };
 
         private static readonly Dictionary<string, string> ShieldMutatorAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -119,6 +142,21 @@ namespace ACE.Server.Factories
             ["bashshield"] = "bashing",
             ["shieldbash"] = "bashing",
             ["breaker"] = "bashing",
+        };
+
+        private static readonly Dictionary<string, string> ArmorMutatorAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["culinarian"] = "culinarian",
+            ["cooking"] = "culinarian",
+            ["cookinggloves"] = "culinarian",
+            ["chef"] = "culinarian",
+            ["wellfed"] = "culinarian",
+
+            ["unarmed"] = "unarmed",
+            ["unarmeddamage"] = "unarmed",
+            ["brawler"] = "unarmed",
+            ["punch"] = "unarmed",
+            ["kick"] = "unarmed",
         };
 
         public static bool TryResolveWeaponMutator(string name, out string canonicalName)
@@ -151,7 +189,11 @@ namespace ACE.Server.Factories
                 "reaper",
                 "archmagi",
                 "shadowclone/voidshadow",
-                "hierophant/life"
+                "hierophant/life",
+                "skybreaker/meteor",
+                "stormcaller/chainlightning",
+                "orbitweaver/spiralstar",
+                "confusion/bedlam"
             });
         }
 
@@ -172,6 +214,25 @@ namespace ACE.Server.Factories
                 "defender",
                 "thorns/thornbound",
                 "bashing/shieldbash"
+            });
+        }
+
+        public static bool TryResolveArmorMutator(string name, out string canonicalName)
+        {
+            canonicalName = null;
+
+            if (string.IsNullOrWhiteSpace(name))
+                return false;
+
+            return ArmorMutatorAliases.TryGetValue(NormalizeWeaponMutatorName(name), out canonicalName);
+        }
+
+        public static string GetArmorMutatorNames()
+        {
+            return string.Join(", ", new[]
+            {
+                "culinarian/cooking",
+                "unarmed/brawler"
             });
         }
 
@@ -208,6 +269,10 @@ namespace ACE.Server.Factories
                 "archmagi"    => wo.GetProperty(PropertyBool.IsArchmagiCaster) == true,
                 "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
+                "skybreaker"  => wo.GetProperty(PropertyBool.IsSkybreakerCaster) == true,
+                "stormcaller" => wo.GetProperty(PropertyBool.IsStormcallerCaster) == true,
+                "orbitweaver" => wo.GetProperty(PropertyBool.IsOrbitweaverCaster) == true,
+                "confusion"   => wo.GetProperty(PropertyBool.IsConfusionCaster) == true,
                 _             => false,
             };
         }
@@ -223,6 +288,19 @@ namespace ACE.Server.Factories
                 "thorns"   => wo.GetProperty(PropertyBool.IsThornsShield) == true,
                 "bashing"  => wo.GetProperty(PropertyBool.IsBashingShield) == true,
                 _          => false,
+            };
+        }
+
+        public static bool HasArmorMutator(WorldObject wo, string mutatorName)
+        {
+            if (wo == null || !TryResolveArmorMutator(mutatorName, out var canonicalName))
+                return false;
+
+            return canonicalName switch
+            {
+                "culinarian" => wo.GetProperty(PropertyBool.IsCookingGloves) == true,
+                "unarmed"    => (wo.UnarmedBaseDamage ?? 0) > 0,
+                _            => false,
             };
         }
 

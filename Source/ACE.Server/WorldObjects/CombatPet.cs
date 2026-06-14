@@ -272,6 +272,12 @@ namespace ACE.Server.WorldObjects
             // We lost the target — clear stuck state.
             _stuckCheckPending = false;
 
+            if (_isShadowClone && ShouldReturnToShadowCloneFormation())
+            {
+                ReturnToOwner();
+                return;
+            }
+
             if (PropertyManager.GetBool("pet_auto_recover_enabled").Item)
             {
                 var now = Common.Time.GetUnixTime();
@@ -339,6 +345,9 @@ namespace ACE.Server.WorldObjects
         private void ReturnToOwner()
         {
             if (P_PetOwner?.PhysicsObj == null || P_PetOwner.Location == null)
+                return;
+
+            if (_isShadowClone && TryReturnToShadowCloneFormation())
                 return;
 
             // Prefer navmesh routing in dungeons so the pet doesn't clip through walls.
@@ -435,6 +444,14 @@ namespace ACE.Server.WorldObjects
 
         public override void Sleep()
         {
+            if (_isShadowClone)
+            {
+                if (ShouldReturnToShadowCloneFormation())
+                    ReturnToOwner();
+
+                return;
+            }
+
             // When the pet has no target, walk back to the owner if it has drifted.
             if (OwnerDistance > PetReturnThreshold)
                 ReturnToOwner();

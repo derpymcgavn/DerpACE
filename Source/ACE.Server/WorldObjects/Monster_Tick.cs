@@ -56,7 +56,8 @@ namespace ACE.Server.WorldObjects
 
             if (EmoteManager.IsBusy) return;
 
-            HandleFindTarget();
+            if (!MaintainVoidConfusion())
+                HandleFindTarget();
 
             CheckMissHome();    // tickrate?
 

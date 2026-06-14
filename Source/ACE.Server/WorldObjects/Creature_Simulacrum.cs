@@ -128,6 +128,7 @@ namespace ACE.Server.WorldObjects
                 CopyAttributesAndVitalsFromPlayer(player);
                 CopySkillsFromPlayer(player);
                 CopyVoidProjectileSpellsFromPlayer(player);
+                ClearExistingCloneEquipment();
                 CopyEquipmentFromPlayer(player);
                 ApplyShadowCloneVisuals();
 
@@ -285,6 +286,22 @@ namespace ACE.Server.WorldObjects
                    spellType == ProjectileSpellType.Streak ||
                    spellType == ProjectileSpellType.Arc ||
                    spellType == ProjectileSpellType.Ring;
+        }
+
+        private void ClearExistingCloneEquipment()
+        {
+            foreach (var item in EquippedObjects.Values.ToList())
+            {
+                try
+                {
+                    if (TryDequipObject(item.Guid, out var removed, out _))
+                        removed.Destroy();
+                }
+                catch (Exception ex)
+                {
+                    log.Warn($"[ShadowClone] Failed to clear shell equipment {item.Name} ({item.WeenieClassId}): {ex.Message}");
+                }
+            }
         }
 
         private void CopyEquipmentFromPlayer(Player p)

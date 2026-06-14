@@ -302,5 +302,13 @@ namespace ACE.Entity.Enum.Properties
         ShadowCloneCooldownSeconds     = 9042,  // cooldown after a successful summon
         ShadowCloneDurationSeconds     = 9043,  // combat pet lifespan
         ShadowCloneDamageScale         = 9044,  // clone outgoing spell damage multiplier
+
+        /* DerpACE Culinarian gloves - food/drink restore bonus while worn */
+        CulinarianRestoreBonusPct      = 9045,  // additional positive health/stamina/mana restored by food/drink (0.10-0.25)
+
+        /* DerpACE Void Confusion caster - short monster retarget crowd control */
+        VoidConfusionDurationSeconds   = 9046,  // duration confused monsters attack nearby monsters
+        VoidConfusionTargetCount       = 9047,  // maximum number of monsters affected
+        VoidConfusionCooldownSeconds   = 9048,  // visible cooldown after a successful confusion pulse
     }
 }
