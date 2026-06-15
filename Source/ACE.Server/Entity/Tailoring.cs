@@ -24,6 +24,7 @@ namespace ACE.Server.Entity
         // tailoring kits
         public const uint ArmorTailoringKit = 41956;
         public const uint WeaponTailoringKit = 51445;
+        public const uint WeaponAppearanceTailoringKit = 420420423;
 
         public const uint ArmorMainReductionTool = 42622;
         public const uint ArmorLowerReductionTool = 44879;
@@ -122,8 +123,9 @@ namespace ACE.Server.Entity
             if (player.FindObject(target.Guid.Full, Player.SearchLocations.MyInventory) == null)
                 return WeenieError.YouDoNotPassCraftingRequirements;
 
-            // verify not retained item
-            if (target.Retained)
+            // verify not retained item. Weapon appearance copy kits do not consume or modify
+            // the donor weapon, so retained donors are allowed for that first copy step.
+            if (target.Retained && source.WeenieClassId != WeaponAppearanceTailoringKit)
             {
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat("You must use Sandstone Salvage to remove the retained property before tailoring.", ChatMessageType.Craft));
                 return WeenieError.YouDoNotPassCraftingRequirements;
@@ -148,6 +150,11 @@ namespace ACE.Server.Entity
                 case WeaponTailoringKit:
 
                     TailorWeapon(player, source, target);
+                    return;
+
+                case WeaponAppearanceTailoringKit:
+
+                    TailorWeaponAppearanceStamp(player, source, target);
                     return;
 
                 case ArmorMainReductionTool:
@@ -324,6 +331,28 @@ namespace ACE.Server.Entity
             return true;
         }
 
+        public static bool HasAvailableSpaceForCopy(Player player, uint sourceWCID, uint resultWCID)
+        {
+            var itemsToReceive = new ItemsToReceive(player);
+
+            itemsToReceive.Remove(sourceWCID, 1);
+            itemsToReceive.Add(resultWCID, 1);
+
+            if (itemsToReceive.PlayerExceedsLimits)
+            {
+                if (itemsToReceive.PlayerExceedsAvailableBurden)
+                    player.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(player.Session, "You are too encumbered to tailor that!"));
+                else if (itemsToReceive.PlayerOutOfInventorySlots)
+                    player.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(player.Session, "You do not have enough pack space to tailor that!"));
+                else if (itemsToReceive.PlayerOutOfContainerSlots)
+                    player.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(player.Session, "You do not have enough container slots to tailor that!"));
+
+                return false;
+            }
+
+            return true;
+        }
+
         public static void Finalize(Player player, WorldObject source, WorldObject target, WorldObject result)
         {
             player.TryConsumeFromInventoryWithNetworking(source, 1);
@@ -334,6 +363,22 @@ namespace ACE.Server.Entity
             {
                 log.Error($"[TAILORING] Tailoring.Finalize({player.Name} (0x{player.Guid}), {source.Name} (0x{source.Guid}), {target.Name} (0x{target.Guid}), {result.Name}) - couldn't add {result.Name} ({result.Guid}) to player inventory after validation, this shouldn't happen!");
                 result.Destroy();  // cleanup for guid manager
+            }
+
+            if (PropertyManager.GetBool("player_receive_immediate_save").Item)
+                player.RushNextPlayerSave(5);
+
+            player.SendUseDoneEvent();
+        }
+
+        public static void FinalizeCopy(Player player, WorldObject source, WorldObject result)
+        {
+            player.TryConsumeFromInventoryWithNetworking(source, 1);
+
+            if (!player.TryCreateInInventoryWithNetworking(result))
+            {
+                log.Error($"[TAILORING] Tailoring.FinalizeCopy({player.Name} (0x{player.Guid}), {source.Name} (0x{source.Guid}), {result.Name}) - couldn't add {result.Name} ({result.Guid}) to player inventory after validation, this shouldn't happen!");
+                result.Destroy();
             }
 
             if (PropertyManager.GetBool("player_receive_immediate_save").Item)
@@ -377,6 +422,41 @@ namespace ACE.Server.Entity
             player.Session.Network.EnqueueSend(new GameMessageSystemChat("You tailor the appearance off the weapon.", ChatMessageType.Broadcast));
 
             Finalize(player, source, target, wo);
+        }
+
+        /// <summary>
+        /// Copies a weapon appearance into an intermediate stamp without consuming the donor weapon.
+        /// The stamp can be applied to the same weapon family while preserving the destination's
+        /// damage type and particle UI effects.
+        /// </summary>
+        public static void TailorWeaponAppearanceStamp(Player player, WorldObject source, WorldObject target)
+        {
+            if (!(target is MeleeWeapon) && !(target is MissileLauncher) && !(target is Caster))
+            {
+                player.SendUseDoneEvent(WeenieError.YouDoNotPassCraftingRequirements);
+                return;
+            }
+
+            if (target is MeleeWeapon && target.W_WeaponType == WeaponType.Undef)
+            {
+                player.SendUseDoneEvent(WeenieError.YouDoNotPassCraftingRequirements);
+                return;
+            }
+
+            if (!HasAvailableSpaceForCopy(player, source.WeenieClassId, DarkHeart))
+            {
+                player.SendUseDoneEvent(WeenieError.YouDoNotPassCraftingRequirements);
+                return;
+            }
+
+            var wo = WorldObjectFactory.CreateNewWorldObject(DarkHeart);
+            SetWeaponProperties(target, wo);
+            wo.SetProperty(PropertyBool.IsWeaponAppearanceStamp, true);
+            wo.LongDesc = LootGenerationFactory.GetLongDesc(wo);
+
+            player.Session.Network.EnqueueSend(new GameMessageSystemChat("You copy the weapon's appearance into a tailoring stamp.", ChatMessageType.Broadcast));
+
+            FinalizeCopy(player, source, wo);
         }
 
         /// <summary>
@@ -517,13 +597,15 @@ namespace ACE.Server.Entity
         {
             //Console.WriteLine($"WeaponApply({player.Name}, {source.Name}, {target.Name})");
 
+            var appearanceStamp = source.GetProperty(PropertyBool.IsWeaponAppearanceStamp) == true;
+
             // verify weapon type
             switch (source.TargetType)
             {
                 case ItemType.MeleeWeapon:
 
                     if (source.W_WeaponType != target.W_WeaponType ||
-                        source.W_DamageType != target.W_DamageType)
+                        (!appearanceStamp && source.W_DamageType != target.W_DamageType))
                     {
                         player.SendUseDoneEvent(WeenieError.YouDoNotPassCraftingRequirements);
                         return;
@@ -533,7 +615,7 @@ namespace ACE.Server.Entity
                 case ItemType.MissileWeapon:
 
                     if (source.DefaultCombatStyle != target.DefaultCombatStyle ||
-                        source.W_DamageType != DamageType.Undef && source.W_DamageType != target.W_DamageType)
+                        (!appearanceStamp && source.W_DamageType != DamageType.Undef && source.W_DamageType != target.W_DamageType))
                     {
                         player.SendUseDoneEvent(WeenieError.YouDoNotPassCraftingRequirements);
                         return;
@@ -542,7 +624,7 @@ namespace ACE.Server.Entity
 
                 case ItemType.Caster:
 
-                    if (source.W_DamageType != DamageType.Undef && source.W_DamageType != target.W_DamageType)
+                    if (!appearanceStamp && source.W_DamageType != DamageType.Undef && source.W_DamageType != target.W_DamageType)
                     {
                         player.SendUseDoneEvent(WeenieError.YouDoNotPassCraftingRequirements);
                         return;
@@ -685,6 +767,7 @@ namespace ACE.Server.Entity
             {
                 case ArmorTailoringKit:
                 case WeaponTailoringKit:
+                case WeaponAppearanceTailoringKit:
                 case ArmorMainReductionTool:
                 case ArmorLowerReductionTool:
                 case ArmorMiddleReductionTool:

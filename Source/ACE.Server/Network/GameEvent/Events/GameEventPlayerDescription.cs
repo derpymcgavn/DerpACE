@@ -409,10 +409,12 @@ namespace ACE.Server.Network.GameEvent.Events
             foreach (var item in Session.Player.Inventory.Values.Where(i => i.UseBackpackSlot).OrderBy(i => i.PlacementPosition))
             {
                 Writer.Write(item.Guid.Full);
-                if (item.WeenieType == WeenieType.Container)
+                if (item.IsFoci || item.RequiresPackSlot)
+                    Writer.Write((uint)ContainerType.Foci);
+                else if (item.WeenieType == WeenieType.Container)
                     Writer.Write((uint)ContainerType.Container);
                 else
-                    Writer.Write((uint)ContainerType.Foci);
+                    Writer.Write((uint)ContainerType.NonContainer);
             }
 
             Writer.Write((uint)Session.Player.EquippedObjects.Values.Count);

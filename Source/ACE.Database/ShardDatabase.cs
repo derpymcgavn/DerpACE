@@ -521,7 +521,7 @@ namespace ACE.Database
                     {
                         inventory.Add(biota);
 
-                        if (includedNestedItems && biota.WeenieType == (int)WeenieType.Container)
+                        if (includedNestedItems && (biota.WeenieType == (int)WeenieType.Container || IsFoci(biota.WeenieClassId)))
                         {
                             var subItems = GetInventoryInParallel(biota.Id, false);
 
@@ -533,6 +533,11 @@ namespace ACE.Database
             }
 
             return inventory.ToList();
+        }
+
+        private static bool IsFoci(uint weenieClassId)
+        {
+            return weenieClassId == 15268 || weenieClassId == 15269 || weenieClassId == 15270 || weenieClassId == 15271 || weenieClassId == 43173;
         }
 
         public List<Biota> GetWieldedItemsInParallel(uint parentId)

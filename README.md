@@ -43,8 +43,8 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Current Loot Mutator Specs (June 12, 2026)
-This section is the current operator-facing summary for lootgen mutators and commands. Older patch notes below are historical and may describe earlier balance values.
+### Current DerpACE Abilities And Commands (June 15, 2026)
+This section is the current operator-facing summary for active custom systems. Older patch notes below are historical and may describe earlier balance values.
 
 #### Admin Commands
 | Command | Purpose |
@@ -52,11 +52,29 @@ This section is the current operator-facing summary for lootgen mutators and com
 | `@lootconfig list` | Prints runtime loot, mutator, armor, mob, and vendor tuning values. |
 | `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Example: `@lootconfig set sentinel.cooldown 14`. |
 | `@lootgen weapon <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon and can force a compatible weapon/caster mutator. Example: `@lootgen weapon 7 mutator=discus`. |
-| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced shield mutators can be applied to shield WCIDs/classnames. Example: `@lootgen shieldtower 7 luck=1 mutator=bashing`. |
+| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced weapon, shield, and armor/clothing mutators can be applied to compatible WCIDs/classnames. Examples: `@lootgen shieldtower 7 luck=1 mutator=bashing`, `@lootgen glovescloth 7 mutator=alchemicalinstability`. |
+| `@customspells reload` | Reloads JSON custom spell definitions from `Data/CustomSpells`. |
+| `@customspells export <spellId>` | Exports a readable SQL package plus the DerpACE custom JSON block for an existing spell. |
+| `@customspells exportcopy <spellId>` | Clones the source spell to the next unused custom spell id, exports it, and loads it. |
+| `@customspells import <file.sql>` | Imports the DerpACE custom spell JSON block from an exported SQL file. |
+| `@cbexport <clothingBaseId> [label]` | Exports a ClothingBase entry to `Data/CustomClothingBase/<id>[_label].json`. |
+| `@cbreload` | Reloads custom ClothingBase JSON files and flushes the ClothingTable cache. |
+| `@cbclear` | Clears ClothingTable cache entries so the next read reloads from DAT/custom merge data. |
+| `@ironmanmode on|off|toggle|status` | Enables or disables player Ironman opt-in server-wide. |
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `hierophant`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`.
+#### Player Commands
+| Command | Purpose |
+|---|---|
+| `/ironman on [-nh] [-blind]` | Begins standard Ironman commitment. Requires `/ironman confirm` within 30 seconds. |
+| `/ironman nomad [-nh] [-blind]` | Begins Nomad Ironman commitment: no weapons/casters, elemental gauntlet/shoe damage, natural unarmored AL. Requires confirmation. |
+| `/ironman confirm` | Finalizes the pending Ironman or Nomad conversion. Permanent. |
+| `/ironman char` | Shows current Ironman progression. Blind Ironmen only see unlocked skills, not future milestones. |
+| `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |
+| `/ironman topkillers`, `/ironmantopkillers` | Shows creatures with the most Ironman kills. |
+
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
 
 #### Weapon And Caster Mutators
 | Mutator | Eligible loot | Current effect |
@@ -64,8 +82,10 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `thief` | Daggers | Requires specialized Sneak Attack. Sneak attacks can add bonus damage and open a hidden seam, reducing target defense briefly. Lowers monster targeting weight. |
 | `quickening` | Daggers | On hit, can speed the wielder's attack animation for a short duration. No start visual; expiration gives feedback. |
 | `fencer` | SwordMS: epee, rapier, schlager | Chance to recover part of armor-mitigated damage as bonus damage, plus a small riposte chance against incoming melee pressure. |
+| `parry sword` | Fencer sword in offhand | Acts as a parry sword: chance to reduce and reflect incoming damage with stamina-down feedback. |
 | `ravager` | Axes and two-handed axes | Axes bleed over ticks. Hammer-named axe variants use a crushing guard/stamina hit instead. |
 | `warden` | Maces, jittes, two-handed maces | Chance to concuss the target, lowering effective defense for a short duration. |
+| `lugianhammer` | Heavy Weapons Lugian hammer WCIDs | Stonehand Throw: rare strike proc hurls a spectral hammer into another nearby foe within 10 yards for 75% of the original hit. |
 | `resolute` | Swords and two-handed swords | Critical hits can heal from damage dealt; killing blows give a small health/stamina burst. |
 | `polebreaker` | Staves | Hits at 70%+ power build same-target rhythm. At full rhythm, Break Guard plays a fast overhead slam, applies a defense penalty, resets rhythm, and starts a visible cooldown. |
 | `sentinel` | Spears and two-handed spears | Goldleaf Sentinel. Hits at configured power or higher build same-target poise. At full stacks, drains target stamina, returns part of it, gives short damage reduction, and starts a visible cooldown. |
@@ -78,6 +98,12 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `archmagi` | Casters | Chance on successful cast to echo an additional same-family spell. |
 | `hierophant` | Life casters / Martyr staff family | Heal support caster with heal boost, HoT chance, fellowship echo, and healer aggro tuning. |
 | `shadowclone` | Void casters only | Umbral Mirror caster can summon a temporary shadow clone combat ally on a 120 second visible cooldown. Clone uses shadow visuals and void/ring style spell support. |
+| `shadowshot` | Bows, crossbows, atlatls | Shadow Volley. Successful shots have a small chance to summon a missile-locked shadow clone for 18 seconds at reduced damage. Shares the visible shadow cooldown and fights alongside the normal pet. |
+| `secondshadow` | Melee weapons | Second Shadow. Successful strikes have a small chance to summon a melee-locked shadow clone for 16 seconds at reduced damage. Shares the visible shadow cooldown and fights alongside the normal pet. |
+| `confusion` | Void casters only | Bedlam caster replaces its spell with `Void Confusion` (`65005`): a weak nether bolt that, on cooldown, makes 1-4 nearby monsters blindly attack other nearby monsters for 1-10 seconds. |
+| `skybreaker` | War casters | Replaces the caster spell with custom spell `Meteor Squall` (`65002`): outdoor-only fire projectile; impact is normal, then fire rains over nearby monsters in short capped ticks. |
+| `stormcaller` | War casters | Replaces the caster spell with custom spell `Chain Lightning` (`65004`): first bolt is normal, then arcs through up to four additional nearby monsters at falling damage. |
+| `orbitweaver` | War casters | Replaces the caster spell with custom spell `Spiral Star` (`65003`): bludgeoning force pulses unwind outward from the caster toward nearby monsters. |
 | `blast` | Rare elemental weapon overlay | T5+ elemental weapons can rarely also roll a level-3 blast-on-strike proc. Nether is excluded from general caster/weapon blast rolls. Ring procs cast from the player toward the target location. |
 
 #### Shield Mutators
@@ -86,6 +112,19 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Defender | Adds monster targeting weight to the shield bearer. |
 | Thorns | Reflects a small percentage of damage actually taken on shield-blocked hits. Kept low to avoid runaway reflect builds. |
 | Bashing | Requires specialized Shield. On block, can deal shield-AL-scaled bash damage, push the attacker back 10 feet, and interrupt a monster spell windup with fizzle feedback. |
+| Reflection | 8-12% chance on incoming missile damage to negate the hit and reflect that damage back at the attacker. Cooldown: 6 seconds. |
+| Spell Mirror | 5-10% chance on harmful spell projectile damage to reduce the hit by 50% and reflect the reduced damage back at the caster. Cooldown: 10 seconds. |
+
+#### Armor And Clothing Mutators
+| Mutator | Eligible loot | Current effect |
+|---|---|---|
+| `culinarian` | Handwear, including cloth gloves | Requires specialized Cooking. Food/drink restores 10-20% more health, stamina, or mana, with a rare T8 25% roll. Every tenth meal grants Well Fed for 2 hours, increasing all primary attributes by 5; cooldown is visible and persists in real time. |
+| `alchemist` | Handwear, including cloth gloves | Requires specialized Alchemy. Potions restore 10-15% more health, stamina, or mana. Targeted alchemy phials have a 10-18% chance to splash their spell onto 1-3 nearby monster targets without consuming extra phials. |
+| `alchemicalinstability` | Rare T6+ alchemist glove sub-perk | Drinking potions has a 4-8% chance to backfire on the player with one random debuff or a Tumerok-palette hair/skin color change; harmful thrown phials trigger an extra random debuff at half chance on their primary target. Natural roll chance: 15% on T6-T7 alchemist gloves, 25% on T8. |
+| `healingdance` | Footwear | After 10 uninterrupted seconds of `/dance`, pulses health restoration to nearby fellowship members; restores only the dancer if no fellows are nearby. |
+| `rejuvenatingdance` | Footwear | Same dance behavior, but restores stamina. |
+| `replenishingdance` | Footwear | Same dance behavior, but restores mana. |
+| `unarmed` | Handwear and footwear | Adds unarmed surrogate damage, damage type, variance, offense/defense, speed, icon overlay, and combat UI effect for truly unarmed attacks. |
 
 #### Important `@lootconfig` Keys
 | Family | Keys |
@@ -98,8 +137,15 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Quickening | `quickening.drop`, `quickening.tier`, `quickening.procmin`, `quickening.procmax`, `quickening.speedmin`, `quickening.speedmax`, `quickening.durmin`, `quickening.durmax` |
 | Elemental blast | `blast.mintier`, `blast.chancemin`, `blast.chancemax`, `blast.ratemin`, `blast.ratemax` |
 
-#### Custom Clothing Base Pipeline
-Custom clothing JSON filenames now identify the custom `ClothingBase` id. Save files under `Source/ACE.Server/Data/CustomClothingBase/<clothingBaseId>[_label].json`; the loader uses the filename id so custom clothing items can add new entries instead of overwriting portal defaults. Use `@cbexport <id> [label]`, edit the JSON, then run `@cbreload` or restart.
+#### Other Current Custom Systems
+| System | Current behavior |
+|---|---|
+| Custom Clothing Base | JSON filenames identify the custom `ClothingBase` id. Save under `Source/ACE.Server/Data/CustomClothingBase/<clothingBaseId>[_label].json`; use `@cbexport`, edit JSON, then `@cbreload` or restart. |
+| Custom Spells | JSON files in `Data/CustomSpells` load at runtime. SQL export/import commands include a marked DerpACE JSON block for easy admin copy/edit/clone workflows. |
+| Weapon Appearance Tailoring Kit | WCID `420420423` creates a non-destructive weapon appearance stamp from a donor weapon, then applies that appearance to a same-family destination weapon while preserving destination stats, spells, procs, damage type, and particles. |
+| Foci Containers | Foci WCIDs `15268`, `15269`, `15270`, `15271`, `43173` act as 15-slot side containers for scarabs, prismatic tapers, and mana stones, and contents persist across relog. |
+| Aetherial Quiver | WCID `2000600` acts as self-replenishing prismatic ammunition for bows, crossbows, and atlatls, tuned slightly below deadly prismatics. |
+| Random Dye | WCID `420420420` applies a random palette to compatible armor, clothing, weapons, casters, and shields. |
 
 ### Recent Patch Notes (Vendor Random Loot by Town Tier)
 Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.

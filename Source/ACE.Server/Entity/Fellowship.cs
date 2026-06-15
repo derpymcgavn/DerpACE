@@ -6,6 +6,7 @@ using System.Linq;
 using ACE.Common;
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
@@ -78,6 +79,12 @@ namespace ACE.Server.Entity
             if (inviter == null || newMember == null)
                 return;
 
+            if (IsMixedIronmanFellowship(inviter, newMember))
+            {
+                inviter.Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
+                return;
+            }
+
             if (IsLocked)
             {
 
@@ -140,6 +147,12 @@ namespace ACE.Server.Entity
         {
             if (inviter == null || inviter.Session == null || inviter.Session.Player == null || player == null) return;
 
+            if (IsMixedIronmanFellowship(inviter, player))
+            {
+                inviter.Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
+                return;
+            }
+
             if (!response)
             {
                 // player clicked 'no' on the fellowship popup
@@ -180,6 +193,11 @@ namespace ACE.Server.Entity
 
             if (inviter.CurrentMotionState.Stance == MotionStance.NonCombat) // only do this motion if inviter is at peace, other times motion is skipped. 
                 inviter.SendMotionAsCommands(MotionCommand.BowDeep, MotionStance.NonCombat);
+        }
+
+        private static bool IsMixedIronmanFellowship(Player inviter, Player newMember)
+        {
+            return (inviter.GetProperty(PropertyBool.IsIronman) == true) != (newMember.GetProperty(PropertyBool.IsIronman) == true);
         }
 
         public void RemoveFellowshipMember(Player player, Player leader)

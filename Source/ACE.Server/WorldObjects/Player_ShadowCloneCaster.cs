@@ -30,17 +30,33 @@ namespace ACE.Server.WorldObjects
             if (caster == null || target == null)
                 return;
 
+            TryProcShadowCloneSource(caster, target, "Your shadow tears free and joins the fight.");
+        }
+
+        public void TryProcShadowCloneWeapon(WorldObject weapon, Creature target)
+        {
+            if (weapon?.GetProperty(PropertyBool.IsShadowCloneWeapon) != true || target == null)
+                return;
+
+            TryProcShadowCloneSource(weapon, target, "Your shadow steps from your weapon and joins the fight.");
+        }
+
+        private void TryProcShadowCloneSource(WorldObject sourceItem, Creature target, string summonMessage)
+        {
+            if (sourceItem == null || target == null)
+                return;
+
             var now = DateTime.UtcNow;
             if (now < _shadowCloneCasterCooldownUntil)
                 return;
 
-            var procChance = (float)(caster.GetProperty(PropertyFloat.ShadowCloneProcChance) ?? 0.04);
+            var procChance = (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneProcChance) ?? 0.04);
             if (procChance <= 0.0f || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
                 return;
 
-            var cooldownSeconds = Math.Max(1.0f, (float)(caster.GetProperty(PropertyFloat.ShadowCloneCooldownSeconds) ?? 120.0));
-            var durationSeconds = Math.Max(1.0f, (float)(caster.GetProperty(PropertyFloat.ShadowCloneDurationSeconds) ?? 25.0));
-            var damageScale = Math.Clamp((float)(caster.GetProperty(PropertyFloat.ShadowCloneDamageScale) ?? 0.35), 0.05f, 1.0f);
+            var cooldownSeconds = Math.Max(1.0f, (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneCooldownSeconds) ?? 120.0));
+            var durationSeconds = Math.Max(1.0f, (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneDurationSeconds) ?? 25.0));
+            var damageScale = Math.Clamp((float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneDamageScale) ?? 0.35), 0.05f, 1.0f);
 
             var clone = CreateShadowClonePetShell();
             if (clone == null)
@@ -57,11 +73,11 @@ namespace ACE.Server.WorldObjects
             }
 
             _shadowCloneCasterCooldownUntil = now.AddSeconds(cooldownSeconds);
-            caster.CooldownId = ShadowCloneCasterCooldownId;
-            caster.CooldownDuration = cooldownSeconds;
-            EnchantmentManager.StartCooldown(caster);
+            sourceItem.CooldownId = ShadowCloneCasterCooldownId;
+            sourceItem.CooldownDuration = cooldownSeconds;
+            EnchantmentManager.StartCooldown(sourceItem);
 
-            Session?.Network.EnqueueSend(new GameMessageSystemChat("Your shadow tears free and joins the fight.", ChatMessageType.Magic));
+            Session?.Network.EnqueueSend(new GameMessageSystemChat(summonMessage, ChatMessageType.Magic));
         }
 
         internal void SetActiveShadowCloneCasterPet(CombatPet clone)
@@ -92,6 +108,9 @@ namespace ACE.Server.WorldObjects
                 return;
 
             var clone = _activeShadowCloneCasterPet;
+            if (!clone.IsShadowCloneLockedToMagic)
+                return;
+
             if (clone.Location == null || clone.CurrentLandblock == null || targetCreature.CurrentLandblock == null ||
                 clone.CurrentLandblock.CurrentLandblockGroup != targetCreature.CurrentLandblock.CurrentLandblockGroup)
                 return;

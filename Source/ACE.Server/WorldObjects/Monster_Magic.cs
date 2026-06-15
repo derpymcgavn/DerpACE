@@ -314,9 +314,11 @@ namespace ACE.Server.WorldObjects
                 target = this;
 
             var caster = GetEquippedWand();
+            var shadowClone = this as CombatPet;
+            var isShadowClone = shadowClone?.IsShadowClone == true;
 
             // handle self procs
-            if (spell.IsHarmful && target != this)
+            if (!isShadowClone && spell.IsHarmful && target != this)
                 TryProcEquippedItems(this, this, true, caster);
 
             // If the target is too far away, don't cast. This checks to see of this monster and the target are on separate landblock groups, and potentially separate threads.
@@ -343,7 +345,7 @@ namespace ACE.Server.WorldObjects
                     if (spell.IsHarmful)
                     {
                         // handle target procs
-                        if (targetCreature != null && targetCreature != this)
+                        if (!isShadowClone && targetCreature != null && targetCreature != this)
                             TryProcEquippedItems(this, targetCreature, false, caster);
                     }
                     break;
@@ -364,7 +366,7 @@ namespace ACE.Server.WorldObjects
                         if (spell.IsHarmful)
                         {
                             // handle target procs
-                            if (targetCreature != null && targetCreature != this)
+                            if (!isShadowClone && targetCreature != null && targetCreature != this)
                                 TryProcEquippedItems(this, targetCreature, false, caster);
                         }
                     }
@@ -373,8 +375,8 @@ namespace ACE.Server.WorldObjects
                 case MagicSchool.WarMagic:
                 case MagicSchool.VoidMagic:
 
-                    var damageModifier = this is CombatPet combatPet && combatPet.IsShadowClone
-                        ? combatPet.ShadowCloneDamageScale
+                    var damageModifier = isShadowClone
+                        ? shadowClone.ShadowCloneDamageScale
                         : 1.0f;
                     HandleCastSpell(spell, target, caster, damageModifier: damageModifier);
                     break;

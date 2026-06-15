@@ -599,6 +599,9 @@ namespace ACE.Server.WorldObjects
             if (ProjectileSource is not Player sourcePlayer || firstTarget == null || primaryDamage <= 0)
                 return;
 
+            if (FromProc)
+                return;
+
             if (firstTarget is Player)
                 return;
 
@@ -633,13 +636,22 @@ namespace ACE.Server.WorldObjects
             {
                 var target = targets[i];
                 var origin = previous;
-                var damage = primaryDamage * scales[Math.Min(i, scales.Length - 1)];
+                var scale = scales[Math.Min(i, scales.Length - 1)];
+                var fallbackDamage = primaryDamage * scale;
 
                 chain.AddDelaySeconds(0.18);
                 chain.AddAction(sourcePlayer, () =>
                 {
                     origin?.ApplyVisualEffects(PlayScript.BreatheLightning);
-                    ApplySpecialWarDamage(sourcePlayer, target, DamageType.Electric, damage, "Chain Lightning");
+                    LaunchCustomWarProcProjectile(
+                        sourcePlayer,
+                        origin,
+                        target,
+                        ACE.Server.Managers.CustomSpellManager.ChainLightningArcSpellId,
+                        scale,
+                        DamageType.Electric,
+                        fallbackDamage,
+                        "Chain Lightning");
                 });
 
                 previous = target;
@@ -666,7 +678,15 @@ namespace ACE.Server.WorldObjects
                     foreach (var target in targets)
                     {
                         firstTarget.ApplyVisualEffects(PlayScript.EnchantUpRed);
-                        ApplySpecialWarDamage(sourcePlayer, target, DamageType.Fire, primaryDamage * 0.18f, "Meteor Squall");
+                        LaunchCustomWarProcProjectile(
+                            sourcePlayer,
+                            target,
+                            target,
+                            ACE.Server.Managers.CustomSpellManager.MeteorFragmentSpellId,
+                            0.18f,
+                            DamageType.Fire,
+                            primaryDamage * 0.18f,
+                            "Meteor Squall");
                     }
                 });
             }
@@ -765,15 +785,25 @@ namespace ACE.Server.WorldObjects
                 return;
 
             var chain = new ActionChain();
-            foreach (var target in targets)
+            for (var i = 0; i < targets.Count; i++)
             {
-                var damage = primaryDamage * 0.42f;
+                var target = targets[i];
+                const float scale = 0.42f;
+                var fallbackDamage = primaryDamage * scale;
 
-                chain.AddDelaySeconds(0.14);
+                chain.AddDelaySeconds(0.18 + (0.06 * i));
                 chain.AddAction(sourcePlayer, () =>
                 {
-                    sourcePlayer.ApplyVisualEffects(PlayScript.EnchantUpOrange);
-                    ApplySpecialWarDamage(sourcePlayer, target, DamageType.Fire, damage, "Spiral Star");
+                    sourcePlayer.ApplyVisualEffects(PlayScript.EnchantUpYellow);
+                    LaunchCustomWarProcProjectile(
+                        sourcePlayer,
+                        sourcePlayer,
+                        target,
+                        ACE.Server.Managers.CustomSpellManager.SpiralStarLashSpellId,
+                        scale,
+                        DamageType.Bludgeon,
+                        fallbackDamage,
+                        "Spiral Star");
                 });
             }
 
@@ -781,6 +811,32 @@ namespace ACE.Server.WorldObjects
                 $"A spiral star circles outward toward {string.Join(", ", targets.Select(t => t.Name))}.",
                 ChatMessageType.Magic));
             chain.EnqueueChain();
+        }
+
+        private void LaunchCustomWarProcProjectile(Player sourcePlayer, WorldObject origin, Creature target, uint spellId, float damageModifier, DamageType fallbackDamageType, float fallbackDamage, string spellName)
+        {
+            if (sourcePlayer == null || target == null || target.IsDead || target is Player || !sourcePlayer.CanDamage(target))
+                return;
+
+            var spell = new Spell(spellId);
+            if (spell.NotFound)
+            {
+                ApplySpecialWarDamage(sourcePlayer, target, fallbackDamageType, fallbackDamage, spellName);
+                return;
+            }
+
+            var projectiles = sourcePlayer.CreateSpellProjectiles(
+                spell,
+                target,
+                ProjectileLauncher,
+                IsWeaponSpell,
+                true,
+                0,
+                damageModifier,
+                origin ?? sourcePlayer);
+
+            if (projectiles.Count == 0)
+                ApplySpecialWarDamage(sourcePlayer, target, fallbackDamageType, fallbackDamage, spellName);
         }
 
         private static List<Creature> GetNearbyMonsterTargets(Player sourcePlayer, WorldObject center, WorldObject sortFrom, float radius, int maxTargets, HashSet<uint> excluded)
@@ -1041,6 +1097,9 @@ namespace ACE.Server.WorldObjects
                     damage = reducedDamage;
                     percent = damage / target.Health.MaxValue;
                 }
+
+                if (targetPlayer != null && targetPlayer.TryProcShieldSpellMirror(ProjectileSource, Spell?.Name, Spell.DamageType, ref damage))
+                    percent = damage / target.Health.MaxValue;
 
                 amount = (uint)-target.UpdateVitalDelta(target.Health, (int)-Math.Round(damage));
                 target.DamageHistory.Add(ProjectileSource, Spell.DamageType, amount);

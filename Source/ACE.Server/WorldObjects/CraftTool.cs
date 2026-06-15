@@ -100,6 +100,12 @@ namespace ACE.Server.WorldObjects
 
         public override void HandleActionUseOnTarget(Player player, WorldObject target)
         {
+            if (Tailoring.IsTailoringKit(WeenieClassId))
+            {
+                Tailoring.UseObjectOnTarget(player, this, target);
+                return;
+            }
+
             if (PetDevice.IsEncapsulatedSpirit(this) && target is PetDevice petDevice)
             {
                 petDevice.Refill(player, this);

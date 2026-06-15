@@ -168,7 +168,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance, spinProcChance);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius);
-                wo.IconOverlayId = 0x06002878u;
+                wo.IconOverlayId = MutatorOverlayDinnerware;
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
             }
 
@@ -228,9 +228,13 @@ namespace ACE.Server.Factories
                 return;
 
             var isDiscus = wo.WeenieClassId == (uint)WeenieClassName.discus;
+            var procChance = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance) ?? 0.0) * 100.0;
+            var radius = wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius) ?? ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius;
+            var firstBounceDamage = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale) ?? ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale) * 100.0;
+
             wo.LongDesc = (wo.LongDesc ?? "") + (isDiscus
-                ? "\n\nThis discus carries the call of a warrior princess - each throw can ricochet through nearby foes for 50%, 25%, 10%, and 5% damage."
-                : "\n\nThis dinnerware was raised for the feast instead of the table - each throw can carom through nearby foes for 50%, 25%, 10%, and 5% damage, ringing out with china, crockery, and bad manners.");
+                ? $"\n\nThis discus carries the call of a warrior princess - each throw has a {procChance:0.#}% chance to ricochet through up to four additional nearby foes within {radius:0.#} yards. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 25%, 10%, and 5% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds."
+                : $"\n\nThis dinnerware was raised for the feast instead of the table - each throw has a {procChance:0.#}% chance to carom through up to four additional nearby foes within {radius:0.#} yards, ringing out with china, crockery, and bad manners. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 25%, 10%, and 5% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds.");
         }
 
         private static bool IsSpecialThrowableTemplate(WorldObject wo)

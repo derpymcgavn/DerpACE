@@ -467,10 +467,10 @@ namespace ACE.Server.WorldObjects
         {
             get
             {
-                if (WeenieType == WeenieType.Container)
-                    return ContainerType.Container;
-                else if (RequiresPackSlot || IsFoci)
+                if (IsFoci || RequiresPackSlot)
                     return ContainerType.Foci;
+                else if (WeenieType == WeenieType.Container)
+                    return ContainerType.Container;
                 else
                     return ContainerType.NonContainer;
             }

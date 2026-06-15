@@ -17,10 +17,10 @@ namespace ACE.Server.Network.GameEvent.Events
             {
                 Writer.Write(inv.Guid.Full);
 
-                if (inv.WeenieType == WeenieType.Container)
-                    Writer.Write((uint)ContainerType.Container);
-                else if (inv.RequiresPackSlot)
+                if (inv.IsFoci || inv.RequiresPackSlot)
                     Writer.Write((uint)ContainerType.Foci);
+                else if (inv.WeenieType == WeenieType.Container)
+                    Writer.Write((uint)ContainerType.Container);
                 else
                     Writer.Write((uint)ContainerType.NonContainer);
             }

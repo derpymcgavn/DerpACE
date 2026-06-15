@@ -41888,6 +41888,7 @@ namespace ACE.Server.Factories.Enum
         ace87832_rootsofskuldgenerator = 87832,
         ace420420420_randomdye = 420420420,
         ace420420421_martyrstaff = 420420421,
+        ace420420423_weaponappearancetailoringkit = 420420423,
         ace5238245_aciddartflinger = 5238245,
         ace5238246_bluntdartflinger = 5238246,
         ace5238247_electricdartflinger = 5238247,

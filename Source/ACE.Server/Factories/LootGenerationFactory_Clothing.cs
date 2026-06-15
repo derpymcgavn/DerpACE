@@ -40,6 +40,14 @@ namespace ACE.Server.Factories
                         ApplyBashingShield(wo);
                         AddShieldSuffix(wo, "of Bashing");
                         break;
+                    case "reflection":
+                        ApplyProjectileReflectShield(wo);
+                        AddShieldSuffix(wo, "of Reflection");
+                        break;
+                    case "spellmirror":
+                        ApplySpellMirrorShield(wo);
+                        AddShieldSuffix(wo, "of Spell Mirroring");
+                        break;
                 }
 
                 return;
@@ -67,6 +75,18 @@ namespace ACE.Server.Factories
                 rolledAffixes.Add("of Bashing");
             }
 
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.06f)
+            {
+                ApplyProjectileReflectShield(wo);
+                rolledAffixes.Add("of Reflection");
+            }
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.04f)
+            {
+                ApplySpellMirrorShield(wo);
+                rolledAffixes.Add("of Spell Mirroring");
+            }
+
             if (rolledAffixes.Count == 0)
                 return;
 
@@ -80,13 +100,13 @@ namespace ACE.Server.Factories
                 wo.Name = "Defender's " + wo.Name;
 
             wo.SetProperty(PropertyBool.IsDefendersShield, true);
-            wo.IconOverlayId = 0x06002878u;
+            wo.IconOverlayId = MutatorOverlayDefender;
             ApplyLootUiEffect(wo, UiEffects.BoostHealth);
 
             if ((wo.LongDesc ?? "").Contains("protective challenge", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge - enemies are more likely to target its bearer.";
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nThis shield resonates with a protective challenge - while equipped, nearby enemies weigh its bearer as a more tempting target when choosing who to attack.";
         }
 
         private static void ApplyThornsShield(WorldObject wo)
@@ -95,10 +115,10 @@ namespace ACE.Server.Factories
 
             wo.SetProperty(PropertyBool.IsThornsShield, true);
             wo.SetProperty(PropertyFloat.ShieldThornsReflectPct, reflectPct);
-            wo.IconOverlayId = 0x0600667Bu;
+            wo.IconOverlayId = MutatorOverlayThorns;
             ApplyLootUiEffect(wo, UiEffects.Poisoned);
 
-            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOn a shield block, this shield reflects {reflectPct:P0} of the damage you take back at the attacker.";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis shield answers violence with splinters of its own - when you take damage with the shield equipped, it reflects {reflectPct:P0} of the damage taken back at the attacker. Cooldown: 1 second.";
         }
 
         private static void ApplyBashingShield(WorldObject wo)
@@ -106,10 +126,34 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyBool.IsBashingShield, true);
             wo.SetProperty(PropertyFloat.ShieldBashingProcChance, 0.10);
             wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, 0.10);
-            wo.IconOverlayId = 0x06001B3Cu;
+            wo.IconOverlayId = MutatorOverlayBashing;
             ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
-            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker, knocking monsters back, dealing damage based on shield armor level, and interrupting monster spell windups.";
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker. A bash deals bludgeoning damage based on shield armor level, capped at 10% of your current health, pushes monsters back 10 feet, and can interrupt monster spell windups. Cooldown: 8 seconds.";
+        }
+
+        private static void ApplyProjectileReflectShield(WorldObject wo)
+        {
+            var reflectChance = ThreadSafeRandom.Next(8, 13) / 100.0;
+
+            wo.SetProperty(PropertyBool.IsProjectileReflectShield, true);
+            wo.SetProperty(PropertyFloat.ShieldProjectileReflectChance, reflectChance);
+            wo.IconOverlayId = MutatorOverlayReflection;
+            ApplyLootUiEffect(wo, UiEffects.Piercing);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis shield catches the line of a flying shot - when you take missile damage, it has a {reflectChance:P0} chance to negate that hit and reflect the damage back at the attacker. Cooldown: 6 seconds.";
+        }
+
+        private static void ApplySpellMirrorShield(WorldObject wo)
+        {
+            var mirrorChance = ThreadSafeRandom.Next(5, 11) / 100.0;
+
+            wo.SetProperty(PropertyBool.IsSpellMirrorShield, true);
+            wo.SetProperty(PropertyFloat.ShieldSpellMirrorChance, mirrorChance);
+            wo.IconOverlayId = MutatorOverlaySpellMirror;
+            ApplyLootUiEffect(wo, UiEffects.Magical);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis shield holds a thin mirrored ward - when you take harmful spell damage, it has a {mirrorChance:P0} chance to reduce that spell hit by 50% and reflect the reduced damage back at the caster. Cooldown: 10 seconds.";
         }
 
         private static void AddShieldSuffix(WorldObject wo, string suffix)
@@ -209,6 +253,8 @@ namespace ACE.Server.Factories
             {
                 TryMutateUnarmedDamage(wo, profile, roll);
                 TryMutateCookingGloves(wo, profile, roll);
+                TryMutateAlchemistGloves(wo, profile, roll);
+                TryMutateDanceBoots(wo, profile, roll);
             }
 
             TryMutateShieldAffixes(wo, profile, roll);
@@ -217,6 +263,12 @@ namespace ACE.Server.Factories
         private static void TryMutateCookingGloves(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
         {
             if (wo == null || profile == null)
+                return;
+
+            if (TryResolveArmorMutator(roll?.ForcedWeaponMutator, out var forcedName) && !string.Equals(forcedName, "culinarian", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (wo.GetProperty(PropertyBool.IsAlchemistGloves) == true)
                 return;
 
             var forced = IsForcedArmorMutator(roll, "culinarian");
@@ -236,6 +288,7 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyBool.IsCookingGloves, true);
             wo.SetProperty(PropertyFloat.CulinarianRestoreBonusPct, restoreBonus);
             wo.Name = $"{wo.Name} of the Culinarian";
+            wo.IconOverlayId = MutatorOverlayCulinarian;
             wo.IconUnderlayId = 0x06001B3Cu;
             ApplyLootUiEffect(wo, UiEffects.BoostStamina);
             AddSpecializedCookingWieldRequirement(wo);
@@ -256,6 +309,112 @@ namespace ACE.Server.Factories
                 return 0.15;
 
             return 0.10;
+        }
+
+        private static void TryMutateAlchemistGloves(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
+        {
+            if (wo == null || profile == null)
+                return;
+
+            if (wo.GetProperty(PropertyBool.IsCookingGloves) == true)
+                return;
+
+            var forced = IsForcedArmorMutator(roll, "alchemist");
+            var forcedInstability = IsForcedArmorMutator(roll, "alchemicalinstability");
+            forced |= forcedInstability;
+
+            var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
+            if (!validLocs.HasFlag(EquipMask.HandWear))
+                return;
+
+            if (!forced && profile.Tier < 4)
+                return;
+
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.08f)
+                return;
+
+            var potionBonus = GetAlchemistPotionBonus(profile);
+            var splashChance = GetAlchemistSplashChance(profile);
+            var splashTargets = GetAlchemistSplashTargets(profile);
+            var hasInstability = forcedInstability || ShouldRollAlchemicalInstability(profile);
+            var instabilityChance = hasInstability ? GetAlchemicalInstabilityChance(profile) : 0.0;
+
+            wo.SetProperty(PropertyBool.IsAlchemistGloves, true);
+            wo.SetProperty(PropertyFloat.AlchemistPotionBonusPct, potionBonus);
+            wo.SetProperty(PropertyFloat.AlchemistSplashProcChance, splashChance);
+            wo.SetProperty(PropertyFloat.AlchemistSplashTargetCount, splashTargets);
+            if (hasInstability)
+            {
+                wo.SetProperty(PropertyBool.IsAlchemicalInstabilityGloves, true);
+                wo.SetProperty(PropertyFloat.AlchemicalInstabilityProcChance, instabilityChance);
+            }
+
+            wo.Name = hasInstability ? $"{wo.Name} of Alchemical Instability" : $"{wo.Name} of the Alchemist";
+            wo.IconOverlayId = MutatorOverlayAlchemist;
+            ApplyLootUiEffect(wo, hasInstability ? UiEffects.Acid | UiEffects.Magical | UiEffects.Poisoned : UiEffects.Acid | UiEffects.Magical);
+            AddSpecializedAlchemyWieldRequirement(wo);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRequires specialized Alchemy to wear.\nWhile worn, potions restore {potionBonus:P0} more health, stamina, or mana. Targeted alchemy phials have a {splashChance:P0} chance to splash their spell onto up to {(int)splashTargets} nearby monster target{(splashTargets == 1 ? "" : "s")} within 10 yards. Splash casts do not consume extra phials.";
+            if (hasInstability)
+                wo.LongDesc += $"\nAlchemical Instability: drinking potions has a {instabilityChance:P0} chance to backfire on you, either applying one random debuff or staining your hair and/or skin with Tumerok palette colors. Harmful thrown phials can also trigger an extra random debuff at half chance on their primary target.";
+        }
+
+        private static double GetAlchemistPotionBonus(TreasureDeath profile)
+        {
+            var tier = profile?.Tier ?? 1;
+
+            if (tier >= 8)
+                return ThreadSafeRandom.Next(13, 16) / 100.0;
+
+            if (tier >= 6)
+                return ThreadSafeRandom.Next(12, 15) / 100.0;
+
+            return ThreadSafeRandom.Next(10, 13) / 100.0;
+        }
+
+        private static double GetAlchemistSplashChance(TreasureDeath profile)
+        {
+            var tier = profile?.Tier ?? 1;
+
+            if (tier >= 8)
+                return 0.18;
+
+            if (tier >= 6)
+                return 0.14;
+
+            return 0.10;
+        }
+
+        private static int GetAlchemistSplashTargets(TreasureDeath profile)
+        {
+            var tier = profile?.Tier ?? 1;
+
+            if (tier >= 8)
+                return 3;
+
+            if (tier >= 6)
+                return 2;
+
+            return 1;
+        }
+
+        private static bool ShouldRollAlchemicalInstability(TreasureDeath profile)
+        {
+            var tier = profile?.Tier ?? 1;
+            if (tier < 6)
+                return false;
+
+            var chance = tier >= 8 ? 0.25f : 0.15f;
+            return ThreadSafeRandom.Next(0.0f, 1.0f) < chance;
+        }
+
+        private static double GetAlchemicalInstabilityChance(TreasureDeath profile)
+        {
+            var tier = profile?.Tier ?? 1;
+            if (tier >= 8)
+                return ThreadSafeRandom.Next(6, 9) / 100.0;
+
+            return ThreadSafeRandom.Next(4, 7) / 100.0;
         }
 
         private static void AddSpecializedCookingWieldRequirement(WorldObject wo)
@@ -300,6 +459,160 @@ namespace ACE.Server.Factories
             return requirement == WieldRequirement.Training &&
                    skillType == (int)Skill.Cooking &&
                    difficulty >= (int)SkillAdvancementClass.Specialized;
+        }
+
+        private static void AddSpecializedAlchemyWieldRequirement(WorldObject wo)
+        {
+            var skill = (int)Skill.Alchemy;
+            var difficulty = (int)SkillAdvancementClass.Specialized;
+
+            if (IsSpecializedAlchemyRequirement(wo.WieldRequirements, wo.WieldSkillType, wo.WieldDifficulty) ||
+                IsSpecializedAlchemyRequirement(wo.WieldRequirements2, wo.WieldSkillType2, wo.WieldDifficulty2) ||
+                IsSpecializedAlchemyRequirement(wo.WieldRequirements3, wo.WieldSkillType3, wo.WieldDifficulty3) ||
+                IsSpecializedAlchemyRequirement(wo.WieldRequirements4, wo.WieldSkillType4, wo.WieldDifficulty4))
+                return;
+
+            if (wo.WieldRequirements == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements = WieldRequirement.Training;
+                wo.WieldSkillType = skill;
+                wo.WieldDifficulty = difficulty;
+            }
+            else if (wo.WieldRequirements2 == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements2 = WieldRequirement.Training;
+                wo.WieldSkillType2 = skill;
+                wo.WieldDifficulty2 = difficulty;
+            }
+            else if (wo.WieldRequirements3 == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements3 = WieldRequirement.Training;
+                wo.WieldSkillType3 = skill;
+                wo.WieldDifficulty3 = difficulty;
+            }
+            else if (wo.WieldRequirements4 == WieldRequirement.Invalid)
+            {
+                wo.WieldRequirements4 = WieldRequirement.Training;
+                wo.WieldSkillType4 = skill;
+                wo.WieldDifficulty4 = difficulty;
+            }
+        }
+
+        private static bool IsSpecializedAlchemyRequirement(WieldRequirement requirement, int? skillType, int? difficulty)
+        {
+            return requirement == WieldRequirement.Training &&
+                   skillType == (int)Skill.Alchemy &&
+                   difficulty >= (int)SkillAdvancementClass.Specialized;
+        }
+
+        private static void TryMutateDanceBoots(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
+        {
+            if (wo == null || profile == null)
+                return;
+
+            var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
+            if (!validLocs.HasFlag(EquipMask.FootWear))
+                return;
+
+            var forced = TryResolveArmorMutator(roll?.ForcedWeaponMutator, out var forcedName) && IsDanceBootMutator(forcedName);
+
+            if (!forced && profile.Tier < 4)
+                return;
+
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.06f)
+                return;
+
+            var mutator = forced ? forcedName : RollDanceBootMutator();
+            ApplyDanceBootMutator(wo, profile, mutator);
+        }
+
+        private static bool IsDanceBootMutator(string mutatorName)
+        {
+            return string.Equals(mutatorName, "healingdance", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mutatorName, "rejuvenatingdance", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(mutatorName, "replenishingdance", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string RollDanceBootMutator()
+        {
+            return ThreadSafeRandom.Next(0, 3) switch
+            {
+                0 => "healingdance",
+                1 => "rejuvenatingdance",
+                _ => "replenishingdance",
+            };
+        }
+
+        private static void ApplyDanceBootMutator(WorldObject wo, TreasureDeath profile, string mutator)
+        {
+            var amount = GetDanceBootRestoreAmount(profile);
+            var interval = GetDanceBootPulseInterval(profile);
+
+            wo.SetProperty(PropertyFloat.DanceBootRestoreAmount, amount);
+            wo.SetProperty(PropertyFloat.DanceBootPulseIntervalSeconds, interval);
+
+            string suffix;
+            string ability;
+            string vital;
+            UiEffects uiEffect;
+
+            switch (mutator)
+            {
+                case "healingdance":
+                    wo.SetProperty(PropertyBool.IsHealingDanceBoots, true);
+                    suffix = "of Healing Dance";
+                    ability = "Healing Dance";
+                    vital = "health";
+                    uiEffect = UiEffects.BoostHealth;
+                    wo.IconOverlayId = MutatorOverlayHealingDance;
+                    break;
+                case "replenishingdance":
+                    wo.SetProperty(PropertyBool.IsReplenishingDanceBoots, true);
+                    suffix = "of Replenishing Dance";
+                    ability = "Replenishing Dance";
+                    vital = "mana";
+                    uiEffect = UiEffects.BoostMana;
+                    wo.IconOverlayId = MutatorOverlayReplenishingDance;
+                    break;
+                case "rejuvenatingdance":
+                default:
+                    wo.SetProperty(PropertyBool.IsRejuvenatingDanceBoots, true);
+                    suffix = "of Rejuvenating Dance";
+                    ability = "Rejuvenating Dance";
+                    vital = "stamina";
+                    uiEffect = UiEffects.BoostStamina;
+                    wo.IconOverlayId = MutatorOverlayRejuvenatingDance;
+                    break;
+            }
+
+            if (!wo.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                wo.Name = $"{wo.Name} {suffix}";
+
+            ApplyLootUiEffect(wo, uiEffect);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\n{ability}: while wearing these boots, perform /dance for 10 uninterrupted seconds to begin restoring {amount:0} {vital} every {interval:0.#} seconds to nearby fellowship members. If no fellows are nearby, the dance restores you instead. The dance ends when you stop dancing, enter combat, die, or remove the boots.";
+        }
+
+        private static int GetDanceBootRestoreAmount(TreasureDeath profile)
+        {
+            return profile?.Tier switch
+            {
+                >= 8 => ThreadSafeRandom.Next(7, 10),
+                >= 7 => ThreadSafeRandom.Next(5, 8),
+                >= 6 => ThreadSafeRandom.Next(3, 6),
+                >= 5 => ThreadSafeRandom.Next(2, 5),
+                _ => ThreadSafeRandom.Next(1, 3),
+            };
+        }
+
+        private static double GetDanceBootPulseInterval(TreasureDeath profile)
+        {
+            return profile?.Tier switch
+            {
+                >= 8 => ThreadSafeRandom.Next(2.5f, 4.0f),
+                >= 6 => ThreadSafeRandom.Next(3.5f, 5.0f),
+                _ => ThreadSafeRandom.Next(4.5f, 6.0f),
+            };
         }
 
 
@@ -456,7 +769,7 @@ namespace ACE.Server.Factories
                 + $"\nOffense: {wo.WeaponOffense:F3}  Defense: {wo.WeaponDefense:F3}  Speed: {wo.WeaponTime}";
 
             // Add visual overlay for unarmed-enabled items
-            wo.IconOverlayId = 0x06006C1F; // Special marker icon
+            wo.IconOverlayId = MutatorOverlayUnarmed;
         }
 
         private static bool IsForcedArmorMutator(TreasureRoll roll, string mutatorName)

@@ -104,6 +104,20 @@ namespace ACE.Server.WorldObjects
             if (CombatTable == null)
                 GetCombatTable();
 
+            if (this is CombatPet combatPet && combatPet.TryGetShadowCloneLockedCombatMode(out var lockedMode))
+            {
+                switch (lockedMode)
+                {
+                    case CombatMode.Magic:
+                        return TrySelectShadowCloneMagicAttack() ? CombatType.Magic : CombatType.Melee;
+                    case CombatMode.Missile:
+                        return GetEquippedMissileWeapon() != null ? CombatType.Missile : CombatType.Melee;
+                    case CombatMode.Melee:
+                    default:
+                        return CombatType.Melee;
+                }
+            }
+
             // if caster, roll for spellcasting chance
             if (HasKnownSpells && TryRollSpell())
                 return CombatType.Magic;
@@ -112,6 +126,30 @@ namespace ACE.Server.WorldObjects
                 return CombatType.Missile;
             else
                 return CombatType.Melee;
+        }
+
+        private bool TrySelectShadowCloneMagicAttack()
+        {
+            if (!HasKnownSpells)
+                return false;
+
+            if (TryRollSpell())
+                return true;
+
+            if (Biota.PropertiesSpellBook == null)
+                return false;
+
+            foreach (var knownSpell in Biota.PropertiesSpellBook.Keys)
+            {
+                var spell = new Spell((uint)knownSpell);
+                if (spell.NotFound || !spell.IsHarmful)
+                    continue;
+
+                CurrentSpell = spell;
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -128,7 +166,9 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public void DoAttackStance()
         {
-            var combatMode = IsRanged ? CombatMode.Missile : CombatMode.Melee;
+            var combatMode = this is CombatPet combatPet && combatPet.TryGetShadowCloneLockedCombatMode(out var lockedMode)
+                ? lockedMode
+                : IsRanged ? CombatMode.Missile : CombatMode.Melee;
 
             var stanceTime = SetCombatMode(combatMode);
 
@@ -144,7 +184,7 @@ namespace ACE.Server.WorldObjects
             else
                 NextAttackTime = nextTime;
 
-            if (IsRanged)
+            if (combatMode == CombatMode.Missile)
             {
                 PrevAttackTime = NextAttackTime + MissileDelay - (AiUseMagicDelay ?? 3.0f);
 

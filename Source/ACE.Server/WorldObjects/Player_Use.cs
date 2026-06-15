@@ -1,16 +1,44 @@
 using System;
+using System.Linq;
 
+using ACE.Common;
+using ACE.DatLoader;
+using ACE.DatLoader.FileTypes;
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
+using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.WorldObjects
 {
     partial class Player
     {
+        private static readonly SpellId[] AlchemicalInstabilityDebuffs =
+        {
+            SpellId.ImperilOther7,
+            SpellId.VulnerabilityOther7,
+            SpellId.Brittlemail7,
+            SpellId.FesterOther7,
+            SpellId.ExhaustionOther7,
+            SpellId.ManaDepletionOther7,
+            SpellId.WeaknessOther7,
+            SpellId.FrailtyOther7,
+            SpellId.ClumsinessOther7,
+            SpellId.SlownessOther7,
+            SpellId.MagicYieldOther7,
+            SpellId.WarMagicIneptitudeOther7,
+            SpellId.MissileWeaponsIneptitudeOther7,
+            SpellId.LightWeaponsIneptitudeOther7,
+            SpellId.HeavyWeaponsIneptitudeOther7,
+            SpellId.FinesseWeaponsIneptitudeOther7,
+            SpellId.VoidMagicIneptitudeOther7,
+            SpellId.ShieldIneptitudeOther7,
+        };
+
         /// <summary>
         /// This is set by HandleActionUseItem / TryUseItem
         /// </summary>
@@ -87,6 +115,7 @@ namespace ACE.Server.WorldObjects
                 else
                 {
                     HandleActionCastTargetedSpell(targetObjectGuid, sourceItem.SpellDID ?? 0, sourceItem);
+                    TryAlchemistPhialSplash(sourceItem, target);
                     return;
                 }
             }
@@ -170,6 +199,220 @@ namespace ACE.Server.WorldObjects
             }
             else
                 sourceItem.HandleActionUseOnTarget(this, target);
+        }
+
+        private void TryAlchemistPhialSplash(WorldObject sourceItem, WorldObject primaryTarget)
+        {
+            if (sourceItem == null || primaryTarget == null || sourceItem.SpellDID == null)
+                return;
+
+            if (!IsAlchemyPhial(sourceItem))
+                return;
+
+            if (!(primaryTarget is Creature primaryCreature) || primaryCreature is Player || !primaryCreature.IsAlive)
+                return;
+
+            var gloves = Food.GetAlchemistGlovesEquipped(this);
+            if (gloves == null)
+                return;
+
+            var spell = new Spell(sourceItem.SpellDID.Value);
+            if (spell.NotFound || !spell.IsHarmful)
+                return;
+
+            TryAlchemicalInstability(gloves, sourceItem, primaryCreature, 0.5);
+
+            var chance = Math.Clamp(gloves.GetProperty(PropertyFloat.AlchemistSplashProcChance) ?? 0.10, 0.0, 0.50);
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= chance)
+                return;
+
+            var maxTargets = Math.Clamp((int)Math.Round(gloves.GetProperty(PropertyFloat.AlchemistSplashTargetCount) ?? 1.0), 1, 3);
+            const float splashRadius = 10.0f;
+
+            var splashTargets = PhysicsObj.ObjMaint.GetVisibleTargetsValuesOfTypeCreature()
+                .Where(creature => creature != null
+                    && creature != this
+                    && creature != primaryCreature
+                    && creature is not Player
+                    && creature.IsAlive
+                    && creature.Location != null
+                    && primaryCreature.Location != null
+                    && creature.Location.Distance2D(primaryCreature.Location) <= splashRadius)
+                .OrderBy(_ => ThreadSafeRandom.Next(0.0f, 1.0f))
+                .Take(maxTargets)
+                .ToList();
+
+            if (splashTargets.Count == 0)
+                return;
+
+            ApplyVisualEffects(PlayScript.BreatheAcid);
+
+            foreach (var splashTarget in splashTargets)
+            {
+                splashTarget.ApplyVisualEffects(PlayScript.BreatheAcid);
+                TryCastSpell(spell, splashTarget, sourceItem, sourceItem, false, true, true);
+            }
+
+            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Your alchemist gloves scatter the {sourceItem.Name}'s contents onto {splashTargets.Count} nearby target{(splashTargets.Count == 1 ? "" : "s")}.",
+                ChatMessageType.Magic));
+        }
+
+        internal void TryAlchemicalInstabilityFromPotion(WorldObject sourceItem)
+        {
+            if (sourceItem == null)
+                return;
+
+            var gloves = Food.GetAlchemistGlovesEquipped(this);
+            if (gloves?.GetProperty(PropertyBool.IsAlchemicalInstabilityGloves) != true)
+                return;
+
+            var chance = Math.Clamp(gloves.GetProperty(PropertyFloat.AlchemicalInstabilityProcChance) ?? 0.05, 0.0, 0.20);
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= chance)
+                return;
+
+            ApplyPotionInstability(sourceItem);
+        }
+
+        private void TryAlchemicalInstability(WorldObject gloves, WorldObject sourceItem, Creature target, double chanceMultiplier)
+        {
+            if (gloves?.GetProperty(PropertyBool.IsAlchemicalInstabilityGloves) != true || sourceItem == null || target == null || !target.IsAlive)
+                return;
+
+            var chance = Math.Clamp((gloves.GetProperty(PropertyFloat.AlchemicalInstabilityProcChance) ?? 0.05) * chanceMultiplier, 0.0, 0.20);
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= chance)
+                return;
+
+            var spellId = AlchemicalInstabilityDebuffs[ThreadSafeRandom.Next(0, AlchemicalInstabilityDebuffs.Length - 1)];
+            var spell = new Spell((uint)spellId);
+            if (spell.NotFound || !spell.IsHarmful)
+                return;
+
+            target.ApplyVisualEffects(PlayScript.AetheriaSurgeAffliction);
+            TryCastSpell(spell, target, sourceItem, sourceItem, false, true, true);
+
+            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Alchemical Instability twists the {sourceItem.Name}, applying {spell.Name} to {target.Name}.",
+                ChatMessageType.Magic));
+        }
+
+        private void ApplyPotionInstability(WorldObject sourceItem)
+        {
+            ApplyVisualEffects(PlayScript.AetheriaSurgeAffliction);
+
+            var roll = ThreadSafeRandom.Next(0.0f, 1.0f);
+            if (roll < 0.45f)
+            {
+                ApplyInstabilitySelfDebuff(sourceItem);
+            }
+            else if (roll < 0.70f)
+            {
+                ApplyTumerokPaletteInstability(sourceItem, changeHair: true, changeSkin: false);
+            }
+            else if (roll < 0.90f)
+            {
+                ApplyTumerokPaletteInstability(sourceItem, changeHair: false, changeSkin: true);
+            }
+            else
+            {
+                ApplyTumerokPaletteInstability(sourceItem, changeHair: true, changeSkin: true);
+            }
+        }
+
+        private void ApplyInstabilitySelfDebuff(WorldObject sourceItem)
+        {
+            var spellId = AlchemicalInstabilityDebuffs[ThreadSafeRandom.Next(0, AlchemicalInstabilityDebuffs.Length - 1)];
+            var spell = new Spell((uint)spellId);
+            if (spell.NotFound || !spell.IsHarmful)
+                return;
+
+            TryCastSpell(spell, this, sourceItem, sourceItem, false, true, true);
+            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Alchemical Instability curdles the {sourceItem.Name}, afflicting you with {spell.Name}.",
+                ChatMessageType.Magic));
+        }
+
+        private void ApplyTumerokPaletteInstability(WorldObject sourceItem, bool changeHair, bool changeSkin)
+        {
+            if (!TryGetTumerokSexData(out var tumerokSex))
+            {
+                ApplyInstabilitySelfDebuff(sourceItem);
+                return;
+            }
+
+            var changed = false;
+
+            if (changeHair && TryGetRandomTumerokHairPalette(tumerokSex, out var hairPalette))
+            {
+                HairPaletteDID = hairPalette;
+                changed = true;
+            }
+
+            if (changeSkin && TryGetRandomTumerokSkinPalette(tumerokSex, out var skinPalette))
+            {
+                SkinPaletteDID = skinPalette;
+                changed = true;
+            }
+
+            if (!changed)
+            {
+                ApplyInstabilitySelfDebuff(sourceItem);
+                return;
+            }
+
+            EnqueueBroadcast(new GameMessageObjDescEvent(this));
+
+            var changedPart = changeHair && changeSkin ? "hair and skin" : changeHair ? "hair" : "skin";
+            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                $"Alchemical Instability stains your {changedPart} with impossible Tumerok color.",
+                ChatMessageType.Magic));
+        }
+
+        private bool TryGetTumerokSexData(out ACE.DatLoader.Entity.SexCG sex)
+        {
+            sex = null;
+
+            if (!Gender.HasValue)
+                return false;
+
+            if (!DatManager.PortalDat.CharGen.HeritageGroups.TryGetValue((uint)HeritageGroup.Tumerok, out var tumerok))
+                return false;
+
+            return tumerok.Genders.TryGetValue(Gender.Value, out sex);
+        }
+
+        private static bool TryGetRandomTumerokSkinPalette(ACE.DatLoader.Entity.SexCG sex, out uint palette)
+        {
+            palette = 0;
+            var skinPalSet = DatManager.PortalDat.ReadFromDat<PaletteSet>(sex.SkinPalSet);
+            if (skinPalSet == null || skinPalSet.PaletteList.Count == 0)
+                return false;
+
+            palette = skinPalSet.GetPaletteID(ThreadSafeRandom.Next(0.0f, 1.0f));
+            return palette != 0;
+        }
+
+        private static bool TryGetRandomTumerokHairPalette(ACE.DatLoader.Entity.SexCG sex, out uint palette)
+        {
+            palette = 0;
+            if (sex.HairColorList.Count == 0)
+                return false;
+
+            var palSetId = sex.HairColorList[ThreadSafeRandom.Next(0, sex.HairColorList.Count - 1)];
+            var hairPalSet = DatManager.PortalDat.ReadFromDat<PaletteSet>(palSetId);
+            if (hairPalSet == null || hairPalSet.PaletteList.Count == 0)
+                return false;
+
+            palette = hairPalSet.GetPaletteID(ThreadSafeRandom.Next(0.0f, 1.0f));
+            return palette != 0;
+        }
+
+        private static bool IsAlchemyPhial(WorldObject item)
+        {
+            var name = item?.Name ?? string.Empty;
+            return name.Contains("Phial", StringComparison.OrdinalIgnoreCase)
+                || item.ItemType == ItemType.CraftAlchemyBase
+                || item.ItemType == ItemType.CraftAlchemyIntermediate;
         }
 
         /// <summary>

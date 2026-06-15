@@ -310,5 +310,24 @@ namespace ACE.Entity.Enum.Properties
         VoidConfusionDurationSeconds   = 9046,  // duration confused monsters attack nearby monsters
         VoidConfusionTargetCount       = 9047,  // maximum number of monsters affected
         VoidConfusionCooldownSeconds   = 9048,  // visible cooldown after a successful confusion pulse
+
+        /* DerpACE dance boots - restore vitals after holding /dance */
+        DanceBootRestoreAmount         = 9049,  // health/stamina/mana restored per pulse
+        DanceBootPulseIntervalSeconds  = 9050,  // seconds between restore pulses
+
+        /* DerpACE Shield reflection affixes */
+        ShieldProjectileReflectChance  = 9051,  // chance on incoming missile damage to negate and reflect to source
+        ShieldSpellMirrorChance        = 9052,  // chance on incoming spell damage to halve and reflect to source
+
+        /* DerpACE Lugian Hammer Throw - secondary hammer toss on strike */
+        LugianHammerThrowProcChance    = 9053,  // chance on successful melee hit to throw a hammer at another target
+        LugianHammerThrowDamageScale   = 9054,  // damage multiplier for the secondary hammer hit
+        LugianHammerThrowRadius        = 9055,  // secondary target search radius in yards
+
+        /* DerpACE Alchemist gloves - potion boost and phial splash */
+        AlchemistPotionBonusPct        = 9056,  // additional positive health/stamina/mana restored by potions (0.10-0.15)
+        AlchemistSplashProcChance      = 9057,  // chance targeted alchemy phials splash to nearby targets
+        AlchemistSplashTargetCount     = 9058,  // maximum nearby targets hit by splash
+        AlchemicalInstabilityProcChance= 9059,  // chance harmful phials apply one random extra debuff
     }
 }

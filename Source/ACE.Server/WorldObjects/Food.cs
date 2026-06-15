@@ -111,14 +111,15 @@ namespace ACE.Server.WorldObjects
             // Easter egg: eat 3 cheese wheels → involuntary consequences.
             TryCheeseWheelEasterEgg(player);
             TryCookingGlovesWellFed(player);
+            if (IsPotionConsumable())
+                player.TryAlchemicalInstabilityFromPotion(this);
         }
 
         private const int WellFedRequiredMeals = 10;
         internal const double WellFedDurationSeconds = 7200.0;
         internal const int WellFedCooldownId = 2058;
-        // Active spell display is client-DAT driven. Use a client-known all-attribute
-        // spell so the +5 Well Fed effect appears in the retail spell panel.
-        private const uint WellFedSpell = (uint)SpellId.SetSocietyAttributeAll1;
+        private const uint WellFedSpell = CustomSpellManager.WellFedSpellId;
+        private const uint LegacyWellFedDisplaySpell = (uint)SpellId.SetSocietyAttributeAll1;
 
         private void TryCookingGlovesWellFed(Player player)
         {
@@ -153,12 +154,23 @@ namespace ACE.Server.WorldObjects
 
             player.RemoveProperty(PropertyInt.WellFedFoodCount);
 
+            if (!CustomSpellManager.EnsureWellFedSpellLoaded())
+            {
+                player.SetProperty(PropertyInt.WellFedFoodCount, WellFedRequiredMeals - 1);
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Well Fed spell {WellFedSpell} is unavailable.",
+                    ChatMessageType.System));
+                return;
+            }
+
+            RemoveWellFedEnchantments(player, cookingGloves);
+
             var spell = new Spell(WellFedSpell);
             if (spell.NotFound)
             {
                 player.SetProperty(PropertyInt.WellFedFoodCount, WellFedRequiredMeals - 1);
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"Well Fed display spell {WellFedSpell} is unavailable.",
+                    $"Well Fed spell {WellFedSpell} is unavailable.",
                     ChatMessageType.System));
                 return;
             }
@@ -196,11 +208,23 @@ namespace ACE.Server.WorldObjects
             if (player == null || gloves == null)
                 return;
 
+            RemoveWellFedEnchantments(player, gloves);
+
+            player.RemoveProperty(PropertyInt.WellFedFoodCount);
+        }
+
+        private static void RemoveWellFedEnchantments(Player player, WorldObject gloves)
+        {
+            if (player == null || gloves == null)
+                return;
+
             var enchantment = player.EnchantmentManager.GetEnchantment(WellFedSpell, gloves.Guid.Full);
             if (enchantment != null)
                 player.EnchantmentManager.Remove(enchantment);
 
-            player.RemoveProperty(PropertyInt.WellFedFoodCount);
+            var legacy = player.EnchantmentManager.GetEnchantment(LegacyWellFedDisplaySpell, gloves.Guid.Full);
+            if (legacy != null)
+                player.EnchantmentManager.Remove(legacy);
         }
 
         private static void StartWellFedCooldown(Player player, WorldObject gloves, double duration)
@@ -287,6 +311,10 @@ namespace ACE.Server.WorldObjects
                             "Your culinary gloves flare warmly. That meal really hit the spot.",
                             ChatMessageType.System));
                 }
+
+                var alchemistBonus = GetAlchemistPotionRestoreBonus(player);
+                if (alchemistBonus > 0 && IsPotionConsumable())
+                    boostValue = (int)Math.Round(boostValue * (1.0 + alchemistBonus));
             }
 
             var vitalChange = (uint)Math.Abs(player.UpdateVitalDelta(vital, boostValue));
@@ -330,6 +358,34 @@ namespace ACE.Server.WorldObjects
             }
 
             return Math.Clamp(cookingGloves.GetProperty(PropertyFloat.CulinarianRestoreBonusPct) ?? 0.10, 0.0, 0.25);
+        }
+
+        private double GetAlchemistPotionRestoreBonus(Player player)
+        {
+            var alchemistGloves = GetAlchemistGlovesEquipped(player);
+            if (alchemistGloves == null)
+                return 0.0;
+
+            return Math.Clamp(alchemistGloves.GetProperty(PropertyFloat.AlchemistPotionBonusPct) ?? 0.10, 0.0, 0.20);
+        }
+
+        internal static WorldObject GetAlchemistGlovesEquipped(Player player)
+        {
+            return player?.EquippedObjects.Values.FirstOrDefault(item =>
+                item?.GetProperty(PropertyBool.IsAlchemistGloves) == true
+                && ((EquipMask)(item.CurrentWieldedLocation ?? 0)).HasFlag(EquipMask.HandWear));
+        }
+
+        private bool IsPotionConsumable()
+        {
+            var name = Name ?? string.Empty;
+            return name.Contains("Potion", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Elixir", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Tonic", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Brew", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Draught", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Tincture", StringComparison.OrdinalIgnoreCase)
+                || name.Contains("Philtre", StringComparison.OrdinalIgnoreCase);
         }
 
         public void CastSpell(Player player)

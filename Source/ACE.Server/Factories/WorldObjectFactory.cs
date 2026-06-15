@@ -143,8 +143,6 @@ namespace ACE.Server.Factories
                 case WeenieType.CraftTool:
                     if (weenie.WeenieClassId == 420420420)
                         return new RandomDye(weenie, guid);
-                    if (weenie.WeenieClassId == 420420423)
-                        return new TransmutersDye(weenie, guid);
                     return new CraftTool(weenie, guid);
                 case WeenieType.LightSource:
                     return new LightSource(weenie, guid);
@@ -268,8 +266,6 @@ namespace ACE.Server.Factories
                 case WeenieType.CraftTool:
                     if (biota.WeenieClassId == 420420420)
                         return new RandomDye(biota);
-                    if (biota.WeenieClassId == 420420423)
-                        return new TransmutersDye(biota);
                     return new CraftTool(biota);
                 case WeenieType.LightSource:
                     return new LightSource(biota);

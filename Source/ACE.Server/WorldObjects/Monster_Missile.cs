@@ -112,7 +112,8 @@ namespace ACE.Server.WorldObjects
                 if (IsDead) return;
 
                 // handle self-procs
-                TryProcEquippedItems(this, this, true, weapon);
+                if (this is not CombatPet shadowClone || !shadowClone.IsShadowClone)
+                    TryProcEquippedItems(this, this, true, weapon);
 
                 var sound = GetLaunchMissileSound(weapon);
                 EnqueueBroadcast(new GameMessageSound(Guid, sound, 1.0f));
@@ -203,6 +204,9 @@ namespace ACE.Server.WorldObjects
 
         public void TrySwitchToMeleeAttack()
         {
+            if (this is CombatPet combatPet && combatPet.TryGetShadowCloneLockedCombatMode(out var lockedMode) && lockedMode != CombatMode.Melee)
+                return;
+
             // 24139 - Invisible Assailant never switches to melee?
             if (AiAllowedCombatStyle == CombatStyle.StubbornMissile || Visibility) return;
 
@@ -305,6 +309,9 @@ namespace ACE.Server.WorldObjects
 
         public void TrySwitchToMissileAttack()
         {
+            if (this is CombatPet combatPet && combatPet.TryGetShadowCloneLockedCombatMode(out var lockedMode) && lockedMode != CombatMode.Missile)
+                return;
+
             SwitchWeaponsPending = true;
 
             if (NextMoveTime > Timers.RunningTime)

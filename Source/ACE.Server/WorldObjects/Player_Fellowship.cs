@@ -88,10 +88,12 @@ namespace ACE.Server.WorldObjects
         {
             if (newPlayer == null) return;
 
-            // DerpACE Ironman: ironmen cannot recruit or be recruited.
-            if (GetProperty(PropertyBool.IsIronman) == true || newPlayer.GetProperty(PropertyBool.IsIronman) == true)
+            // DerpACE Ironman: ironmen may fellowship with ironmen only.
+            var recruiterIronman = GetProperty(PropertyBool.IsIronman) == true;
+            var recruitIronman = newPlayer.GetProperty(PropertyBool.IsIronman) == true;
+            if (recruiterIronman != recruitIronman)
             {
-                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen walk alone — no fellowship can be formed.", ChatMessageType.Broadcast));
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
                 return;
             }
 

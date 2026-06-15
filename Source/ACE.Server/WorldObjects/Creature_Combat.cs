@@ -264,6 +264,9 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public MotionStance GetCombatStance()
         {
+            if (this is CombatPet combatPet && combatPet.TryGetShadowCloneLockedCombatMode(out var lockedMode))
+                return GetShadowCloneLockedCombatStance(lockedMode);
+
             var caster = GetEquippedWand();
 
             if (caster != null)
@@ -285,6 +288,36 @@ namespace ACE.Server.WorldObjects
                 combatStance = AddShieldStance(combatStance);
 
             return combatStance;
+        }
+
+        private MotionStance GetShadowCloneLockedCombatStance(CombatMode lockedMode)
+        {
+            switch (lockedMode)
+            {
+                case CombatMode.Magic:
+                    return GetEquippedWand() != null ? MotionStance.Magic : MotionStance.HandCombat;
+
+                case CombatMode.Missile:
+                    var missileWeapon = GetEquippedMissileWeapon();
+                    if (missileWeapon != null)
+                        return GetWeaponStance(missileWeapon);
+                    return MotionStance.HandCombat;
+
+                case CombatMode.Melee:
+                default:
+                    var weapon = GetEquippedMeleeWeapon(true);
+                    var dualWield = GetDualWieldWeapon();
+                    var shield = GetEquippedShield();
+                    var combatStance = weapon != null ? GetWeaponStance(weapon) : MotionStance.HandCombat;
+
+                    if (dualWield != null)
+                        combatStance = MotionStance.DualWieldCombat;
+
+                    if (shield != null)
+                        combatStance = AddShieldStance(combatStance);
+
+                    return combatStance;
+            }
         }
 
         /// <summary>

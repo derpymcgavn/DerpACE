@@ -181,9 +181,9 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster, true);
                 wo.ProcSpell = null;
                 wo.ProcSpellRate = procChance;
-                wo.IconOverlayId = 0x06002860;
+                wo.IconOverlayId = MutatorOverlayArchmagi;
                 ApplyLootUiEffects(wo, wo.W_DamageType, true);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory - when you cast a harmful single-target spell, it has a {procChance:P0} chance to chain the same spell from you to a different nearby target at reduced damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory - when you cast a harmful single-target spell, it has a {procChance:P0} chance to chain the same spell from you to a different monster within {ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastRadius:0.#} yards for {ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier:P0} damage.";
 
             }
 
@@ -211,7 +211,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantHealBoostPct, healBoost);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantHotPct, hotPct);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.HierophantFellowEchoPct, fellowEcho);
-                wo.IconOverlayId = 0x06002CB7;
+                wo.IconOverlayId = MutatorOverlayHierophant;
                 ApplyLootUiEffects(wo, wo.W_DamageType, true);
 
                 wo.LongDesc = (wo.LongDesc ?? "")
@@ -243,7 +243,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDamageScale, damageScale);
                 wo.CooldownId = Player.ShadowCloneCasterCooldownId;
                 wo.CooldownDuration = cooldownSeconds;
-                wo.IconOverlayId = 0x06002860;
+                wo.IconOverlayId = MutatorOverlayShadow;
                 ApplyLootUiEffects(wo, wo.W_DamageType, true);
 
                 wo.LongDesc = (wo.LongDesc ?? "")
@@ -286,13 +286,13 @@ namespace ACE.Server.Factories
             wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.VoidConfusionCooldownSeconds, cooldownSeconds);
             wo.CooldownId = Player.VoidConfusionCooldownId;
             wo.CooldownDuration = cooldownSeconds;
-            wo.IconOverlayId = 0x06002860;
+            wo.IconOverlayId = MutatorOverlayConfusion;
             ApplyLootUiEffects(wo, DamageType.Nether, true);
             wo.ProcSpell = null;
             wo.ProcSpellRate = null;
             wo.ProcSpellSelfTargeted = false;
 
-            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nBedlam: casts Void Confusion. On hit, if the staff is off cooldown, up to {maxTargets} nearby monsters blindly attack other nearby monsters for {duration} seconds. Cooldown: {cooldownSeconds:0} seconds.";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nBedlam: casts Void Confusion. On hit, if the staff is off cooldown, up to {maxTargets} nearby monsters within 12 yards blindly attack other nearby monsters for {duration} seconds. If no blameable monsters are nearby, the effect fizzles. Cooldown: {cooldownSeconds:0} seconds.";
         }
 
         private static void TryMutateWarMageSpecialCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)
@@ -348,9 +348,9 @@ namespace ACE.Server.Factories
                     wo.W_DamageType = DamageType.Fire;
                     wo.SpellDID = ACE.Server.Managers.CustomSpellManager.MeteorSquallSpellId;
                     wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSkybreakerCaster, true);
-                    wo.IconOverlayId = 0x06001036;
+                    wo.IconOverlayId = MutatorOverlaySkybreaker;
                     ApplyLootUiEffects(wo, DamageType.Fire, true);
-                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nSkybreaker: casts Meteor Squall, an outdoor-only fire spell. The first impact hits normally, then burning fragments rain over nearby monsters for several short ticks.";
+                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nSkybreaker: casts Meteor Squall, an outdoor-only fire spell. The first impact hits normally, then four waves of burning fragments fall every 0.75 seconds on up to three nearby monsters within 8 yards for 18% damage each.";
                     break;
 
                 case "stormcaller":
@@ -358,19 +358,19 @@ namespace ACE.Server.Factories
                     wo.W_DamageType = DamageType.Electric;
                     wo.SpellDID = ACE.Server.Managers.CustomSpellManager.ChainLightningSpellId;
                     wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStormcallerCaster, true);
-                    wo.IconOverlayId = 0x06001039;
+                    wo.IconOverlayId = MutatorOverlayStormcaller;
                     ApplyLootUiEffects(wo, DamageType.Electric, true);
-                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nStormcaller: casts Chain Lightning. The first bolt hits normally, then arcs through up to four additional nearby monsters with reduced damage each jump.";
+                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nStormcaller: casts Chain Lightning. The first bolt hits normally, then arcs through up to four additional nearby monsters within 12 yards for 70%, 50%, 35%, and 25% damage.";
                     break;
 
                 case "orbitweaver":
                     wo.Name = wo.Name + " of the Orbitweaver";
-                    wo.W_DamageType = DamageType.Fire;
+                    wo.W_DamageType = DamageType.Bludgeon;
                     wo.SpellDID = ACE.Server.Managers.CustomSpellManager.SpiralStarSpellId;
                     wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOrbitweaverCaster, true);
-                    wo.IconOverlayId = 0x06001036;
-                    ApplyLootUiEffects(wo, DamageType.Fire, true);
-                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOrbitweaver: casts Spiral Star. The first hit lands normally, then a circling flame star lashes outward from you toward up to five nearby monsters.";
+                    wo.IconOverlayId = MutatorOverlayOrbitweaver;
+                    ApplyLootUiEffects(wo, DamageType.Bludgeon, true);
+                    wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOrbitweaver: casts Spiral Star. The first hit lands normally, then bludgeoning force pulses unwind outward from you toward up to five nearby monsters within 14 yards for 42% damage each.";
                     break;
             }
 

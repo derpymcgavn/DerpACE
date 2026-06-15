@@ -75,6 +75,7 @@ namespace ACE.Server.WorldObjects
         private double nextCourseCorrectionTime;
         private double nextCrowdUnstickTime;
         private double nextDoorOpenAttemptTime;
+        private double nextMeleeCornerRecoveryTime;
 
         private const double StuckSampleInterval = 0.25;
         private const float StuckMinTravelDistance = 0.18f;
@@ -84,6 +85,8 @@ namespace ACE.Server.WorldObjects
         private const double CourseCorrectionCooldownMax = 0.30;
         private const double CrowdUnstickCooldown = 0.45;
         private const double DoorOpenAttemptCooldown = 0.30;
+        private const double MeleeCornerRecoveryCooldown = 0.35;
+        private const float MeleeCornerRecoveryRangeBuffer = 2.0f;
         private const float DoorOpenScanRadius = 3.5f;
         private const float DoorOpenForwardBias = -0.25f;
         private const float CrowdBlockerScanRadius = 2.6f;
@@ -146,6 +149,37 @@ namespace ACE.Server.WorldObjects
             courseCorrectionAttemptCount = 0;
             nextCrowdUnstickTime = 0;
             nextDoorOpenAttemptTime = 0;
+            nextMeleeCornerRecoveryTime = 0;
+        }
+
+        private bool IsMeleeGeometryBlocked(float targetDist, bool isMeleeVisible)
+        {
+            return CurrentAttack == CombatType.Melee
+                && !isMeleeVisible
+                && targetDist <= MaxRange + MeleeCornerRecoveryRangeBuffer;
+        }
+
+        private bool TryRecoverMeleeGeometryBlock(double currentUnixTime)
+        {
+            if (AttackTarget?.Location == null || Location == null)
+                return false;
+
+            if (currentUnixTime < nextMeleeCornerRecoveryTime)
+                return IsRouting || IsRouteStartPending || HasPendingMovement;
+
+            nextMeleeCornerRecoveryTime = currentUnixTime + MeleeCornerRecoveryCooldown;
+
+            if (TryOpenNearbyDoor())
+                return true;
+
+            if (PathfindingEnabled && CanAttemptRouteAfterNullRoute(currentUnixTime))
+            {
+                TryRoute();
+                if (IsRouteStartPending || IsRouting)
+                    return true;
+            }
+
+            return TrySmartCourseCorrection(escalate: true);
         }
 
         private bool TrySmartCourseCorrection(bool escalate = false)
@@ -656,6 +690,9 @@ namespace ACE.Server.WorldObjects
         {
             //if (!IsRanged)
                 UpdatePosition();
+
+            if (MonsterState == State.Awake && AttackTarget != null)
+                TryOpenNearbyDoor();
 
             TrackAndHandleStuck();
 

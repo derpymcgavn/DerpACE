@@ -75,7 +75,8 @@ namespace ACE.Server.WorldObjects
             var actionChain = new ActionChain();
 
             // handle self-procs
-            TryProcEquippedItems(this, this, true, weapon);
+            if (this is not CombatPet selfProcShadowClone || !selfProcShadowClone.IsShadowClone)
+                TryProcEquippedItems(this, this, true, weapon);
 
             var prevTime = 0.0f;
             bool targetProc = false;
@@ -97,6 +98,8 @@ namespace ACE.Server.WorldObjects
                     }
 
                     var damageEvent = DamageEvent.CalculateDamage(this, target, weapon, motionCommand, attackFrames[0].attackHook);
+                    if (this is CombatPet shadowClone && shadowClone.IsShadowClone && damageEvent?.HasDamage == true)
+                        damageEvent.Damage *= shadowClone.ShadowCloneDamageScale;
 
                     //var damage = CalculateDamage(ref damageType, maneuver, bodyPart, ref critical, ref shieldMod);
 
@@ -141,7 +144,8 @@ namespace ACE.Server.WorldObjects
                         // handle target procs
                         if (!targetProc)
                         {
-                            TryProcEquippedItems(this, target, false, weapon);
+                            if (this is not CombatPet targetProcShadowClone || !targetProcShadowClone.IsShadowClone)
+                                TryProcEquippedItems(this, target, false, weapon);
                             targetProc = true;
                         }
                     }

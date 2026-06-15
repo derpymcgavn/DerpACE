@@ -19,6 +19,15 @@ namespace ACE.Server.WorldObjects
 
         internal bool IsShadowClone => _isShadowClone;
         internal float ShadowCloneDamageScale { get; private set; } = 1.0f;
+        private CombatMode? _shadowCloneLockedCombatMode;
+
+        internal bool TryGetShadowCloneLockedCombatMode(out CombatMode combatMode)
+        {
+            combatMode = _shadowCloneLockedCombatMode ?? CombatMode.Melee;
+            return _isShadowClone && _shadowCloneLockedCombatMode.HasValue;
+        }
+
+        internal bool IsShadowCloneLockedToMagic => TryGetShadowCloneLockedCombatMode(out var mode) && mode == CombatMode.Magic;
 
         public bool InitShadowClone(Player player, Creature target, float durationSeconds, float damageScale)
         {
@@ -26,6 +35,7 @@ namespace ACE.Server.WorldObjects
                 return false;
 
             _isShadowClone = true;
+            _shadowCloneLockedCombatMode = GetShadowCloneCombatMode(player);
             ShadowCloneDamageScale = Math.Clamp(damageScale, 0.05f, 1.0f);
 
             Location = GetShadowCloneFormationPosition(player);
@@ -40,7 +50,7 @@ namespace ACE.Server.WorldObjects
             TimeToRot = -1;
             SuppressGenerateEffect = true;
 
-            SetCombatMode(GetShadowCloneCombatMode(player));
+            SetCombatMode(_shadowCloneLockedCombatMode.Value);
             MonsterState = State.Awake;
             IsAwake = true;
 

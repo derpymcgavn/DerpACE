@@ -152,6 +152,7 @@ namespace ACE.Server.WorldObjects
                 var isDirectVisible = IsDirectVisible(AttackTarget);
                 var canStick = PhysicsObj.IsSticky && CurrentAttack == CombatType.Melee && isMeleeVisible;
                 var aiImmobile = AiImmobile;
+                var meleeGeometryBlocked = IsMeleeGeometryBlocked(targetDist, isMeleeVisible);
 
                 // -- Ported from ClassicACE CustomDM --
                 // If we lost sight of the target while not in any recovery state, accumulate
@@ -169,11 +170,15 @@ namespace ACE.Server.WorldObjects
                     FailedSightCount = 0;
                 }
 
-                if ((!canStick && targetDist > MaxRange) || (!IsFacing(AttackTarget) && !IsSelfCast()))
+                if (meleeGeometryBlocked || (!canStick && targetDist > MaxRange) || (!IsFacing(AttackTarget) && !IsSelfCast()))
                 {
                     bool failedThresholds = FailedMovementCount >= FailedMovementThreshold || FailedSightCount >= FailedSightThreshold;
 
-                    if (!IsTurning && !IsMoving && !failedThresholds && !aiImmobile)
+                    if (meleeGeometryBlocked && !aiImmobile && TryRecoverMeleeGeometryBlock(currentUnixTime))
+                    {
+                        // Pathing or door recovery owns the next movement beat.
+                    }
+                    else if (!IsTurning && !IsMoving && !failedThresholds && !aiImmobile)
                     {
                         StartTurn();
                     }

@@ -243,6 +243,10 @@ namespace ACE.Entity.Enum.Properties
         /* DerpACE Shield affixes */
         IsThornsShield                   = 9051,
         IsBashingShield                  = 9052,
+        IsProjectileReflectShield        = 9068,
+        IsSpellMirrorShield              = 9069,
+        IsLugianHammerThrowWeapon        = 9070,
+        IsWeaponAppearanceStamp          = 9071,
 
         /* DerpACE weapon affixes */
         IsDartflingerAtlatl              = 9053,
@@ -251,6 +255,8 @@ namespace ACE.Entity.Enum.Properties
         IsDinnerwareBounceProjectile     = 9056,
         IsShadowCloneCaster              = 9057,
         IsCookingGloves                  = 9058,
+        IsAlchemistGloves                = 9072,
+        IsAlchemicalInstabilityGloves    = 9073,
 
         /* DerpACE Ironman Blind submode - hides future skill plan and auto-spends XP */
         IsIronmanBlind                   = 9059,
@@ -260,5 +266,11 @@ namespace ACE.Entity.Enum.Properties
         IsStormcallerCaster              = 9061,
         IsOrbitweaverCaster              = 9062,
         IsConfusionCaster                = 9063,
+
+        /* DerpACE dance boots - restore vitals while dancing */
+        IsHealingDanceBoots              = 9064,
+        IsRejuvenatingDanceBoots         = 9065,
+        IsReplenishingDanceBoots         = 9066,
+        IsShadowCloneWeapon              = 9067,
     }
 }

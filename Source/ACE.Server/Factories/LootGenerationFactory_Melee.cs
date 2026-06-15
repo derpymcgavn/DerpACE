@@ -75,6 +75,21 @@ namespace ACE.Server.Factories
             73081   // Shade Iron Ore Hammer
         };
 
+        private static readonly HashSet<int> LugianHammerThrowWcids = new HashSet<int>
+        {
+            542,    // Lugian Hammer
+            23753,  // Lugian Hammer
+            23754,  // Lugian Hammer
+            23755,  // Lugian Hammer
+            23756,  // Lugian Hammer
+            31763,  // Frost Lugian Hammer
+            31764,  // Lugian Hammer
+            31765,  // Acid Lugian Hammer
+            31766,  // Lightning Lugian Hammer
+            31767,  // Flaming Lugian Hammer
+            38935   // Lugian Hammer
+        };
+
         // Returns a flavor noun for the rolled weapon type so long descriptions match the actual weapon.
         private static string GetWeaponNoun(TreasureWeaponType weaponType)
         {
@@ -373,6 +388,7 @@ namespace ACE.Server.Factories
             {
                 wo.Name = wo.Name + " of the Thief";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger, true);
+                wo.IconOverlayId = MutatorOverlayThief;
                 wo.IconUnderlayId = 0x060065FC;
                 ApplyLootUiEffect(wo, UiEffects.Poisoned);
 
@@ -420,7 +436,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerProcChance, procPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerSpeedMultiplier, 1.0 + speedPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerDuration, duration);
-                wo.IconOverlayId = 0x06002699u;
+                wo.IconOverlayId = MutatorOverlayQuickening;
                 ApplyLootUiEffect(wo, UiEffects.Lightning | UiEffects.BoostStamina);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} twitches ahead of the hand — each hit has a {procPct}% chance to quicken your attacks by {speedPct}% for {duration} seconds.";
@@ -466,7 +482,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPierceProc, pierceProc / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance,   deflectChance / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct,         parryPct / 100.0);
-                wo.IconOverlayId = 0x06002699u;
+                wo.IconOverlayId = MutatorOverlayFencer;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling — each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
@@ -478,7 +494,7 @@ namespace ACE.Server.Factories
                 var fencerPiercePct = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerArmorPiercePct) ?? 0.0) * 100.0;
                 var fencerRiposteChance = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerDeflectChance) ?? 0.0) * 100.0;
                 var fencerParryPct = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct) ?? 0.0) * 100.0;
-                wo.LongDesc = GetLongDesc(wo) + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling -- each strike has a {fencerPierceProc:0}% chance to exploit an opening, dealing bonus damage equal to {fencerPiercePct:0}% of what the target's armor stopped. It also has a {fencerRiposteChance:0}% chance to riposte incoming melee pressure with a precise counterthrust. When held offhand, it becomes a parry sword: {fencerParryPct:0}% chance to reduce and reflect {fencerParryPct:0}% of incoming melee damage.";
+                wo.LongDesc = GetLongDesc(wo) + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling -- each strike has a {fencerPierceProc:0}% chance to exploit an opening, dealing bonus damage equal to {fencerPiercePct:0}% of what the target's armor stopped. It also has a {fencerRiposteChance:0}% chance to riposte incoming melee pressure with a precise counterthrust. When held offhand, it becomes a parry sword: {fencerParryPct:0}% chance to reduce and reflect {fencerParryPct:0}% of incoming melee damage with a point-down flourish and stamina-down effect. Pierce, riposte, and parry use separate short cooldowns.";
             }
 
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
@@ -515,7 +531,7 @@ namespace ACE.Server.Factories
                 wo.Name = wo.Name + (isHammer ? " of Bonebreak" : " of the Ravager");
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsRavagersAxe, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc, procPct / 100.0);
-                wo.IconOverlayId = 0x06002878u;
+                wo.IconOverlayId = MutatorOverlayRavager;
                 ApplyLootUiEffect(wo, isHammer ? UiEffects.Bludgeoning : UiEffects.Slashing);
 
                 if (isHammer)
@@ -578,10 +594,38 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussProc,     procPct  / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussPenalty,  penalty);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussDuration, duration);
-                wo.IconOverlayId = 0x06002878u;
+                wo.IconOverlayId = MutatorOverlayWarden;
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is forged for crushing guards — each strike has a {procPct}% chance to concuss the target, reducing their effective defense skill by {penalty} for {duration} seconds.{(isTwoHandedMace ? " The two-handed swing rattles bone." : "")}";
+            }
+
+            // Lugian Hammer Throw: rare Heavy Weapons Lugian hammer proc to hammer a second foe.
+            if (TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.04f,
+                6,
+                IsLugianHammerThrowEligible(wo),
+                "lugianhammer", "hammerthrow", "thrownhammer"))
+            {
+                const float procChance = 0.08f;
+                const float damageScale = 0.75f;
+                const float radius = 10.0f;
+                const float cooldown = 4.0f;
+
+                wo.Name = wo.Name + " of the Stonehand";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsLugianHammerThrowWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.LugianHammerThrowProcChance, procChance);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.LugianHammerThrowDamageScale, damageScale);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.LugianHammerThrowRadius, radius);
+                wo.CooldownId = Player.LugianHammerThrowCooldownId;
+                wo.CooldownDuration = cooldown;
+                wo.IconOverlayId = MutatorOverlayLugianHammer;
+                ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nStonehand Throw: successful strikes have a {procChance:P0} chance to hurl a spectral hammer into another nearby foe within {radius:0.#} yards, dealing {damageScale:P0} of the original hit as bludgeoning damage. Cooldown: {cooldown:0.#} seconds.";
             }
 
             // Resolute Blade: configurable chance on T6+ swords (1H or 2H, excluding fencer SwordMS) (see @lootconfig)
@@ -616,7 +660,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc,     procPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealPct,      healPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteKillBurstPct, killBurst);
-                wo.IconOverlayId = 0x06002860u;
+                wo.IconOverlayId = MutatorOverlayResolute;
                 ApplyLootUiEffect(wo, UiEffects.BoostHealth);
 
                 var killBurstPct = (int)Math.Round(killBurst * 100.0);
@@ -653,7 +697,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PolebreakerMaxStacks,  maxStacks);
                 wo.CooldownId = Player.PolebreakerBreakGuardCooldownId;
                 wo.CooldownDuration = 12.0;
-                wo.IconOverlayId = 0x06002699u;
+                wo.IconOverlayId = MutatorOverlayPolebreaker;
                 ApplyLootUiEffect(wo, UiEffects.BoostMana | UiEffects.BoostStamina);
 
                 var totalPct = stackPct * maxStacks;
@@ -731,7 +775,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSentinelSpear, true);
                 wo.CooldownId = Player.GoldleafSentinelCooldownId;
                 wo.CooldownDuration = Math.Max(1, ACE.Server.Managers.DerpACEConfig.SentinelSpearCooldownSeconds);
-                wo.IconOverlayId = 0x06002699;
+                wo.IconOverlayId = MutatorOverlaySentinel;
                 ApplyLootUiEffect(wo, UiEffects.BoostStamina);
 
                 var powerPct = (int)Math.Round(Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearPowerThreshold, 0.0f, 1.0f) * 100.0f);
@@ -742,6 +786,36 @@ namespace ACE.Server.Factories
                 var reductionPct = (int)Math.Round(Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearPoiseDamageReduction, 0.0f, 0.5f) * 100.0f);
                 var cooldown = Math.Max(1, ACE.Server.Managers.DerpACEConfig.SentinelSpearCooldownSeconds);
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards proper form - attacks made at {powerPct}% power or higher build Goldleaf Poise on consecutive hits against the same target. At {maxStacks} stacks, it drains {drainPct}% of the target's current stamina, restores {returnPct}% of the drained stamina to the wielder, grants {poiseDuration} seconds of {reductionPct}% damage reduction, then starts a {cooldown} second cooldown.";
+            }
+
+            // Second Shadow: rare melee-weapon shadow clone affix.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.0125f,
+                7,
+                true,
+                "shadowclone", "secondshadow", "shadowblade"))
+            {
+                const float procChance = 0.03f;
+                const float cooldownSeconds = 150.0f;
+                const float durationSeconds = 16.0f;
+                const float damageScale = 0.25f;
+
+                wo.Name = wo.Name + " of the Second Shadow";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneProcChance, procChance);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneCooldownSeconds, cooldownSeconds);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDurationSeconds, durationSeconds);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDamageScale, damageScale);
+                wo.CooldownId = Player.ShadowCloneCasterCooldownId;
+                wo.CooldownDuration = cooldownSeconds;
+                wo.IconOverlayId = MutatorOverlayShadow;
+                ApplyLootUiEffect(wo, UiEffects.Nether);
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nSecond Shadow: successful strikes have a {procChance:P0} chance to summon a melee shadow for {durationSeconds:0}s. The shadow locks to melee combat, copies your equipped weapon style, fights alongside your normal pet, and deals {damageScale:P0} damage. Cooldown: {cooldownSeconds:0}s.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.
@@ -756,6 +830,18 @@ namespace ACE.Server.Factories
         private static string GetOffenseDefenseScript(MeleeWeaponSkill weaponSkill, TreasureWeaponType weaponType)
         {
             return "MeleeWeapons.WeaponOffense_WeaponDefense." + weaponType.GetScriptShortName() + "_offense_defense.txt";
+        }
+
+        private static bool IsLugianHammerThrowEligible(WorldObject wo)
+        {
+            if (wo == null || wo.WeaponSkill != Skill.HeavyWeapons)
+                return false;
+
+            if (!LugianHammerThrowWcids.Contains((int)wo.WeenieClassId))
+                return false;
+
+            return wo.W_WeaponType == WeaponType.Mace
+                || (wo.Name?.IndexOf("lugian hammer", StringComparison.OrdinalIgnoreCase) >= 0);
         }
     }
 }

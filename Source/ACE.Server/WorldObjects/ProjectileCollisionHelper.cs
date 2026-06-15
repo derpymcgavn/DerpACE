@@ -55,6 +55,8 @@ namespace ACE.Server.WorldObjects
                     var targetPlayer = sourceCreature.AttackTarget as Player;
 
                     damageEvent = DamageEvent.CalculateDamage(sourceCreature, targetCreature, worldObject);
+                    if (sourceCreature is CombatPet shadowClone && shadowClone.IsShadowClone && damageEvent?.HasDamage == true)
+                        damageEvent.Damage *= shadowClone.ShadowCloneDamageScale;
 
                     if (targetPlayer != null)
                     {
@@ -112,7 +114,7 @@ namespace ACE.Server.WorldObjects
                             threadSafe = false;
                     }
 
-                    if (threadSafe)
+                    if (threadSafe && (sourceCreature is not CombatPet shadowClone || !shadowClone.IsShadowClone))
                         // This can result in spell projectiles being added to either sourceCreature or targetCreature landblock.
                         // worldObject is hitting targetCreature, so they should almost always be in the same landblock
                         worldObject.TryProcEquippedItems(sourceCreature, targetCreature, false, worldObject.ProjectileLauncher);

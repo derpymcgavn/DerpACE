@@ -37,13 +37,19 @@ namespace ACE.Server.Managers
         public const uint SpiralStarSpellId = 65003;
         public const uint ChainLightningSpellId = 65004;
         public const uint VoidConfusionSpellId = 65005;
+        public const uint MeteorFragmentSpellId = 65006;
+        public const uint SpiralStarLashSpellId = 65007;
+        public const uint ChainLightningArcSpellId = 65008;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
             return spellId == MeteorSquallSpellId
                 || spellId == SpiralStarSpellId
                 || spellId == ChainLightningSpellId
-                || spellId == VoidConfusionSpellId;
+                || spellId == VoidConfusionSpellId
+                || spellId == MeteorFragmentSpellId
+                || spellId == SpiralStarLashSpellId
+                || spellId == ChainLightningArcSpellId;
         }
 
         private const string ContentDirectoryEnvVar = "DERPACE_CUSTOM_SPELLS_DIR";
@@ -69,6 +75,8 @@ namespace ACE.Server.Managers
             EnsureDefaultVoidConfusionSpell();
 
             var loaded = LoadAll();
+            ForceLoadDefaultWellFedSpell();
+            ForceLoadDefaultWarMageVisualSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureVoidConfusionVisuals();
             log.Info($"CustomSpellManager: Initialized. Loaded {loaded} custom spell definition(s) from {ContentDir}.");
@@ -77,6 +85,8 @@ namespace ACE.Server.Managers
         public static int Reload()
         {
             var loaded = LoadAll();
+            ForceLoadDefaultWellFedSpell();
+            ForceLoadDefaultWarMageVisualSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureVoidConfusionVisuals();
             log.Info($"CustomSpellManager: Reloaded {loaded} custom spell definition(s) from {ContentDir}.");
@@ -98,17 +108,29 @@ namespace ACE.Server.Managers
             if (File.Exists(path))
                 LoadFile(path);
 
-            if (!new Spell(WellFedSpellId).NotFound)
-                return true;
+            ForceLoadDefaultWellFedSpell();
 
+            return !new Spell(WellFedSpellId).NotFound;
+        }
+
+        private static void ForceLoadDefaultWellFedSpell()
+        {
             using var doc = JsonDocument.Parse(DefaultWellFedJson, JsonOptions);
             if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
             {
                 foreach (var entry in customSpells.EnumerateArray())
                     TryApply(entry, "built-in WellFed.json");
             }
+        }
 
-            return !new Spell(WellFedSpellId).NotFound;
+        private static void ForceLoadDefaultWarMageVisualSpells()
+        {
+            using var doc = JsonDocument.Parse(DefaultWarMageVisualSpellsJson, JsonOptions);
+            if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in customSpells.EnumerateArray())
+                    TryApply(entry, "built-in WarMageVisuals.json");
+            }
         }
 
         public static bool TryExportSql(uint spellId, bool asCopy, out string path, out uint exportedId, out string error)
@@ -1126,9 +1148,9 @@ namespace ACE.Server.Managers
 
             NormalizeProjectileSpell(
                 SpiralStarSpellId,
-                SpellId.FlameArc7,
+                SpellId.ForceRing,
                 "Spiral Star",
-                DamageType.Fire,
+                DamageType.Bludgeon,
                 baseIntensity: 105,
                 variance: 45,
                 numProjectiles: 5,
@@ -1145,11 +1167,53 @@ namespace ACE.Server.Managers
                 DamageType.Electric,
                 baseIntensity: 115,
                 variance: 45,
-                numProjectiles: 3,
-                spreadAngle: 24.0f,
+                numProjectiles: 1,
+                spreadAngle: 0.0f,
                 nonTracking: false,
                 createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.35f },
-                padding: new JsonVector3 { X = 0.45f, Y = 0.0f, Z = 0.0f },
+                padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+
+            NormalizeProjectileSpell(
+                MeteorFragmentSpellId,
+                SpellId.FlameBolt7,
+                "Meteor Fragment",
+                DamageType.Fire,
+                baseIntensity: 75,
+                variance: 25,
+                numProjectiles: 1,
+                spreadAngle: 0.0f,
+                nonTracking: true,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 6.0f },
+                padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+
+            NormalizeProjectileSpell(
+                SpiralStarLashSpellId,
+                SpellId.ForceBolt7,
+                "Spiral Force",
+                DamageType.Bludgeon,
+                baseIntensity: 65,
+                variance: 20,
+                numProjectiles: 1,
+                spreadAngle: 0.0f,
+                nonTracking: false,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.75f },
+                padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+
+            NormalizeProjectileSpell(
+                ChainLightningArcSpellId,
+                SpellId.LightningBolt7,
+                "Chain Lightning Arc",
+                DamageType.Electric,
+                baseIntensity: 80,
+                variance: 25,
+                numProjectiles: 1,
+                spreadAngle: 0.0f,
+                nonTracking: false,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.35f },
+                padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
                 peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
         }
 
@@ -1230,14 +1294,88 @@ namespace ACE.Server.Managers
     {
       ""Template"": ""SetSocietyAttributeAll1"",
       ""Id"": 65001,
-      ""Name"": ""Well Fed"",
-      ""SpellWords"": ""Well Fed"",
+      ""Name"": ""WELL FED"",
+      ""SpellWords"": ""WELL FED"",
+      ""Desc"": ""Increases all primary attributes by 5."",
       ""Icon"": ""0x06001B3C"",
       ""Category"": 9040,
       ""Duration"": 7200,
       ""StatModVal"": 5,
       ""CasterEffect"": ""EnchantUpYellow"",
       ""TargetEffect"": ""EnchantUpYellow""
+    }
+  ]
+}
+";
+
+        private const string DefaultWarMageVisualSpellsJson =
+@"{
+  ""CustomSpells"": [
+    {
+      ""Template"": ""FlameBolt7"",
+      ""Id"": 65006,
+      ""Name"": ""Meteor Fragment"",
+      ""SpellWords"": ""Meteor Fragment"",
+      ""Desc"": ""A falling ember called by Meteor Squall."",
+      ""Icon"": ""0x06001036"",
+      ""EType"": ""Fire"",
+      ""DamageType"": ""Fire"",
+      ""BaseMana"": 1,
+      ""BaseIntensity"": 75,
+      ""Variance"": 25,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": true,
+      ""CreateOffset"": [0, 0, 6.0],
+      ""Padding"": [0, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpRed"",
+      ""TargetEffect"": ""BreatheFlame""
+    },
+    {
+      ""Template"": ""ForceBolt7"",
+      ""Id"": 65007,
+      ""Name"": ""Spiral Force"",
+      ""SpellWords"": ""Spiral Force"",
+      ""Desc"": ""A visible bludgeoning pulse from Spiral Star."",
+      ""Icon"": ""0x0600103C"",
+      ""EType"": ""Bludgeon"",
+      ""DamageType"": ""Bludgeon"",
+      ""BaseMana"": 1,
+      ""BaseIntensity"": 65,
+      ""Variance"": 20,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": false,
+      ""CreateOffset"": [0, 0, 0.75],
+      ""Padding"": [0, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpYellow"",
+      ""TargetEffect"": ""HealthDownYellow""
+    },
+    {
+      ""Template"": ""LightningBolt7"",
+      ""Id"": 65008,
+      ""Name"": ""Chain Lightning Arc"",
+      ""SpellWords"": ""Chain Lightning Arc"",
+      ""Desc"": ""A visible jumping arc from Chain Lightning."",
+      ""Icon"": ""0x06001039"",
+      ""EType"": ""Electric"",
+      ""DamageType"": ""Electric"",
+      ""BaseMana"": 1,
+      ""BaseIntensity"": 80,
+      ""Variance"": 25,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": false,
+      ""CreateOffset"": [0, 0, 0.35],
+      ""Padding"": [0, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpBlue"",
+      ""TargetEffect"": ""BreatheLightning""
     }
   ]
 }
@@ -1269,14 +1407,14 @@ namespace ACE.Server.Managers
       ""TargetEffect"": ""BreatheFlame""
     },
     {
-      ""Template"": ""FlameArc7"",
+      ""Template"": ""ForceRing"",
       ""Id"": 65003,
       ""Name"": ""Spiral Star"",
       ""SpellWords"": ""Spiral Star"",
-      ""Desc"": ""Launches a circling flame star that lashes outward from the caster to nearby foes."",
-      ""Icon"": ""0x06001036"",
-      ""EType"": ""Fire"",
-      ""DamageType"": ""Fire"",
+      ""Desc"": ""Launches a circling bludgeoning force that unwinds outward from the caster to nearby foes."",
+      ""Icon"": ""0x0600103C"",
+      ""EType"": ""Bludgeon"",
+      ""DamageType"": ""Bludgeon"",
       ""BaseMana"": 68,
       ""BaseIntensity"": 105,
       ""Variance"": 45,
@@ -1287,8 +1425,8 @@ namespace ACE.Server.Managers
       ""CreateOffset"": [0, 0, 0.25],
       ""Padding"": [0.75, 0, 0],
       ""Peturbation"": [0, 0, 0],
-      ""CasterEffect"": ""EnchantUpOrange"",
-      ""TargetEffect"": ""BreatheFlame""
+      ""CasterEffect"": ""EnchantUpYellow"",
+      ""TargetEffect"": ""HealthDownYellow""
     },
     {
       ""Template"": ""LightningBolt7"",
@@ -1302,12 +1440,12 @@ namespace ACE.Server.Managers
       ""BaseMana"": 75,
       ""BaseIntensity"": 115,
       ""Variance"": 45,
-      ""NumProjectiles"": 3,
+      ""NumProjectiles"": 1,
       ""NumProjectilesVariance"": 0,
-      ""SpreadAngle"": 24,
+      ""SpreadAngle"": 0,
       ""NonTracking"": false,
       ""CreateOffset"": [0, 0, 0.35],
-      ""Padding"": [0.45, 0, 0],
+      ""Padding"": [0, 0, 0],
       ""Peturbation"": [0, 0, 0],
       ""CasterEffect"": ""EnchantUpBlue"",
       ""TargetEffect"": ""BreatheLightning""

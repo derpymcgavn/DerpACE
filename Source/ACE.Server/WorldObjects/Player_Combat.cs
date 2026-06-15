@@ -76,6 +76,9 @@ namespace ACE.Server.WorldObjects
         public const int HierophantCooldownId = 2035;
         public const int FencerParryCooldownId = 2036;
         public const int VoidConfusionCooldownId = 2037;
+        public const int ShieldProjectileReflectCooldownId = 2038;
+        public const int ShieldSpellMirrorCooldownId = 2039;
+        public const int LugianHammerThrowCooldownId = 2040;
         private const float PolebreakerPowerThreshold = 0.70f;
         public const int PolebreakerBreakGuardCooldownId = 2019;
         private const float PolebreakerBreakGuardSlamSpeed = 3.0f;
@@ -98,6 +101,9 @@ namespace ACE.Server.WorldObjects
         public const double DinnerwareCooldownSeconds = 5.0;
         private const double ShieldThornsCooldownSeconds = 1.0;
         private const double ShieldBashingCooldownSeconds = 8.0;
+        private const double ShieldProjectileReflectCooldownSeconds = 6.0;
+        private const double ShieldSpellMirrorCooldownSeconds = 10.0;
+        private const double LugianHammerThrowCooldownSeconds = 4.0;
         public const double HierophantCooldownSeconds = 10.0;
 
         // DerpACE: Unarmed combo system for tracking punch/kick combos
@@ -938,6 +944,12 @@ namespace ACE.Server.WorldObjects
                     targetPlayer.TakeDamage(this, damageEvent);
                 else
                     target.TakeDamage(this, damageEvent.DamageType, damageEvent.Damage, damageEvent.IsCritical);
+
+                var shadowCloneSource = damageEvent.Weapon ?? damageSource;
+                TryProcLugianHammerThrow(target, damageEvent);
+
+                if (shadowCloneSource != null && target.IsAlive)
+                    TryProcShadowCloneWeapon(shadowCloneSource, target);
             }
             else
             {
@@ -1562,6 +1574,60 @@ namespace ACE.Server.WorldObjects
             actionChain.EnqueueChain();
         }
 
+        private void TryProcLugianHammerThrow(Creature primaryTarget, DamageEvent damageEvent)
+        {
+            if (primaryTarget == null
+                || damageEvent?.Weapon?.GetProperty(PropertyBool.IsLugianHammerThrowWeapon) != true
+                || damageEvent.Damage <= 0
+                || CurrentLandblock == null
+                || primaryTarget.Location == null)
+                return;
+
+            if (!WeaponIsType(damageEvent.Weapon, WeaponType.Mace) || damageEvent.Weapon.WeaponSkill != Skill.HeavyWeapons)
+                return;
+
+            var procChance = damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowProcChance) ?? 0.0;
+            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+                return;
+
+            var radius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowRadius) ?? 10.0));
+            var radiusSq = radius * radius;
+            var secondaryTarget = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Creature>()
+                .Where(c => c != null
+                            && c != primaryTarget
+                            && c != this
+                            && c.IsAlive
+                            && c.Attackable
+                            && c.IsMonster
+                            && !c.Teleporting
+                            && c.Location != null
+                            && primaryTarget.Location.SquaredDistanceTo(c.Location) <= radiusSq
+                            && CanDamage(c))
+                .OrderBy(c => primaryTarget.Location.SquaredDistanceTo(c.Location))
+                .FirstOrDefault();
+
+            if (secondaryTarget == null)
+                return;
+
+            if (!TryStartMutatorCooldown(damageEvent.Weapon, LugianHammerThrowCooldownId, LugianHammerThrowCooldownSeconds))
+                return;
+
+            var damageScale = Math.Clamp((float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowDamageScale) ?? 0.75), 0.05f, 1.0f);
+            var throwDamage = Math.Max(1.0f, damageEvent.Damage * damageScale);
+
+            var stance = CurrentMotionState?.Stance ?? MotionStance.NonCombat;
+            EnqueueBroadcastMotion(new Motion(stance, MotionCommand.HeadThrow));
+            secondaryTarget.TakeDamage(this, DamageType.Bludgeon, throwDamage, false);
+            secondaryTarget.ApplyVisualEffects(PlayScript.Explode);
+            primaryTarget.ApplyVisualEffects(PlayScript.SparkMidRightFront);
+
+            if (!SquelchManager.Squelches.Contains(secondaryTarget, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your {damageEvent.Weapon.NameWithMaterial} hurls a spectral hammer into {secondaryTarget.Name} for {(uint)Math.Round(throwDamage)} bludgeoning damage. [Stonehand Throw]",
+                    ChatMessageType.CombatSelf));
+        }
+
         private float GetUnarmedComboAttackSpeedMultiplier()
         {
             return DateTime.UtcNow <= _unarmedAttackSpeedBoostUntil
@@ -1809,6 +1875,7 @@ namespace ACE.Server.WorldObjects
                 damageEvent.Damage *= 1.0f - Math.Clamp(ACE.Server.Managers.DerpACEConfig.SentinelSpearPoiseDamageReduction, 0.0f, 0.5f);
 
             TryApplyOffhandFencerParry(source, damageEvent);
+            TryProcShieldProjectileReflect(source, damageEvent);
 
             var damageTaken = TakeDamage(source, damageEvent.DamageType, damageEvent.Damage, damageEvent.BodyPart, damageEvent.IsCritical, damageEvent.AttackConditions);
 
@@ -1899,6 +1966,80 @@ namespace ACE.Server.WorldObjects
                 Session.Network.EnqueueSend(new GameMessageSystemChat(
                     $"Your {shield.NameWithMaterial} reflects {(uint)Math.Max(0, reflectDamage)} damage back at {attacker.Name}. [Thorns]",
                     ChatMessageType.CombatSelf));
+        }
+
+        private void TryProcShieldProjectileReflect(WorldObject source, DamageEvent damageEvent)
+        {
+            if (source is not Creature attacker || attacker.IsDead || IsDead || damageEvent.Damage <= 0)
+                return;
+
+            if (damageEvent.CombatType != CombatType.Missile)
+                return;
+
+            var shield = GetEquippedShield();
+            if (shield?.GetProperty(PropertyBool.IsProjectileReflectShield) != true)
+                return;
+
+            var reflectChance = shield.GetProperty(PropertyFloat.ShieldProjectileReflectChance) ?? 0.0;
+            if (reflectChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= reflectChance)
+                return;
+
+            if (!TryStartMutatorCooldown(shield, ShieldProjectileReflectCooldownId, ShieldProjectileReflectCooldownSeconds))
+                return;
+
+            var reflectedDamage = Math.Max(1.0f, (float)Math.Round(damageEvent.Damage));
+            damageEvent.Damage = 0;
+
+            attacker.TakeDamage(this, damageEvent.DamageType, reflectedDamage);
+            attacker.ApplyVisualEffects(PlayScript.SparkMidLeftFront);
+            ApplyVisualEffects(PlayScript.ShieldUpBlue);
+
+            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your {shield.NameWithMaterial} turns the shot back at {attacker.Name} for {(uint)reflectedDamage} damage. [Reflection]",
+                    ChatMessageType.CombatSelf));
+        }
+
+        public bool TryProcShieldSpellMirror(WorldObject source, string spellName, DamageType damageType, ref float damage)
+        {
+            if (source is not Creature caster || caster.IsDead || IsDead || damage <= 0)
+                return false;
+
+            if (source == this)
+                return false;
+
+            var shield = GetEquippedShield();
+            if (shield?.GetProperty(PropertyBool.IsSpellMirrorShield) != true)
+                return false;
+
+            var mirrorChance = shield.GetProperty(PropertyFloat.ShieldSpellMirrorChance) ?? 0.0;
+            if (mirrorChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= mirrorChance)
+                return false;
+
+            if (!TryStartMutatorCooldown(shield, ShieldSpellMirrorCooldownId, ShieldSpellMirrorCooldownSeconds))
+                return false;
+
+            var reducedDamage = Math.Max(0.0f, damage * 0.5f);
+            var reflectedDamage = Math.Max(1.0f, (float)Math.Round(reducedDamage));
+            damage = reducedDamage;
+
+            caster.TakeDamage(this, damageType, reflectedDamage);
+            caster.ApplyVisualEffects(PlayScript.HealthDownBlue);
+            ApplyVisualEffects(PlayScript.ShieldUpPurple);
+
+            var displaySpellName = string.IsNullOrWhiteSpace(spellName) ? "the spell" : spellName;
+
+            if (!SquelchManager.Squelches.Contains(source, ChatMessageType.Magic))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Your {shield.NameWithMaterial} mirrors {displaySpellName}, reducing the hit by 50% and reflecting {(uint)reflectedDamage} damage back at {caster.Name}. [Spell Mirror]",
+                    ChatMessageType.Magic));
+
+            if (source is Player sourcePlayer && !sourcePlayer.SquelchManager.Squelches.Contains(this, ChatMessageType.Magic))
+                sourcePlayer.Session?.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"{Name}'s {shield.NameWithMaterial} mirrors your {displaySpellName} for {(uint)reflectedDamage} damage. [Spell Mirror]",
+                    ChatMessageType.Magic));
+
+            return true;
         }
 
         private void TryProcShieldAffixesOnBlock(WorldObject source, DamageEvent damageEvent, uint damageTaken)

@@ -138,7 +138,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStalkersBow, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc,  procPct  / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus, bonusPct / 100.0);
-                wo.IconOverlayId = 0x06002699u;
+                wo.IconOverlayId = MutatorOverlayStalker;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards the patient hunter -- the *first* shot loosed at a target has a {procPct}% chance to strike with +{bonusPct}% bonus damage. Switching targets resets the opportunity.";
@@ -165,7 +165,7 @@ namespace ACE.Server.Factories
                 wo.Name = wo.Name + " of the Breacher";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.BreacherArmorIgnoreChance, armorIgnoreChance / 100.0);
-                wo.IconOverlayId = 0x06002878u;
+                wo.IconOverlayId = MutatorOverlayBreacher;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
@@ -199,7 +199,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsReapersAtlatl, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillProc, procPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct, healPct / 100.0);
-                wo.IconOverlayId = 0x0600285Fu;
+                wo.IconOverlayId = MutatorOverlayReaper;
                 ApplyLootUiEffect(wo, UiEffects.Nether);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} feeds on endings -- killing blows have a {procPct}% chance to restore {healPct}% of your maximum health.";
@@ -231,10 +231,42 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetProcChance,  procPct / 100.0);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetDamageScale, ACE.Server.Managers.DerpACEConfig.RicochetDamageScale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RicochetRadius,      ACE.Server.Managers.DerpACEConfig.RicochetRadius);
-                wo.IconOverlayId = 0x06002860u;
+                wo.IconOverlayId = MutatorOverlayDartflinger;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} skips death through the air -- each hit has a {procPct}% chance to send a second dart into another nearby foe for {ACE.Server.Managers.DerpACEConfig.RicochetDamageScale:P0} damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} skips death through the air -- each hit has a {procPct}% chance to send a visible second dart into another nearby foe within {ACE.Server.Managers.DerpACEConfig.RicochetRadius:0.#} yards for {ACE.Server.Managers.DerpACEConfig.RicochetDamageScale:P0} damage. Cooldown: {Player.RicochetCooldownSeconds:0.#} seconds.";
+            }
+
+            // Shadow Volley: rare missile-weapon shadow clone affix.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.015f,
+                7,
+                roll.WeaponType == TreasureWeaponType.Bow
+                    || roll.WeaponType == TreasureWeaponType.Crossbow
+                    || roll.WeaponType == TreasureWeaponType.Atlatl,
+                "shadowclone", "shadowshot", "shadowvolley"))
+            {
+                const float procChance = 0.03f;
+                const float cooldownSeconds = 150.0f;
+                const float durationSeconds = 18.0f;
+                const float damageScale = 0.25f;
+
+                wo.Name = wo.Name + " of the Shadow Volley";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneProcChance, procChance);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneCooldownSeconds, cooldownSeconds);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDurationSeconds, durationSeconds);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDamageScale, damageScale);
+                wo.CooldownId = Player.ShadowCloneCasterCooldownId;
+                wo.CooldownDuration = cooldownSeconds;
+                wo.IconOverlayId = MutatorOverlayShadow;
+                ApplyLootUiEffect(wo, UiEffects.Nether);
+
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nShadow Volley: successful shots have a {procChance:P0} chance to summon a shadow archer for {durationSeconds:0}s. The shadow locks to missile combat, copies your equipped missile weapon, fights alongside your normal pet, and deals {damageScale:P0} damage. Cooldown: {cooldownSeconds:0}s.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.

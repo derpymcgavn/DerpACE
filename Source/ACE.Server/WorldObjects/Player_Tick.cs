@@ -130,6 +130,8 @@ namespace ACE.Server.WorldObjects
             // DerpACE: tick persistent aura particle effects.
             AuraManager.Tick(this, currentUnixTime);
 
+            DanceBootsTick(currentUnixTime);
+
             // Check if we're due for our periodic SavePlayer
             if (LastRequestedDatabaseSave == DateTime.MinValue)
                 LastRequestedDatabaseSave = DateTime.UtcNow;

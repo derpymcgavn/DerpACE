@@ -7,6 +7,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Factories;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects.Entity;
 
@@ -314,7 +315,7 @@ namespace ACE.Server.WorldObjects
             {
                 try
                 {
-                    var clone = WorldObjectFactory.CreateNewWorldObject(src.WeenieClassId);
+                    var clone = CreateEquipmentClone(src);
                     if (clone == null)
                         continue;
 
@@ -335,6 +336,43 @@ namespace ACE.Server.WorldObjects
                 {
                     log.Warn($"[Simulacrum] Failed to clone equipment {src.Name} ({src.WeenieClassId}): {ex.Message}");
                 }
+            }
+        }
+
+        private static WorldObject CreateEquipmentClone(WorldObject src)
+        {
+            if (src?.Biota == null)
+                return src != null ? WorldObjectFactory.CreateNewWorldObject(src.WeenieClassId) : null;
+
+            var guid = GuidManager.NewDynamicGuid();
+            try
+            {
+                var databaseBiota = ACE.Database.Adapter.BiotaConverter.ConvertFromEntityBiota(src.Biota);
+                databaseBiota.Id = guid.Full;
+
+                var clonedBiota = ACE.Database.Adapter.BiotaConverter.ConvertToEntityBiota(databaseBiota);
+                clonedBiota.Id = guid.Full;
+
+                var clone = WorldObjectFactory.CreateWorldObject(clonedBiota);
+                if (clone == null)
+                {
+                    GuidManager.RecycleDynamicGuid(guid);
+                    return WorldObjectFactory.CreateNewWorldObject(src.WeenieClassId);
+                }
+
+                clone.RemoveProperty(PropertyInstanceId.Container);
+                clone.RemoveProperty(PropertyInstanceId.Wielder);
+                clone.RemoveProperty(PropertyInt.CurrentWieldedLocation);
+                clone.RemoveProperty(PropertyInt.ParentLocation);
+                clone.Location = null;
+
+                return clone;
+            }
+            catch (Exception ex)
+            {
+                GuidManager.RecycleDynamicGuid(guid);
+                log.Warn($"[Simulacrum] Failed to copy equipment biota for {src.Name} ({src.WeenieClassId}); falling back to WCID clone: {ex.Message}");
+                return WorldObjectFactory.CreateNewWorldObject(src.WeenieClassId);
             }
         }
 

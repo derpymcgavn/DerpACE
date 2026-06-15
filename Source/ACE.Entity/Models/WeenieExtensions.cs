@@ -176,7 +176,12 @@ namespace ACE.Entity.Models
         {
             var requiresBackPackSlot = weenie.GetProperty(PropertyBool.RequiresBackpackSlot) ?? false;
 
-            return requiresBackPackSlot || weenie.WeenieType == WeenieType.Container;
+            return requiresBackPackSlot || weenie.WeenieType == WeenieType.Container || IsFoci(weenie.WeenieClassId);
+        }
+
+        private static bool IsFoci(uint weenieClassId)
+        {
+            return weenieClassId == 15268 || weenieClassId == 15269 || weenieClassId == 15270 || weenieClassId == 15271 || weenieClassId == 43173;
         }
 
         public static bool IsVendorService(this Weenie weenie)

@@ -33,6 +33,11 @@ namespace ACE.Server.Factories
             ["concussive"] = "warden",
             ["concussion"] = "warden",
 
+            ["lugianhammer"] = "lugianhammer",
+            ["stonehand"] = "lugianhammer",
+            ["hammerthrow"] = "lugianhammer",
+            ["thrownhammer"] = "lugianhammer",
+
             ["resolute"] = "resolute",
             ["resolve"] = "resolute",
             ["vampire"] = "resolute",
@@ -75,6 +80,10 @@ namespace ACE.Server.Factories
             ["voidshadow"] = "shadowclone",
             ["umbral"] = "shadowclone",
             ["mirror"] = "shadowclone",
+            ["shadowshot"] = "shadowshot",
+            ["shadowvolley"] = "shadowshot",
+            ["secondshadow"] = "secondshadow",
+            ["shadowblade"] = "secondshadow",
 
             ["hierophant"] = "hierophant",
             ["life"] = "hierophant",
@@ -107,6 +116,7 @@ namespace ACE.Server.Factories
             ["fencer"] = TreasureWeaponType.SwordMS,
             ["ravager"] = TreasureWeaponType.Axe,
             ["warden"] = TreasureWeaponType.Mace,
+            ["lugianhammer"] = TreasureWeaponType.Mace,
             ["resolute"] = TreasureWeaponType.Sword,
             ["polebreaker"] = TreasureWeaponType.Staff,
             ["sentinel"] = TreasureWeaponType.Spear,
@@ -118,6 +128,8 @@ namespace ACE.Server.Factories
             ["reaper"] = TreasureWeaponType.Atlatl,
             ["archmagi"] = TreasureWeaponType.Caster,
             ["shadowclone"] = TreasureWeaponType.Caster,
+            ["shadowshot"] = TreasureWeaponType.Bow,
+            ["secondshadow"] = TreasureWeaponType.Sword,
             ["hierophant"] = TreasureWeaponType.Caster,
             ["skybreaker"] = TreasureWeaponType.Caster,
             ["stormcaller"] = TreasureWeaponType.Caster,
@@ -142,6 +154,16 @@ namespace ACE.Server.Factories
             ["bashshield"] = "bashing",
             ["shieldbash"] = "bashing",
             ["breaker"] = "bashing",
+
+            ["reflection"] = "reflection",
+            ["reflect"] = "reflection",
+            ["projectilereflect"] = "reflection",
+            ["returnshot"] = "reflection",
+
+            ["spellmirror"] = "spellmirror",
+            ["mirror"] = "spellmirror",
+            ["wardmirror"] = "spellmirror",
+            ["spellreflect"] = "spellmirror",
         };
 
         private static readonly Dictionary<string, string> ArmorMutatorAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -152,11 +174,36 @@ namespace ACE.Server.Factories
             ["chef"] = "culinarian",
             ["wellfed"] = "culinarian",
 
+            ["alchemist"] = "alchemist",
+            ["alchemy"] = "alchemist",
+            ["alchemygloves"] = "alchemist",
+            ["potion"] = "alchemist",
+            ["phial"] = "alchemist",
+            ["splash"] = "alchemist",
+            ["instability"] = "alchemicalinstability",
+            ["alchemicalinstability"] = "alchemicalinstability",
+            ["unstable"] = "alchemicalinstability",
+
             ["unarmed"] = "unarmed",
             ["unarmeddamage"] = "unarmed",
             ["brawler"] = "unarmed",
             ["punch"] = "unarmed",
             ["kick"] = "unarmed",
+
+            ["healingdance"] = "healingdance",
+            ["healing"] = "healingdance",
+            ["danceheal"] = "healingdance",
+            ["healthdance"] = "healingdance",
+
+            ["rejuvenatingdance"] = "rejuvenatingdance",
+            ["rejuvenating"] = "rejuvenatingdance",
+            ["rejuvdance"] = "rejuvenatingdance",
+            ["staminadance"] = "rejuvenatingdance",
+
+            ["replenishingdance"] = "replenishingdance",
+            ["replenishing"] = "replenishingdance",
+            ["replendance"] = "replenishingdance",
+            ["manadance"] = "replenishingdance",
         };
 
         public static bool TryResolveWeaponMutator(string name, out string canonicalName)
@@ -178,6 +225,7 @@ namespace ACE.Server.Factories
                 "fencer/duelist",
                 "ravager",
                 "warden/concussive",
+                "lugianhammer/hammerthrow",
                 "resolute/vampire",
                 "polebreaker",
                 "sentinel",
@@ -189,6 +237,8 @@ namespace ACE.Server.Factories
                 "reaper",
                 "archmagi",
                 "shadowclone/voidshadow",
+                "shadowshot/shadowvolley",
+                "secondshadow/shadowblade",
                 "hierophant/life",
                 "skybreaker/meteor",
                 "stormcaller/chainlightning",
@@ -213,7 +263,9 @@ namespace ACE.Server.Factories
             {
                 "defender",
                 "thorns/thornbound",
-                "bashing/shieldbash"
+                "bashing/shieldbash",
+                "reflection/returnshot",
+                "spellmirror/spellreflect"
             });
         }
 
@@ -232,7 +284,12 @@ namespace ACE.Server.Factories
             return string.Join(", ", new[]
             {
                 "culinarian/cooking",
-                "unarmed/brawler"
+                "alchemist/alchemy",
+                "alchemicalinstability",
+                "unarmed/brawler",
+                "healingdance",
+                "rejuvenatingdance",
+                "replenishingdance"
             });
         }
 
@@ -253,6 +310,7 @@ namespace ACE.Server.Factories
                 "fencer"      => wo.GetProperty(PropertyBool.IsFencerBlade) == true,
                 "ravager"     => wo.GetProperty(PropertyBool.IsRavagersAxe) == true,
                 "warden"      => wo.GetProperty(PropertyBool.IsWardensMaul) == true,
+                "lugianhammer"=> wo.GetProperty(PropertyBool.IsLugianHammerThrowWeapon) == true,
                 "resolute"    => wo.GetProperty(PropertyBool.IsResoluteBlade) == true,
                 "polebreaker" => wo.GetProperty(PropertyBool.IsPolebreakerStaff) == true,
                 "sentinel"    => wo.GetProperty(PropertyBool.IsSentinelSpear) == true,
@@ -267,7 +325,10 @@ namespace ACE.Server.Factories
                                  || wo.GetProperty(PropertyBool.IsDartflingerAtlatl) == true,
                 "reaper"      => wo.GetProperty(PropertyBool.IsReapersAtlatl) == true,
                 "archmagi"    => wo.GetProperty(PropertyBool.IsArchmagiCaster) == true,
-                "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true,
+                "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true
+                                 || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
+                "shadowshot"  => wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
+                "secondshadow"=> wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
                 "skybreaker"  => wo.GetProperty(PropertyBool.IsSkybreakerCaster) == true,
                 "stormcaller" => wo.GetProperty(PropertyBool.IsStormcallerCaster) == true,
@@ -287,6 +348,8 @@ namespace ACE.Server.Factories
                 "defender" => wo.GetProperty(PropertyBool.IsDefendersShield) == true,
                 "thorns"   => wo.GetProperty(PropertyBool.IsThornsShield) == true,
                 "bashing"  => wo.GetProperty(PropertyBool.IsBashingShield) == true,
+                "reflection" => wo.GetProperty(PropertyBool.IsProjectileReflectShield) == true,
+                "spellmirror" => wo.GetProperty(PropertyBool.IsSpellMirrorShield) == true,
                 _          => false,
             };
         }
@@ -298,8 +361,13 @@ namespace ACE.Server.Factories
 
             return canonicalName switch
             {
-                "culinarian" => wo.GetProperty(PropertyBool.IsCookingGloves) == true,
-                "unarmed"    => (wo.UnarmedBaseDamage ?? 0) > 0,
+                "culinarian"        => wo.GetProperty(PropertyBool.IsCookingGloves) == true,
+                "alchemist"         => wo.GetProperty(PropertyBool.IsAlchemistGloves) == true,
+                "alchemicalinstability" => wo.GetProperty(PropertyBool.IsAlchemicalInstabilityGloves) == true,
+                "unarmed"           => (wo.UnarmedBaseDamage ?? 0) > 0,
+                "healingdance"      => wo.GetProperty(PropertyBool.IsHealingDanceBoots) == true,
+                "rejuvenatingdance" => wo.GetProperty(PropertyBool.IsRejuvenatingDanceBoots) == true,
+                "replenishingdance" => wo.GetProperty(PropertyBool.IsReplenishingDanceBoots) == true,
                 _            => false,
             };
         }
