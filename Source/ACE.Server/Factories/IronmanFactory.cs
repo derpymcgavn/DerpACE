@@ -1376,39 +1376,105 @@ namespace ACE.Server.Factories
             var guard = 0;
             while ((player.AvailableExperience ?? 0) > 0 && guard++ < 5000)
             {
-                var nextSkill = player.Skills.Values
-                    .Where(skill => skill.AdvancementClass >= SkillAdvancementClass.Trained && !skill.IsMaxRank)
-                    .OrderBy(skill => skill.Ranks)
-                    .ThenBy(skill => skill.Skill)
-                    .FirstOrDefault();
+                var spent = false;
 
-                if (nextSkill == null)
+                spent |= TrySpendNextBlindSkillRank(player);
+                spent |= TrySpendNextBlindVitalRank(player);
+                spent |= TrySpendNextBlindAttributeRank(player);
+
+                if (!spent)
                     break;
-
-                var xpToNextRank = player.GetXPBetweenSkillLevels(nextSkill.AdvancementClass, nextSkill.Ranks, nextSkill.Ranks + 1);
-                if (xpToNextRank == null || xpToNextRank == 0)
-                    break;
-
-                var amount = (uint)Math.Min(Math.Min((ulong)Math.Max(player.AvailableExperience ?? 0, 0), xpToNextRank.Value), uint.MaxValue);
-                if (amount == 0)
-                    break;
-
-                player.HandleActionRaiseSkill(nextSkill.Skill, amount);
             }
+        }
 
-            if ((player.AvailableExperience ?? 0) <= 0)
-                return;
+        private static bool TrySpendNextBlindSkillRank(Player player)
+        {
+            var available = player.AvailableExperience ?? 0;
+            if (available <= 0)
+                return false;
 
-            player.SpendAllAvailableVitalXp(player.Health, true);
-            player.SpendAllAvailableVitalXp(player.Stamina, true);
-            player.SpendAllAvailableVitalXp(player.Mana, true);
+            var nextSkill = player.Skills.Values
+                .Where(skill => skill.AdvancementClass >= SkillAdvancementClass.Trained && !skill.IsMaxRank)
+                .Select(skill => new { Skill = skill, Cost = player.GetXpToNextRank(skill) })
+                .Where(candidate => candidate.Cost.HasValue && candidate.Cost.Value > 0 && candidate.Cost.Value <= available)
+                .OrderBy(candidate => candidate.Skill.Ranks)
+                .ThenBy(candidate => candidate.Cost.Value)
+                .ThenBy(candidate => candidate.Skill.Skill)
+                .FirstOrDefault();
 
-            player.SpendAllAvailableAttributeXp(player.Strength, true);
-            player.SpendAllAvailableAttributeXp(player.Endurance, true);
-            player.SpendAllAvailableAttributeXp(player.Coordination, true);
-            player.SpendAllAvailableAttributeXp(player.Quickness, true);
-            player.SpendAllAvailableAttributeXp(player.Focus, true);
-            player.SpendAllAvailableAttributeXp(player.Self, true);
+            return nextSkill != null && player.HandleActionRaiseSkill(nextSkill.Skill.Skill, nextSkill.Cost.Value);
+        }
+
+        private static bool TrySpendNextBlindVitalRank(Player player)
+        {
+            var available = player.AvailableExperience ?? 0;
+            if (available <= 0)
+                return false;
+
+            var vitalOrder = new[]
+            {
+                PropertyAttribute2nd.MaxHealth,
+                PropertyAttribute2nd.MaxStamina,
+                PropertyAttribute2nd.MaxMana,
+            };
+
+            var vitalXpTable = DatManager.PortalDat.XpTable.VitalXpList;
+            var nextVital = vitalOrder
+                .Where(vital => player.Vitals.ContainsKey(vital))
+                .Select(vital => player.Vitals[vital])
+                .Where(vital => !vital.IsMaxRank)
+                .Select(vital => new { Vital = vital, Cost = GetXpToNextBlindRank(vitalXpTable, vital.Ranks, vital.ExperienceSpent) })
+                .Where(candidate => candidate.Cost.HasValue && candidate.Cost.Value > 0 && candidate.Cost.Value <= available)
+                .OrderBy(candidate => candidate.Vital.Ranks)
+                .ThenBy(candidate => candidate.Cost.Value)
+                .ThenBy(candidate => Array.IndexOf(vitalOrder, candidate.Vital.Vital))
+                .FirstOrDefault();
+
+            return nextVital != null && player.HandleActionRaiseVital(nextVital.Vital.Vital, nextVital.Cost.Value);
+        }
+
+        private static bool TrySpendNextBlindAttributeRank(Player player)
+        {
+            var available = player.AvailableExperience ?? 0;
+            if (available <= 0)
+                return false;
+
+            var attributeOrder = new[]
+            {
+                PropertyAttribute.Endurance,
+                PropertyAttribute.Focus,
+                PropertyAttribute.Self,
+                PropertyAttribute.Coordination,
+                PropertyAttribute.Strength,
+                PropertyAttribute.Quickness,
+            };
+
+            var attributeXpTable = DatManager.PortalDat.XpTable.AttributeXpList;
+            var nextAttribute = attributeOrder
+                .Where(attribute => player.Attributes.ContainsKey(attribute))
+                .Select(attribute => player.Attributes[attribute])
+                .Where(attribute => !attribute.IsMaxRank)
+                .Select(attribute => new { Attribute = attribute, Cost = GetXpToNextBlindRank(attributeXpTable, attribute.Ranks, attribute.ExperienceSpent) })
+                .Where(candidate => candidate.Cost.HasValue && candidate.Cost.Value > 0 && candidate.Cost.Value <= available)
+                .OrderBy(candidate => candidate.Attribute.Ranks)
+                .ThenBy(candidate => candidate.Cost.Value)
+                .ThenBy(candidate => Array.IndexOf(attributeOrder, candidate.Attribute.Attribute))
+                .FirstOrDefault();
+
+            return nextAttribute != null && player.HandleActionRaiseAttribute(nextAttribute.Attribute.Attribute, nextAttribute.Cost.Value);
+        }
+
+        private static uint? GetXpToNextBlindRank(IReadOnlyList<uint> rankXpTable, uint ranks, uint experienceSpent)
+        {
+            var nextRank = ranks + 1;
+            if (nextRank >= rankXpTable.Count)
+                return null;
+
+            var nextRankXp = rankXpTable[(int)nextRank];
+            if (nextRankXp <= experienceSpent)
+                return null;
+
+            return nextRankXp - experienceSpent;
         }
 
         // ---------- Item tagging ----------

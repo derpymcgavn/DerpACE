@@ -67,8 +67,8 @@ This section is the current source of truth for lootgen mutators, custom abiliti
 #### Player Commands
 | Command | Purpose |
 |---|---|
-| `/ironman on [-nh] [-blind]` | Begins standard Ironman commitment. Requires `/ironman confirm` within 30 seconds. |
-| `/ironman nomad [-nh] [-blind]` | Begins Nomad Ironman commitment: no weapons/casters, elemental gauntlet/shoe damage, natural unarmored AL. Requires confirmation. |
+| `/ironman on [-nh] [-blind]` | Begins standard Ironman commitment. Requires `/ironman confirm` within 30 seconds. Blind mode hides future skill milestones and auto-spends XP across trained skills, Health/Stamina/Mana, and supporting attributes. |
+| `/ironman nomad [-nh] [-blind]` | Begins Nomad Ironman commitment: no weapons/casters, elemental gauntlet/shoe damage, natural unarmored AL. Requires confirmation. Blind mode uses the same balanced auto-spend. |
 | `/ironman confirm` | Finalizes the pending Ironman or Nomad conversion. Permanent. |
 | `/ironman char` | Shows current Ironman progression. Blind Ironmen only see unlocked skills, not future milestones. |
 | `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |

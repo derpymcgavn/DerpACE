@@ -70,7 +70,7 @@ namespace ACE.Server.Command.Handlers
             "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 420 with above-average protections while unarmored)\n" +
             "  add -nh to 'on' or 'nomad' to exclude non-human heritages, rolling only\n" +
             "            Aluvian, Gharundim, Sho, Viamontian, Umbraen, Penumbraen, Undead, or Empyrean\n" +
-            "  add -blind to hide future skill milestones and auto-spend XP as the build grows\n" +
+            "  add -blind to hide future skill milestones and auto-spend XP into skills, vitals, and attributes as the build grows\n" +
             "confirm   - finalize Ironman conversion. Cannot be undone.\n" +
             "char      - view your character progression milestones\n" +
             "top       - show the Ironman leaderboard\n" +
@@ -168,7 +168,7 @@ namespace ACE.Server.Command.Handlers
                     player.SendMessage(
                         $"WARNING: Ironman mode is permanent and will wipe your inventory, spellbook, " +
                         $"and reroll your attributes/skills.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
-                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP." : "")} " +
+                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP into skills, vitals, and attributes." : "")} " +
                         $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
@@ -183,7 +183,7 @@ namespace ACE.Server.Command.Handlers
                         $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
                         $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
                         $"AL of 450 (average); worn armor is only half effective.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
-                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP." : "")} " +
+                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP into skills, vitals, and attributes." : "")} " +
                         $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
