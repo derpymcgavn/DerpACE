@@ -76,16 +76,17 @@ namespace ACE.Server.WorldObjects
         private double nextCrowdUnstickTime;
         private double nextDoorOpenAttemptTime;
         private double nextMeleeCornerRecoveryTime;
+        private double nextTacticalFlankTime;
 
-        private const double StuckSampleInterval = 0.25;
-        private const float StuckMinTravelDistance = 0.18f;
-        private const float StuckMinDistanceImprovement = 0.10f;
-        private const int StuckCourseCorrectionThreshold = 2;
-        private const double CourseCorrectionCooldownMin = 0.15;
-        private const double CourseCorrectionCooldownMax = 0.30;
-        private const double CrowdUnstickCooldown = 0.45;
+        private const double StuckSampleInterval = 0.75;
+        private const float StuckMinTravelDistance = 0.30f;
+        private const float StuckMinDistanceImprovement = 0.35f;
+        private const int StuckCourseCorrectionThreshold = 4;
+        private const double CourseCorrectionCooldownMin = 1.00;
+        private const double CourseCorrectionCooldownMax = 1.60;
+        private const double CrowdUnstickCooldown = 1.50;
         private const double DoorOpenAttemptCooldown = 0.30;
-        private const double MeleeCornerRecoveryCooldown = 0.35;
+        private const double MeleeCornerRecoveryCooldown = 0.90;
         private const float MeleeCornerRecoveryRangeBuffer = 2.0f;
         private const float DoorOpenScanRadius = 3.5f;
         private const float DoorOpenForwardBias = -0.25f;
@@ -93,6 +94,11 @@ namespace ACE.Server.WorldObjects
         private const float CrowdBlockerClearance = 1.35f;
         private const float CrowdEscapeStepMin = 1.4f;
         private const float CrowdEscapeStepMax = 3.4f;
+        private const double TacticalFlankCooldownMin = 4.0;
+        private const double TacticalFlankCooldownMax = 7.0;
+        private const float TacticalFlankChance = 0.22f;
+        private const float TacticalFlankRangeBuffer = 1.75f;
+        private const float TacticalFlankSpacing = 1.35f;
 
         /// <summary>
         /// Starts the process of monster turning towards target
@@ -188,7 +194,7 @@ namespace ACE.Server.WorldObjects
                 return false;
 
             var now = Timers.RunningTime;
-            if (!escalate && now < nextCourseCorrectionTime)
+            if (now < nextCourseCorrectionTime)
                 return false;
 
             if (PathfindingEnabled && Location != null)
@@ -209,8 +215,8 @@ namespace ACE.Server.WorldObjects
             // Alternate left/right strafing and gradually widen sidesteps if still blocked.
             var sideSign = (courseCorrectionAttemptCount % 2 == 0) ? 1.0f : -1.0f;
             var widen = Math.Min(3, courseCorrectionAttemptCount / 2);
-            var lateralDistance = 1.8f + (widen * 0.6f);
-            var forwardDistance = 1.2f + (widen * 0.4f);
+            var lateralDistance = 1.1f + (widen * 0.35f);
+            var forwardDistance = 1.7f + (widen * 0.35f);
 
             var sidestep = side * sideSign * lateralDistance;
             var advance = forward * forwardDistance;
@@ -356,7 +362,7 @@ namespace ACE.Server.WorldObjects
             var asked = 0;
             foreach (var blocker in blockers)
             {
-                if (asked >= 3)
+                if (asked >= 1)
                     break;
 
                 if (blocker.TryGrantPassage(this))
@@ -489,6 +495,148 @@ namespace ACE.Server.WorldObjects
 
             escape = best;
             return escape != null;
+        }
+
+        private bool TryTacticalFlank(double currentUnixTime, float targetDist)
+        {
+            if (CurrentAttack != CombatType.Melee || AiImmobile || AttackTarget?.Location == null || Location == null)
+                return false;
+
+            if (currentUnixTime < nextTacticalFlankTime || targetDist > MaxRange + TacticalFlankRangeBuffer)
+                return false;
+
+            if (IsMoving || IsTurning || IsAttacking || IsRouting || IsRouteStartPending || IsWandering || IsWanderingPending || IsEmoting || IsEmotePending)
+                return false;
+
+            if (!IsMeleeVisible(AttackTarget) || CountMeleePackPressure() <= 0)
+                return false;
+
+            nextTacticalFlankTime = currentUnixTime + ThreadSafeRandom.Next((float)TacticalFlankCooldownMin, (float)TacticalFlankCooldownMax);
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) > TacticalFlankChance)
+                return false;
+
+            if (!TryFindTacticalFlankPosition(out var flank))
+                return false;
+
+            LastPathMoveTarget = flank;
+            MoveAlongPath(flank);
+            return true;
+        }
+
+        private int CountMeleePackPressure()
+        {
+            if (AttackTarget == null || Location == null || PhysicsObj?.ObjMaint == null)
+                return 0;
+
+            var count = 0;
+            var myGuid = Guid.Full;
+
+            foreach (var visible in PhysicsObj.ObjMaint.GetVisibleObjectsValuesOfTypeCreature())
+            {
+                if (visible == null || visible.Guid.Full == myGuid || visible.IsDead || visible is Player || visible is CombatPet)
+                    continue;
+
+                if (visible.AttackTarget != AttackTarget || visible.CurrentAttack != CombatType.Melee || visible.Location == null)
+                    continue;
+
+                if ((visible.Location.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                if (Location.SquaredDistanceTo(visible.Location) <= 8.0f * 8.0f)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private bool TryFindTacticalFlankPosition(out ACE.Entity.Position flank)
+        {
+            flank = null;
+
+            var target = AttackTarget;
+            if (target?.Location == null || Location == null)
+                return false;
+
+            var forward = target.Location.GetCurrentDir();
+            forward.Z = 0;
+
+            if (forward.LengthSquared() <= 0.001f)
+            {
+                forward = Location.ToGlobal() - target.Location.ToGlobal();
+                forward.Z = 0;
+            }
+
+            if (forward.LengthSquared() <= 0.001f)
+                return false;
+
+            forward = Vector3.Normalize(forward);
+            var side = Vector3.Normalize(new Vector3(-forward.Y, forward.X, 0));
+            var spacing = Math.Max(TacticalFlankSpacing, (target.PhysicsObj?.GetRadius() ?? 0.5f) + (PhysicsObj?.GetRadius() ?? 0.5f) + 0.55f);
+
+            var preferred = (Guid.Full & 1) == 0
+                ? new[] { -forward + side * 0.55f, -forward - side * 0.55f, side, -side }
+                : new[] { -forward - side * 0.55f, -forward + side * 0.55f, -side, side };
+
+            var bestScore = float.MinValue;
+            ACE.Entity.Position best = null;
+
+            foreach (var dirCandidate in preferred)
+            {
+                var dir = Vector3.Normalize(dirCandidate);
+                var candidate = new ACE.Entity.Position(target.Location)
+                {
+                    PositionX = target.Location.PositionX + dir.X * spacing,
+                    PositionY = target.Location.PositionY + dir.Y * spacing,
+                };
+
+                if ((candidate.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                candidate = SnapToMeshIfAvailable(candidate);
+                if (!IsValidPathPosition(candidate) || (candidate.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                if (candidate.DistanceTo(target.Location) > MaxRange + TacticalFlankRangeBuffer)
+                    continue;
+
+                var travelCost = Location.DistanceTo(candidate);
+                if (travelCost > 4.5f)
+                    continue;
+
+                var score = candidate.SquaredDistanceTo(Location) * -0.15f;
+                score += Vector3.Dot(dir, -forward) * 2.0f;
+                score += GetFlankClearanceScore(candidate);
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+
+            flank = best;
+            return flank != null;
+        }
+
+        private float GetFlankClearanceScore(ACE.Entity.Position candidate)
+        {
+            if (candidate == null || PhysicsObj?.ObjMaint == null)
+                return 0;
+
+            var nearestSq = 6.0f * 6.0f;
+            foreach (var visible in PhysicsObj.ObjMaint.GetVisibleObjectsValuesOfTypeCreature())
+            {
+                if (visible == null || visible.Guid.Full == Guid.Full || visible.IsDead || visible.Location == null)
+                    continue;
+
+                if ((visible.Location.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
+                    continue;
+
+                nearestSq = Math.Min(nearestSq, candidate.SquaredDistanceTo(visible.Location));
+            }
+
+            return nearestSq * 0.08f;
         }
 
         private ACE.Entity.Position SnapToMeshIfAvailable(ACE.Entity.Position candidate)

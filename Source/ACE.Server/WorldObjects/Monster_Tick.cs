@@ -250,6 +250,10 @@ namespace ACE.Server.WorldObjects
                         // should ranged mobs only get CurrentTargets within MaxRange?
                         TrySwitchToMeleeAttack();
                     }
+                    else if (TryTacticalFlank(currentUnixTime, targetDist))
+                    {
+                        // Movement tactic owns this beat; attack will resume on the next ready tick.
+                    }
                     else if (AttackReady())
                     {
                         Attack();
