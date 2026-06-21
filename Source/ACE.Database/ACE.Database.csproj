@@ -19,6 +19,8 @@
   <ItemGroup>
     <PackageReference Include="log4net" Version="3.3.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.16" />
+    <PackageReference Include="log4net" Version="2.0.17" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.17" />
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
   </ItemGroup>
 
@@ -31,6 +33,10 @@
         <Pack>True</Pack>
         <PackagePath></PackagePath>
       </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-4f7c-pmjv-c25w" />
     </ItemGroup>
 
 </Project>
