@@ -79,6 +79,7 @@ namespace ACE.Server.WorldObjects
         public const int ShieldProjectileReflectCooldownId = 2038;
         public const int ShieldSpellMirrorCooldownId = 2039;
         public const int LugianHammerThrowCooldownId = 2040;
+        public const int PugilistCooldownId = 2041;
         private const float PolebreakerPowerThreshold = 0.70f;
         public const int PolebreakerBreakGuardCooldownId = 2019;
         private const float PolebreakerBreakGuardSlamSpeed = 3.0f;
@@ -104,6 +105,7 @@ namespace ACE.Server.WorldObjects
         private const double ShieldProjectileReflectCooldownSeconds = 6.0;
         private const double ShieldSpellMirrorCooldownSeconds = 10.0;
         private const double LugianHammerThrowCooldownSeconds = 4.0;
+        public const double PugilistCooldownSeconds = 6.0;
         public const double HierophantCooldownSeconds = 10.0;
 
         // DerpACE: Unarmed combo system for tracking punch/kick combos
@@ -169,6 +171,9 @@ namespace ACE.Server.WorldObjects
 
             if (weapon?.WeaponSkill == null)
                 return GetHighestMeleeSkill();
+
+            if (weapon.GetProperty(PropertyBool.IsHandCrossbow) == true)
+                return Skill.MissileWeapons;
 
             var skill = ConvertToMoASkill(weapon.WeaponSkill);
 
@@ -237,6 +242,9 @@ namespace ACE.Server.WorldObjects
         {
             // this is an unsafe function, move away from this
             var weapon = GetEquippedWeapon();
+
+            if (weapon?.GetProperty(PropertyBool.IsHandCrossbow) == true)
+                return CombatType.Missile;
 
             if (weapon == null || weapon.CurrentWieldedLocation != EquipMask.MissileWeapon)
                 return CombatType.Melee;
@@ -693,6 +701,64 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
+            // Pugilist unarmed weapons: blunt fists flurry; sharp fists rake.
+            uint pugilistExtraDamage = 0;
+            string pugilistMessage = null;
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPugilistUnarmedWeapon) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Unarmed))
+            {
+                var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistProcChance) ?? 0.0;
+                if (procChance > 0.0
+                    && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && TryStartMutatorCooldown(damageEvent.Weapon, PugilistCooldownId, PugilistCooldownSeconds))
+                {
+                    var style = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyInt.PugilistStyle) ?? 1;
+                    var damageScale = Math.Clamp((float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistDamageScale) ?? 0.35), 0.05f, 1.0f);
+                    var extraDamage = Math.Max(1.0f, damageEvent.Damage * damageScale);
+
+                    if (style == 2 || style == 3)
+                    {
+                        var duration = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistDurationSeconds) ?? 6.0));
+                        var ticks = 3;
+                        var interval = duration / ticks;
+                        var perTick = extraDamage / ticks;
+                        var traumaType = style == 3 ? DamageType.Pierce : DamageType.Slash;
+                        var traumaLabel = style == 3 ? "piercing trauma" : "slashing trauma";
+                        var bleedTarget = target;
+                        var attacker = this;
+                        var chain = new ActionChain();
+
+                        for (var i = 0; i < ticks; i++)
+                        {
+                            chain.AddDelaySeconds(interval);
+                            chain.AddAction(this, () =>
+                            {
+                                if (bleedTarget == null || !bleedTarget.IsAlive)
+                                    return;
+
+                                bleedTarget.TakeDamage(attacker, traumaType, perTick, false);
+                                bleedTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftBack);
+                            });
+                        }
+
+                        chain.EnqueueChain();
+                        pugilistExtraDamage = (uint)Math.Round(extraDamage);
+                        pugilistMessage = $"Your fist weapon bites deep - {target.Name} suffers {pugilistExtraDamage} {traumaLabel}. [Raking Hand]";
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidLeftBack);
+                    }
+                    else
+                    {
+                        target.TakeDamage(this, DamageType.Bludgeon, extraDamage, false);
+                        target.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SparkMidRightFront);
+                        var stance = CurrentMotionState?.Stance ?? MotionStance.HandCombat;
+                        EnqueueBroadcastMotion(new Motion(stance, MotionCommand.AttackHigh1));
+                        pugilistExtraDamage = (uint)Math.Round(extraDamage);
+                        pugilistMessage = $"You snap in a second crushing blow for {pugilistExtraDamage} damage. [Iron Flurry]";
+                    }
+                }
+            }
+
             // Resolute Blade: heal-on-critical proc (see @lootconfig)
             // Applies to sword family, including two-handed swords.
             uint resoluteHealApplied = 0;
@@ -1092,6 +1158,13 @@ namespace ACE.Server.WorldObjects
                         ChatMessageType.CombatSelf));
                 }
 
+                if (pugilistExtraDamage > 0 && pugilistMessage != null)
+                {
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        pugilistMessage,
+                        ChatMessageType.CombatSelf));
+                }
+
                 // Polebreaker: each successive strike lands harder
                 if (polebreakerStacks > 1 && polebreakerBonus > 0)
                 {
@@ -1247,8 +1320,9 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public override void OnDamageTarget(WorldObject target, CombatType attackType, bool critical)
         {
-            var attackSkill = GetCreatureSkill(GetCurrentWeaponSkill());
-            var difficulty = GetTargetEffectiveDefenseSkill(target);
+            var skillType = attackType == CombatType.Missile ? Skill.MissileWeapons : GetCurrentWeaponSkill();
+            var attackSkill = GetCreatureSkill(skillType);
+            var difficulty = GetTargetEffectiveDefenseSkill(target, attackType);
 
             Proficiency.OnSuccessUse(this, attackSkill, difficulty);
         }
@@ -1271,12 +1345,12 @@ namespace ACE.Server.WorldObjects
             return attackSkill;
         }
 
-        public uint GetTargetEffectiveDefenseSkill(WorldObject target)
+        public uint GetTargetEffectiveDefenseSkill(WorldObject target, CombatType? combatType = null)
         {
             var creature = target as Creature;
             if (creature == null) return 0;
 
-            var attackType = GetCombatType();
+            var attackType = combatType ?? GetCombatType();
             var defenseSkill = attackType == CombatType.Missile ? Skill.MissileDefense : Skill.MeleeDefense;
             var defenseMod = defenseSkill == Skill.MeleeDefense ? GetWeaponMeleeDefenseModifier(creature) : 1.0f;
             var effectiveDefense = (uint)Math.Round(creature.GetCreatureSkill(defenseSkill).Current * defenseMod);

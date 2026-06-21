@@ -329,5 +329,10 @@ namespace ACE.Entity.Enum.Properties
         AlchemistSplashProcChance      = 9057,  // chance targeted alchemy phials splash to nearby targets
         AlchemistSplashTargetCount     = 9058,  // maximum nearby targets hit by splash
         AlchemicalInstabilityProcChance= 9059,  // chance harmful phials apply one random extra debuff
+
+        /* DerpACE Pugilist unarmed weapons - family-specific fist weapon procs */
+        PugilistProcChance             = 9060,  // chance on successful unarmed-weapon hit to fire Flurry/Rake
+        PugilistDamageScale            = 9061,  // extra strike or total bleed damage as a fraction of the hit
+        PugilistDurationSeconds        = 9062,  // bleed duration for Raking Hand style
     }
 }

@@ -681,6 +681,8 @@ namespace ACE.Entity.Enum.Properties
         // DerpACE: Nomad unarmed proc type stamped onto gauntlets/shoes
         // 0 = none, 1 = Cleave Flurry (2-4 extra fast strikes), 2 = Healing Strike (dmg + self-heal)
         NomadProcType                            = 9030,
+        // DerpACE: Pugilist unarmed weapon style. 1 = Iron Flurry, 2 = slash Raking Hand, 3 = pierce Raking Hand
+        PugilistStyle                            = 9031,
         // DerpACE: Aura system - up to 3 looping PlayScript particle effect slots.
         // A missing or zero value means the slot is inactive.
         AuraPlayScript1                          = 9034,

@@ -62,6 +62,7 @@ namespace ACE.Server.DerpAce
             {
                 LoadFromDisk();
                 Apply();
+                AdminMapService.Restart();
                 return $"DerpAce config reloaded from '{_resolvedPath}'.";
             }
             catch (Exception ex)
@@ -128,6 +129,7 @@ namespace ACE.Server.DerpAce
             // ── Per-Custom-Weapon Toggles ─────────────────────────────────────
             DerpACEConfig.DefenderShieldEnabled   = c.DefenderShieldEnabled;
             DerpACEConfig.ArchmagiEnabled         = c.ArchmagiEnabled;
+            DerpACEConfig.LifeCasterEnabled       = c.LifeCasterEnabled;
             DerpACEConfig.HierophantEnabled       = c.HierophantEnabled;
             DerpACEConfig.ThievesDaggerEnabled    = c.ThievesDaggerEnabled;
             DerpACEConfig.SentinelSpearEnabled    = c.SentinelSpearEnabled;

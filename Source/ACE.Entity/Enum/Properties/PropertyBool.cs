@@ -258,6 +258,7 @@ namespace ACE.Entity.Enum.Properties
         IsAlchemistGloves                = 9072,
         IsAlchemicalInstabilityGloves    = 9073,
         IsHandCrossbow                   = 9074,
+        IsPugilistUnarmedWeapon          = 9075,
 
         /* DerpACE Ironman Blind submode - hides future skill plan and auto-spends XP */
         IsIronmanBlind                   = 9059,

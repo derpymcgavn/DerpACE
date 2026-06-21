@@ -345,6 +345,9 @@ namespace ACE.Server
             log.Info("Initializing WorldManager...");
             WorldManager.Initialize();
 
+            log.Info("Initializing DerpACE AdminMapService...");
+            DerpAce.AdminMapService.Start();
+
             log.Info("Initializing EventManager...");
             EventManager.Initialize();
 
@@ -387,6 +390,7 @@ namespace ACE.Server
                     log.Warn("Unsafe server shutdown detected! Data loss is possible!");
 
                 PropertyManager.StopUpdating();
+                DerpAce.AdminMapService.Stop();
                 DatabaseManager.Stop();
 
                 // Do system specific cleanup here
@@ -405,6 +409,7 @@ namespace ACE.Server
             else
             {
                 ServerManager.DoShutdownNow();
+                DerpAce.AdminMapService.Stop();
                 DatabaseManager.Stop();
             }
         }

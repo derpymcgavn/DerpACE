@@ -256,7 +256,10 @@ namespace ACE.Server.Entity
             DamageBeforeMitigation = BaseDamage * AttributeMod * PowerMod * SlayerMod * DamageRatingMod;
 
             // critical hit?
-            var attackSkill = attacker.GetCreatureSkill(attacker.GetCurrentWeaponSkill());
+            var attackSkillType = Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow) == true
+                ? Skill.MissileWeapons
+                : attacker.GetCurrentWeaponSkill();
+            var attackSkill = attacker.GetCreatureSkill(attackSkillType);
             CriticalChance = WorldObject.GetWeaponCriticalChance(Weapon, attacker, attackSkill, defender);
 
             // https://asheron.fandom.com/wiki/Announcements_-_2002/08_-_Atonement

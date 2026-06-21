@@ -33,6 +33,28 @@ namespace ACE.Server.DerpAce
         public bool EnableVampiricJewelry { get; set; } = true;
         [JsonPropertyName("enable_prepatch_variants")]
         public bool EnablePrePatchVariants { get; set; } = true;
+        [JsonPropertyName("admin_map_enabled")]
+        public bool AdminMapEnabled { get; set; } = false;
+        [JsonPropertyName("admin_map_host")]
+        public string AdminMapHost { get; set; } = "127.0.0.1";
+        [JsonPropertyName("admin_map_port")]
+        public int AdminMapPort { get; set; } = 9110;
+        [JsonPropertyName("admin_map_token")]
+        public string AdminMapToken { get; set; } = "";
+        [JsonPropertyName("admin_map_show_admins")]
+        public bool AdminMapShowAdmins { get; set; } = false;
+        [JsonPropertyName("admin_map_refresh_seconds")]
+        public int AdminMapRefreshSeconds { get; set; } = 5;
+        [JsonPropertyName("admin_map_image_path")]
+        public string AdminMapImagePath { get; set; } = "Data/AdminMap/dereth-map.jpg";
+        [JsonPropertyName("admin_map_bounds_left_pct")]
+        public float AdminMapBoundsLeftPct { get; set; } = 0.45f;
+        [JsonPropertyName("admin_map_bounds_top_pct")]
+        public float AdminMapBoundsTopPct { get; set; } = 0.45f;
+        [JsonPropertyName("admin_map_bounds_right_pct")]
+        public float AdminMapBoundsRightPct { get; set; } = 99.55f;
+        [JsonPropertyName("admin_map_bounds_bottom_pct")]
+        public float AdminMapBoundsBottomPct { get; set; } = 99.55f;
 
         // ── Per-Mutator Toggles ───────────────────────────────────────────────
         [JsonPropertyName("mob_nocturnal_enabled")]
@@ -63,6 +85,8 @@ namespace ACE.Server.DerpAce
         public bool DefenderShieldEnabled { get; set; } = true;
         [JsonPropertyName("archmagi_enabled")]
         public bool ArchmagiEnabled { get; set; } = true;
+        [JsonPropertyName("life_caster_enabled")]
+        public bool LifeCasterEnabled { get; set; } = true;
         [JsonPropertyName("hierophant_enabled")]
         public bool HierophantEnabled { get; set; } = true;
         [JsonPropertyName("thief_dagger_enabled")]

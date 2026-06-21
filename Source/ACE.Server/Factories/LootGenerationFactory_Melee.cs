@@ -498,6 +498,46 @@ namespace ACE.Server.Factories
                 wo.LongDesc = GetLongDesc(wo) + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling -- each strike has a {fencerPierceProc:0}% chance to exploit an opening, dealing bonus damage equal to {fencerPiercePct:0}% of what the target's armor stopped. It also has a {fencerRiposteChance:0}% chance to riposte incoming melee pressure with a precise counterthrust. When held offhand, it becomes a parry sword: {fencerParryPct:0}% chance to reduce and reflect {fencerParryPct:0}% of incoming melee damage with a point-down flourish and stamina-down effect. Pierce, riposte, and parry use separate short cooldowns.";
             }
 
+            // Pugilist: unarmed weapons get a family-specific proc.
+            // Cestus/knuckles/handwraps punch with Iron Flurry; katars pierce; nekodes/claws rake with slash/pierce.
+            if (TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.05f,
+                5,
+                roll.WeaponType == TreasureWeaponType.Unarmed,
+                "pugilist", "combo", "flurry", "rake"))
+            {
+                var name = wo.Name ?? "";
+                var isKatar = name.IndexOf("katar", StringComparison.OrdinalIgnoreCase) >= 0;
+                var isNekode = name.IndexOf("nekode", StringComparison.OrdinalIgnoreCase) >= 0;
+                var isClaw = name.IndexOf("claw", StringComparison.OrdinalIgnoreCase) >= 0;
+                var isRake = isKatar || isNekode || isClaw;
+
+                var procPct = RollTierScaledInt(6, 10, profile.Tier, 5);
+                var style = isKatar ? 3 : isNekode && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.5f ? 3 : isRake ? 2 : 1;
+                var scale = isRake ? 0.45 : 0.35;
+                var duration = isRake ? 6.0 : 0.0;
+                var rakeDamageType = style == 3 ? "piercing" : "slashing";
+
+                wo.Name = wo.Name + (isRake ? " of the Raking Hand" : " of the Iron Flurry");
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPugilistUnarmedWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyInt.PugilistStyle, style);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistProcChance, procPct / 100.0);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistDamageScale, scale);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistDurationSeconds, duration);
+                wo.CooldownId = Player.PugilistCooldownId;
+                wo.CooldownDuration = Player.PugilistCooldownSeconds;
+                wo.IconOverlayId = isRake ? 0x06002886u : 0x06002867u;
+                ApplyLootUiEffect(wo, isRake ? (style == 3 ? UiEffects.Piercing : UiEffects.Slashing) : UiEffects.Bludgeoning);
+
+                if (isRake)
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRaking Hand: successful strikes have a {procPct}% chance to tear the target for {scale:P0} of the hit's damage as {rakeDamageType} trauma over {duration:0.#} seconds. Cooldown: {Player.PugilistCooldownSeconds:0.#} seconds.";
+                else
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nIron Flurry: successful strikes have a {procPct}% chance to snap in a second short-range blow for {scale:P0} of the original hit as bludgeoning damage. Cooldown: {Player.PugilistCooldownSeconds:0.#} seconds.";
+            }
+
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
             // Bleed total damage = bleedPct% of the triggering hit, spread evenly across RavagerBleedTicks at RavagerBleedInterval seconds.
             // Two-handed axes get the bleed total scaled by RavagerTwoHandMult.

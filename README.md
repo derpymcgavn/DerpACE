@@ -43,8 +43,29 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Current DerpACE Abilities And Commands (June 15, 2026)
-This section is the current operator-facing summary for active custom systems. Older patch notes below are historical and may describe earlier balance values.
+### Current DerpACE Abilities And Commands (June 21, 2026)
+This section is the current operator-facing source of truth for active DerpACE systems. Older patch notes below are historical and may describe earlier balance values.
+
+#### Runtime Config Toggles
+`DerpAce.json` is generated next to the server binary and reloads with `@derpconfig reload`. The reload pushes values into live runtime config; some changes affect only future rolls, spawns, or restocks because existing objects already have their rolled properties.
+
+| System | DerpAce.json key | Runtime reload | Notes |
+|---|---|---|---|
+| Teleport | `enable_teleport` plus `tp_*` | Yes | Gates `/tp` and its cost/request timing. |
+| Mysterious Stranger | `enable_mysterious_stranger` plus `stranger_*` | Yes | Gates the death/chest stranger system. |
+| Mob mutators | `enable_mob_modifiers`, `mob_*_enabled`, `mob_*` | Yes, future spawns | Controls nocturnal, exploding, vampiric, thief, scout, simulacrum, healer, tank, reaper, necromancer, and warder mobs. |
+| Derpcoin | `enable_derpcoin` plus `derpcoin_*` | Yes | Controls custom coin corpse drops. |
+| Custom weapon/shield/caster mutators | `enable_custom_weapons`, per-mutator `*_enabled`, balance keys | Yes, future rolls and live procs | Includes Defender, Archmagi, Life Caster, Hierophant, thief daggers, sentinel spears, fencer swords, ravager, warden, resolute, polebreaker, stalker, breacher, reaper atlatl, ricochet/dartflinger, dinnerware/discus/platter, quickening, and elemental blast. |
+| Armor and clothing enchants | `enable_armor_enchants` plus armor/handwear/footwear keys | Yes, future rolls and live item checks | Covers armor bane, culinarian gloves, alchemist gloves, unarmed hand/footwear, and dance boots. |
+| Vampiric jewelry | `enable_vampiric_jewelry` plus `vampiric_jewelry_*` | Yes | Controls new loot rolls and live regen/on-hit behavior. |
+| Prepatch variants | `enable_prepatch_variants` plus `prepatch_*` | Yes, future rolls | Controls selected prepatch-style item variants. |
+| Vendor random loot | `vendor_random_loot_enabled` plus `vendor_*` | Yes, future vendor loads/restocks | Vendor inventories reroll when the vendor reloads. |
+| Ironman / Nomad | `ironman_enabled` plus `ironman_*` | Yes | Gates opt-in commands and controls default blind/hardcore support values. |
+| Bank | `enable_bank` plus `bank_*` | Yes | Controls coin banking, direct deposit, vendor bank spend, and overflow behavior. |
+| Admin map | `admin_map_enabled` plus `admin_map_*` | Yes | `@derpconfig reload` restarts the map service with the new host, port, token, image, and calibration settings. |
+| Custom spells | JSON files plus `@customspells` commands | Reload command | No hard-off JSON toggle yet; spell packages are an import/export pipeline and custom spell data is intentionally loaded through `@customspells reload` or startup. |
+| Custom ClothingBase | JSON files plus `@cb*` commands | Reload command | No hard-off JSON toggle yet; custom clothing is a data merge pipeline keyed by ClothingBase id filenames. |
+| Fixed utility items | Item WCIDs and live item behavior | Item-specific | Foci containers, Aetherial Quiver, random dye, and the weapon appearance tailoring kit are currently always available if their weenies exist. |
 
 #### Admin Commands
 | Command | Purpose |
@@ -60,6 +81,7 @@ This section is the current operator-facing summary for active custom systems. O
 | `@cbexport <clothingBaseId> [label]` | Exports a ClothingBase entry to `Data/CustomClothingBase/<id>[_label].json`. |
 | `@cbreload` | Reloads custom ClothingBase JSON files and flushes the ClothingTable cache. |
 | `@cbclear` | Clears ClothingTable cache entries so the next read reloads from DAT/custom merge data. |
+| `@derpconfig reload` | Reloads `DerpAce.json` and restarts runtime services that need it, including the admin map web UI. |
 | `@ironmanmode on|off|toggle|status` | Enables or disables player Ironman opt-in server-wide. |
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
@@ -74,7 +96,7 @@ This section is the current operator-facing summary for active custom systems. O
 | `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |
 | `/ironman topkillers`, `/ironmantopkillers` | Shows creatures with the most Ironman kills. |
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `handcrossbow`, `dinnerware`, `discus`, `platter`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `pugilist`, `combo`, `flurry`, `rake`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `handcrossbow`, `dinnerware`, `discus`, `platter`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
 
 #### Weapon And Caster Mutators
 | Mutator | Eligible loot | Current effect |
@@ -83,6 +105,7 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `quickening` | Daggers | On hit, can speed the wielder's attack animation for a short duration. No start visual; expiration gives feedback. |
 | `fencer` | SwordMS: epee, rapier, schlager | Chance to recover part of armor-mitigated damage as bonus damage, plus a small riposte chance against incoming melee pressure. |
 | `parry sword` | Fencer sword in offhand | Acts as a parry sword: chance to reduce and reflect incoming damage with stamina-down feedback. |
+| `pugilist` | Unarmed weapons across their available physical/elemental variants: cestus, knuckles, handwraps, katars, nekodes, claws | Family-specific fist weapon perk. Cestus, knuckles, and handwraps roll Iron Flurry: a short-cooldown chance for a second punching/bludgeoning hit. Katars roll piercing Raking Hand. Claws roll slashing Raking Hand. Nekodes can roll slash or pierce Raking Hand. |
 | `ravager` | Axes and two-handed axes | Axes bleed over ticks. Hammer-named axe variants use a crushing guard/stamina hit instead. |
 | `warden` | Maces, jittes, two-handed maces | Chance to concuss the target, lowering effective defense for a short duration. |
 | `lugianhammer` | Heavy Weapons Lugian hammer WCIDs | Stonehand Throw: rare strike proc hurls a spectral hammer into another nearby foe within 10 yards for 75% of the original hit. |
@@ -148,6 +171,10 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Foci Containers | Foci WCIDs `15268`, `15269`, `15270`, `15271`, `43173` act as 15-slot side containers for scarabs, prismatic tapers, and mana stones, and contents persist across relog. |
 | Aetherial Quiver | WCID `2000600` acts as self-replenishing prismatic ammunition for bows, crossbows, and atlatls, tuned slightly below deadly prismatics. |
 | Random Dye | WCID `420420420` applies a random palette to compatible armor, clothing, weapons, casters, and shields. |
+| Admin Map Web UI | Optional read-only web service showing visible online players on a real Dereth coordinate map. Configure in `DerpAce.json`: `admin_map_enabled`, `admin_map_host` default `127.0.0.1`, `admin_map_port` default `9110`, `admin_map_token`, `admin_map_show_admins`, `admin_map_refresh_seconds`, `admin_map_image_path` default `Data/AdminMap/dereth-map.jpg`, and the four `admin_map_bounds_*_pct` calibration edges. Visit `http://127.0.0.1:9110/`; JSON is at `/api/players`. Clicking an indoor/dungeon player generates a cached top-down SVG floor plan for that dungeon landblock from server DAT geometry and overlays player dots; JSON is at `/api/dungeon?landblock=0x........`. `@derpconfig reload` restarts the service with new settings. |
+
+### Historical Development Notes
+The notes below are retained as implementation history. Prefer the current sections above when checking live behavior, commands, aliases, or balance.
 
 ### Recent Patch Notes (Vendor Random Loot by Town Tier)
 Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.

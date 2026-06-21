@@ -299,6 +299,7 @@
       <TargetPath>Data\CustomClothingBase\README.md</TargetPath>
     </None>
     <None Include="Data\CustomClothingBase\**\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\CustomClothingBase\" />
+    <None Include="Data\AdminMap\**\*.*" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\AdminMap\" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
