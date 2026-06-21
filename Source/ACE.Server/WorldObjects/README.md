@@ -74,7 +74,7 @@ This section is the current source of truth for lootgen mutators, custom abiliti
 | `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |
 | `/ironman topkillers`, `/ironmantopkillers` | Shows creatures with the most Ironman kills. |
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `handcrossbow`, `dinnerware`, `discus`, `platter`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
 
 #### Weapon And Caster Mutators
 | Mutator | Eligible loot | Current effect |
@@ -91,10 +91,12 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `sentinel` | Spears and two-handed spears | Goldleaf Sentinel. Hits at configured power or higher build same-target poise. At full stacks, drains target stamina, returns part of it, gives short damage reduction, and starts a visible cooldown. |
 | `stalker` | Bows | First registered hit on a target can gain bonus damage. |
 | `breacher` | Crossbows | Always recovers a small part of armor-mitigated damage as bonus pierce damage. |
+| `handcrossbow` | Crossbows | Converts a crossbow into a 0.25-scale hand crossbow: dual-wield melee-slot weapon, requires specialized Missile Weapons and Dual Wield, uses bolt ammo, halves launcher mods and ordinary bolt projectile damage. Dual-wield attacks fire visible bolts from the active hand. New ammo WCID `2000601` creates half-damage prismatic `Handcrossbow Bolts`. |
 | `dartflinger` | Dart flinger atlatl family only | Ricochet-style bounce behavior for dartflingers. Separate from standard atlatls. |
 | `reaper` | Standard atlatls only | Killing blows can restore a small percentage of max health. Does not roll on dartflingers. |
 | `dinnerware` | Throwable dinnerware | Banquet spin/bounce behavior. Projectiles visually bounce up to 5 targets with falling damage: 100%, 50%, 25%, 10%, 5%. |
 | `discus` | Discus WCID 8211 as missile loot | Most are plain discus. About 1 in 100 rolls become `Discus of the Warrior Princess's Call`, using dinnerware bounce behavior with discus combat log flavor at a 5-8% proc rate. Lootgen strips admin-added spell/proc/resistance/crit extras so damage stays in line with dinnerware. |
+| `platter` | Platter WCID 251 as super-rare missile loot | Most platter rolls stay plain. Rare rolls become `Platter of the Flying Buffet`: infinite-use thrown platter with a 3-5% proc to bounce through four extra targets at 60%, 35%, 20%, and 10% damage, then make a harmless visible return pass back to the player. Lootgen stamps missing `PropertyInt.TsysMutationData` as `0x11000005` and strips admin-added spell/proc/resistance/crit extras. |
 | `archmagi` | Casters | Chance on successful cast to echo an additional same-family spell. |
 | `hierophant` | Life casters / Martyr staff family | Heal support caster with heal boost, HoT chance, fellowship echo, and healer aggro tuning. |
 | `shadowclone` | Void casters only | Umbral Mirror caster can summon a temporary shadow clone combat ally on a 120 second visible cooldown. Clone uses shadow visuals and void/ring style spell support. |
@@ -132,7 +134,7 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Thief | `thief.drop`, `thief.tier`, `thief.proc`, `thief.bonus`, `thief.aggro`, `thief.seampenalty`, `thief.seamduration` |
 | Goldleaf Sentinel | `sentinel.drop`, `sentinel.tier`, `sentinel.power`, `sentinel.stacks`, `sentinel.drain`, `sentinel.return`, `sentinel.cooldown`, `sentinel.poisedur`, `sentinel.poisedr`, `sentinel.aggro` |
 | Polebreaker | `polebreaker.drop`, `polebreaker.tier`, `polebreaker.stackmin`, `polebreaker.stackmax`, `polebreaker.maxstackmin`, `polebreaker.maxstackmax` |
-| Dinnerware / Discus | `dinnerware.drop`, `dinnerware.tier`, `dinnerware.spin`, `dinnerware.spintier`, `dinnerware.scale`, `dinnerware.radius` |
+| Dinnerware / Discus / Platter | `dinnerware.drop`, `dinnerware.tier`, `dinnerware.spin`, `dinnerware.spintier`, `dinnerware.scale`, `dinnerware.radius` |
 | Dartflinger / Ricochet | `ricochet.drop`, `ricochet.tier`, `ricochet.procmin`, `ricochet.procmax`, `ricochet.scale`, `ricochet.radius` |
 | Quickening | `quickening.drop`, `quickening.tier`, `quickening.procmin`, `quickening.procmax`, `quickening.speedmin`, `quickening.speedmax`, `quickening.durmin`, `quickening.durmax` |
 | Elemental blast | `blast.mintier`, `blast.chancemin`, `blast.chancemax`, `blast.ratemin`, `blast.ratemax` |

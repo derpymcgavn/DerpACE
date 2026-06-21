@@ -37,6 +37,17 @@ namespace ACE.Server.WorldObjects
             var sourcePlayer = worldObject.ProjectileSource as Player;
             var targetCreature = target as Creature;
 
+            if (worldObject.GetProperty(PropertyBool.IsDinnerwareBounceProjectile) == true
+                && sourcePlayer != null
+                && target == sourcePlayer)
+            {
+                sourcePlayer.ApplyVisualEffects(PlayScript.EnchantUpYellow);
+                worldObject.CurrentLandblock?.RemoveWorldObject(worldObject.Guid, showError: !worldObject.PhysicsObj.entering_world);
+                worldObject.PhysicsObj.set_active(false);
+                worldObject.HitMsg = true;
+                return;
+            }
+
             DamageEvent damageEvent = null;
 
             if (targetCreature != null && targetCreature.IsAlive)
@@ -287,7 +298,10 @@ namespace ACE.Server.WorldObjects
             if (!sourcePlayer.TryStartMutatorCooldown(dinnerwareSource, Player.DinnerwareCooldownId, Player.DinnerwareCooldownSeconds))
                 return;
 
-            var damageScales = new[] { 0.50, 0.25, 0.10, 0.05 };
+            var isPlatter = dinnerwareSource.WeenieClassId == (uint)ACE.Server.Factories.Enum.WeenieClassName.platter;
+            var damageScales = isPlatter
+                ? new[] { 0.60, 0.35, 0.20, 0.10 }
+                : new[] { 0.50, 0.25, 0.10, 0.05 };
             var launchedNames = new System.Collections.Generic.List<string>();
             var actionChain = new ActionChain();
             Creature previousTarget = firstTarget;
@@ -336,12 +350,51 @@ namespace ACE.Server.WorldObjects
                 previousTarget = bounceTarget;
             }
 
+            if (isPlatter)
+            {
+                actionChain.AddDelaySeconds(0.18f);
+                var returnOriginObject = previousTarget;
+                actionChain.AddAction(sourcePlayer, () =>
+                {
+                    if (sourcePlayer.IsDead || returnOriginObject == null || returnOriginObject.Location == null || sourcePlayer.Location == null)
+                        return;
+
+                    var origin = returnOriginObject.Location.Pos;
+                    origin.Z += returnOriginObject.Height + 0.4f;
+
+                    var dest = sourcePlayer.Location.Pos;
+                    dest.Z += sourcePlayer.Height * 0.75f;
+
+                    var dir = Vector3.Normalize(dest - origin);
+                    if (!dir.IsValid())
+                        return;
+
+                    var angle = Math.Atan2(-dir.X, dir.Y);
+                    var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (float)angle);
+                    var velocity = sourcePlayer.GetProjectileVelocity(sourcePlayer, origin, dir, dest, sourcePlayer.GetProjectileSpeed(), out _);
+                    if (!velocity.IsValid() || velocity == Vector3.Zero)
+                        return;
+
+                    var returning = sourcePlayer.LaunchProjectile(projectile.ProjectileLauncher ?? ammo, ammo, sourcePlayer, origin, rotation, velocity);
+                    if (returning == null)
+                        return;
+
+                    returning.SetProperty(PropertyBool.IsDinnerwareBounceProjectile, true);
+                    returning.Damage = 0;
+                    returning.DamageMod = 0.0;
+                    returning.DamageVariance = 0.0;
+                    sourcePlayer.ApplyVisualEffects(PlayScript.EnchantUpYellow);
+                });
+            }
+
             if (launchedNames.Count > 0)
             {
                 var isDiscus = dinnerwareSource.WeenieClassId == (uint)ACE.Server.Factories.Enum.WeenieClassName.discus;
-                var message = isDiscus
-                    ? $"Your discus answers the warrior princess's call, ricocheting toward {string.Join(", ", launchedNames)}."
-                    : $"Your dinnerware caroms toward {string.Join(", ", launchedNames)}.";
+                var message = isPlatter
+                    ? $"Your platter becomes a flying buffet, crashing toward {string.Join(", ", launchedNames)}."
+                    : isDiscus
+                        ? $"Your discus answers the warrior princess's call, ricocheting toward {string.Join(", ", launchedNames)}."
+                        : $"Your dinnerware caroms toward {string.Join(", ", launchedNames)}.";
 
                 firstTarget.ApplyVisualEffects(PlayScript.ProjectileCollision);
                 sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(message, ChatMessageType.CombatSelf));

@@ -14,6 +14,7 @@ namespace ACE.Server.Factories
         private const uint MutatorOverlaySentinel = 0x0600285Du;
         private const uint MutatorOverlayStalker = 0x0600285Eu;
         private const uint MutatorOverlayBreacher = 0x0600285Cu;
+        private const uint MutatorOverlayHandCrossbow = 0x06002882u;
         private const uint MutatorOverlayDinnerware = 0x06002868u;
         private const uint MutatorOverlayReaper = 0x06002878u;
         private const uint MutatorOverlayDartflinger = 0x06002880u;

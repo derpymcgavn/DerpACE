@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 using ACE.DatLoader.Entity.AnimationHooks;
 using ACE.Entity.Enum;
@@ -7,8 +8,10 @@ using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
+using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.Physics;
 using ACE.Server.Physics.Animation;
+using ACE.Server.Physics.Extensions;
 
 namespace ACE.Server.WorldObjects
 {
@@ -170,6 +173,24 @@ namespace ACE.Server.WorldObjects
         public void HandleActionTargetedMeleeAttack_Inner(WorldObject target, int attackSequence)
         {
             var dist = GetCylinderDistance(target);
+
+            if (IsHandCrossbowAttackReady() && TargetInHandCrossbowRange(target))
+            {
+                var angle = GetAngle(target);
+                if (angle > PropertyManager.GetDouble("melee_max_angle").Item)
+                {
+                    var rotateTime = Rotate(target);
+
+                    var actionChain = new ActionChain();
+                    actionChain.AddDelaySeconds(rotateTime);
+                    actionChain.AddAction(this, () => Attack(target, attackSequence));
+                    actionChain.EnqueueChain();
+                }
+                else
+                    Attack(target, attackSequence);
+
+                return;
+            }
 
             if (dist <= MeleeDistance || dist <= StickyDistance && IsMeleeVisible(target))
             {
@@ -336,6 +357,12 @@ namespace ACE.Server.WorldObjects
                         return;
                     }
 
+                    if (IsHandCrossbowWeapon(weapon))
+                    {
+                        TryLaunchHandCrossbowBolt(creature, weapon);
+                        return;
+                    }
+
                     var damageEvent = DamageTarget(creature, weapon);
 
                     // handle target procs
@@ -396,6 +423,103 @@ namespace ACE.Server.WorldObjects
 
             if (UnderLifestoneProtection)
                 LifestoneProtectionDispel();
+        }
+
+        private bool IsHandCrossbowAttackReady()
+        {
+            var mainhand = GetEquippedMeleeWeapon(true);
+            var offhand = GetDualWieldWeapon();
+
+            return IsHandCrossbowWeapon(mainhand) || IsHandCrossbowWeapon(offhand);
+        }
+
+        private static bool IsHandCrossbowWeapon(WorldObject weapon)
+        {
+            return weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow) == true;
+        }
+
+        private bool TargetInHandCrossbowRange(WorldObject target)
+        {
+            if (target?.Location == null || Location == null || !IsDirectVisible(target))
+                return false;
+
+            var weapon = GetEquippedMeleeWeapon() ?? GetEquippedMeleeWeapon(true);
+            if (!IsHandCrossbowWeapon(weapon))
+                weapon = GetDualWieldWeapon();
+
+            if (!IsHandCrossbowWeapon(weapon))
+                return false;
+
+            var maxVelocity = weapon.MaximumVelocity ?? DefaultMaxVelocity;
+            if (maxVelocity <= 0.0f)
+                maxVelocity = DefaultMaxVelocity;
+
+            var range = (float)Math.Pow(maxVelocity, 2.0f) * 0.1020408163265306f;
+            range = Math.Min(range, MissileRangeCap * 0.6f);
+            return Location.DistanceTo(target.Location) <= range;
+        }
+
+        private bool TryLaunchHandCrossbowBolt(Creature target, WorldObject weapon)
+        {
+            if (target == null || weapon == null || !target.IsAlive)
+                return false;
+
+            var ammo = GetEquippedAmmo();
+            if (ammo == null || ammo.AmmoType == null || !IsBoltAmmo(ammo.AmmoType.Value))
+            {
+                SendWeenieError(WeenieError.YouAreOutOfAmmunition);
+                return false;
+            }
+
+            if (!TargetInHandCrossbowRange(target))
+            {
+                SendWeenieError(WeenieError.MissileOutOfRange);
+                return false;
+            }
+
+            var projectileSpeed = Math.Min((float)(weapon.MaximumVelocity ?? DefaultProjectileSpeed), PhysicsGlobals.MaxVelocity);
+            if (projectileSpeed <= 0.0f)
+                projectileSpeed = DefaultProjectileSpeed;
+
+            var aimVelocity = GetAimVelocity(target, projectileSpeed);
+            var aimLevel = GetAimLevel(aimVelocity);
+            var localOrigin = GetProjectileSpawnOrigin(ammo.WeenieClassId, aimLevel);
+
+            if (weapon.CurrentWieldedLocation == EquipMask.Shield)
+                localOrigin.X *= -1.0f;
+
+            var velocity = CalculateProjectileVelocity(localOrigin, target, projectileSpeed, out var origin, out var orientation);
+            if (!velocity.IsValid() || velocity == Vector3.Zero)
+            {
+                SendWeenieError(WeenieError.MissileOutOfRange);
+                return false;
+            }
+
+            var sound = GetLaunchMissileSound(weapon);
+            EnqueueBroadcast(new GameMessageSound(Guid, sound, 1.0f));
+
+            var projectile = LaunchProjectile(weapon, ammo, target, origin, orientation, velocity);
+            if (projectile == null)
+                return false;
+
+            projectile.Name = "Handcrossbow Bolt";
+            if (ammo.WeenieClassId != 2000601)
+            {
+                projectile.Damage = projectile.Damage.HasValue ? Math.Max(1, (int)Math.Round(projectile.Damage.Value * 0.5f)) : projectile.Damage;
+                projectile.DamageMod = projectile.DamageMod.HasValue ? projectile.DamageMod.Value * 0.5 : 0.5;
+                projectile.ElementalDamageBonus = projectile.ElementalDamageBonus.HasValue ? Math.Max(0, (int)Math.Round(projectile.ElementalDamageBonus.Value * 0.5)) : projectile.ElementalDamageBonus;
+            }
+            projectile.ObjScale = (projectile.ObjScale ?? 1.0f) * 0.5f;
+
+            UpdateAmmoAfterLaunch(ammo);
+            return true;
+        }
+
+        private static bool IsBoltAmmo(ACE.Entity.Enum.AmmoType ammoType)
+        {
+            return ammoType == ACE.Entity.Enum.AmmoType.Bolt
+                || ammoType == ACE.Entity.Enum.AmmoType.BoltCrystal
+                || ammoType == ACE.Entity.Enum.AmmoType.BoltChorizite;
         }
 
         /// <summary>

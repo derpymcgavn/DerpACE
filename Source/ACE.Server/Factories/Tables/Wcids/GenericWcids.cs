@@ -22,6 +22,7 @@ namespace ACE.Server.Factories.Tables.Wcids
             WeenieClassName.dinnerplate,
             WeenieClassName.stoup,
             WeenieClassName.tankard,
+            WeenieClassName.platter,
             (WeenieClassName)420498,
         };
 
@@ -155,6 +156,8 @@ namespace ACE.Server.Factories.Tables.Wcids
                 foreach (var entry in tierChance)
                     _combined.Add(entry.result);
             }
+
+            _combined.Add(WeenieClassName.platter);
         }
 
         public static bool Contains(WeenieClassName wcid)

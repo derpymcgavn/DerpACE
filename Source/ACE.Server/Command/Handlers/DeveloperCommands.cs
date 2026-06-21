@@ -2426,8 +2426,9 @@ namespace ACE.Server.Command.Handlers
             }
 
             var forceShieldMutatorOnShield = forcedMutatorType == "shield" && wo.IsShield;
+            var forceSpecialThrowableTemplate = LootGenerationFactory.IsSpecialThrowableLootTemplate(wo);
 
-            if (!randomWeapon && !forceShieldMutatorOnShield && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
+            if (!randomWeapon && !forceShieldMutatorOnShield && !forceSpecialThrowableTemplate && wo.TsysMutationData == null && !Aetheria.IsAetheria(wo.WeenieClassId) && !(wo is PetDevice))
             {
                 session.Network.EnqueueSend(new GameMessageSystemChat($"{wo.Name} ({wo.WeenieClassId}) missing PropertyInt.TsysMutationData", ChatMessageType.Broadcast));
                 return;

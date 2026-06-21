@@ -359,6 +359,7 @@ namespace ACE.Server.Factories
 
                         case TreasureWeaponType.ThrownDinnerware:
                         case TreasureWeaponType.Discus:
+                        case TreasureWeaponType.Platter:
 
                             MutateDinnerware(wo, treasureDeath, isMagical, treasureRoll);
                             break;
@@ -1033,7 +1034,11 @@ namespace ACE.Server.Factories
                 if (IsThrowableDinnerware(item))
                 {
                     roll.ItemType = TreasureItemType.Weapon;
-                    roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
+                    roll.WeaponType = item.WeenieClassId == (uint)WeenieClassName.discus
+                        ? TreasureWeaponType.Discus
+                        : item.WeenieClassId == (uint)WeenieClassName.platter
+                            ? TreasureWeaponType.Platter
+                            : TreasureWeaponType.ThrownDinnerware;
                 }
                 else
                     roll.ItemType = TreasureItemType.ArtObject;

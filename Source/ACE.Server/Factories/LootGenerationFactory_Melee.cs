@@ -113,6 +113,7 @@ namespace ACE.Server.Factories
                 case TreasureWeaponType.Crossbow:        return "crossbow";
                 case TreasureWeaponType.Atlatl:          return "atlatl";
                 case TreasureWeaponType.Discus:          return "discus";
+                case TreasureWeaponType.Platter:         return "platter";
                 default:                                 return "weapon";
             }
         }

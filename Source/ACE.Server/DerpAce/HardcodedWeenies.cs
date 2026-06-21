@@ -24,6 +24,7 @@ namespace ACE.Server.DerpAce
             try
             {
                 DatabaseManager.World.SetCachedWeenie(BuildAetherialQuiver());
+                DatabaseManager.World.SetCachedWeenie(BuildHandCrossbowBolts());
                 DatabaseManager.World.SetCachedWeenie(BuildSausageMcBuffin());
 
                 log.Info("DerpACE: Hardcoded weenies registered.");
@@ -122,6 +123,75 @@ namespace ACE.Server.DerpAce
         /// Buff casting behavior is hardcoded in <see cref="WorldObjects.SausageMcBuffin"/>;
         /// this is the creature weenie shell so it can be spawned and used in the world without SQL.
         /// </summary>
+        /// <summary>
+        /// Handcrossbow Bolts (WCID 2000601) - half-damage prismatic bolt ammo for Hand Crossbow mutators.
+        /// </summary>
+        private static Weenie BuildHandCrossbowBolts()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = 2000601,
+                ClassName     = "ace2000601-handcrossbowbolts",
+                WeenieType    = WeenieType.Ammunition,
+
+                PropertiesInt    = new Dictionary<PropertyInt, int>(),
+                PropertiesBool   = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat  = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID    = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType]             = (int)ItemType.MissileWeapon;
+            w.PropertiesInt[PropertyInt.PaletteTemplate]      = 20;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]       = 1;
+            w.PropertiesInt[PropertyInt.Mass]                 = 1;
+            w.PropertiesInt[PropertyInt.ValidLocations]       = (int)EquipMask.MissileAmmo;
+            w.PropertiesInt[PropertyInt.MaxStackSize]         = 3000;
+            w.PropertiesInt[PropertyInt.StackSize]            = 100;
+            w.PropertiesInt[PropertyInt.StackUnitEncumbrance] = 1;
+            w.PropertiesInt[PropertyInt.StackUnitMass]        = 1;
+            w.PropertiesInt[PropertyInt.StackUnitValue]       = 25;
+            w.PropertiesInt[PropertyInt.ItemUseable]          = (int)Usable.No;
+            w.PropertiesInt[PropertyInt.UiEffects]            = (int)UiEffects.BoostStamina;
+            w.PropertiesInt[PropertyInt.Value]                = 25;
+            w.PropertiesInt[PropertyInt.Damage]               = 20;
+            w.PropertiesInt[PropertyInt.DamageType]           = (int)DamageType.Base;
+            w.PropertiesInt[PropertyInt.AmmoType]             = (int)AmmoType.Bolt;
+            w.PropertiesInt[PropertyInt.CombatUse]            = (int)CombatUse.Ammo;
+            w.PropertiesInt[PropertyInt.PhysicsState]         = 132116;
+            w.PropertiesInt[PropertyInt.WieldRequirements]    = (int)WieldRequirement.Training;
+            w.PropertiesInt[PropertyInt.WieldSkillType]       = (int)Skill.MissileWeapons;
+            w.PropertiesInt[PropertyInt.WieldDifficulty]      = (int)SkillAdvancementClass.Specialized;
+            w.PropertiesInt[PropertyInt.WieldRequirements2]   = (int)WieldRequirement.Training;
+            w.PropertiesInt[PropertyInt.WieldSkillType2]      = (int)Skill.DualWield;
+            w.PropertiesInt[PropertyInt.WieldDifficulty2]     = (int)SkillAdvancementClass.Specialized;
+
+            w.PropertiesBool[PropertyBool.Inelastic] = true;
+
+            w.PropertiesFloat[PropertyFloat.DefaultScale]     = 0.5;
+            w.PropertiesFloat[PropertyFloat.WeaponLength]     = 0;
+            w.PropertiesFloat[PropertyFloat.DamageVariance]   = 0.2;
+            w.PropertiesFloat[PropertyFloat.MaximumVelocity]  = 0;
+            w.PropertiesFloat[PropertyFloat.WeaponDefense]    = 1;
+            w.PropertiesFloat[PropertyFloat.WeaponOffense]    = 1;
+            w.PropertiesFloat[PropertyFloat.DamageMod]        = 1;
+            w.PropertiesFloat[PropertyFloat.Friction]         = 1;
+            w.PropertiesFloat[PropertyFloat.Elasticity]       = 0;
+
+            w.PropertiesString[PropertyString.Name]     = "Handcrossbow Bolts";
+            w.PropertiesString[PropertyString.Use]      = "Nock these tiny bolts to hand crossbows.";
+            w.PropertiesString[PropertyString.LongDesc] = "Compact prismatic quarrels balanced for hand crossbows. They strike at roughly half the force of full-sized prismatic crossbow ammunition and require specialized Missile Weapons and specialized Dual Wield.";
+
+            w.PropertiesDID[PropertyDataId.Setup]              = 0x02001A87;
+            w.PropertiesDID[PropertyDataId.SoundTable]         = 0x20000014;
+            w.PropertiesDID[PropertyDataId.PaletteBase]        = 0x04000BEF;
+            w.PropertiesDID[PropertyDataId.ClothingBase]       = 0x10000352;
+            w.PropertiesDID[PropertyDataId.Icon]               = 0x06006FC7;
+            w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 0x3400002B;
+
+            return w;
+        }
+
         private static Weenie BuildSausageMcBuffin()
         {
             var w = new Weenie

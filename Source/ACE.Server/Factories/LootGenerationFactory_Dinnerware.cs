@@ -34,6 +34,7 @@ namespace ACE.Server.Factories
             WeenieClassName.stoup,
             WeenieClassName.tankard,
             WeenieClassName.discus,
+            WeenieClassName.platter,
             RageaRangWcid,
         };
 
@@ -51,6 +52,10 @@ namespace ACE.Server.Factories
         private const float WarriorPrincessCallDropChance = 0.01f;
         private const float WarriorPrincessCallProcMin = 0.05f;
         private const float WarriorPrincessCallProcMax = 0.08f;
+        private const float FlyingBuffetDropChance = 0.01f;
+        private const float FlyingBuffetProcMin = 0.03f;
+        private const float FlyingBuffetProcMax = 0.05f;
+        private const float FlyingBuffetFirstBounceDamageScale = 0.60f;
 
         /// <summary>
         /// This is only called by /testlootgen command
@@ -119,8 +124,10 @@ namespace ACE.Server.Factories
             var specialModifierApplied = false;
             var isDiscus = roll.WeaponType == TreasureWeaponType.Discus
                 || wo.WeenieClassId == (uint)WeenieClassName.discus;
+            var isPlatter = roll.WeaponType == TreasureWeaponType.Platter
+                || wo.WeenieClassId == (uint)WeenieClassName.platter;
 
-            if (!isDiscus)
+            if (!isDiscus && !isPlatter)
                 roll.WeaponType = TreasureWeaponType.ThrownDinnerware;
             else
                 SanitizeLootThrowableTemplate(wo);
@@ -135,38 +142,40 @@ namespace ACE.Server.Factories
             ApplyLootUiEffects(wo, wo.W_DamageType, false);
             wo.Biota.PropertiesSpellBook?.Clear();
 
-            var applyDinnerwareMutator = isDiscus
-                ? ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
-                  && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
-                  && TryRollWeaponModifier(
-                      profile,
-                      roll,
-                      ref specialModifierApplied,
-                      WarriorPrincessCallDropChance,
-                      ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
-                      true,
-                      "discus")
-                : ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
-                  && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
-                  && TryRollWeaponModifier(
-                      profile,
-                      roll,
-                      ref specialModifierApplied,
-                      ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponDropChance,
-                      ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
-                      true,
-                      "dinnerware");
+            var applyDinnerwareMutator = ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponEnabled
+                && TryRollWeaponModifier(
+                    profile,
+                    roll,
+                    ref specialModifierApplied,
+                    isPlatter
+                        ? FlyingBuffetDropChance
+                        : isDiscus
+                            ? WarriorPrincessCallDropChance
+                            : ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponDropChance,
+                    ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
+                    true,
+                    isPlatter ? "platter" : isDiscus ? "discus" : "dinnerware");
 
             if (applyDinnerwareMutator)
             {
                 var spinProcChance = isDiscus
                     ? ThreadSafeRandom.Next(WarriorPrincessCallProcMin, WarriorPrincessCallProcMax)
+                    : isPlatter
+                        ? ThreadSafeRandom.Next(FlyingBuffetProcMin, FlyingBuffetProcMax)
                     : ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance;
+                var spinDamageScale = isPlatter
+                    ? FlyingBuffetFirstBounceDamageScale
+                    : ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale;
 
-                wo.Name = isDiscus ? "Discus of the Warrior Princess's Call" : wo.Name + " of the Banquet";
+                wo.Name = isPlatter
+                    ? "Platter of the Flying Buffet"
+                    : isDiscus
+                        ? "Discus of the Warrior Princess's Call"
+                        : wo.Name + " of the Banquet";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsDinnerwareWeapon, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance, spinProcChance);
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale, spinDamageScale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius, ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius);
                 wo.IconOverlayId = MutatorOverlayDinnerware;
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
@@ -228,13 +237,21 @@ namespace ACE.Server.Factories
                 return;
 
             var isDiscus = wo.WeenieClassId == (uint)WeenieClassName.discus;
+            var isPlatter = wo.WeenieClassId == (uint)WeenieClassName.platter;
             var procChance = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinProcChance) ?? 0.0) * 100.0;
             var radius = wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinRadius) ?? ACE.Server.Managers.DerpACEConfig.DinnerwareSpinRadius;
             var firstBounceDamage = (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.DinnerwareSpinDamageScale) ?? ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale) * 100.0;
 
-            wo.LongDesc = (wo.LongDesc ?? "") + (isDiscus
-                ? $"\n\nThis discus carries the call of a warrior princess - each throw has a {procChance:0.#}% chance to ricochet through up to four additional nearby foes within {radius:0.#} yards. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 25%, 10%, and 5% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds."
-                : $"\n\nThis dinnerware was raised for the feast instead of the table - each throw has a {procChance:0.#}% chance to carom through up to four additional nearby foes within {radius:0.#} yards, ringing out with china, crockery, and bad manners. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 25%, 10%, and 5% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds.");
+            wo.LongDesc = (wo.LongDesc ?? "") + (isPlatter
+                ? $"\n\nFlying Buffet: this serving platter has a {procChance:0.#}% chance on throw to crash through up to four additional nearby foes within {radius:0.#} yards. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 35%, 20%, and 10% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds."
+                : isDiscus
+                    ? $"\n\nThis discus carries the call of a warrior princess - each throw has a {procChance:0.#}% chance to ricochet through up to four additional nearby foes within {radius:0.#} yards. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 25%, 10%, and 5% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds."
+                    : $"\n\nThis dinnerware was raised for the feast instead of the table - each throw has a {procChance:0.#}% chance to carom through up to four additional nearby foes within {radius:0.#} yards, ringing out with china, crockery, and bad manners. The first bounce deals {firstBounceDamage:0}% damage, then later bounces deal 25%, 10%, and 5% damage. Cooldown: {Player.DinnerwareCooldownSeconds:0.#} seconds.");
+        }
+
+        public static bool IsSpecialThrowableLootTemplate(WorldObject wo)
+        {
+            return IsSpecialThrowableTemplate(wo);
         }
 
         private static bool IsSpecialThrowableTemplate(WorldObject wo)
@@ -243,6 +260,7 @@ namespace ACE.Server.Factories
                 return false;
 
             return wo.WeenieClassId == (uint)WeenieClassName.discus
+                || wo.WeenieClassId == (uint)WeenieClassName.platter
                 || wo.WeenieClassId == (uint)RageaRangWcid;
         }
 

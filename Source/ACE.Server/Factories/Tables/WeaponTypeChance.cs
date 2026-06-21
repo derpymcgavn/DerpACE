@@ -25,6 +25,7 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Atlatl,   0.03f ),
             ( TreasureWeaponType.ThrownDinnerware, 0.0075f ),
             ( TreasureWeaponType.Discus,   0.0025f ),
+            ( TreasureWeaponType.Platter,  0.00025f ),
             ( TreasureWeaponType.Caster,   0.04f ),
         };
 
@@ -45,6 +46,7 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Atlatl,   0.06f ),
             ( TreasureWeaponType.ThrownDinnerware, 0.02f ),
             ( TreasureWeaponType.Discus,   0.01f ),
+            ( TreasureWeaponType.Platter,  0.00075f ),
             ( TreasureWeaponType.Caster,   0.10f ),
         };
 
@@ -68,6 +70,7 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Atlatl,          0.04f ),
             ( TreasureWeaponType.ThrownDinnerware, 0.015f ),
             ( TreasureWeaponType.Discus,          0.005f ),
+            ( TreasureWeaponType.Platter,         0.00075f ),
             ( TreasureWeaponType.Caster,          0.07f ),
             ( TreasureWeaponType.TwoHandedWeapon, 0.10f ),      // see TreasureWeaponType for an explanation of why this is here,
                                                                 // and not deeper in WeaponWcids.cs
@@ -100,6 +103,7 @@ namespace ACE.Server.Factories.Tables
             ( TreasureWeaponType.Atlatl,          0.25f ),
             ( TreasureWeaponType.ThrownDinnerware, 0.15f ),
             ( TreasureWeaponType.Discus,          0.10f ),
+            ( TreasureWeaponType.Platter,         0.02f ),
         };
 
         private static readonly List<ChanceTable<TreasureWeaponType>> weaponTiers = new List<ChanceTable<TreasureWeaponType>>()

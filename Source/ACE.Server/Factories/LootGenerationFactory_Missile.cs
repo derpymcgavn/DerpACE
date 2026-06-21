@@ -1,3 +1,5 @@
+using System;
+
 using ACE.Common;
 using ACE.Database.Models.World;
 using ACE.Entity.Enum;
@@ -23,7 +25,8 @@ namespace ACE.Server.Factories
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
 
             if (treasureRoll.WeaponType == TreasureWeaponType.ThrownDinnerware
-                || treasureRoll.WeaponType == TreasureWeaponType.Discus)
+                || treasureRoll.WeaponType == TreasureWeaponType.Discus
+                || treasureRoll.WeaponType == TreasureWeaponType.Platter)
                 MutateDinnerware(wo, profile, isMagical, treasureRoll);
             else
                 MutateMissileWeapon(wo, profile, isMagical, treasureRoll);
@@ -169,6 +172,56 @@ namespace ACE.Server.Factories
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
+            }
+
+            // Hand Crossbow: crossbow mutator that turns the launcher into a tiny dual-wield
+            // sidearm. Runtime firing is handled by the melee dual-wield path when the flag is set.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.01f,
+                5,
+                roll.WeaponType == TreasureWeaponType.Crossbow
+                    && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) != true,
+                "handcrossbow"))
+            {
+                wo.Name = "Hand " + wo.Name;
+                wo.ItemType = ItemType.MeleeWeapon | ItemType.MissileWeapon;
+                wo.ValidLocations = EquipMask.MeleeWeapon;
+                wo.DefaultCombatStyle = CombatStyle.DualWield;
+                wo.WeaponSkill = Skill.MissileWeapons;
+                wo.W_WeaponType = WeaponType.Crossbow;
+                wo.W_AttackType = AttackType.Thrust | AttackType.DoubleThrust;
+                wo.AmmoType = AmmoType.Bolt;
+                wo.ObjScale = 0.25f;
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow, true);
+
+                wo.Damage = wo.Damage.HasValue ? Math.Max(1, (int)Math.Round(wo.Damage.Value * 0.5f)) : wo.Damage;
+                wo.DamageMod = wo.DamageMod.HasValue ? 1.0 + ((wo.DamageMod.Value - 1.0) * 0.5) : wo.DamageMod;
+                wo.ElementalDamageBonus = wo.ElementalDamageBonus.HasValue ? Math.Max(0, (int)Math.Round(wo.ElementalDamageBonus.Value * 0.5)) : wo.ElementalDamageBonus;
+                wo.WeaponDefense = wo.WeaponDefense.HasValue ? 1.0 + ((wo.WeaponDefense.Value - 1.0) * 0.5) : wo.WeaponDefense;
+                wo.WeaponMissileDefense = wo.WeaponMissileDefense.HasValue ? 1.0 + ((wo.WeaponMissileDefense.Value - 1.0) * 0.5) : wo.WeaponMissileDefense;
+                wo.WeaponMagicDefense = wo.WeaponMagicDefense.HasValue ? 1.0 + ((wo.WeaponMagicDefense.Value - 1.0) * 0.5) : wo.WeaponMagicDefense;
+
+                wo.WieldRequirements = WieldRequirement.Training;
+                wo.WieldSkillType = (int)Skill.MissileWeapons;
+                wo.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
+                wo.WieldRequirements2 = WieldRequirement.Training;
+                wo.WieldSkillType2 = (int)Skill.DualWield;
+                wo.WieldDifficulty2 = (int)SkillAdvancementClass.Specialized;
+                wo.WieldRequirements3 = WieldRequirement.Invalid;
+                wo.WieldSkillType3 = null;
+                wo.WieldDifficulty3 = null;
+                wo.WieldRequirements4 = WieldRequirement.Invalid;
+                wo.WieldSkillType4 = null;
+                wo.WieldDifficulty4 = null;
+
+                wo.IconOverlayId = MutatorOverlayHandCrossbow;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
+
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nHand Crossbow: this tiny crossbow is wielded like a dual-wield sidearm and fires bolts from the melee attack cadence. It requires specialized Missile Weapons and specialized Dual Wield. Launcher stats and bolt damage are reduced by half; equip two hand crossbows to alternate shots from each hand.";
             }
 
             // Reaper's Atlatl: atlatl-only kill-fed sustain. Separate from Dartflinger.
