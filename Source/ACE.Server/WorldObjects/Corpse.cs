@@ -9,6 +9,7 @@ using ACE.Server.Entity.Actions;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
+using ACE.Server.DerpAce;
 using ACE.Server.Entity;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
@@ -354,6 +355,7 @@ namespace ACE.Server.WorldObjects
                 CorpseGeneratedRare = true;
                 LongDesc += " This corpse generated a rare item!";
                 TimeToRot = 900;  // guesstimated 15 mins from hells
+                AdminMapService.RecordRareFind(killerName, wo.Name, wo.WeenieClassId, tier, chance, luck, Name, Location?.ToLOCString(), Location != null ? $"0x{Location.Cell & 0xFFFF0000:X8}" : null);
 
                 if (killerPlayer != null)
                 {

@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 
 using ACE.Entity.Enum;
+using ACE.Server.DerpAce;
 using ACE.Server.Entity;
 using ACE.Server.Managers;
 using ACE.Server.Network.Enum;
@@ -321,6 +322,9 @@ namespace ACE.Server.Network.Handlers
                 }
 
                 LogTurbineChat(adjustedChannelID, session.Player.Name, message, senderID, adjustedchatType);
+
+                if (adjustedchatType == ChatType.General)
+                    AdminMapService.RecordGeneralChat(session.Player.Name, message);
             }
             else
                 Console.WriteLine($"Unhandled TurbineChatHandler ChatNetworkBlobType: 0x{(uint)chatBlobType:X4}");

@@ -14,9 +14,11 @@ using log4net;
 
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Pathfinding.Geometry;
 using ACE.Server.Entity;
 using ACE.Server.Managers;
+using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.DerpAce
@@ -34,8 +36,57 @@ namespace ACE.Server.DerpAce
         private static HttpListener listener;
         private static CancellationTokenSource cancelSource;
         private static readonly ConcurrentDictionary<uint, AdminDungeonMap> DungeonMapCache = new ConcurrentDictionary<uint, AdminDungeonMap>();
+        private static readonly object FeedLock = new object();
+        private static readonly List<AdminChatFeedEntry> ChatFeed = new List<AdminChatFeedEntry>();
+        private static readonly List<AdminRareFeedEntry> RareFeed = new List<AdminRareFeedEntry>();
         private const float CreatureBlipRadius = 80.0f;
         private const int MaxCreatureBlips = 200;
+        private const int MaxFeedEntries = 80;
+        private const int SnapshotFeedEntries = 18;
+
+        public static void RecordGeneralChat(string sender, string message)
+        {
+            if (string.IsNullOrWhiteSpace(sender) || string.IsNullOrWhiteSpace(message))
+                return;
+
+            lock (FeedLock)
+            {
+                ChatFeed.Add(new AdminChatFeedEntry
+                {
+                    Utc = DateTime.UtcNow,
+                    Channel = "General",
+                    Sender = sender.TrimStart('+'),
+                    Message = message.Trim()
+                });
+
+                TrimFeed(ChatFeed);
+            }
+        }
+
+        public static void RecordRareFind(string playerName, string itemName, uint weenieClassId, int tier, int chance, int luck, string corpseName, string location, string landblock)
+        {
+            if (string.IsNullOrWhiteSpace(playerName) || string.IsNullOrWhiteSpace(itemName))
+                return;
+
+            lock (FeedLock)
+            {
+                RareFeed.Add(new AdminRareFeedEntry
+                {
+                    Utc = DateTime.UtcNow,
+                    Player = playerName.TrimStart('+'),
+                    Item = itemName.Trim(),
+                    WeenieClassId = weenieClassId,
+                    Tier = tier,
+                    Chance = chance,
+                    Luck = luck,
+                    Corpse = corpseName,
+                    Location = location,
+                    Landblock = landblock
+                });
+
+                TrimFeed(RareFeed);
+            }
+        }
 
         public static void Start()
         {
@@ -166,6 +217,66 @@ namespace ACE.Server.DerpAce
                     return;
                 }
 
+                if (path.Equals("/api/inventory", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { error = "Missing or invalid admin map token." });
+                        return;
+                    }
+
+                    if (!TryGetPlayerGuid(context.Request.QueryString["player"], out var playerGuid))
+                    {
+                        context.Response.StatusCode = 400;
+                        WriteJson(context, new { error = "Missing or invalid player." });
+                        return;
+                    }
+
+                    WriteJson(context, BuildInventorySnapshot(playerGuid));
+                    return;
+                }
+
+                if (path.Equals("/api/inventory/item", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { error = "Missing or invalid admin map token." });
+                        return;
+                    }
+
+                    if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { error = "Use POST for inventory edits." });
+                        return;
+                    }
+
+                    WriteJson(context, HandleInventoryItemEdit(ReadJsonBody<AdminInventoryItemEditRequest>(context)));
+                    return;
+                }
+
+                if (path.Equals("/api/inventory/delete", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { error = "Missing or invalid admin map token." });
+                        return;
+                    }
+
+                    if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { error = "Use POST for inventory edits." });
+                        return;
+                    }
+
+                    WriteJson(context, HandleInventoryItemDelete(ReadJsonBody<AdminInventoryItemDeleteRequest>(context)));
+                    return;
+                }
+
                 if (path.Equals("/assets/dereth-map", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -248,8 +359,34 @@ namespace ACE.Server.DerpAce
                     Bottom = ClampPercent(config.AdminMapBoundsBottomPct)
                 },
                 Players = players,
-                Blips = BuildNearbyMapBlips(visiblePlayers, false, 0)
+                Blips = BuildNearbyMapBlips(visiblePlayers, false, 0),
+                Stats = BuildMapStats(visiblePlayers),
+                Feeds = BuildFeeds()
             };
+        }
+
+        private static AdminMapFeeds BuildFeeds()
+        {
+            lock (FeedLock)
+            {
+                return new AdminMapFeeds
+                {
+                    Chat = ChatFeed
+                        .OrderByDescending(e => e.Utc)
+                        .Take(SnapshotFeedEntries)
+                        .ToList(),
+                    Rares = RareFeed
+                        .OrderByDescending(e => e.Utc)
+                        .Take(SnapshotFeedEntries)
+                        .ToList()
+                };
+            }
+        }
+
+        private static void TrimFeed<T>(List<T> feed)
+        {
+            if (feed.Count > MaxFeedEntries)
+                feed.RemoveRange(0, feed.Count - MaxFeedEntries);
         }
 
         private static AdminDungeonSnapshot BuildDungeonSnapshot(uint landblock)
@@ -289,6 +426,202 @@ namespace ACE.Server.DerpAce
                 Players = players,
                 Blips = BuildNearbyMapBlips(visiblePlayers, true, landblock)
             };
+        }
+
+        private static AdminInventorySnapshot BuildInventorySnapshot(uint playerGuid)
+        {
+            var player = PlayerManager.GetOnlinePlayer(playerGuid);
+            if (player == null)
+                return AdminInventorySnapshot.Fail("Player is not online.");
+
+            var items = new List<AdminInventoryItem>();
+
+            foreach (var item in player.EquippedObjects.Values.OrderBy(i => i.CurrentWieldedLocation ?? 0).ThenBy(i => i.Name))
+                items.Add(BuildInventoryItem(item, "Equipped", null, true));
+
+            AddInventoryItems(items, player, player.Inventory.Values, "Main Pack", 0);
+
+            return new AdminInventorySnapshot
+            {
+                PlayerName = player.Name,
+                PlayerGuid = $"0x{player.Guid.Full:X8}",
+                Encumbrance = player.EncumbranceVal ?? 0,
+                CoinValue = player.CoinValue ?? 0,
+                Items = items
+            };
+        }
+
+        private static void AddInventoryItems(List<AdminInventoryItem> items, Player player, IEnumerable<WorldObject> inventory, string containerName, int depth)
+        {
+            foreach (var item in inventory.OrderBy(i => i.PlacementPosition ?? 0).ThenBy(i => i.Name))
+            {
+                items.Add(BuildInventoryItem(item, containerName, item.ContainerId, false, depth));
+
+                if (item is Container container)
+                    AddInventoryItems(items, player, container.Inventory.Values, item.Name, depth + 1);
+            }
+        }
+
+        private static AdminInventoryItem BuildInventoryItem(WorldObject item, string containerName, uint? containerId, bool equipped, int depth = 0)
+        {
+            return new AdminInventoryItem
+            {
+                Name = item.Name,
+                Guid = $"0x{item.Guid.Full:X8}",
+                GuidValue = item.Guid.Full,
+                WeenieClassId = item.WeenieClassId,
+                WeenieClassName = item.WeenieClassName,
+                WeenieType = item.WeenieType.ToString(),
+                ItemType = item.ItemType.ToString(),
+                Container = containerName,
+                ContainerGuid = containerId.HasValue ? $"0x{containerId.Value:X8}" : null,
+                Equipped = equipped,
+                Depth = depth,
+                Placement = item.PlacementPosition ?? 0,
+                StackSize = item.StackSize,
+                MaxStackSize = item.MaxStackSize,
+                Value = item.Value,
+                Encumbrance = item.EncumbranceVal,
+                Workmanship = item.ItemWorkmanship,
+                Material = item.MaterialType?.ToString(),
+                WieldedLocation = item.CurrentWieldedLocation?.ToString(),
+                IsContainer = item is Container,
+                IsAttuned = item.IsAttunedOrContainsAttuned,
+                IsBonded = item.Bonded != null
+            };
+        }
+
+        private static object HandleInventoryItemEdit(AdminInventoryItemEditRequest request)
+        {
+            if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out var foundInContainer, out var rootOwner, out _, out var error))
+                return new { ok = false, error };
+
+            var oldEncumbrance = item.EncumbranceVal ?? 0;
+            var oldValue = item.Value ?? 0;
+            var changed = false;
+
+            if (request.StackSize.HasValue)
+            {
+                if (!(item is Stackable))
+                    return new { ok = false, error = "This item is not stackable." };
+
+                var max = item.MaxStackSize ?? ushort.MaxValue;
+                var next = Math.Clamp(request.StackSize.Value, 1, max);
+                item.SetStackSize(next);
+                player.Session.Network.EnqueueSend(new GameMessageSetStackSize(item));
+                changed = true;
+            }
+
+            if (request.Value.HasValue)
+            {
+                item.Value = Math.Max(0, request.Value.Value);
+                player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.Value, item.Value ?? 0));
+                changed = true;
+            }
+
+            if (request.Encumbrance.HasValue)
+            {
+                item.EncumbranceVal = Math.Max(0, request.Encumbrance.Value);
+                player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.EncumbranceVal, item.EncumbranceVal ?? 0));
+                changed = true;
+            }
+
+            if (request.Workmanship.HasValue)
+            {
+                item.ItemWorkmanship = Math.Max(0, request.Workmanship.Value);
+                player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.ItemWorkmanship, item.ItemWorkmanship ?? 0));
+                changed = true;
+            }
+
+            if (!changed)
+                return new { ok = false, error = "No supported item changes were provided." };
+
+            ApplyInventoryDelta(rootOwner, foundInContainer, item, oldEncumbrance, oldValue);
+            item.SaveBiotaToDatabase();
+            player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.EncumbranceVal, player.EncumbranceVal ?? 0));
+
+            log.Info($"[DerpACE AdminMap] Edited item {item.Name} ({item.Guid}) for {player.Name} ({player.Guid})");
+            return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
+        }
+
+        private static object HandleInventoryItemDelete(AdminInventoryItemDeleteRequest request)
+        {
+            if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out _, out _, out var wasEquipped, out var error))
+                return new { ok = false, error };
+
+            var itemName = item.Name;
+            var itemGuid = item.Guid;
+            var removed = wasEquipped
+                ? player.TryDequipObjectWithNetworking(item.Guid, out item, Player.DequipObjectAction.ConsumeItem)
+                : player.TryRemoveFromInventoryWithNetworking(item.Guid, out item, Player.RemoveFromInventoryAction.ConsumeItem);
+
+            if (!removed)
+                return new { ok = false, error = "Could not remove item from player." };
+
+            if (!wasEquipped)
+                item.Destroy();
+
+            log.Warn($"[DerpACE AdminMap] Deleted item {itemName} ({itemGuid}) from {player.Name} ({player.Guid})");
+
+            return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
+        }
+
+        private static bool TryGetEditableItem(string playerGuidValue, string itemGuidValue, out Player player, out WorldObject item, out Container foundInContainer, out Container rootOwner, out bool wasEquipped, out string error)
+        {
+            player = null;
+            item = null;
+            foundInContainer = null;
+            rootOwner = null;
+            wasEquipped = false;
+            error = null;
+
+            if (!TryGetPlayerGuid(playerGuidValue, out var playerGuid))
+            {
+                error = "Missing or invalid player.";
+                return false;
+            }
+
+            if (!TryGetPlayerGuid(itemGuidValue, out var itemGuid))
+            {
+                error = "Missing or invalid item.";
+                return false;
+            }
+
+            player = PlayerManager.GetOnlinePlayer(playerGuid);
+            if (player == null)
+            {
+                error = "Player is not online.";
+                return false;
+            }
+
+            item = player.FindObject(new ObjectGuid(itemGuid), Player.SearchLocations.MyInventory | Player.SearchLocations.MyEquippedItems, out foundInContainer, out rootOwner, out wasEquipped);
+            if (item == null)
+            {
+                error = "Item is not in this player's inventory or equipment.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void ApplyInventoryDelta(Container rootOwner, Container foundInContainer, WorldObject item, int oldEncumbrance, int oldValue)
+        {
+            var encumbranceDelta = (item.EncumbranceVal ?? 0) - oldEncumbrance;
+            var valueDelta = (item.Value ?? 0) - oldValue;
+
+            if (foundInContainer != null)
+            {
+                foundInContainer.EncumbranceVal += encumbranceDelta;
+                foundInContainer.Value += valueDelta;
+                foundInContainer.SaveBiotaToDatabase();
+            }
+
+            if (rootOwner != null && rootOwner != foundInContainer)
+            {
+                rootOwner.EncumbranceVal += encumbranceDelta;
+                rootOwner.Value += valueDelta;
+                rootOwner.SaveBiotaToDatabase();
+            }
         }
 
         private static AdminDungeonMap BuildDungeonMap(uint landblock)
@@ -391,6 +724,75 @@ namespace ACE.Server.DerpAce
                 MaxStamina = player.Stamina?.MaxValue ?? 0,
                 Mana = player.Mana?.Current ?? 0,
                 MaxMana = player.Mana?.MaxValue ?? 0
+            };
+        }
+
+        private static AdminMapStats BuildMapStats(List<Player> visiblePlayers)
+        {
+            var online = visiblePlayers ?? new List<Player>();
+            var uniqueIps = online
+                .Select(p => p?.Session?.EndPointC2S?.Address?.ToString())
+                .Where(ip => !string.IsNullOrWhiteSpace(ip))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            return new AdminMapStats
+            {
+                OnlineCount = online.Count,
+                UniqueIpCount = uniqueIps,
+                HardcoreOnlineCount = online.Count(p => p.GetProperty(PropertyBool.IsHardcore) == true && p.GetProperty(PropertyBool.IsIronman) != true),
+                IronmanOnlineCount = online.Count(p => p.GetProperty(PropertyBool.IsIronman) == true),
+                HardcoreLeader = GetHardcoreLeader(),
+                IronmanLeader = GetIronmanLeader(),
+                DeadliestNormal = ToLeaderboardEntry(PlayerKillerTracker.GetTopKillers(PlayerKillerTracker.Category.Normal, 1).FirstOrDefault()),
+                DeadliestHardcore = ToLeaderboardEntry(PlayerKillerTracker.GetTopKillers(PlayerKillerTracker.Category.Hardcore, 1).FirstOrDefault()),
+                DeadliestIronman = ToLeaderboardEntry(PlayerKillerTracker.GetTopKillers(PlayerKillerTracker.Category.Ironman, 1).FirstOrDefault())
+            };
+        }
+
+        private static AdminLeaderboardEntry GetHardcoreLeader()
+        {
+            return PlayerManager.GetAllPlayers()
+                .Where(p => !p.IsDeleted
+                    && p.GetProperty(PropertyBool.IsHardcore) == true
+                    && p.GetProperty(PropertyBool.IsIronman) != true)
+                .Select(p => new AdminLeaderboardEntry
+                {
+                    Name = p.Name,
+                    Level = p.Level ?? 0,
+                    Kills = p.GetProperty(PropertyInt.CreatureKills) ?? 0,
+                    Lives = p.GetProperty(PropertyInt.HardcoreLives) ?? 0
+                })
+                .OrderByDescending(e => e.Kills)
+                .ThenByDescending(e => e.Level)
+                .FirstOrDefault();
+        }
+
+        private static AdminLeaderboardEntry GetIronmanLeader()
+        {
+            return PlayerManager.GetAllPlayers()
+                .Where(p => !p.IsDeleted && p.GetProperty(PropertyBool.IsIronman) == true)
+                .Select(p => new AdminLeaderboardEntry
+                {
+                    Name = p.Name,
+                    Level = p.Level ?? 0,
+                    Kills = p.GetProperty(PropertyInt.CreatureKills) ?? 0,
+                    Lives = p.GetProperty(PropertyInt.HardcoreLives) ?? 0
+                })
+                .OrderByDescending(e => e.Kills)
+                .ThenByDescending(e => e.Level)
+                .FirstOrDefault();
+        }
+
+        private static AdminLeaderboardEntry ToLeaderboardEntry((string Name, int Kills) entry)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Name))
+                return null;
+
+            return new AdminLeaderboardEntry
+            {
+                Name = entry.Name,
+                Kills = entry.Kills
             };
         }
 
@@ -558,6 +960,20 @@ namespace ACE.Server.DerpAce
             return landblock != 0;
         }
 
+        private static bool TryGetPlayerGuid(string value, out uint guid)
+        {
+            guid = 0;
+
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            value = value.Trim();
+            if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return uint.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out guid);
+
+            return uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out guid);
+        }
+
         private static bool TryWriteMapImage(HttpListenerContext context)
         {
             var path = ResolveMapImagePath();
@@ -652,6 +1068,18 @@ namespace ACE.Server.DerpAce
             WriteText(context, JsonSerializer.Serialize(payload, JsonOptions), "application/json; charset=utf-8");
         }
 
+        private static T ReadJsonBody<T>(HttpListenerContext context) where T : class
+        {
+            using (var reader = new StreamReader(context.Request.InputStream, context.Request.ContentEncoding ?? Encoding.UTF8))
+            {
+                var body = reader.ReadToEnd();
+                if (string.IsNullOrWhiteSpace(body))
+                    return null;
+
+                return JsonSerializer.Deserialize<T>(body, JsonOptions);
+            }
+        }
+
         private static void WriteText(HttpListenerContext context, string text, string contentType)
         {
             var bytes = Encoding.UTF8.GetBytes(text);
@@ -701,9 +1129,9 @@ body {{ margin: 0; display: grid; grid-template-columns: minmax(320px, 1fr) 360p
 .east {{ right: 12px; top: 50%; transform: translateY(-50%); }}
 .mapLayer {{ position: absolute; inset: 0; transform-origin: 0 0; }}
 .worldMapImage {{ position: absolute; inset: 0; background-color: #8fa0a8; background-position: center; background-repeat: no-repeat; background-size: 100% 100%; }}
-.pin {{ position: absolute; z-index: 2; width: 13px; height: 13px; margin: -6px 0 0 -6px; border: 2px solid #ffffff; border-radius: 50%; background: #f5f7f0; box-shadow: 0 0 0 3px rgba(255,255,255,.18), 0 0 16px rgba(130,220,255,.72); cursor: pointer; }}
-.pin::after {{ content: attr(data-name); position: absolute; left: 15px; top: -7px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 6px; border-radius: 4px; background: rgba(8,12,14,.78); color: #fff; font-size: 12px; }}
-.pin.indoor {{ background: #ffffff; box-shadow: 0 0 0 3px rgba(117,167,255,.24), 0 0 16px rgba(117,167,255,.82); }}
+.pin {{ position: absolute; z-index: 3; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 2px solid #ffffff; border-radius: 50%; background: #f5f7f0; box-shadow: 0 0 0 2px rgba(255,255,255,.16), 0 0 10px rgba(130,220,255,.62); cursor: pointer; }}
+.pin::after {{ content: attr(data-name); position: absolute; left: 17px; top: -5px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 11px; text-shadow: 0 1px 3px #000, 0 0 5px #000; }}
+.pin.indoor {{ background: #ffffff; box-shadow: 0 0 0 2px rgba(117,167,255,.22), 0 0 12px rgba(117,167,255,.72); }}
 .dungeonSvg {{ position: absolute; inset: 0; width: 100%; height: 100%; }}
 .dungeonSvg svg {{ display: block; width: 100%; height: 100%; }}
 .dungeonPin {{ position: absolute; z-index: 3; width: 15px; height: 15px; margin: -7px 0 0 -7px; border: 2px solid #ffffff; border-radius: 50%; background: #f5f7f0; box-shadow: 0 0 0 4px rgba(255,255,255,.2), 0 0 18px rgba(130,220,255,.82); }}
@@ -715,9 +1143,30 @@ body {{ margin: 0; display: grid; grid-template-columns: minmax(320px, 1fr) 360p
 .blip.lifestone {{ width: 11px; height: 11px; margin: -5px 0 0 -5px; background: #4f8cff; box-shadow: 0 0 0 3px rgba(79,140,255,.2), 0 0 14px rgba(79,140,255,.82); }}
 .blip.door {{ width: 11px; height: 4px; margin: -2px 0 0 -5px; border-radius: 1px; background: #b98b58; box-shadow: 0 0 0 2px rgba(185,139,88,.18), 0 0 8px rgba(185,139,88,.62); }}
 .blip.light {{ z-index: 1; width: 34px; height: 34px; margin: -17px 0 0 -17px; background: radial-gradient(circle, rgba(255,214,116,.42) 0, rgba(255,189,87,.18) 38%, rgba(255,189,87,0) 72%); box-shadow: none; }}
+.blip.npc::after, .blip.vendor::after {{ content: attr(data-name); position: absolute; left: 10px; top: -5px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff7a6; font-size: 11px; text-shadow: 0 1px 3px #000, 0 0 5px #000; }}
+.blip.portal::after, .blip.lifestone::after {{ content: attr(data-name); position: absolute; left: 13px; top: -5px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #dcc8ff; font-size: 11px; text-shadow: 0 1px 3px #000, 0 0 5px #000; }}
 .zoomControls {{ position: absolute; z-index: 5; left: 12px; bottom: 12px; display: none; grid-template-columns: repeat(4, 36px); gap: 6px; }}
 .hasLayer .zoomControls {{ display: grid; }}
 .zoomControls button {{ width: 36px; height: 36px; padding: 0; border-radius: 4px; font-size: 18px; font-weight: 700; }}
+.bottomDock {{ position: absolute; z-index: 4; left: 170px; right: 12px; bottom: 12px; display: grid; grid-template-columns: minmax(260px, .9fr) minmax(320px, 1.1fr); gap: 8px; pointer-events: none; }}
+.dockPanel {{ min-width: 0; border: 1px solid rgba(255,255,255,.14); border-radius: 4px; background: rgba(10,14,16,.82); box-shadow: 0 8px 24px rgba(0,0,0,.24); padding: 8px 10px; }}
+.dockTitle {{ color: #fff3bf; font-size: 12px; font-weight: 650; margin-bottom: 6px; }}
+.statGrid {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }}
+.statBox {{ min-width: 0; }}
+.statLabel {{ color: #9eaaa5; font-size: 10px; text-transform: uppercase; }}
+.statValue {{ color: #f1f5f1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.onlineChips {{ display: flex; flex-wrap: wrap; gap: 5px; max-height: 74px; overflow: hidden; }}
+.onlineChip {{ display: inline-flex; align-items: center; gap: 5px; max-width: 150px; padding: 2px 6px 2px 3px; border-radius: 999px; background: rgba(255,255,255,.08); color: #e8ece8; font-size: 11px; }}
+.onlineDot {{ width: 10px; height: 10px; border: 1px solid #fff; border-radius: 50%; background: #f5f7f0; box-shadow: 0 0 7px rgba(130,220,255,.7); }}
+.onlineName {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.feedBlock {{ margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,.1); }}
+.feedList {{ display: grid; gap: 4px; max-height: 88px; overflow: hidden; }}
+.feedRow {{ display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: baseline; min-width: 0; color: #d6ddd8; font-size: 11px; }}
+.feedTime {{ color: #8d9b96; font-variant-numeric: tabular-nums; }}
+.feedText {{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.feedName {{ color: #fff3bf; }}
+.rareTier {{ color: #9bd6ff; }}
+.rareItem {{ color: #f0dc54; }}
 aside {{ border-left: 1px solid rgba(255,255,255,.12); background: #15191b; padding: 14px; overflow: auto; }}
 h1 {{ margin: 0 0 12px; font-size: 20px; font-weight: 650; }}
 .controls {{ display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 12px; }}
@@ -744,13 +1193,38 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
 .health span {{ background: #e35748; }}
 .stamina span {{ background: #ead45f; }}
 .mana span {{ background: #6c92ff; }}
-@media (max-width: 860px) {{ body {{ grid-template-columns: 1fr; }} #map {{ min-height: 64vh; }} aside {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} }}
+.inventoryPanel {{ position: fixed; z-index: 20; inset: 28px; display: none; grid-template-columns: minmax(360px, 1fr) 300px; min-height: 0; border: 1px solid rgba(255,255,255,.18); border-radius: 6px; background: #121719; box-shadow: 0 18px 60px rgba(0,0,0,.5); overflow: hidden; }}
+.inventoryPanel.open {{ display: grid; }}
+.inventoryListPane, .inventoryEditPane {{ min-width: 0; min-height: 0; padding: 12px; }}
+.inventoryListPane {{ display: grid; grid-template-rows: auto auto 1fr; gap: 8px; }}
+.inventoryEditPane {{ border-left: 1px solid rgba(255,255,255,.12); background: #171d20; overflow: auto; }}
+.inventoryTop {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; }}
+.inventoryTop h2 {{ margin: 0; color: #fff3bf; font-size: 16px; }}
+.inventoryActions {{ display: flex; gap: 6px; }}
+.iconButton {{ width: 32px; height: 32px; padding: 0; display: grid; place-items: center; }}
+.inventorySearch {{ display: grid; grid-template-columns: 1fr auto; gap: 8px; }}
+.inventoryTable {{ min-height: 0; overflow: auto; border: 1px solid rgba(255,255,255,.1); border-radius: 4px; }}
+.inventoryRow {{ display: grid; grid-template-columns: minmax(190px, 1fr) 74px 70px 88px; gap: 8px; align-items: center; min-height: 34px; padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,.07); color: #dce3df; font-size: 12px; cursor: pointer; }}
+.inventoryRow:hover, .inventoryRow.selected {{ background: rgba(255,255,255,.08); }}
+.inventoryRow .itemName {{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.inventoryRow .itemMeta {{ color: #98a6a0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.inventoryTag {{ display: inline-block; margin-right: 4px; padding: 1px 4px; border-radius: 3px; background: rgba(155,214,255,.12); color: #9bd6ff; font-size: 10px; }}
+.inventoryForm {{ display: grid; gap: 9px; }}
+.inventoryForm label {{ display: grid; gap: 4px; color: #aeb9b4; font-size: 11px; text-transform: uppercase; }}
+.inventoryForm input {{ padding: 7px; }}
+.inventoryDetails {{ display: grid; gap: 5px; margin-bottom: 12px; color: #c8d1cc; font-size: 12px; }}
+.inventoryDetails strong {{ color: #fff; overflow-wrap: anywhere; }}
+.dangerButton {{ background: #763330; }}
+.smallButton {{ padding: 5px 8px; font-size: 11px; }}
+@media (max-width: 980px) {{ .bottomDock {{ left: 12px; grid-template-columns: 1fr; }} .statGrid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+@media (max-width: 860px) {{ body {{ grid-template-columns: 1fr; }} #map {{ min-height: 64vh; }} aside {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} .bottomDock {{ position: static; margin: 8px 12px 12px; }} .inventoryPanel {{ inset: 10px; grid-template-columns: 1fr; }} .inventoryEditPane {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} }}
 </style>
 </head>
 <body>
 <main id=""map"">
   <div class=""axis north"">102N</div><div class=""axis south"">102S</div><div class=""axis west"">102W</div><div class=""axis east"">102E</div>
   <div class=""zoomControls""><button id=""zoomIn"" title=""Zoom in"">+</button><button id=""zoomOut"" title=""Zoom out"">-</button><button id=""zoomReset"" title=""Reset view"">1</button><button id=""zoomFit"" title=""Fit"">□</button></div>
+  <div id=""bottomDock"" class=""bottomDock""></div>
 </main>
 <aside>
   <h1>Admin Map</h1>
@@ -767,17 +1241,42 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
   </div>
   <div id=""players""></div>
 </aside>
+<section id=""inventoryPanel"" class=""inventoryPanel"" aria-live=""polite"">
+  <div class=""inventoryListPane"">
+    <div class=""inventoryTop""><h2 id=""inventoryTitle"">Inventory</h2><div class=""inventoryActions""><button id=""inventoryRefresh"" class=""iconButton"" title=""Refresh"">↻</button><button id=""inventoryClose"" class=""iconButton"" title=""Close"">×</button></div></div>
+    <div class=""inventorySearch""><input id=""inventoryFilter"" placeholder=""search name, type, wcid, container""><button id=""inventoryClear"" class=""smallButton"">Clear</button></div>
+    <div id=""inventoryRows"" class=""inventoryTable""></div>
+  </div>
+  <div class=""inventoryEditPane"">
+    <div id=""inventoryDetails"" class=""inventoryDetails""><span class=""muted"">Select an item</span></div>
+    <div class=""inventoryForm"">
+      <label>Stack<input id=""editStack"" type=""number"" min=""1""></label>
+      <label>Value<input id=""editValue"" type=""number"" min=""0""></label>
+      <label>Burden<input id=""editBurden"" type=""number"" min=""0""></label>
+      <label>Workmanship<input id=""editWorkmanship"" type=""number"" min=""0""></label>
+      <button id=""inventorySave"">Save Item</button>
+      <button id=""inventoryDelete"" class=""dangerButton"">Delete Item</button>
+    </div>
+  </div>
+</section>
 <script>
 const map = document.getElementById('map');
 const list = document.getElementById('players');
 const status = document.getElementById('status');
 const token = document.getElementById('token');
+const bottomDock = document.getElementById('bottomDock');
+const inventoryPanel = document.getElementById('inventoryPanel');
+const inventoryRows = document.getElementById('inventoryRows');
+const inventoryTitle = document.getElementById('inventoryTitle');
+const inventoryFilter = document.getElementById('inventoryFilter');
+const inventoryDetails = document.getElementById('inventoryDetails');
 let currentDungeon = null;
 let currentMode = null;
 let mapLayer = null;
 let view = {{ scale: 1, x: 0, y: 0 }};
 let dragging = false;
 let dragStart = null;
+let inventoryState = {{ playerGuid: null, data: null, selected: null }};
 token.value = localStorage.getItem('derpace-admin-map-token') || '';
 document.getElementById('save').onclick = () => {{ localStorage.setItem('derpace-admin-map-token', token.value); refresh(); }};
 function pctX(x) {{ return ((x + 102) / 204) * 100; }}
@@ -787,6 +1286,18 @@ function mapPctY(y, b) {{ return b.top + ((102 - y) / 204) * (b.bottom - b.top);
 function dungeonPctX(x, d) {{ return ((x - d.minX) / Math.max(1, d.maxX - d.minX)) * 100; }}
 function dungeonPctY(y, d) {{ return ((d.maxY - y) / Math.max(1, d.maxY - d.minY)) * 100; }}
 function bar(cur, max, cls) {{ const p = max > 0 ? Math.max(0, Math.min(100, cur / max * 100)) : 0; return `<div class=""bar ${{cls}}""><span style=""width:${{p}}%""></span></div>`; }}
+function esc(v) {{ return String(v ?? '').replace(/[&<>""']/g, ch => ({{'&':'&amp;','<':'&lt;','>':'&gt;','""':'&quot;',""'"":'&#39;'}}[ch])); }}
+function fmtNum(v) {{ return Number(v || 0).toLocaleString(); }}
+function leaderText(entry, suffix) {{ return entry ? `${{esc(entry.name)}} ${{suffix ? suffix(entry) : fmtNum(entry.kills)}}` : 'none'; }}
+function feedTime(utc) {{ const d = new Date(utc); return isNaN(d) ? '--:--' : d.toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit' }}); }}
+function renderChatFeed(chat) {{
+  const rows = (chat || []).map(e => `<div class=""feedRow""><span class=""feedTime"">${{feedTime(e.utc)}}</span><span class=""feedText""><span class=""feedName"">${{esc(e.sender)}}</span>: ${{esc(e.message)}}</span></div>`).join('');
+  return rows || '<div class=""muted"">No General chat yet</div>';
+}}
+function renderRareFeed(rares) {{
+  const rows = (rares || []).map(e => `<div class=""feedRow"" title=""${{esc((e.location || e.landblock || '') + ' ' + (e.corpse || ''))}}""><span class=""feedTime"">${{feedTime(e.utc)}}</span><span class=""feedText""><span class=""feedName"">${{esc(e.player)}}</span> found <span class=""rareItem"">${{esc(e.item)}}</span> <span class=""rareTier"">T${{fmtNum(e.tier)}}</span></span></div>`).join('');
+  return rows || '<div class=""muted"">No rare finds yet</div>';
+}}
 function clearMap() {{ map.querySelectorAll('.mapLayer').forEach(x => x.remove()); mapLayer = null; map.classList.remove('hasLayer'); }}
 function applyView() {{ if (mapLayer) mapLayer.style.transform = `translate(${{view.x}}px, ${{view.y}}px) scale(${{view.scale}})`; }}
 function resetView() {{ view = {{ scale: 1, x: 0, y: 0 }}; applyView(); }}
@@ -814,9 +1325,148 @@ function addBlip(layer, blip, left, top) {{
   marker.className = 'blip ' + kind;
   marker.style.left = left + '%';
   marker.style.top = top + '%';
+  marker.dataset.name = blip.name || '';
   marker.title = `${{blip.name || kind}}\n${{blip.loc || blip.cell}}\n${{kind}}${{blip.radarColor ? ' / ' + blip.radarColor : ''}}\nz ${{Number(blip.z || 0).toFixed(2)}}`;
   layer.appendChild(marker);
 }}
+function renderDock(data) {{
+  const stats = data.stats || {{}};
+  const feeds = data.feeds || {{}};
+  const players = data.players || [];
+  const playerChips = players
+    .slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map(p => `<span class=""onlineChip"" title=""${{esc(p.loc || p.landblock)}}""><span class=""onlineDot""></span><span class=""onlineName"">${{esc(p.name)}}</span></span>`)
+    .join('');
+  bottomDock.innerHTML = `
+    <section class=""dockPanel"">
+      <div class=""dockTitle"">Stats</div>
+      <div class=""statGrid"">
+        <div class=""statBox""><div class=""statLabel"">Online</div><div class=""statValue"">${{fmtNum(stats.onlineCount ?? data.onlineCount)}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">Unique IPs</div><div class=""statValue"">${{fmtNum(stats.uniqueIpCount)}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">Hardcore</div><div class=""statValue"">${{fmtNum(stats.hardcoreOnlineCount)}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">Ironman</div><div class=""statValue"">${{fmtNum(stats.ironmanOnlineCount)}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">HC leader</div><div class=""statValue"">${{leaderText(stats.hardcoreLeader, e => fmtNum(e.kills) + ' kills')}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">IM leader</div><div class=""statValue"">${{leaderText(stats.ironmanLeader, e => fmtNum(e.kills) + ' kills')}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">Deadliest</div><div class=""statValue"">${{leaderText(stats.deadliestNormal, e => fmtNum(e.kills))}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">HC killer</div><div class=""statValue"">${{leaderText(stats.deadliestHardcore, e => fmtNum(e.kills))}}</div></div>
+        <div class=""statBox""><div class=""statLabel"">IM killer</div><div class=""statValue"">${{leaderText(stats.deadliestIronman, e => fmtNum(e.kills))}}</div></div>
+      </div>
+      <div class=""feedBlock""><div class=""dockTitle"">Rare Finds</div><div class=""feedList"">${{renderRareFeed(feeds.rares)}}</div></div>
+    </section>
+    <section class=""dockPanel"">
+      <div class=""dockTitle"">Online Players</div>
+      <div class=""onlineChips"">${{playerChips || '<span class=""muted"">No visible players</span>'}}</div>
+      <div class=""feedBlock""><div class=""dockTitle"">General Chat</div><div class=""feedList"">${{renderChatFeed(feeds.chat)}}</div></div>
+    </section>`;
+}}
+function authHeaders(extra) {{ return Object.assign(token.value ? {{ 'X-DerpACE-Map-Token': token.value }} : {{}}, extra || {{}}); }}
+async function openInventory(playerGuid) {{
+  inventoryState.playerGuid = playerGuid;
+  inventoryState.selected = null;
+  inventoryPanel.classList.add('open');
+  inventoryTitle.textContent = 'Inventory';
+  inventoryRows.innerHTML = '<div class=""muted"" style=""padding:10px"">Loading...</div>';
+  await loadInventory();
+}}
+async function loadInventory() {{
+  if (!inventoryState.playerGuid) return;
+  const res = await fetch('/api/inventory?player=' + encodeURIComponent(inventoryState.playerGuid), {{ headers: authHeaders(), cache: 'no-store' }});
+  const data = await res.json();
+  if (!res.ok || data.ok === false) {{
+    inventoryRows.innerHTML = `<div class=""muted"" style=""padding:10px"">${{esc(data.error || res.statusText)}}</div>`;
+    return;
+  }}
+  inventoryState.data = data;
+  inventoryTitle.textContent = `${{data.playerName}} Inventory`;
+  renderInventoryRows();
+  renderInventoryDetails(null);
+}}
+function renderInventoryRows() {{
+  const q = inventoryFilter.value.trim().toLowerCase();
+  const items = (inventoryState.data?.items || []).filter(i => {{
+    if (!q) return true;
+    return [i.name, i.guid, i.weenieClassId, i.weenieClassName, i.weenieType, i.itemType, i.container].some(v => String(v ?? '').toLowerCase().includes(q));
+  }});
+  inventoryRows.innerHTML = items.map(i => `
+    <div class=""inventoryRow${{inventoryState.selected?.guid === i.guid ? ' selected' : ''}}"" data-guid=""${{esc(i.guid)}}"">
+      <div class=""itemName"" style=""padding-left:${{Math.min(30, (i.depth || 0) * 14)}}px"">${{i.equipped ? '<span class=""inventoryTag"">EQ</span>' : ''}}${{i.isContainer ? '<span class=""inventoryTag"">BAG</span>' : ''}}${{esc(i.name)}}</div>
+      <div class=""itemMeta"">${{esc(i.weenieClassId)}}</div>
+      <div class=""itemMeta"">${{i.stackSize ? 'x' + fmtNum(i.stackSize) : ''}}</div>
+      <div class=""itemMeta"">${{esc(i.container || i.wieldedLocation || '')}}</div>
+    </div>`).join('') || '<div class=""muted"" style=""padding:10px"">No matching items</div>';
+  inventoryRows.querySelectorAll('.inventoryRow').forEach(row => row.onclick = () => {{
+    const item = (inventoryState.data?.items || []).find(i => i.guid === row.dataset.guid);
+    inventoryState.selected = item;
+    renderInventoryRows();
+    renderInventoryDetails(item);
+  }});
+}}
+function renderInventoryDetails(item) {{
+  const ids = ['editStack', 'editValue', 'editBurden', 'editWorkmanship'];
+  if (!item) {{
+    inventoryDetails.innerHTML = '<span class=""muted"">Select an item</span>';
+    ids.forEach(id => {{ const el = document.getElementById(id); el.value = ''; el.disabled = true; }});
+    document.getElementById('inventorySave').disabled = true;
+    document.getElementById('inventoryDelete').disabled = true;
+    return;
+  }}
+  inventoryDetails.innerHTML = `
+    <strong>${{esc(item.name)}}</strong>
+    <span>${{esc(item.guid)}} | WCID ${{esc(item.weenieClassId)}} | ${{esc(item.weenieType)}} / ${{esc(item.itemType)}}</span>
+    <span>${{item.equipped ? 'Equipped: ' + esc(item.wieldedLocation || '') : 'Container: ' + esc(item.container || 'Main Pack')}}</span>
+    <span>Value ${{fmtNum(item.value)}} | Burden ${{fmtNum(item.encumbrance)}}${{item.material ? ' | ' + esc(item.material) : ''}}</span>`;
+  const stack = document.getElementById('editStack');
+  stack.value = item.stackSize ?? '';
+  stack.max = item.maxStackSize ?? '';
+  stack.disabled = !item.stackSize;
+  document.getElementById('editValue').value = item.value ?? '';
+  document.getElementById('editBurden').value = item.encumbrance ?? '';
+  document.getElementById('editWorkmanship').value = item.workmanship ?? '';
+  ['editValue', 'editBurden', 'editWorkmanship'].forEach(id => document.getElementById(id).disabled = false);
+  document.getElementById('inventorySave').disabled = false;
+  document.getElementById('inventoryDelete').disabled = false;
+}}
+async function saveInventoryItem() {{
+  const item = inventoryState.selected;
+  if (!item) return;
+  const numOrNull = id => {{
+    const value = document.getElementById(id).value;
+    return value === '' ? null : Number(value);
+  }};
+  const payload = {{
+    playerGuid: inventoryState.playerGuid,
+    itemGuid: item.guid,
+    stackSize: item.stackSize ? numOrNull('editStack') : null,
+    value: numOrNull('editValue'),
+    encumbrance: numOrNull('editBurden'),
+    workmanship: numOrNull('editWorkmanship')
+  }};
+  const res = await fetch('/api/inventory/item', {{ method: 'POST', headers: authHeaders({{ 'Content-Type': 'application/json' }}), body: JSON.stringify(payload) }});
+  const data = await res.json();
+  if (!res.ok || data.ok === false) {{ status.textContent = data.error || res.statusText; return; }}
+  inventoryState.data = data.inventory;
+  inventoryState.selected = (inventoryState.data.items || []).find(i => i.guid === item.guid) || null;
+  renderInventoryRows();
+  renderInventoryDetails(inventoryState.selected);
+}}
+async function deleteInventoryItem() {{
+  const item = inventoryState.selected;
+  if (!item || !confirm(`Delete ${{item.name}} from ${{inventoryState.data?.playerName || 'player'}}?`)) return;
+  const res = await fetch('/api/inventory/delete', {{ method: 'POST', headers: authHeaders({{ 'Content-Type': 'application/json' }}), body: JSON.stringify({{ playerGuid: inventoryState.playerGuid, itemGuid: item.guid }}) }});
+  const data = await res.json();
+  if (!res.ok || data.ok === false) {{ status.textContent = data.error || res.statusText; return; }}
+  inventoryState.data = data.inventory;
+  inventoryState.selected = null;
+  renderInventoryRows();
+  renderInventoryDetails(null);
+}}
+document.getElementById('inventoryClose').onclick = () => inventoryPanel.classList.remove('open');
+document.getElementById('inventoryRefresh').onclick = loadInventory;
+document.getElementById('inventoryClear').onclick = () => {{ inventoryFilter.value = ''; renderInventoryRows(); }};
+document.getElementById('inventorySave').onclick = saveInventoryItem;
+document.getElementById('inventoryDelete').onclick = deleteInventoryItem;
+inventoryFilter.addEventListener('input', renderInventoryRows);
 document.getElementById('zoomIn').onclick = () => zoomAt(1.25, map.clientWidth / 2, map.clientHeight / 2);
 document.getElementById('zoomOut').onclick = () => zoomAt(0.8, map.clientWidth / 2, map.clientHeight / 2);
 document.getElementById('zoomReset').onclick = resetView;
@@ -864,6 +1514,7 @@ async function load() {{
     }}
     if (modeChanged) resetView();
     list.innerHTML = '';
+    renderDock(data);
     const blips = data.blips || [];
     status.textContent = `${{data.onlineCount}} visible online player${{data.onlineCount === 1 ? '' : 's'}}, ${{blips.length}} nearby radar blip${{blips.length === 1 ? '' : 's'}} - updated ${{new Date(data.serverTimeUtc).toLocaleTimeString()}}`;
     for (const b of blips) {{
@@ -881,8 +1532,9 @@ async function load() {{
       }}
       const item = document.createElement('div');
       item.className = 'player';
-      item.innerHTML = `<strong>${{p.name}}</strong><div class=""muted"">${{p.loc || 'Indoor/dungeon'}} | ${{p.landblock}}</div><div class=""bars"">${{bar(p.health,p.maxHealth,'health')}}${{bar(p.stamina,p.maxStamina,'stamina')}}${{bar(p.mana,p.maxMana,'mana')}}</div>`;
+      item.innerHTML = `<strong>${{esc(p.name)}}</strong><div class=""muted"">${{esc(p.loc || 'Indoor/dungeon')}} | ${{esc(p.landblock)}}</div><div class=""inventoryActions""><button class=""smallButton invButton"" data-guid=""${{esc(p.guid)}}"">Inventory</button></div><div class=""bars"">${{bar(p.health,p.maxHealth,'health')}}${{bar(p.stamina,p.maxStamina,'stamina')}}${{bar(p.mana,p.maxMana,'mana')}}</div>`;
       if (p.isIndoors) item.onclick = () => loadDungeon(p.landblock);
+      item.querySelector('.invButton').onclick = e => {{ e.stopPropagation(); openInventory(p.guid); }};
       list.appendChild(item);
     }}
   }} catch (e) {{
@@ -903,6 +1555,7 @@ async function loadDungeon(landblock) {{
     map.classList.remove('hasImage');
     map.style.backgroundImage = '';
     if (!data.generated) throw new Error(data.error || 'No dungeon geometry for ' + landblock);
+    bottomDock.innerHTML = '';
     const layer = createLayer('dungeonLayer');
     const wrap = document.createElement('div');
     wrap.className = 'dungeonSvg';
@@ -945,6 +1598,8 @@ setInterval(refresh, {refresh * 1000});
             public AdminMapBounds MapBounds { get; set; }
             public List<AdminMapPlayer> Players { get; set; }
             public List<AdminMapBlip> Blips { get; set; }
+            public AdminMapStats Stats { get; set; }
+            public AdminMapFeeds Feeds { get; set; }
         }
 
         private sealed class AdminMapBounds
@@ -991,6 +1646,113 @@ setInterval(refresh, {refresh * 1000});
             public float X { get; set; }
             public float Y { get; set; }
             public float Z { get; set; }
+        }
+
+        private sealed class AdminMapStats
+        {
+            public int OnlineCount { get; set; }
+            public int UniqueIpCount { get; set; }
+            public int HardcoreOnlineCount { get; set; }
+            public int IronmanOnlineCount { get; set; }
+            public AdminLeaderboardEntry HardcoreLeader { get; set; }
+            public AdminLeaderboardEntry IronmanLeader { get; set; }
+            public AdminLeaderboardEntry DeadliestNormal { get; set; }
+            public AdminLeaderboardEntry DeadliestHardcore { get; set; }
+            public AdminLeaderboardEntry DeadliestIronman { get; set; }
+        }
+
+        private sealed class AdminLeaderboardEntry
+        {
+            public string Name { get; set; }
+            public int Level { get; set; }
+            public int Kills { get; set; }
+            public int Lives { get; set; }
+        }
+
+        private sealed class AdminMapFeeds
+        {
+            public List<AdminChatFeedEntry> Chat { get; set; }
+            public List<AdminRareFeedEntry> Rares { get; set; }
+        }
+
+        private sealed class AdminChatFeedEntry
+        {
+            public DateTime Utc { get; set; }
+            public string Channel { get; set; }
+            public string Sender { get; set; }
+            public string Message { get; set; }
+        }
+
+        private sealed class AdminRareFeedEntry
+        {
+            public DateTime Utc { get; set; }
+            public string Player { get; set; }
+            public string Item { get; set; }
+            public uint WeenieClassId { get; set; }
+            public int Tier { get; set; }
+            public int Chance { get; set; }
+            public int Luck { get; set; }
+            public string Corpse { get; set; }
+            public string Location { get; set; }
+            public string Landblock { get; set; }
+        }
+
+        private sealed class AdminInventorySnapshot
+        {
+            public bool Ok { get; set; } = true;
+            public string Error { get; set; }
+            public string PlayerName { get; set; }
+            public string PlayerGuid { get; set; }
+            public int Encumbrance { get; set; }
+            public int CoinValue { get; set; }
+            public List<AdminInventoryItem> Items { get; set; }
+
+            public static AdminInventorySnapshot Fail(string error)
+            {
+                return new AdminInventorySnapshot { Ok = false, Error = error, Items = new List<AdminInventoryItem>() };
+            }
+        }
+
+        private sealed class AdminInventoryItem
+        {
+            public string Name { get; set; }
+            public string Guid { get; set; }
+            public uint GuidValue { get; set; }
+            public uint WeenieClassId { get; set; }
+            public string WeenieClassName { get; set; }
+            public string WeenieType { get; set; }
+            public string ItemType { get; set; }
+            public string Container { get; set; }
+            public string ContainerGuid { get; set; }
+            public bool Equipped { get; set; }
+            public int Depth { get; set; }
+            public int Placement { get; set; }
+            public int? StackSize { get; set; }
+            public ushort? MaxStackSize { get; set; }
+            public int? Value { get; set; }
+            public int? Encumbrance { get; set; }
+            public int? Workmanship { get; set; }
+            public string Material { get; set; }
+            public string WieldedLocation { get; set; }
+            public bool IsContainer { get; set; }
+            public bool IsAttuned { get; set; }
+            public bool IsBonded { get; set; }
+        }
+
+        private sealed class AdminInventoryItemEditRequest
+        {
+            public string PlayerGuid { get; set; }
+            public string ItemGuid { get; set; }
+            public int? StackSize { get; set; }
+            public int? Value { get; set; }
+            public int? Encumbrance { get; set; }
+            public int? Workmanship { get; set; }
+        }
+
+        private sealed class AdminInventoryItemDeleteRequest
+        {
+            public string PlayerGuid { get; set; }
+            public string ItemGuid { get; set; }
         }
 
         private sealed class AdminDungeonSnapshot
