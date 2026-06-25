@@ -1128,6 +1128,7 @@ namespace ACE.Server.Command.Handlers
                     sb.AppendLine($"    stranger_dramatic_spawn_delay         = {c.StrangerDramaticSpawnDelay}");
                     sb.AppendLine($"    stranger_obfuscated_burden_min        = {c.StrangerObfuscatedBurdenMin}");
                     sb.AppendLine($"    stranger_obfuscated_burden_max        = {c.StrangerObfuscatedBurdenMax}");
+                    sb.AppendLine($"    stranger_min_account_age_days         = {c.StrangerMinAccountAgeDays}");
                     sb.AppendLine($"    stranger_deal_cooldown_seconds        = {c.StrangerDealCooldownSeconds}");
                     sb.AppendLine($"    stranger_junk_prank_chance            = {c.StrangerJunkPrankChance}");
                     sb.Append("────────────────────────────────────────────────");

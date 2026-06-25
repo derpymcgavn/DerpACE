@@ -46,12 +46,13 @@ namespace ACE.Server.WorldObjects
             var deathMessage = base.OnDeath(lastDamager, damageType, criticalHit);
 
             // DerpACE Ironman: hardcore-life accounting. Decrement lives and, on final
-            // death, mark the character as deleted + force logoff. The cooldown lets
-            // back-to-back deaths in PK / accidents not chain-burn lives.
+            // death, mark the character as deleted + force logoff. The debounce prevents
+            // duplicate death events from chain-burning lives, but should never shield
+            // later legitimate deaths.
             if (GetProperty(PropertyBool.IsHardcore) == true)
             {
                 var nowTs = ACE.Common.Time.GetUnixTime();
-                var cooldown = ACE.Server.Managers.DerpACEConfig.IronmanHardcoreSecondsBetweenDeaths;
+                var cooldown = Math.Clamp(ACE.Server.Managers.DerpACEConfig.IronmanHardcoreSecondsBetweenDeaths, 0.0f, 30.0f);
                 if (!_lastHardcoreDeathTimestamp.TryGetValue(Guid.Full, out var lastTs) || nowTs - lastTs >= cooldown)
                 {
                     _lastHardcoreDeathTimestamp[Guid.Full] = nowTs;

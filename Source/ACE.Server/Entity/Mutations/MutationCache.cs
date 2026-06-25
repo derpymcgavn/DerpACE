@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 using log4net;
 
@@ -19,7 +20,7 @@ namespace ACE.Server.Entity.Mutations
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        private static readonly ConcurrentDictionary<string, MutationFilter> tSysMutationFilters = new ConcurrentDictionary<string, MutationFilter>();
+        private static readonly ConcurrentDictionary<string, Lazy<MutationFilter>> tSysMutationFilters = new ConcurrentDictionary<string, Lazy<MutationFilter>>();
 
         static MutationCache()
         {
@@ -31,14 +32,10 @@ namespace ACE.Server.Entity.Mutations
         /// </summary>
         public static MutationFilter GetMutation(string filename)
         {
-            if (!tSysMutationFilters.TryGetValue(filename, out var tSysMutationFilter))
-            {
-                tSysMutationFilter = BuildMutation(filename);
+            var cacheKey = NormalizeFilename(filename);
 
-                if (tSysMutationFilter != null)
-                    tSysMutationFilters.TryAdd(filename, tSysMutationFilter);
-            }
-            return tSysMutationFilter;
+            return tSysMutationFilters.GetOrAdd(cacheKey, key =>
+                new Lazy<MutationFilter>(() => BuildMutation(key), LazyThreadSafetyMode.ExecutionAndPublication)).Value;
         }
 
         /// <summary>
@@ -46,27 +43,13 @@ namespace ACE.Server.Entity.Mutations
         /// </summary>
         public static MutationFilter GetMutation(uint mutationId)
         {
-            var mutationId_str = mutationId.ToString();
-
-            if (!tSysMutationFilters.TryGetValue(mutationId_str, out var tSysMutationFilter))
-            {
-                tSysMutationFilter = BuildMutation(mutationId);
-
-                if (tSysMutationFilter != null)
-                    tSysMutationFilters.TryAdd(mutationId_str, tSysMutationFilter);
-            }
-            return tSysMutationFilter;
-        }
-
-        private static MutationFilter BuildMutation(uint mutationId)
-        {
             if (!mutationIdToFilename.TryGetValue(mutationId, out var filename))
             {
-                log.Error($"MutationCache.BuildMutation({mutationId:X8}) - embedded resource not found");
+                log.Error($"MutationCache.GetMutation({mutationId:X8}) - embedded resource not found");
                 return null;
             }
 
-            return BuildMutation(filename);
+            return GetMutation(filename);
         }
 
         private static MutationFilter BuildMutation(string filename)
@@ -514,10 +497,15 @@ namespace ACE.Server.Entity.Mutations
 
         private const string prefix = "ACE.Server.Entity.Mutations.";
 
+        private static string NormalizeFilename(string filename)
+        {
+            return filename.Replace('/', '.');
+        }
+
         private static List<string> ReadScript(string filename)
         {
             var assembly = Assembly.GetExecutingAssembly();
-            var resourceName = prefix + filename.Replace('/', '.');
+            var resourceName = prefix + NormalizeFilename(filename);
 
             using (var stream = assembly.GetManifestResourceStream(resourceName))
             {

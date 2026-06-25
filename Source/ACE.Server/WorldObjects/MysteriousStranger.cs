@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 
 using ACE.Common;
 using ACE.Database.Models.World;
@@ -69,7 +71,8 @@ namespace ACE.Server.WorldObjects
         public static float  ChestArcDistance      = 4.0f;
         // Total arc swept across all 9 chests (degrees). Full circle = 360deg.
         public static float  ChestArcSweepDegrees  = 360.0f;
-        public static int    DealCooldownSeconds   = 86400; // 24 hours between deals (per player)
+        public static int    MinAccountAgeDays     = 5;
+        public static int    DealCooldownSeconds   = 86400; // 24 hours between deals (per account)
         public const  string DealQuestStamp        = "MysteriousStrangerDeal";
 
         // Palettes that look good on the generic chest mesh. Picked at random per spawn.
@@ -255,6 +258,10 @@ namespace ACE.Server.WorldObjects
         private static readonly Dictionary<uint, ChestSession> _strangerChestOwner = new Dictionary<uint, ChestSession>();
         // Per-player list of currently-spawned chest guids, used for cleanup when opens are exhausted.
         private static readonly Dictionary<uint, List<uint>> _playerChests = new Dictionary<uint, List<uint>>();
+        private static readonly object _accountDealLock = new object();
+        private static readonly JsonSerializerOptions _accountDealJsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        private static Dictionary<uint, long> _accountDealTimestamps = new Dictionary<uint, long>();
+        private static bool _accountDealTimestampsLoaded;
 
         /// <summary>
         /// Guid of the player currently in an active Stranger session.
@@ -311,30 +318,8 @@ namespace ACE.Server.WorldObjects
             if (player.IsDead)
                 return;
 
-            // 24-hour per-player cooldown on the deal itself (separate from the 5s anti-spam).
-            // Tracked as a custom quest stamp on the player so it survives logout / server restart.
-            var qm = player.QuestManager;
-            if (qm != null)
-            {
-                var stamp = qm.GetQuest(DealQuestStamp);
-                if (stamp != null)
-                {
-                    var elapsed = (long)Time.GetUnixTime() - (long)stamp.LastTimeCompleted;
-                    var remaining = DealCooldownSeconds - elapsed;
-                    if (remaining > 0)
-                    {
-                        var hours = remaining / 3600;
-                        var minutes = (remaining % 3600) / 60;
-                        stranger.EnqueueBroadcast(new GameMessageHearSpeech(
-                            "Patience. Fortune does not visit the same soul twice in one day. Return on the morrow.",
-                            stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
-                        player.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                            $"You may bargain with the Mysterious Stranger again in {hours}h {minutes}m.",
-                            ChatMessageType.Broadcast));
-                        return;
-                    }
-                }
-            }
+            if (!CanAccountTakeDeal(stranger, player))
+                return;
 
             stranger.EnqueueBroadcast(new GameMessageHearSpeech(
                 "I will bind a measure of death to your soul... in exchange for a glimpse at fortune. " +
@@ -358,6 +343,147 @@ namespace ACE.Server.WorldObjects
                 () => DeclineDeal(stranger, player));
             if (!player.ConfirmationManager.EnqueueSend(confirm, prompt))
                 player.SendWeenieError(WeenieError.ConfirmationInProgress);
+        }
+
+        private static bool CanAccountTakeDeal(Creature stranger, Player player)
+        {
+            if (stranger == null || player?.Account == null)
+                return false;
+
+            var requiredAge = TimeSpan.FromDays(Math.Max(0, MinAccountAgeDays));
+            if (requiredAge > TimeSpan.Zero)
+            {
+                var accountAge = DateTime.UtcNow - player.Account.CreateTime;
+                if (accountAge < requiredAge)
+                {
+                    var remaining = requiredAge - accountAge;
+                    stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                        "Fresh accounts are too easy to fool. Come back when your shadow has aged a little.",
+                        stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"Your account must be at least {MinAccountAgeDays} day{(MinAccountAgeDays == 1 ? "" : "s")} old to bargain with the Mysterious Stranger. Try again in {FormatDuration(remaining)}.",
+                        ChatMessageType.Broadcast));
+                    return false;
+                }
+            }
+
+            if (DealCooldownSeconds <= 0)
+                return true;
+
+            var lastDeal = GetLastAccountDealTimestamp(player);
+            if (lastDeal > 0)
+            {
+                var elapsed = (long)Time.GetUnixTime() - lastDeal;
+                var remainingSeconds = DealCooldownSeconds - elapsed;
+                if (remainingSeconds > 0)
+                {
+                    stranger.EnqueueBroadcast(new GameMessageHearSpeech(
+                        "Patience. Fortune does not visit the same account twice in one day. Return on the morrow.",
+                        stranger.Name, stranger.Guid.Full, ChatMessageType.Speech));
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"This account may bargain with the Mysterious Stranger again in {FormatDuration(TimeSpan.FromSeconds(remainingSeconds))}.",
+                        ChatMessageType.Broadcast));
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static long GetLastAccountDealTimestamp(Player player)
+        {
+            if (player?.Account == null)
+                return 0;
+
+            EnsureAccountDealTimestampsLoaded();
+
+            long accountLastDeal;
+            lock (_accountDealLock)
+                _accountDealTimestamps.TryGetValue(player.Account.AccountId, out accountLastDeal);
+
+            var characterStamp = player.QuestManager?.GetQuest(DealQuestStamp);
+            if (characterStamp != null && characterStamp.LastTimeCompleted > accountLastDeal)
+                accountLastDeal = characterStamp.LastTimeCompleted;
+
+            return accountLastDeal;
+        }
+
+        private static void StampAccountDeal(Player player)
+        {
+            if (player?.Account == null)
+                return;
+
+            EnsureAccountDealTimestampsLoaded();
+
+            lock (_accountDealLock)
+            {
+                _accountDealTimestamps[player.Account.AccountId] = (long)Time.GetUnixTime();
+                SaveAccountDealTimestamps();
+            }
+        }
+
+        private static void EnsureAccountDealTimestampsLoaded()
+        {
+            if (_accountDealTimestampsLoaded)
+                return;
+
+            lock (_accountDealLock)
+            {
+                if (_accountDealTimestampsLoaded)
+                    return;
+
+                try
+                {
+                    var path = AccountDealTimestampsPath;
+                    if (File.Exists(path))
+                    {
+                        var json = File.ReadAllText(path);
+                        _accountDealTimestamps = JsonSerializer.Deserialize<Dictionary<uint, long>>(json, _accountDealJsonOptions)
+                                                 ?? new Dictionary<uint, long>();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.Error($"[MysteriousStranger] Failed to load account deal timestamps: {ex}");
+                    _accountDealTimestamps = new Dictionary<uint, long>();
+                }
+
+                _accountDealTimestampsLoaded = true;
+            }
+        }
+
+        private static void SaveAccountDealTimestamps()
+        {
+            try
+            {
+                var path = AccountDealTimestampsPath;
+                var directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+
+                File.WriteAllText(path, JsonSerializer.Serialize(_accountDealTimestamps, _accountDealJsonOptions));
+            }
+            catch (Exception ex)
+            {
+                log.Error($"[MysteriousStranger] Failed to save account deal timestamps: {ex}");
+            }
+        }
+
+        private static string AccountDealTimestampsPath =>
+            Path.Combine(AppContext.BaseDirectory, "Data", "MysteriousStrangerAccountDeals.json");
+
+        private static string FormatDuration(TimeSpan duration)
+        {
+            if (duration.TotalSeconds < 0)
+                duration = TimeSpan.Zero;
+
+            if (duration.TotalDays >= 1)
+                return $"{(int)duration.TotalDays}d {duration.Hours}h";
+
+            if (duration.TotalHours >= 1)
+                return $"{(int)duration.TotalHours}h {duration.Minutes}m";
+
+            return $"{Math.Max(1, (int)Math.Ceiling(duration.TotalMinutes))}m";
         }
 
         // ---------- decline ----------
@@ -389,7 +515,11 @@ namespace ACE.Server.WorldObjects
             var vitaePct   = ThreadSafeRandom.Next(MinVitaePercent, MaxVitaePercent);
             var chestOpens = ThreadSafeRandom.Next(MinChestOpens, MaxChestOpens);
 
-            // Stamp the 24-hour cooldown the moment the player commits, win or lose.
+            if (!CanAccountTakeDeal(stranger, player))
+                return;
+
+            // Stamp the cooldown the moment the player commits, win or lose.
+            StampAccountDeal(player);
             player.QuestManager?.Stamp(DealQuestStamp);
 
             // Lock the Stranger to this player for the duration of the session.

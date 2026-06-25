@@ -175,6 +175,8 @@ namespace ACE.Server.DerpAce
         public int StrangerObfuscatedBurdenMin { get; set; } = 50;
         [JsonPropertyName("stranger_obfuscated_burden_max")]
         public int StrangerObfuscatedBurdenMax { get; set; } = 950;
+        [JsonPropertyName("stranger_min_account_age_days")]
+        public int StrangerMinAccountAgeDays { get; set; } = 5;
         [JsonPropertyName("stranger_deal_cooldown_seconds")]
         public int StrangerDealCooldownSeconds { get; set; } = 86400;
         [JsonPropertyName("stranger_junk_prank_chance")]
@@ -598,7 +600,7 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("ironman_hardcore_starting_lives")]
         public int IronmanHardcoreStartingLives { get; set; } = 1;
         [JsonPropertyName("ironman_hardcore_seconds_between_deaths")]
-        public float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 604800.0f;
+        public float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 5.0f;
 
         // ── Bank ─────────────────────────────────────────────────────────────
         [JsonPropertyName("enable_bank")]

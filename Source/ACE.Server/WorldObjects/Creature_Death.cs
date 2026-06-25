@@ -259,7 +259,10 @@ namespace ACE.Server.WorldObjects
                 {
                     var topDamagerPlayer = topDamager.TryGetAttacker();
                     if (topDamagerPlayer != null)
+                    {
                         topDamagerPlayer.CreatureKills = (topDamagerPlayer.CreatureKills ?? 0) + 1;
+                        LeaderboardCache.InvalidatePlayers();
+                    }
                 }
             }
 

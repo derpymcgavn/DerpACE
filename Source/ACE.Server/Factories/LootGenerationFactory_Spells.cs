@@ -249,26 +249,19 @@ namespace ACE.Server.Factories
 
         private static float RollEnchantmentDifficulty(List<SpellId> spellIds)
         {
-            var spells = new List<Server.Entity.Spell>();
-
-            foreach (var spellId in spellIds)
-            {
-                var spell = new Server.Entity.Spell(spellId);
-                spells.Add(spell);
-            }
-
-            spells = spells.OrderBy(i => i.Formula.Level).ToList();
+            var spellLevels = spellIds
+                .Select(spellId => SpellLevelCache.GetSpellLevel((int)spellId))
+                .OrderBy(spellLevel => spellLevel)
+                .ToList();
 
             var itemDifficulty = 0.0f;
 
             // exclude highest spell
-            for (var i = 0; i < spells.Count - 1; i++)
+            for (var i = 0; i < spellLevels.Count - 1; i++)
             {
-                var spell = spells[i];
-
                 var rng = (float)ThreadSafeRandom.Next(0.5f, 1.5f);
 
-                itemDifficulty += spell.Formula.Level * 5.0f * rng;
+                itemDifficulty += spellLevels[i] * 5.0f * rng;
             }
 
             return itemDifficulty;

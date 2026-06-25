@@ -787,17 +787,13 @@ namespace ACE.Server.Factories
 
             if (wo.SpellDID != null)
             {
-                var spell = new Server.Entity.Spell(wo.SpellDID.Value);
-                spellLevelSum += (int)spell.Level;
+                spellLevelSum += SpellLevelCache.GetServerSpellLevel((int)wo.SpellDID.Value);
             }
 
             if (wo.Biota.PropertiesSpellBook != null)
             {
                 foreach (var spellId in wo.Biota.PropertiesSpellBook.Keys)
-                {
-                    var spell = new Server.Entity.Spell(spellId);
-                    spellLevelSum += (int)spell.Level;
-                }
+                    spellLevelSum += SpellLevelCache.GetServerSpellLevel(spellId);
             }
             wo.Value += spellLevelSum * 10;
         }

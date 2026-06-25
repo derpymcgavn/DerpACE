@@ -179,6 +179,7 @@ namespace ACE.Server.DerpAce
             MysteriousStranger.DramaticSpawnDelay         = c.StrangerDramaticSpawnDelay;
             MysteriousStranger.ObfuscatedBurdenMin        = c.StrangerObfuscatedBurdenMin;
             MysteriousStranger.ObfuscatedBurdenMax        = c.StrangerObfuscatedBurdenMax;
+            MysteriousStranger.MinAccountAgeDays          = c.StrangerMinAccountAgeDays;
             MysteriousStranger.DealCooldownSeconds        = c.StrangerDealCooldownSeconds;
             MysteriousStranger.JunkPrankChance            = c.StrangerJunkPrankChance;
 

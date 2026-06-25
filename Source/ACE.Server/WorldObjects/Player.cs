@@ -808,6 +808,9 @@ namespace ACE.Server.WorldObjects
         {
             if (!IsGagged)
             {
+                if (TryHandleFlatulenceEmote(message, false))
+                    return;
+
                 EnqueueBroadcast(new GameMessageHearSpeech(message, GetNameWithSuffix(), Guid.Full, ChatMessageType.Speech), LocalBroadcastRange, ChatMessageType.Speech);
 
                 OnTalk(message);
@@ -838,6 +841,9 @@ namespace ACE.Server.WorldObjects
         {
             if (!IsGagged)
             {
+                if (TryHandleFlatulenceEmote(message, true))
+                    return;
+
                 EnqueueBroadcast(new GameMessageEmoteText(Guid.Full, GetNameWithSuffix(), message), LocalBroadcastRange);
 
                 OnTalk(message);
@@ -850,6 +856,9 @@ namespace ACE.Server.WorldObjects
         {
             if (!IsGagged)
             {
+                if (TryHandleFlatulenceEmote(message, true))
+                    return;
+
                 if (!IsOlthoiPlayer || (IsOlthoiPlayer && NoOlthoiTalk))
                     EnqueueBroadcast(new GameMessageSoulEmote(Guid.Full, Name, message), LocalBroadcastRange);
 
@@ -857,6 +866,27 @@ namespace ACE.Server.WorldObjects
             }
             else
                 SendGagError();
+        }
+
+        private bool TryHandleFlatulenceEmote(string message, bool allowBareEmote)
+        {
+            var text = message?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            var isFart =
+                text.Equals("/fart", StringComparison.OrdinalIgnoreCase) ||
+                text.Equals("*fart*", StringComparison.OrdinalIgnoreCase) ||
+                (allowBareEmote && text.Equals("fart", StringComparison.OrdinalIgnoreCase));
+
+            if (!isFart)
+                return false;
+
+            EnqueueBroadcastMotion(new Motion(this, MotionCommand.Flatulence));
+            EnqueueBroadcast(new GameMessageSound(Guid, Sound.Fizzle, 1.0f));
+            EnqueueBroadcast(new GameMessageEmoteText(Guid.Full, GetNameWithSuffix(), "passes gas."), LocalBroadcastRange);
+            OnTalk("*fart*");
+            return true;
         }
 
         public void OnTalk(string message)

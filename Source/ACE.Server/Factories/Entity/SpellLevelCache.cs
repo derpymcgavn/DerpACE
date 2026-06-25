@@ -6,16 +6,55 @@ namespace ACE.Server.Factories.Entity
 {
     public static class SpellLevelCache
     {
-        private static readonly ConcurrentDictionary<int, int> spellLevels = new ConcurrentDictionary<int, int>();
+        private static readonly ConcurrentDictionary<int, SpellInfo> spellInfo = new ConcurrentDictionary<int, SpellInfo>();
 
         public static int GetSpellLevel(int spellId)
         {
-            if (!spellLevels.TryGetValue(spellId, out var spellLevel))
+            return GetSpellInfo(spellId).FormulaLevel;
+        }
+
+        public static int GetServerSpellLevel(int spellId)
+        {
+            return GetSpellInfo(spellId).ServerLevel;
+        }
+
+        public static int GetBaseMana(int spellId)
+        {
+            return GetSpellInfo(spellId).BaseMana;
+        }
+
+        public static int GetPower(int spellId)
+        {
+            return GetSpellInfo(spellId).Power;
+        }
+
+        private static SpellInfo GetSpellInfo(int spellId)
+        {
+            return spellInfo.GetOrAdd(spellId, BuildSpellInfo);
+        }
+
+        private static SpellInfo BuildSpellInfo(int spellId)
+        {
+            var spell = new Spell(spellId, false);
+
+            if (spell._spellBase == null)
+                return default;
+
+            return new SpellInfo
             {
-                var spell = new Spell(spellId);
-                spellLevel = spellLevels[spellId] = (int)spell.Formula.Level;
-            }
-            return spellLevel;
+                FormulaLevel = spell.Formula != null ? (int)spell.Formula.Level : 0,
+                ServerLevel = (int)spell.Level,
+                BaseMana = (int)spell.BaseMana,
+                Power = (int)spell.Power,
+            };
+        }
+
+        private struct SpellInfo
+        {
+            public int FormulaLevel;
+            public int ServerLevel;
+            public int BaseMana;
+            public int Power;
         }
     }
 }

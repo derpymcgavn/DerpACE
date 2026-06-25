@@ -83,6 +83,7 @@ namespace ACE.Server.Managers
 
             var bucket = _kills[category];
             bucket.AddOrUpdate(killerName, 1, (_, existing) => existing + 1);
+            LeaderboardCache.InvalidateKillers();
 
             Save();
         }

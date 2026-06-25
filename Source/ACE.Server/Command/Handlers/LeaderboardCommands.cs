@@ -26,20 +26,7 @@ namespace ACE.Server.Command.Handlers
         {
             if (session?.Player == null) return;
 
-            var entries = PlayerManager.GetAllPlayers()
-                .Where(p => !p.IsDeleted
-                            && p.GetProperty(PropertyBool.IsHardcore) == true
-                            && p.GetProperty(PropertyBool.IsIronman) != true)
-                .Select(p => (
-                    Name:  p.Name,
-                    Level: p.Level ?? 0,
-                    Kills: p.GetProperty(PropertyInt.CreatureKills) ?? 0,
-                    Lives: p.GetProperty(PropertyInt.HardcoreLives) ?? 0
-                ))
-                .OrderByDescending(e => e.Kills)
-                .ThenByDescending(e => e.Level)
-                .Take(LeaderboardSize)
-                .ToList();
+            var entries = LeaderboardCache.GetHardcore().Take(LeaderboardSize).ToList();
 
             var sb = new StringBuilder();
             sb.AppendLine($"=== Hardcore Leaderboard (Top {LeaderboardSize}) ===");

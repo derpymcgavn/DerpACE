@@ -25,9 +25,7 @@ namespace ACE.Server.Factories
 
             if (wo.SpellDID != null)
             {
-                var spell = new Server.Entity.Spell(wo.SpellDID.Value);
-
-                var castableMana = (int)spell.BaseMana * 5;
+                var castableMana = SpellLevelCache.GetBaseMana((int)wo.SpellDID.Value) * 5;
 
                 if (castableMana > maxSpellMana)
                     maxSpellMana = castableMana;
@@ -81,10 +79,10 @@ namespace ACE.Server.Factories
             {
                 foreach (var spellId in wo.Biota.PropertiesSpellBook.Keys)
                 {
-                    var spell = new Server.Entity.Spell(spellId);
+                    var baseMana = SpellLevelCache.GetBaseMana(spellId);
 
-                    if (spell.BaseMana > maxBaseMana)
-                        maxBaseMana = (int)spell.BaseMana;
+                    if (baseMana > maxBaseMana)
+                        maxBaseMana = baseMana;
                 }
             }
             return maxBaseMana;
@@ -175,20 +173,20 @@ namespace ACE.Server.Factories
 
             if (wo.SpellDID != null)
             {
-                var spell = new Server.Entity.Spell(wo.SpellDID.Value);
+                var power = SpellLevelCache.GetPower((int)wo.SpellDID.Value);
 
-                if (spell.Power > maxSpellPower)
-                    maxSpellPower = (int)spell.Power;
+                if (power > maxSpellPower)
+                    maxSpellPower = power;
             }
 
             if (wo.Biota.PropertiesSpellBook != null)
             {
                 foreach (var spellId in wo.Biota.PropertiesSpellBook.Keys)
                 {
-                    var spell = new Server.Entity.Spell(spellId);
+                    var power = SpellLevelCache.GetPower(spellId);
 
-                    if (spell.Power > maxSpellPower)
-                        maxSpellPower = (int)spell.Power;
+                    if (power > maxSpellPower)
+                        maxSpellPower = power;
                 }
             }
             return maxSpellPower;

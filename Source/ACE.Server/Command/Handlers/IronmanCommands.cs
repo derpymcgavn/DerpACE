@@ -487,19 +487,7 @@ namespace ACE.Server.Command.Handlers
 
         private static void ShowIronmanLeaderboard(ACE.Server.WorldObjects.Player viewer)
         {
-            var entries = PlayerManager.GetAllPlayers()
-                .Where(p => !p.IsDeleted && p.GetProperty(PropertyBool.IsIronman) == true)
-                .Select(p => (
-                    Name:   p.Name,
-                    Level:  p.Level ?? 0,
-                    Kills:  p.GetProperty(PropertyInt.CreatureKills) ?? 0,
-                    Lives:  p.GetProperty(PropertyInt.HardcoreLives) ?? 0,
-                    Nomad:  p.GetProperty(PropertyBool.IsIronmanNomad) == true
-                ))
-                .OrderByDescending(e => e.Kills)
-                .ThenByDescending(e => e.Level)
-                .Take(LeaderboardSize)
-                .ToList();
+            var entries = LeaderboardCache.GetIronman().Take(LeaderboardSize).ToList();
 
             var sb = new StringBuilder();
             sb.AppendLine($"=== Ironman Leaderboard (Top {LeaderboardSize}) ===");
@@ -513,7 +501,7 @@ namespace ACE.Server.Command.Handlers
                 for (int i = 0; i < entries.Count; i++)
                 {
                     var e = entries[i];
-                    var status = e.Lives <= 0 ? "DEAD" : (e.Nomad ? "NOMAD" : "ALIVE");
+                    var status = e.Lives <= 0 ? "DEAD" : (e.IsNomad ? "NOMAD" : "ALIVE");
                     // AC's chat font is proportional, so column padding never aligns.
                     // Use a separator-based line that reads cleanly at any name length.
                     sb.AppendLine($"  {i + 1,2}. {e.Name} - Lv {e.Level} | {e.Kills:N0} kills | {e.Lives} life(s) | {status}");

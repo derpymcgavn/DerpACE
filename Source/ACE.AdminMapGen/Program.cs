@@ -230,7 +230,7 @@ sealed record Options
     public string CellDatPath { get; init; } = @"C:\Turbine\Asheron's Call\client_cell_1.dat";
     public string PortalDatPath { get; init; } = @"C:\Turbine\Asheron's Call\client_portal.dat";
     public string OutputPath { get; init; } = Path.Combine("Source", "ACE.Server", "Data", "AdminMap", "dereth-map.png");
-    public int PixelsPerCell { get; init; } = 1;
+    public int PixelsPerCell { get; init; } = 4;
     public string ColorOrder { get; init; } = "argb";
     public bool CopyToTemp { get; init; } = true;
 
@@ -300,7 +300,7 @@ sealed record Options
           --cell <path>          Path to client_cell_1.dat
           --portal <path>        Path to client_portal.dat
           --out <path>           Output PNG path
-          --scale <n>            Pixels per terrain cell. 1 = 2048x2048, 2 = 4096x4096
+          --scale <n>            Pixels per terrain cell. 1 = 2048x2048, 2 = 4096x4096, 4 = 8192x8192
           --color-order <order>  argb, rgba, abgr, or bgra for TerrainColor decoding
           --no-copy              Read DATs in place instead of copying to temp first
         """);

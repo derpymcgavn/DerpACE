@@ -695,8 +695,8 @@ namespace ACE.Server.Managers
         /// <summary>Number of hardcore lives an Ironman starts with. Final death (lives reaches 0) marks the character as deleted. Default 1.</summary>
         public static int IronmanHardcoreStartingLives { get; set; } = 1;
 
-        /// <summary>Cooldown (seconds) between deaths that count toward life loss. Default 7 days.</summary>
-        public static float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 60f * 60f * 24f * 7f;
+        /// <summary>Short debounce (seconds) between duplicate death events that count toward life loss. Default 5 seconds.</summary>
+        public static float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 5f;
 
         // ---------- Vampiric Jewelry (rings / necklaces / bracelets) ----------
 
