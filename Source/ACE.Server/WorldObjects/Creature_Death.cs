@@ -281,6 +281,9 @@ namespace ACE.Server.WorldObjects
 
             // wait for death animation to finish
             //var deathAnimLength = DatManager.PortalDat.ReadFromDat<MotionTable>(MotionTableId).GetAnimationLength(MotionCommand.Dead);
+            if (Location?.InstanceId > 0)
+                deathAnimLength = Math.Min(deathAnimLength, 1.0f);
+
             dieChain.AddDelaySeconds(deathAnimLength);
 
             dieChain.AddAction(this, () =>
@@ -663,6 +666,7 @@ namespace ACE.Server.WorldObjects
             // use the physics location for accuracy,
             // especially while jumping
             corpse.Location = PhysicsObj.Position.ACEPosition();
+            corpse.Location.InstanceId = Location?.InstanceId ?? 0;
 
             corpse.VictimId = Guid.Full;
             corpse.Name = $"{prefix} of {Name}";

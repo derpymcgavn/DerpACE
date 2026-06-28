@@ -2147,7 +2147,9 @@ namespace ACE.Server.WorldObjects
                 return;
 
             attacker.TakeDamage(this, DamageType.Bludgeon, bashDamage);
-            attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SplatterMidRightFront);
+            attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SparkMidRightFront);
+            var stance = CurrentMotionState?.Stance ?? MotionStance.SwordShieldCombat;
+            EnqueueBroadcastMotion(new Motion(stance, MotionCommand.AttackHigh1));
             ApplyVisualEffects(ACE.Entity.Enum.PlayScript.ShieldUpBlue);
             TryApplyShieldBashKnockback(attacker);
             var interrupted = attacker.TryInterruptMagicWindup(this);

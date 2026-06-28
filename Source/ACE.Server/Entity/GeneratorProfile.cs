@@ -352,6 +352,8 @@ namespace ACE.Server.Entity
                     obj.Location = new ACE.Entity.Position(Generator.Location.Cell, Generator.Location.PositionX + Biota.OriginX ?? 0, Generator.Location.PositionY + Biota.OriginY ?? 0, Generator.Location.PositionZ + Biota.OriginZ ?? 0, Biota.AnglesX ?? 0, Biota.AnglesY ?? 0, Biota.AnglesZ ?? 0, Biota.AnglesW ?? 0);
             }
 
+            ApplyGeneratorInstance(obj);
+
             if (!VerifyLandblock(obj) || !VerifyWalkableSlope(obj))
                 return false;
 
@@ -384,6 +386,8 @@ namespace ACE.Server.Entity
                 obj.Location.PositionZ += Biota.OriginZ ?? 0;
             }
 
+            ApplyGeneratorInstance(obj);
+
             obj.Location.PositionZ += 0.05f;
 
             // we are going to delay this scatter logic until the physics engine,
@@ -403,6 +407,8 @@ namespace ACE.Server.Entity
 
         public bool Spawn_Container(WorldObject obj)
         {
+            ApplyGeneratorInstance(obj);
+
             var success = Generator is Container container && container.TryAddToInventory(obj);
 
             if (!success)
@@ -413,6 +419,8 @@ namespace ACE.Server.Entity
 
         public bool Spawn_Shop(WorldObject obj)
         {
+            ApplyGeneratorInstance(obj);
+
             // spawn item in vendor shop inventory
             if (!(Generator is Vendor vendor))
             {
@@ -430,8 +438,15 @@ namespace ACE.Server.Entity
             //log.DebugFormat("{0}.Spawn_Default({1}): default handler for RegenLocationType {2}", _generator.Name, obj.Name, RegenLocationType);
 
             obj.Location = new ACE.Entity.Position(Generator.Location);
+            ApplyGeneratorInstance(obj);
 
             return obj.EnterWorld();
+        }
+
+        private void ApplyGeneratorInstance(WorldObject obj)
+        {
+            if (obj?.Location != null && Generator?.Location != null)
+                obj.Location.InstanceId = Generator.Location.InstanceId;
         }
 
         public bool VerifyLandblock(WorldObject obj)

@@ -80,6 +80,8 @@ namespace ACE.Server.Entity
         {
             try
             {
+                using var instanceScope = LScape.PushInstance(p.InstanceId);
+
                 //var landblock = LScape.get_landblock(p.LandblockId.Raw);
 
                 // dungeons
@@ -239,6 +241,8 @@ namespace ACE.Server.Entity
 
         public static void AdjustMapCoords(this Position pos)
         {
+            using var instanceScope = LScape.PushInstance(pos.InstanceId);
+
             // adjust Z to terrain height
             pos.PositionZ = pos.GetTerrainZ();
 
@@ -282,6 +286,8 @@ namespace ACE.Server.Entity
 
         public static float GetTerrainZ(this Position p)
         {
+            using var instanceScope = LScape.PushInstance(p.InstanceId);
+
             var landblock = LScape.get_landblock(p.LandblockId.Raw);
 
             var cellID = GetOutdoorCell(p);
@@ -306,6 +312,8 @@ namespace ACE.Server.Entity
         public static bool IsWalkable(this Position p)
         {
             if (p.Indoors) return true;
+
+            using var instanceScope = LScape.PushInstance(p.InstanceId);
 
             var landcell = (LandCell)LScape.get_landcell(p.Cell);
 

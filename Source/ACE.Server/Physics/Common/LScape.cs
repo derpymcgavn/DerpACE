@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading;
 
 using ACE.Entity;
 using ACE.Server.Managers;
@@ -15,6 +16,7 @@ namespace ACE.Server.Physics.Common
         public static int MidWidth = 11;
 
         private static readonly object landblockMutex = new object();
+        private static readonly AsyncLocal<uint> currentInstanceId = new AsyncLocal<uint>();
         /// <summary>
         /// This is not used if PhysicsEngine.Instance.Server is true
         /// </summary>
@@ -46,6 +48,28 @@ namespace ACE.Server.Physics.Common
 
         public static int LandblocksCount => Landblocks.Count;
 
+        public static IDisposable PushInstance(uint instanceId)
+        {
+            var previous = currentInstanceId.Value;
+            currentInstanceId.Value = instanceId;
+            return new InstanceScope(previous);
+        }
+
+        private class InstanceScope : IDisposable
+        {
+            private readonly uint previousInstanceId;
+
+            public InstanceScope(uint previousInstanceId)
+            {
+                this.previousInstanceId = previousInstanceId;
+            }
+
+            public void Dispose()
+            {
+                currentInstanceId.Value = previousInstanceId;
+            }
+        }
+
         /// <summary>
         /// Loads the backing store landblock structure<para />
         /// This function is thread safe
@@ -58,7 +82,7 @@ namespace ACE.Server.Physics.Common
             if (PhysicsEngine.Instance.Server)
             {
                 var lbid = new LandblockId(landblockID);
-                var lbmLandblock = LandblockManager.GetLandblock(lbid, false, false);
+                var lbmLandblock = LandblockManager.GetLandblock(lbid, currentInstanceId.Value, false, false);
 
                 return lbmLandblock.PhysicsLandblock;
             }
@@ -109,7 +133,8 @@ namespace ACE.Server.Physics.Common
                 // todo: Instead of ACE.Server.Entity.Landblock.Unload() calling this function, it should be calling PhysicsLandblock.Unload()
                 // todo: which would then call AdjustCell.AdjustCells.Remove()
 
-                AdjustCell.AdjustCells.TryRemove(landblockID >> 16, out _);
+                if (currentInstanceId.Value == 0)
+                    AdjustCell.AdjustCells.TryRemove(landblockID >> 16, out _);
                 return true;
             }
 

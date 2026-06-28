@@ -51,6 +51,12 @@ namespace ACE.Server.Entity
 
         public LandblockId Id { get; }
 
+        public uint InstanceId { get; }
+
+        public ulong LongId => ((ulong)InstanceId << 32) | (Id.Raw | 0xFFFF);
+
+        public bool IsDungeonInstance => InstanceId != 0;
+
         /// <summary>
         /// Flag indicates if this landblock is permanently loaded (for example, towns on high-traffic servers)
         /// </summary>
@@ -77,6 +83,7 @@ namespace ACE.Server.Entity
         private readonly Dictionary<ObjectGuid, WorldObject> worldObjects = new Dictionary<ObjectGuid, WorldObject>();
         private readonly Dictionary<ObjectGuid, WorldObject> pendingAdditions = new Dictionary<ObjectGuid, WorldObject>();
         private readonly List<ObjectGuid> pendingRemovals = new List<ObjectGuid>();
+        private readonly HashSet<ObjectGuid> instanceTemplateObjectGuids = new HashSet<ObjectGuid>();
 
         // Cache used for Tick efficiency
         private readonly List<Player> players = new List<Player>();
@@ -166,11 +173,12 @@ namespace ACE.Server.Entity
         }
 
 
-        public Landblock(LandblockId id)
+        public Landblock(LandblockId id, uint instanceId = 0)
         {
             //log.DebugFormat("Landblock({0:X8})", (id.Raw | 0xFFFF));
 
             Id = id;
+            InstanceId = instanceId;
 
             CellLandblock = DatManager.CellDat.ReadFromDat<CellLandblock>(Id.Raw | 0xFFFF);
             LandblockInfo = DatManager.CellDat.ReadFromDat<LandblockInfo>((uint)Id.Landblock << 16 | 0xFFFE);
@@ -188,14 +196,51 @@ namespace ACE.Server.Entity
 
             Task.Run(() =>
             {
+                if (IsDungeonInstance)
+                {
+                    CreateDungeonInstanceWorldObjects();
+                    return;
+                }
+
                 CreateWorldObjects();
-
                 SpawnDynamicShardObjects();
-
                 SpawnEncounters();
             });
 
             //LoadMeshes(objects);
+        }
+
+        private void CreateDungeonInstanceWorldObjects()
+        {
+            if (!IsDungeon)
+            {
+                CreateWorldObjectsCompleted = true;
+                return;
+            }
+
+            var objects = DatabaseManager.World.GetCachedInstancesByLandblock(Id.Landblock);
+            var shardObjects = DatabaseManager.Shard.BaseDatabase.GetStaticObjectsByLandblock(Id.Landblock);
+            var factoryObjects = WorldObjectFactory.CreateNewWorldObjects(objects, shardObjects)
+                .Where(fo => fo.WeenieType == WeenieType.Door)
+                .ToList();
+
+            actionQueue.EnqueueAction(new ActionEventDelegate(() =>
+            {
+                foreach (var fo in factoryObjects)
+                {
+                    if (fo.Location != null)
+                        fo.Location.InstanceId = InstanceId;
+
+                    instanceTemplateObjectGuids.Add(fo.Guid);
+                    AddWorldObject(fo);
+
+                    if (fo.PhysicsObj != null)
+                        fo.PhysicsObj.Order = 0;
+                }
+
+                CreateWorldObjectsCompleted = true;
+                PhysicsLandblock.SortObjects();
+            }));
         }
 
         /// <summary>
@@ -397,6 +442,8 @@ namespace ACE.Server.Entity
         /// </summary>
         public void TickPhysics(double portalYearTicks, ConcurrentBag<WorldObject> movedObjects)
         {
+            using var instanceScope = LScape.PushInstance(InstanceId);
+
             if (IsDormant)
                 return;
 
@@ -425,6 +472,8 @@ namespace ACE.Server.Entity
         /// </summary>
         public void TickMultiThreadedWork(double currentUnixTime)
         {
+            using var instanceScope = LScape.PushInstance(InstanceId);
+
             if (monitorsRequireEventStart)
             {
                 Monitor5m.Restart();
@@ -576,6 +625,8 @@ namespace ACE.Server.Entity
         /// </summary>
         public void TickSingleThreadedWork(double currentUnixTime)
         {
+            using var instanceScope = LScape.PushInstance(InstanceId);
+
             if (monitorsRequireEventStart)
             {
                 Monitor5m.Restart();
@@ -820,6 +871,11 @@ namespace ACE.Server.Entity
 
         private bool AddWorldObjectInternal(WorldObject wo)
         {
+            using var instanceScope = LScape.PushInstance(InstanceId);
+
+            if (wo.Location != null)
+                wo.Location.InstanceId = InstanceId;
+
             if (IsRemovedSwarmingRynthidMutatorSpawn(wo))
             {
                 // These are stale custom mutator spawns that should no longer enter the world.
@@ -1063,6 +1119,11 @@ namespace ACE.Server.Entity
             return worldObjects.Values.ToList();
         }
 
+        public bool IsInstanceTemplateObject(WorldObject worldObject)
+        {
+            return worldObject != null && instanceTemplateObjectGuids.Contains(worldObject.Guid);
+        }
+
         public WorldObject GetObject(uint objectId)
         {
             return GetObject(new ObjectGuid(objectId));
@@ -1160,6 +1221,8 @@ namespace ACE.Server.Entity
         /// </summary>
         public void Unload()
         {
+            using var instanceScope = LScape.PushInstance(InstanceId);
+
             var landblockID = Id.Raw | 0xFFFF;
 
             //log.DebugFormat("Landblock.Unload({0:X8})", landblockID);
@@ -1212,6 +1275,9 @@ namespace ACE.Server.Entity
 
         private void SaveDB()
         {
+            if (IsDungeonInstance)
+                return;
+
             var biotas = new Collection<(Biota biota, ReaderWriterLockSlim rwLock)>();
 
             foreach (var wo in worldObjects.Values)

@@ -1951,7 +1951,7 @@ namespace ACE.Server.WorldObjects
 
                         mainhand = GetEquippedMainHand();
                         // Remove any Two Handed, Caster (magic), or Missile Weapons
-                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher))
+                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand)))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{mainhand.Name}'");
                             return false;
@@ -2074,7 +2074,7 @@ namespace ACE.Server.WorldObjects
                     if (offhand != null)
                     {
                         // Can't wield these with anything else!
-                        if (mainhand.IsTwoHanded || mainhand.IsAmmoLauncher || mainhand.IsCaster)
+                        if (mainhand.IsTwoHanded || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand) || mainhand.IsCaster)
                         {
                             log.Warn($"'{Name}' is illegally wielding '{mainhand.Name}' ({mainhand.Guid}) and {offhand.Name}' ({offhand.Guid})");
                             return false;

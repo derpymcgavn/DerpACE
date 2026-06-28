@@ -193,13 +193,13 @@ namespace ACE.Server.Factories
                 wo.DefaultCombatStyle = CombatStyle.DualWield;
                 wo.WeaponSkill = Skill.MissileWeapons;
                 wo.W_WeaponType = WeaponType.Crossbow;
-                wo.W_AttackType = AttackType.Thrust | AttackType.DoubleThrust;
+                wo.W_AttackType = AttackType.Thrust;
                 wo.AmmoType = AmmoType.Bolt;
                 wo.ObjScale = 0.25f;
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow, true);
 
                 wo.Damage = wo.Damage.HasValue ? Math.Max(1, (int)Math.Round(wo.Damage.Value * 0.5f)) : wo.Damage;
-                wo.DamageMod = wo.DamageMod.HasValue ? 1.0 + ((wo.DamageMod.Value - 1.0) * 0.5) : wo.DamageMod;
+                wo.DamageMod = wo.DamageMod.HasValue ? wo.DamageMod.Value * 0.5 : wo.DamageMod;
                 wo.ElementalDamageBonus = wo.ElementalDamageBonus.HasValue ? Math.Max(0, (int)Math.Round(wo.ElementalDamageBonus.Value * 0.5)) : wo.ElementalDamageBonus;
                 wo.WeaponDefense = wo.WeaponDefense.HasValue ? 1.0 + ((wo.WeaponDefense.Value - 1.0) * 0.5) : wo.WeaponDefense;
                 wo.WeaponMissileDefense = wo.WeaponMissileDefense.HasValue ? 1.0 + ((wo.WeaponMissileDefense.Value - 1.0) * 0.5) : wo.WeaponMissileDefense;
@@ -221,7 +221,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = MutatorOverlayHandCrossbow;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nHand Crossbow: this tiny crossbow is wielded like a dual-wield sidearm and fires bolts from the melee attack cadence. It requires specialized Missile Weapons and specialized Dual Wield. Launcher stats and bolt damage are reduced by half; equip two hand crossbows to alternate shots from each hand.";
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nHand Crossbow: this tiny crossbow is wielded like a dual-wield sidearm and fires one bolt per attack from ranged posture. It requires specialized Missile Weapons and specialized Dual Wield. Its damage modifier is half of a normal crossbow roll; equip two hand crossbows to alternate shots from each hand, or pair one with a shield.";
             }
 
             // Reaper's Atlatl: atlatl-only kill-fed sustain. Separate from Dartflinger.

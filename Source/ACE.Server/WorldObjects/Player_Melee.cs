@@ -169,13 +169,21 @@ namespace ACE.Server.WorldObjects
         public const float MeleeDistance  = 0.6f;
         public const float StickyDistance = 4.0f;
         public const float RepeatDistance = 16.0f;
+        private const double HandCrossbowDamageModScale = 0.5;
 
         public void HandleActionTargetedMeleeAttack_Inner(WorldObject target, int attackSequence)
         {
             var dist = GetCylinderDistance(target);
 
-            if (IsHandCrossbowAttackReady() && TargetInHandCrossbowRange(target))
+            if (IsHandCrossbowAttackReady())
             {
+                if (!TargetInHandCrossbowRange(target))
+                {
+                    SendWeenieError(WeenieError.MissileOutOfRange);
+                    OnAttackDone();
+                    return;
+                }
+
                 var angle = GetAngle(target);
                 if (angle > PropertyManager.GetDouble("melee_max_angle").Item)
                 {
@@ -328,6 +336,12 @@ namespace ACE.Server.WorldObjects
             var staminaCost = GetAttackStamina(GetPowerRange());
             UpdateVitalDelta(Stamina, -staminaCost);
 
+            if (IsHandCrossbowWeapon(weapon) && attackFrames.Count > 1)
+            {
+                attackFrames.RemoveRange(1, attackFrames.Count - 1);
+                numStrikes = 1;
+            }
+
             if (numStrikes != attackFrames.Count)
             {
                 //log.Warn($"{Name}.GetAttackFrames(): MotionTableId: {MotionTableId:X8}, MotionStance: {CurrentMotionState.Stance}, Motion: {GetSwingAnimation()}, AttackFrames.Count({attackFrames.Count}) != NumStrikes({numStrikes})");
@@ -405,7 +419,10 @@ namespace ACE.Server.WorldObjects
 
                 var dist = GetCylinderDistance(target);
 
-                if (creature.IsAlive && GetCharacterOption(CharacterOption.AutoRepeatAttacks) && (dist <= MeleeDistance || dist <= StickyDistance && IsMeleeVisible(target)) && !IsBusy && !AttackCancelled)
+                var canRepeatHandCrossbow = IsHandCrossbowWeapon(weapon) && TargetInHandCrossbowRange(target);
+                var canRepeatMelee = dist <= MeleeDistance || dist <= StickyDistance && IsMeleeVisible(target);
+
+                if (creature.IsAlive && GetCharacterOption(CharacterOption.AutoRepeatAttacks) && (canRepeatHandCrossbow || canRepeatMelee) && !IsBusy && !AttackCancelled)
                 {
                     // client starts refilling power meter
                     Session.Network.EnqueueSend(new GameEventAttackDone(Session));
@@ -506,7 +523,7 @@ namespace ACE.Server.WorldObjects
             if (ammo.WeenieClassId != 2000601)
             {
                 projectile.Damage = projectile.Damage.HasValue ? Math.Max(1, (int)Math.Round(projectile.Damage.Value * 0.5f)) : projectile.Damage;
-                projectile.DamageMod = projectile.DamageMod.HasValue ? projectile.DamageMod.Value * 0.5 : 0.5;
+                projectile.DamageMod = projectile.DamageMod.HasValue ? projectile.DamageMod.Value * HandCrossbowDamageModScale : HandCrossbowDamageModScale;
                 projectile.ElementalDamageBonus = projectile.ElementalDamageBonus.HasValue ? Math.Max(0, (int)Math.Round(projectile.ElementalDamageBonus.Value * 0.5)) : projectile.ElementalDamageBonus;
             }
             projectile.ObjScale = (projectile.ObjScale ?? 1.0f) * 0.5f;
@@ -535,6 +552,7 @@ namespace ACE.Server.WorldObjects
             var weapon = GetEquippedMeleeWeapon();
 
             var swingAnimation = GetSwingAnimation();
+            var isHandCrossbowAttack = IsHandCrossbowAttackReady();
             if (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
                 animSpeed *= GetUnarmedComboAttackSpeedMultiplier();
             else
@@ -553,13 +571,18 @@ namespace ACE.Server.WorldObjects
                 motion.Persist(CurrentMotionState);
             }
             motion.MotionState.TurnSpeed = 2.25f;
-            motion.MotionFlags |= MotionFlags.StickToObject;
-            motion.TargetGuid = target.Guid;
+
+            if (!isHandCrossbowAttack)
+            {
+                motion.MotionFlags |= MotionFlags.StickToObject;
+                motion.TargetGuid = target.Guid;
+            }
+
             CurrentMotionState = motion;
 
             EnqueueBroadcastMotion(motion);
 
-            if (FastTick)
+            if (FastTick && !isHandCrossbowAttack)
                 PhysicsObj.stick_to_object(target.Guid.Full);
 
             return animLength;
@@ -575,7 +598,7 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public MotionCommand GetSwingAnimation()
         {
-            if (IsDualWieldAttack)
+            if (IsDualWieldAttack && GetDualWieldWeapon() != null)
                 DualWieldAlternate = !DualWieldAlternate;
 
             var offhand = IsDualWieldAttack && !DualWieldAlternate;

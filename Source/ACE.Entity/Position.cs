@@ -20,6 +20,11 @@ namespace ACE.Entity
         // FIXME: this is returning landblock + cell
         public uint Cell { get => landblockId.Raw; }
 
+        /// <summary>
+        /// Server-side landblock instance id. Zero is the base world.
+        /// </summary>
+        public uint InstanceId { get; set; }
+
         public uint CellX { get => landblockId.Raw >> 8 & 0xFF; }
         public uint CellY { get => landblockId.Raw & 0xFF; }
 
@@ -213,6 +218,7 @@ namespace ACE.Entity
         public Position(Position pos)
         {
             LandblockId = new LandblockId(pos.LandblockId.Raw);
+            InstanceId = pos.InstanceId;
             Pos = pos.Pos;
             Rotation = pos.Rotation;
         }
@@ -510,7 +516,8 @@ namespace ACE.Entity
 
         public string ToLOCString()
         {
-            return $"0x{LandblockId.Raw:X8} [{PositionX:F6} {PositionY:F6} {PositionZ:F6}] {RotationW:F6} {RotationX:F6} {RotationY:F6} {RotationZ:F6}";
+            var instance = InstanceId != 0 ? $" i{InstanceId}" : string.Empty;
+            return $"0x{LandblockId.Raw:X8} [{PositionX:F6} {PositionY:F6} {PositionZ:F6}] {RotationW:F6} {RotationX:F6} {RotationY:F6} {RotationZ:F6}{instance}";
         }
 
         public const int BlockLength = 192;

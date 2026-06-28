@@ -733,6 +733,9 @@ namespace ACE.Server.WorldObjects
             if (Location == null)
                 return false;
 
+            if (Location.InstanceId == 0 && Generator?.Location?.InstanceId > 0)
+                Location.InstanceId = Generator.Location.InstanceId;
+
             if (!LandblockManager.AddObject(this))
                 return false;
 
@@ -759,6 +762,8 @@ namespace ACE.Server.WorldObjects
         {
             if (pos == null) return false;
 
+            using var instanceScope = LScape.PushInstance(pos.InstanceId);
+
             var landblock = LScape.get_landblock(pos.Cell);
             if (landblock == null || !landblock.HasDungeon) return false;
 
@@ -779,6 +784,8 @@ namespace ACE.Server.WorldObjects
         public static bool AdjustDungeonPos(Position pos)
         {
             if (pos == null) return false;
+
+            using var instanceScope = LScape.PushInstance(pos.InstanceId);
 
             var landblock = LScape.get_landblock(pos.Cell);
             if (landblock == null || !landblock.HasDungeon) return false;
