@@ -2711,6 +2711,7 @@ namespace ACE.Server.WorldObjects
             var currentCombatStance = GetCombatStance();
 
             var missileWeapon = GetEquippedMissileWeapon();
+            var isHandCrossbowMissile = missileWeapon?.IsHandCrossbow == true;
             var caster = GetEquippedWand();
 
             if (CombatMode == CombatMode.Magic && MagicState.IsCasting)
@@ -2724,6 +2725,13 @@ namespace ACE.Server.WorldObjects
             {
                 case CombatMode.NonCombat:
                     {
+                        if (isHandCrossbowMissile)
+                        {
+                            var equippedAmmo = GetEquippedAmmo();
+                            if (equippedAmmo != null)
+                                ClearChild(equippedAmmo);
+                        }
+
                         switch (currentCombatStance)
                         {
                             case MotionStance.BowCombat:
@@ -2761,6 +2769,31 @@ namespace ACE.Server.WorldObjects
 
                             SetCombatMode(CombatMode.NonCombat);
                             return;
+                        }
+
+                        if (isHandCrossbowMissile)
+                        {
+                            var equippedAmmo = GetEquippedAmmo();
+                            if (equippedAmmo == null)
+                            {
+                                animTime = SetCombatMode(newCombatMode, out queueTime);
+
+                                var actionChain = new ActionChain();
+                                actionChain.AddDelaySeconds(animTime);
+                                actionChain.AddAction(this, () =>
+                                {
+                                    Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You are out of ammunition!"));
+                                    SetCombatMode(CombatMode.NonCombat);
+                                });
+                                actionChain.EnqueueChain();
+
+                                NextUseTime = DateTime.UtcNow.AddSeconds(animTime);
+                                return;
+                            }
+
+                            equippedAmmo.Placement = ACE.Entity.Enum.Placement.RightHandCombat;
+                            equippedAmmo.ParentLocation = ACE.Entity.Enum.ParentLocation.RightHand;
+                            break;
                         }
 
                         switch (currentCombatStance)

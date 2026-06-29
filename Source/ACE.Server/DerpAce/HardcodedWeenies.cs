@@ -124,7 +124,7 @@ namespace ACE.Server.DerpAce
         /// this is the creature weenie shell so it can be spawned and used in the world without SQL.
         /// </summary>
         /// <summary>
-        /// Handcrossbow Bolts (WCID 2000601) - half-damage prismatic bolt ammo for Hand Crossbow mutators.
+        /// Handcrossbow Bolts (WCID 2000601) - half-strength prismatic bolt ammo for Hand Crossbow mutators.
         /// </summary>
         private static Weenie BuildHandCrossbowBolts()
         {
@@ -180,7 +180,7 @@ namespace ACE.Server.DerpAce
 
             w.PropertiesString[PropertyString.Name]     = "Handcrossbow Bolts";
             w.PropertiesString[PropertyString.Use]      = "Nock these tiny bolts to hand crossbows.";
-            w.PropertiesString[PropertyString.LongDesc] = "Compact prismatic quarrels balanced for hand crossbows. They strike at roughly half the force of full-sized prismatic crossbow ammunition and require specialized Missile Weapons and specialized Dual Wield.";
+            w.PropertiesString[PropertyString.LongDesc] = "Compact prismatic quarrels balanced for hand crossbows. They strike at roughly half deadly-prismatic force and require specialized Missile Weapons and specialized Dual Wield.";
 
             w.PropertiesDID[PropertyDataId.Setup]              = 0x02001A87;
             w.PropertiesDID[PropertyDataId.SoundTable]         = 0x20000014;

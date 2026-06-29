@@ -43,6 +43,91 @@ namespace ACE.Server.WorldObjects
             return results;
         }
 
+        private void ConvertLegacyHandCrossbows()
+        {
+            foreach (var item in GetAllPossessions())
+            {
+                var conversion = GetLegacyHandCrossbowConversion(item);
+                if (conversion == HandCrossbowConversion.None)
+                    continue;
+
+                if (conversion == HandCrossbowConversion.LegacyAllStatsHalved)
+                {
+                    item.Damage = item.Damage.HasValue ? item.Damage.Value * 2 : item.Damage;
+                    item.DamageMod = item.DamageMod.HasValue ? Math.Max(0.0, item.DamageMod.Value - 0.5) : item.DamageMod;
+                    item.ElementalDamageBonus = item.ElementalDamageBonus.HasValue ? item.ElementalDamageBonus.Value * 2 : item.ElementalDamageBonus;
+                    item.WeaponDefense = RestoreLegacyScaledDefenseMod(item.WeaponDefense);
+                    item.WeaponMissileDefense = RestoreLegacyScaledDefenseMod(item.WeaponMissileDefense);
+                    item.WeaponMagicDefense = RestoreLegacyScaledDefenseMod(item.WeaponMagicDefense);
+                }
+                else if (conversion == HandCrossbowConversion.LegacyDamageModHalved)
+                {
+                    item.Damage = item.Damage.HasValue ? item.Damage.Value * 2 : item.Damage;
+                    item.ElementalDamageBonus = item.ElementalDamageBonus.HasValue ? item.ElementalDamageBonus.Value * 2 : item.ElementalDamageBonus;
+                    item.WeaponDefense = RestoreLegacyScaledDefenseMod(item.WeaponDefense);
+                    item.WeaponMissileDefense = RestoreLegacyScaledDefenseMod(item.WeaponMissileDefense);
+                    item.WeaponMagicDefense = RestoreLegacyScaledDefenseMod(item.WeaponMagicDefense);
+                }
+                else if (conversion == HandCrossbowConversion.FullDamageMod)
+                {
+                    item.DamageMod = item.DamageMod.HasValue ? item.DamageMod.Value * 0.5 : item.DamageMod;
+                }
+
+                item.ObjScale = 0.5f;
+
+                item.LongDesc = GetCurrentHandCrossbowLongDesc(item.LongDesc);
+                item.SaveBiotaToDatabase();
+            }
+        }
+
+        private enum HandCrossbowConversion
+        {
+            None,
+            LegacyAllStatsHalved,
+            LegacyDamageModHalved,
+            FullDamageMod
+        }
+
+        private static HandCrossbowConversion GetLegacyHandCrossbowConversion(WorldObject item)
+        {
+            if (item?.IsHandCrossbow != true)
+                return HandCrossbowConversion.None;
+
+            var longDesc = item.LongDesc ?? "";
+            if (longDesc.Contains("Launcher stats and bolt damage are reduced by half", StringComparison.OrdinalIgnoreCase))
+                return HandCrossbowConversion.LegacyAllStatsHalved;
+
+            if (longDesc.Contains("damage modifier is half of a normal crossbow roll", StringComparison.OrdinalIgnoreCase))
+                return HandCrossbowConversion.LegacyDamageModHalved;
+
+            if (longDesc.Contains("keeps normal crossbow damage stats", StringComparison.OrdinalIgnoreCase))
+                return HandCrossbowConversion.FullDamageMod;
+
+            return HandCrossbowConversion.None;
+        }
+
+        private static double? RestoreLegacyScaledDefenseMod(double? value)
+        {
+            if (!value.HasValue)
+                return value;
+
+            return 1.0 + ((value.Value - 1.0) * 2.0);
+        }
+
+        private static string GetCurrentHandCrossbowLongDesc(string longDesc)
+        {
+            const string current = "Hand Crossbow: this one-handed crossbow is half the size of a normal crossbow, uses half the normal crossbow damage modifier, and fires compact bolts at roughly half deadly-prismatic force. It uses the missile accuracy bar with a stand-still dual-wield attack animation. It requires specialized Missile Weapons and specialized Dual Wield; equip it with another hand crossbow or pair it with a shield.";
+
+            if (string.IsNullOrWhiteSpace(longDesc))
+                return current;
+
+            var marker = longDesc.IndexOf("Hand Crossbow:", StringComparison.OrdinalIgnoreCase);
+            if (marker < 0)
+                return longDesc + "\n\n" + current;
+
+            return longDesc.Substring(0, marker).TrimEnd() + "\n\n" + current;
+        }
+
         public int GetEncumbranceCapacity()
         {
             var strength = Attributes[PropertyAttribute.Strength].Current;
@@ -1731,6 +1816,8 @@ namespace ACE.Server.WorldObjects
                     mainWeapon = null;
 
                 mainWeapon = mainWeapon ?? GetEquippedMissileWeapon() ?? GetEquippedWand();
+                if (mainWeapon?.IsHandCrossbow == true)
+                    mainWeapon = null;
 
                 // special case: instead of sending the typical DequipItem -> GetAndWieldItem here,
                 // the client just sends GetAndWieldItem, and the server is responsible for detecting if DequipItem is needed
@@ -1950,6 +2037,18 @@ namespace ACE.Server.WorldObjects
                         }
 
                         mainhand = GetEquippedMainHand();
+                        if (mainhand?.IsHandCrossbow == true && !item.IsShield && !item.IsHandCrossbow)
+                        {
+                            log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) with hand crossbow '{mainhand.Name}'");
+                            return false;
+                        }
+
+                        if (item.IsHandCrossbow && mainhand != null && !mainhand.IsHandCrossbow)
+                        {
+                            log.Warn($"'{Name}' tried to wield hand crossbow '{item.Name}' ({item.Guid}) with non-hand-crossbow '{mainhand.Name}'");
+                            return false;
+                        }
+
                         // Remove any Two Handed, Caster (magic), or Missile Weapons
                         if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand)))
                         {
@@ -2016,14 +2115,26 @@ namespace ACE.Server.WorldObjects
                     case EquipMask.MeleeWeapon:
                         // Should not have any Caster, Missile, or TwoHanders equipped
                         offhand = GetEquippedOffHand();
-                        if (offhand != null && (offhand.IsTwoHanded || offhand.IsCaster || offhand.IsAmmoLauncher))
+                        if (item.IsHandCrossbow && offhand != null && !offhand.IsShield && !offhand.IsHandCrossbow)
+                        {
+                            log.Warn($"'{Name}' tried to wield hand crossbow '{item.Name}' ({item.Guid}) with non-hand-crossbow offhand '{offhand.Name}'");
+                            return false;
+                        }
+
+                        if (offhand?.IsHandCrossbow == true && !item.IsHandCrossbow)
+                        {
+                            log.Warn($"'{Name}' tried to wield non-hand-crossbow '{item.Name}' ({item.Guid}) with hand crossbow offhand '{offhand.Name}'");
+                            return false;
+                        }
+
+                        if (offhand != null && (offhand.IsTwoHanded || offhand.IsCaster || offhand.IsAmmoLauncher && !IsHandCrossbowWeapon(offhand)))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{offhand.Name}'");
                             return false;
                         }
 
                         mainhand = GetEquippedMainHand();
-                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher))
+                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand)))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{mainhand.Name}'");
                             return false;

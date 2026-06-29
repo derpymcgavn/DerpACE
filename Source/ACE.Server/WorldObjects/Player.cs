@@ -124,6 +124,7 @@ namespace ACE.Server.WorldObjects
 
             SortBiotasIntoInventory(inventory);
             AddBiotasToEquippedObjects(wieldedItems);
+            ConvertLegacyHandCrossbows();
 
             UpdateCoinValue(false);
         }

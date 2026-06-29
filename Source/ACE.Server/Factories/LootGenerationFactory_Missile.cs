@@ -174,8 +174,8 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
-            // Hand Crossbow: crossbow mutator that turns the launcher into a tiny dual-wield
-            // sidearm. Runtime firing is handled by the melee dual-wield path when the flag is set.
+            // Hand Crossbow: crossbow mutator that keeps normal crossbow behavior, but equips
+            // one-handed and uses the dual-wield attack stance while standing still.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
                 && TryRollWeaponModifier(
                 profile,
@@ -195,15 +195,9 @@ namespace ACE.Server.Factories
                 wo.W_WeaponType = WeaponType.Crossbow;
                 wo.W_AttackType = AttackType.Thrust;
                 wo.AmmoType = AmmoType.Bolt;
-                wo.ObjScale = 0.25f;
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow, true);
-
-                wo.Damage = wo.Damage.HasValue ? Math.Max(1, (int)Math.Round(wo.Damage.Value * 0.5f)) : wo.Damage;
                 wo.DamageMod = wo.DamageMod.HasValue ? wo.DamageMod.Value * 0.5 : wo.DamageMod;
-                wo.ElementalDamageBonus = wo.ElementalDamageBonus.HasValue ? Math.Max(0, (int)Math.Round(wo.ElementalDamageBonus.Value * 0.5)) : wo.ElementalDamageBonus;
-                wo.WeaponDefense = wo.WeaponDefense.HasValue ? 1.0 + ((wo.WeaponDefense.Value - 1.0) * 0.5) : wo.WeaponDefense;
-                wo.WeaponMissileDefense = wo.WeaponMissileDefense.HasValue ? 1.0 + ((wo.WeaponMissileDefense.Value - 1.0) * 0.5) : wo.WeaponMissileDefense;
-                wo.WeaponMagicDefense = wo.WeaponMagicDefense.HasValue ? 1.0 + ((wo.WeaponMagicDefense.Value - 1.0) * 0.5) : wo.WeaponMagicDefense;
+                wo.ObjScale = 0.5f;
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow, true);
 
                 wo.WieldRequirements = WieldRequirement.Training;
                 wo.WieldSkillType = (int)Skill.MissileWeapons;
@@ -221,7 +215,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = MutatorOverlayHandCrossbow;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nHand Crossbow: this tiny crossbow is wielded like a dual-wield sidearm and fires one bolt per attack from ranged posture. It requires specialized Missile Weapons and specialized Dual Wield. Its damage modifier is half of a normal crossbow roll; equip two hand crossbows to alternate shots from each hand, or pair one with a shield.";
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nHand Crossbow: this one-handed crossbow is half the size of a normal crossbow, uses half the normal crossbow damage modifier, and fires compact bolts at roughly half deadly-prismatic force. It uses the missile accuracy bar with a stand-still dual-wield attack animation. It requires specialized Missile Weapons and specialized Dual Wield; equip it with another hand crossbow or pair it with a shield.";
             }
 
             // Reaper's Atlatl: atlatl-only kill-fed sustain. Separate from Dartflinger.

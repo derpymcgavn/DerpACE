@@ -169,7 +169,6 @@ namespace ACE.Server.WorldObjects
         public const float MeleeDistance  = 0.6f;
         public const float StickyDistance = 4.0f;
         public const float RepeatDistance = 16.0f;
-        private const double HandCrossbowDamageModScale = 0.5;
 
         public void HandleActionTargetedMeleeAttack_Inner(WorldObject target, int attackSequence)
         {
@@ -519,17 +518,19 @@ namespace ACE.Server.WorldObjects
             if (projectile == null)
                 return false;
 
-            projectile.Name = "Handcrossbow Bolt";
-            if (ammo.WeenieClassId != 2000601)
-            {
-                projectile.Damage = projectile.Damage.HasValue ? Math.Max(1, (int)Math.Round(projectile.Damage.Value * 0.5f)) : projectile.Damage;
-                projectile.DamageMod = projectile.DamageMod.HasValue ? projectile.DamageMod.Value * HandCrossbowDamageModScale : HandCrossbowDamageModScale;
-                projectile.ElementalDamageBonus = projectile.ElementalDamageBonus.HasValue ? Math.Max(0, (int)Math.Round(projectile.ElementalDamageBonus.Value * 0.5)) : projectile.ElementalDamageBonus;
-            }
-            projectile.ObjScale = (projectile.ObjScale ?? 1.0f) * 0.5f;
+            ApplyHandCrossbowProjectileScale(projectile, ammo);
 
             UpdateAmmoAfterLaunch(ammo);
             return true;
+        }
+
+        private void ApplyHandCrossbowProjectileScale(WorldObject projectile, WorldObject ammo)
+        {
+            if (projectile == null || ammo == null)
+                return;
+
+            projectile.Name = "Handcrossbow Bolt";
+            projectile.ObjScale = (projectile.ObjScale ?? 1.0f) * 0.5f;
         }
 
         private static bool IsBoltAmmo(ACE.Entity.Enum.AmmoType ammoType)

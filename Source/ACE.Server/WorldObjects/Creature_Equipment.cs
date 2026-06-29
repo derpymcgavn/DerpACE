@@ -149,7 +149,8 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public WorldObject GetEquippedMissileWeapon()
         {
-            return EquippedObjects.Values.FirstOrDefault(e => e.CurrentWieldedLocation == EquipMask.MissileWeapon);
+            return EquippedObjects.Values.FirstOrDefault(e => e.CurrentWieldedLocation == EquipMask.MissileWeapon)
+                ?? GetEquippedHandCrossbow();
         }
 
         /// <summary>
@@ -157,7 +158,19 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public WorldObject GetEquippedMissileLauncher()
         {
-            return EquippedObjects.Values.FirstOrDefault(e => e.CurrentWieldedLocation == EquipMask.MissileWeapon && e is MissileLauncher);
+            return EquippedObjects.Values.FirstOrDefault(e => e.CurrentWieldedLocation == EquipMask.MissileWeapon && e is MissileLauncher)
+                ?? GetEquippedHandCrossbow();
+        }
+
+        private WorldObject GetEquippedHandCrossbow()
+        {
+            var mainhand = EquippedObjects.Values.FirstOrDefault(e => e.IsHandCrossbow && e.ParentLocation == ACE.Entity.Enum.ParentLocation.RightHand && e.CurrentWieldedLocation == EquipMask.MeleeWeapon);
+            var offhand = EquippedObjects.Values.FirstOrDefault(e => e.IsHandCrossbow && !e.IsShield && e.CurrentWieldedLocation == EquipMask.Shield);
+
+            if (!IsDualWieldAttack || DualWieldAlternate)
+                return mainhand ?? offhand;
+
+            return offhand ?? mainhand;
         }
 
         /// <summary>

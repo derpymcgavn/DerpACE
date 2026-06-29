@@ -77,6 +77,7 @@ namespace ACE.Server.WorldObjects
 
             var weapon = GetEquippedMissileWeapon();
             var ammo = GetEquippedAmmo();
+            var usingHandCrossbow = weapon?.IsHandCrossbow == true;
 
             // sanity check
             accuracyLevel = Math.Clamp(accuracyLevel, 0.0f, 1.0f);
@@ -91,7 +92,11 @@ namespace ACE.Server.WorldObjects
             AttackQueue.Add(accuracyLevel);
 
             if (MissileTarget == null)
+            {
                 AccuracyLevel = accuracyLevel;  // verify
+                if (usingHandCrossbow)
+                    DualWieldAlternate = true;
+            }
 
             // get world object of target guid
             var target = CurrentLandblock?.GetObject(targetGuid) as Creature;
@@ -152,6 +157,7 @@ namespace ACE.Server.WorldObjects
                 OnAttackDone();
                 return;
             }
+            var handCrossbowShot = weapon.IsHandCrossbow;
 
             var ammo = weapon.IsAmmoLauncher ? GetEquippedAmmo() : weapon;
             if (ammo == null)
@@ -208,6 +214,8 @@ namespace ACE.Server.WorldObjects
 
             // calculate projectile spawn pos and velocity
             var localOrigin = GetProjectileSpawnOrigin(ammo.WeenieClassId, aimLevel);
+            if (handCrossbowShot && weapon.CurrentWieldedLocation == EquipMask.Shield)
+                localOrigin.X *= -1.0f;
 
             var velocity = CalculateProjectileVelocity(localOrigin, target, projectileSpeed, out Vector3 origin, out Quaternion orientation);
 
@@ -242,6 +250,13 @@ namespace ACE.Server.WorldObjects
                 UpdateVitalDelta(Stamina, -staminaCost);
 
                 var projectile = LaunchProjectile(launcher, ammo, target, origin, orientation, velocity);
+                if (handCrossbowShot)
+                {
+                    ApplyHandCrossbowProjectileScale(projectile, ammo);
+                    if (GetDualWieldWeapon()?.IsHandCrossbow == true)
+                        DualWieldAlternate = !DualWieldAlternate;
+                }
+
                 UpdateAmmoAfterLaunch(ammo);
             });
 

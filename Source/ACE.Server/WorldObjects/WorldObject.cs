@@ -75,6 +75,7 @@ namespace ACE.Server.WorldObjects
         // ValidLocations is bugged for some older two-handed weapons, still contains MeleeWeapon instead of TwoHanded?
         //public bool IsTwoHanded { get => CurrentWieldedLocation != null && CurrentWieldedLocation == EquipMask.TwoHanded; }
         public bool IsTwoHanded => WeaponSkill == Skill.TwoHandedCombat;
+        public bool IsHandCrossbow => GetProperty(PropertyBool.IsHandCrossbow) == true;
         public bool IsBow { get => DefaultCombatStyle != null && (DefaultCombatStyle == CombatStyle.Bow || DefaultCombatStyle == CombatStyle.Crossbow); }
         public bool IsAtlatl { get => DefaultCombatStyle != null && DefaultCombatStyle == CombatStyle.Atlatl; }
         public bool IsAmmoLauncher { get => IsBow || IsAtlatl; }
