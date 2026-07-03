@@ -174,31 +174,6 @@ namespace ACE.Server.WorldObjects
         {
             var dist = GetCylinderDistance(target);
 
-            if (IsHandCrossbowAttackReady())
-            {
-                if (!TargetInHandCrossbowRange(target))
-                {
-                    SendWeenieError(WeenieError.MissileOutOfRange);
-                    OnAttackDone();
-                    return;
-                }
-
-                var angle = GetAngle(target);
-                if (angle > PropertyManager.GetDouble("melee_max_angle").Item)
-                {
-                    var rotateTime = Rotate(target);
-
-                    var actionChain = new ActionChain();
-                    actionChain.AddDelaySeconds(rotateTime);
-                    actionChain.AddAction(this, () => Attack(target, attackSequence));
-                    actionChain.EnqueueChain();
-                }
-                else
-                    Attack(target, attackSequence);
-
-                return;
-            }
-
             if (dist <= MeleeDistance || dist <= StickyDistance && IsMeleeVisible(target))
             {
                 // sticky melee
@@ -335,12 +310,6 @@ namespace ACE.Server.WorldObjects
             var staminaCost = GetAttackStamina(GetPowerRange());
             UpdateVitalDelta(Stamina, -staminaCost);
 
-            if (IsHandCrossbowWeapon(weapon) && attackFrames.Count > 1)
-            {
-                attackFrames.RemoveRange(1, attackFrames.Count - 1);
-                numStrikes = 1;
-            }
-
             if (numStrikes != attackFrames.Count)
             {
                 //log.Warn($"{Name}.GetAttackFrames(): MotionTableId: {MotionTableId:X8}, MotionStance: {CurrentMotionState.Stance}, Motion: {GetSwingAnimation()}, AttackFrames.Count({attackFrames.Count}) != NumStrikes({numStrikes})");
@@ -367,12 +336,6 @@ namespace ACE.Server.WorldObjects
                     {
                         Attacking = false;
                         OnAttackDone();
-                        return;
-                    }
-
-                    if (IsHandCrossbowWeapon(weapon))
-                    {
-                        TryLaunchHandCrossbowBolt(creature, weapon);
                         return;
                     }
 
@@ -418,10 +381,9 @@ namespace ACE.Server.WorldObjects
 
                 var dist = GetCylinderDistance(target);
 
-                var canRepeatHandCrossbow = IsHandCrossbowWeapon(weapon) && TargetInHandCrossbowRange(target);
                 var canRepeatMelee = dist <= MeleeDistance || dist <= StickyDistance && IsMeleeVisible(target);
 
-                if (creature.IsAlive && GetCharacterOption(CharacterOption.AutoRepeatAttacks) && (canRepeatHandCrossbow || canRepeatMelee) && !IsBusy && !AttackCancelled)
+                if (creature.IsAlive && GetCharacterOption(CharacterOption.AutoRepeatAttacks) && canRepeatMelee && !IsBusy && !AttackCancelled)
                 {
                     // client starts refilling power meter
                     Session.Network.EnqueueSend(new GameEventAttackDone(Session));
@@ -441,105 +403,6 @@ namespace ACE.Server.WorldObjects
                 LifestoneProtectionDispel();
         }
 
-        private bool IsHandCrossbowAttackReady()
-        {
-            var mainhand = GetEquippedMeleeWeapon(true);
-            var offhand = GetDualWieldWeapon();
-
-            return IsHandCrossbowWeapon(mainhand) || IsHandCrossbowWeapon(offhand);
-        }
-
-        private static bool IsHandCrossbowWeapon(WorldObject weapon)
-        {
-            return weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow) == true;
-        }
-
-        private bool TargetInHandCrossbowRange(WorldObject target)
-        {
-            if (target?.Location == null || Location == null || !IsDirectVisible(target))
-                return false;
-
-            var weapon = GetEquippedMeleeWeapon() ?? GetEquippedMeleeWeapon(true);
-            if (!IsHandCrossbowWeapon(weapon))
-                weapon = GetDualWieldWeapon();
-
-            if (!IsHandCrossbowWeapon(weapon))
-                return false;
-
-            var maxVelocity = weapon.MaximumVelocity ?? DefaultMaxVelocity;
-            if (maxVelocity <= 0.0f)
-                maxVelocity = DefaultMaxVelocity;
-
-            var range = (float)Math.Pow(maxVelocity, 2.0f) * 0.1020408163265306f;
-            range = Math.Min(range, MissileRangeCap * 0.6f);
-            return Location.DistanceTo(target.Location) <= range;
-        }
-
-        private bool TryLaunchHandCrossbowBolt(Creature target, WorldObject weapon)
-        {
-            if (target == null || weapon == null || !target.IsAlive)
-                return false;
-
-            var ammo = GetEquippedAmmo();
-            if (ammo == null || ammo.AmmoType == null || !IsBoltAmmo(ammo.AmmoType.Value))
-            {
-                SendWeenieError(WeenieError.YouAreOutOfAmmunition);
-                return false;
-            }
-
-            if (!TargetInHandCrossbowRange(target))
-            {
-                SendWeenieError(WeenieError.MissileOutOfRange);
-                return false;
-            }
-
-            var projectileSpeed = Math.Min((float)(weapon.MaximumVelocity ?? DefaultProjectileSpeed), PhysicsGlobals.MaxVelocity);
-            if (projectileSpeed <= 0.0f)
-                projectileSpeed = DefaultProjectileSpeed;
-
-            var aimVelocity = GetAimVelocity(target, projectileSpeed);
-            var aimLevel = GetAimLevel(aimVelocity);
-            var localOrigin = GetProjectileSpawnOrigin(ammo.WeenieClassId, aimLevel);
-
-            if (weapon.CurrentWieldedLocation == EquipMask.Shield)
-                localOrigin.X *= -1.0f;
-
-            var velocity = CalculateProjectileVelocity(localOrigin, target, projectileSpeed, out var origin, out var orientation);
-            if (!velocity.IsValid() || velocity == Vector3.Zero)
-            {
-                SendWeenieError(WeenieError.MissileOutOfRange);
-                return false;
-            }
-
-            var sound = GetLaunchMissileSound(weapon);
-            EnqueueBroadcast(new GameMessageSound(Guid, sound, 1.0f));
-
-            var projectile = LaunchProjectile(weapon, ammo, target, origin, orientation, velocity);
-            if (projectile == null)
-                return false;
-
-            ApplyHandCrossbowProjectileScale(projectile, ammo);
-
-            UpdateAmmoAfterLaunch(ammo);
-            return true;
-        }
-
-        private void ApplyHandCrossbowProjectileScale(WorldObject projectile, WorldObject ammo)
-        {
-            if (projectile == null || ammo == null)
-                return;
-
-            projectile.Name = "Handcrossbow Bolt";
-            projectile.ObjScale = (projectile.ObjScale ?? 1.0f) * 0.5f;
-        }
-
-        private static bool IsBoltAmmo(ACE.Entity.Enum.AmmoType ammoType)
-        {
-            return ammoType == ACE.Entity.Enum.AmmoType.Bolt
-                || ammoType == ACE.Entity.Enum.AmmoType.BoltCrystal
-                || ammoType == ACE.Entity.Enum.AmmoType.BoltChorizite;
-        }
-
         /// <summary>
         /// Performs the player melee swing animation
         /// </summary>
@@ -553,7 +416,6 @@ namespace ACE.Server.WorldObjects
             var weapon = GetEquippedMeleeWeapon();
 
             var swingAnimation = GetSwingAnimation();
-            var isHandCrossbowAttack = IsHandCrossbowAttackReady();
             if (AttackType == AttackType.Punch || AttackType == AttackType.Kick)
                 animSpeed *= GetUnarmedComboAttackSpeedMultiplier();
             else
@@ -573,17 +435,14 @@ namespace ACE.Server.WorldObjects
             }
             motion.MotionState.TurnSpeed = 2.25f;
 
-            if (!isHandCrossbowAttack)
-            {
-                motion.MotionFlags |= MotionFlags.StickToObject;
-                motion.TargetGuid = target.Guid;
-            }
+            motion.MotionFlags |= MotionFlags.StickToObject;
+            motion.TargetGuid = target.Guid;
 
             CurrentMotionState = motion;
 
             EnqueueBroadcastMotion(motion);
 
-            if (FastTick && !isHandCrossbowAttack)
+            if (FastTick)
                 PhysicsObj.stick_to_object(target.Guid.Full);
 
             return animLength;

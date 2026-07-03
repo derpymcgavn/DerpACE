@@ -255,9 +255,132 @@ namespace ACE.Server.Factories
                 TryMutateCookingGloves(wo, profile, roll);
                 TryMutateAlchemistGloves(wo, profile, roll);
                 TryMutateDanceBoots(wo, profile, roll);
+                TryMutateArmorSort(wo, profile, roll);
+                TryMutateBattlemageHelm(wo, profile, roll);
             }
 
             TryMutateShieldAffixes(wo, profile, roll);
+        }
+
+        private static void TryMutateBattlemageHelm(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null)
+                return;
+
+            var forced = IsForcedArmorMutator(roll, "battlemage");
+
+            var validLocs = (EquipMask)(wo.ValidLocations ?? 0);
+            if (!validLocs.HasFlag(EquipMask.HeadWear))
+                return;
+
+            if (!forced && profile.Tier < 5)
+                return;
+
+            var rollChance = profile.Tier >= 8 ? 0.08f : profile.Tier >= 7 ? 0.06f : 0.04f;
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
+                return;
+
+            wo.SetProperty(PropertyBool.IsBattlemageHelm, true);
+
+            const string suffix = "of the Battlemage";
+            if (!wo.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                wo.Name = $"{wo.Name} {suffix}";
+
+            wo.IconOverlayId = MutatorOverlayBattlemage;
+            ApplyLootUiEffect(wo, UiEffects.Magical);
+
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nBattlemage: while this helm is equipped, War Magic can satisfy Light Weapons wield requirements. Your light weapon attacks use War Magic for attack checks and Focus for physical damage scaling.";
+        }
+
+        private static readonly DamageType[] ArmorSortDamageTypes =
+        {
+            DamageType.Slash,
+            DamageType.Pierce,
+            DamageType.Bludgeon,
+            DamageType.Cold,
+            DamageType.Fire,
+            DamageType.Acid,
+            DamageType.Electric,
+            DamageType.Health,
+            DamageType.Stamina,
+            DamageType.Mana,
+            DamageType.Nether,
+        };
+
+        private static void TryMutateArmorSort(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null)
+                return;
+
+            if (wo.IsShield)
+                return;
+
+            var forced = IsForcedArmorMutator(roll, "armorsort");
+
+            if (!forced && profile.Tier < 4)
+                return;
+
+            var rollChance = profile.Tier >= 8 ? 0.10f : profile.Tier >= 7 ? 0.08f : profile.Tier >= 6 ? 0.06f : 0.04f;
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
+                return;
+
+            var bonus = forced ? 3 : RollArmorSortBonus(profile);
+            var damageType = ArmorSortDamageTypes[ThreadSafeRandom.Next(0, ArmorSortDamageTypes.Length - 1)];
+            var damageName = GetArmorSortDamageName(damageType);
+
+            wo.ArmorSortDamageType = damageType;
+            wo.ArmorSortDamageBonus = bonus;
+            wo.IconOverlayId = IconOverlay_ItemMaxLevel[bonus - 1];
+
+            var suffix = $"of {damageName} Resonance +{bonus}";
+            if (!wo.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                wo.Name = $"{wo.Name} {suffix}";
+
+            ApplyLootUiEffect(wo, GetArmorSortUiEffect(damageType));
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nResonant Weave: while equipped, this piece adds +{bonus} {damageName} damage to matching outgoing melee, missile, and spell projectile hits. Matching equipped pieces harmonize with diminishing returns: strongest resonance full value, then half value, then quarter value, rounded to the nearest whole damage.";
+        }
+
+        private static int RollArmorSortBonus(TreasureDeath profile)
+        {
+            var roll = ThreadSafeRandom.Next(0.0f, 1.0f);
+
+            if (profile.Tier >= 8)
+                return roll < 0.12f ? 3 : roll < 0.42f ? 2 : 1;
+
+            if (profile.Tier >= 7)
+                return roll < 0.08f ? 3 : roll < 0.32f ? 2 : 1;
+
+            return roll < 0.20f ? 2 : 1;
+        }
+
+        private static string GetArmorSortDamageName(DamageType damageType)
+        {
+            return damageType switch
+            {
+                DamageType.Bludgeon => "Bludgeon",
+                DamageType.Cold => "Frost",
+                DamageType.Electric => "Lightning",
+                _ => damageType.ToString(),
+            };
+        }
+
+        private static UiEffects GetArmorSortUiEffect(DamageType damageType)
+        {
+            return damageType switch
+            {
+                DamageType.Slash => UiEffects.Slashing,
+                DamageType.Pierce => UiEffects.Piercing,
+                DamageType.Bludgeon => UiEffects.Bludgeoning,
+                DamageType.Cold => UiEffects.Frost,
+                DamageType.Fire => UiEffects.Fire,
+                DamageType.Acid => UiEffects.Acid,
+                DamageType.Electric => UiEffects.Lightning,
+                DamageType.Health => UiEffects.BoostHealth,
+                DamageType.Stamina => UiEffects.BoostStamina,
+                DamageType.Mana => UiEffects.BoostMana,
+                DamageType.Nether => UiEffects.Magical,
+                _ => UiEffects.Magical,
+            };
         }
 
         private static void TryMutateCookingGloves(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
@@ -733,15 +856,15 @@ namespace ACE.Server.Factories
             wo.WeaponSkill = Skill.UnarmedCombat;
 
             // ── Weapon combat properties so the surrogate reads identically to a melee weapon ──
-            // WeaponOffense / WeaponDefense (same ranges as heavy unarmed mutation scripts)
-            // T5: ~1.01-1.03  T6: ~1.02-1.05  T7: ~1.04-1.08  T8: ~1.06-1.12
+            // WeaponOffense / WeaponDefense. Endgame content leans heavily on evades,
+            // so high-tier unarmed armor needs attack mods in the same band as real melee weapons.
             float offMin, offMax, defMin, defMax;
             switch (profile.Tier)
             {
-                case 5:  offMin = 1.01f; offMax = 1.03f; defMin = 1.01f; defMax = 1.03f; break;
-                case 6:  offMin = 1.02f; offMax = 1.05f; defMin = 1.02f; defMax = 1.05f; break;
-                case 7:  offMin = 1.04f; offMax = 1.08f; defMin = 1.04f; defMax = 1.08f; break;
-                default: offMin = 1.06f; offMax = 1.12f; defMin = 1.06f; defMax = 1.12f; break;
+                case 5:  offMin = 1.03f; offMax = 1.08f; defMin = 1.01f; defMax = 1.04f; break;
+                case 6:  offMin = 1.06f; offMax = 1.12f; defMin = 1.02f; defMax = 1.06f; break;
+                case 7:  offMin = 1.09f; offMax = 1.17f; defMin = 1.04f; defMax = 1.09f; break;
+                default: offMin = 1.12f; offMax = 1.22f; defMin = 1.06f; defMax = 1.12f; break;
             }
             wo.WeaponOffense = ThreadSafeRandom.Next(offMin, offMax);
             wo.WeaponDefense = ThreadSafeRandom.Next(defMin, defMax);

@@ -89,9 +89,7 @@ namespace ACE.Server.WorldObjects
             if (newPlayer == null) return;
 
             // DerpACE Ironman: ironmen may fellowship with ironmen only.
-            var recruiterIronman = GetProperty(PropertyBool.IsIronman) == true;
-            var recruitIronman = newPlayer.GetProperty(PropertyBool.IsIronman) == true;
-            if (recruiterIronman != recruitIronman)
+            if (IsIronmanFamily != newPlayer.IsIronmanFamily)
             {
                 Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
                 return;

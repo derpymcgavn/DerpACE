@@ -669,7 +669,7 @@ namespace ACE.Server.WorldObjects
                     MagicState.CastGesture = casterItem.UseUserAnimation;
             }
 
-            if (GetProperty(PropertyBool.UseNpcCastAnimation) == true)
+            if (GetProperty(PropertyBool.UseNpcCastAnimation) == true || IsUsingSpellFocusCasterStaff(casterItem ?? GetEquippedWand()))
                 MagicState.CastGesture = MotionCommand.CastSpell;
 
             if (RecordCast.Enabled)
@@ -1091,6 +1091,13 @@ namespace ACE.Server.WorldObjects
             if (spell.MetaSpellType == SpellType.Dispel && !VerifyDispelPKStatus(this, target))
                 return;
 
+            if (spell.Id == CustomSpellManager.FrostWaveShieldSpellId)
+            {
+                StartFrostWaveShield(spell, itemCaster ?? caster);
+                Proficiency.OnSuccessUse(this, GetCreatureSkill(spell.School), spell.PowerMod);
+                return;
+            }
+
             switch (spell.School)
             {
                 case MagicSchool.ItemEnchantment:
@@ -1153,6 +1160,76 @@ namespace ACE.Server.WorldObjects
                     }
 
                     break;
+            }
+        }
+
+        private const double FrostWaveShieldDuration = 15.0;
+        private const double FrostWaveShieldPulseSeconds = 3.0;
+        private const float FrostWaveShieldRadius = 5.0f;
+        private const int FrostWaveShieldMaxTargets = 10;
+
+        private void StartFrostWaveShield(Spell spell, WorldObject caster)
+        {
+            var pulses = Math.Max(1, (int)(FrostWaveShieldDuration / FrostWaveShieldPulseSeconds));
+            var totalDamage = Math.Max(1.0f, ThreadSafeRandom.Next(spell.MinDamage, spell.MaxDamage));
+            var tickDamage = Math.Max(1.0f, totalDamage / pulses);
+            var damageType = spell.DamageType == DamageType.Undef ? DamageType.Cold : spell.DamageType;
+
+            Session.Network.EnqueueSend(new GameMessageSystemChat(
+                "A frost wave gathers into a shield around you.",
+                ChatMessageType.Magic));
+
+            var chain = new ActionChain();
+            for (var pulse = 0; pulse < pulses; pulse++)
+            {
+                if (pulse > 0)
+                    chain.AddDelaySeconds(FrostWaveShieldPulseSeconds);
+
+                chain.AddAction(this, () => PulseFrostWaveShield(spell, caster, tickDamage, damageType));
+            }
+
+            chain.EnqueueChain();
+        }
+
+        private void PulseFrostWaveShield(Spell spell, WorldObject caster, float tickDamage, DamageType damageType)
+        {
+            if (!IsAlive || IsDead || Teleporting || CurrentLandblock == null || Location == null)
+                return;
+
+            ApplyVisualEffects(spell.CasterEffect);
+
+            var visualSpell = new Spell(CustomSpellManager.FrostWaveShieldSpellId);
+            if (!visualSpell.NotFound && visualSpell.NumProjectiles > 0)
+                CreateSpellProjectiles(visualSpell, null, caster, false, true, 0, 0.0f, this);
+
+            var baseLandblock = Location.Cell & 0xFFFF0000;
+            var radiusSq = FrostWaveShieldRadius * FrostWaveShieldRadius;
+            var targets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Creature>()
+                .Where(creature => creature != null
+                    && creature != this
+                    && creature.IsMonster
+                    && creature.IsAlive
+                    && creature.Attackable
+                    && !creature.Teleporting
+                    && creature.Location != null
+                    && (creature.Location.Cell & 0xFFFF0000) == baseLandblock
+                    && Location.SquaredDistanceTo(creature.Location) <= radiusSq
+                    && CanDamage(creature))
+                .OrderBy(creature => Location.SquaredDistanceTo(creature.Location))
+                .Take(FrostWaveShieldMaxTargets)
+                .ToList();
+
+            foreach (var target in targets)
+            {
+                target.ApplyVisualEffects(spell.TargetEffect);
+                var amount = target.TakeDamage(this, damageType, tickDamage);
+                OnAttackMonster(target);
+
+                if (amount > 0)
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"Frost Wave Shield chills {target.Name} for {amount} points.",
+                        ChatMessageType.Magic));
             }
         }
 

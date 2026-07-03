@@ -78,6 +78,8 @@ namespace ACE.Server.WorldObjects
             // DerpACE: fire any active aura effects immediately so they appear on load-in.
             AuraManager.FireAuras(this);
 
+            NomadRunePouch.EnsureFor(this, notify: false);
+
             // Update or override certain properties sent to client.
 
             // bugged: do not send this here, or else a freshly loaded acclient will overrwrite the values

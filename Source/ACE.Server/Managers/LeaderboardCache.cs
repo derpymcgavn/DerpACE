@@ -4,6 +4,7 @@ using System.Linq;
 
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
+using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Managers
 {
@@ -83,8 +84,8 @@ namespace ACE.Server.Managers
             return players
                 .Where(p => !p.IsDeleted
                     && (ironmanOnly
-                        ? p.GetProperty(PropertyBool.IsIronman) == true
-                        : p.GetProperty(PropertyBool.IsHardcore) == true && p.GetProperty(PropertyBool.IsIronman) != true))
+                        ? Player.IsIronmanFamilyPlayer(p)
+                        : p.GetProperty(PropertyBool.IsHardcore) == true && !Player.IsIronmanFamilyPlayer(p)))
                 .Select(p => new PlayerLeaderboardEntry
                 {
                     Name = p.Name,

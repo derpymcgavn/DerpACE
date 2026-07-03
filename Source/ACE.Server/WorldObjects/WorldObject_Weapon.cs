@@ -4,6 +4,7 @@ using ACE.Common;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects.Entity;
 
@@ -242,7 +243,12 @@ namespace ACE.Server.WorldObjects
              While many old quest weapons still retain their (useless) attack bonus, we will not be putting any new ones into the system.
              */
             if (weapon == null)
+            {
+                if (wielder is Player player && player.IsIronmanNomad && player.IsNomadUnarmed)
+                    return (float)PropertyManager.GetDouble("unarmed_nomad_attack_mod").Item;
+
                 return defaultModifier;
+            }
 
             if (weapon.IsRanged && !IsDerpAceAttackBuffThrowable(weapon) /* see note above */)
                 return defaultModifier;

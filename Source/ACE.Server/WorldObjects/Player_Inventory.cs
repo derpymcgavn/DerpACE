@@ -47,9 +47,10 @@ namespace ACE.Server.WorldObjects
         {
             foreach (var item in GetAllPossessions())
             {
-                var conversion = GetLegacyHandCrossbowConversion(item);
-                if (conversion == HandCrossbowConversion.None)
+                if (item?.IsHandCrossbow != true)
                     continue;
+
+                var conversion = GetLegacyHandCrossbowConversion(item);
 
                 if (conversion == HandCrossbowConversion.LegacyAllStatsHalved)
                 {
@@ -73,11 +74,57 @@ namespace ACE.Server.WorldObjects
                     item.DamageMod = item.DamageMod.HasValue ? item.DamageMod.Value * 0.5 : item.DamageMod;
                 }
 
-                item.ObjScale = 0.5f;
+                var retiredItem = item;
+                var wasEquipped = EquippedObjects.ContainsKey(retiredItem.Guid);
+                var retiredWieldedLocation = EquipMask.None;
+                if (wasEquipped && TryDequipObject(retiredItem.Guid, out var dequippedItem, out retiredWieldedLocation))
+                    retiredItem = dequippedItem;
 
-                item.LongDesc = GetCurrentHandCrossbowLongDesc(item.LongDesc);
-                item.SaveBiotaToDatabase();
+                RetireHandCrossbow(retiredItem);
+
+                if (wasEquipped && !TryAddToInventory(retiredItem, out _, burdenCheck: false))
+                {
+                    log.Warn($"{Name}.ConvertLegacyHandCrossbows() - inventory full while retiring {retiredItem.Name} ({retiredItem.Guid}); leaving it equipped for manual recovery");
+                    TryEquipObject(retiredItem, retiredWieldedLocation);
+                }
+
+                retiredItem.LongDesc = GetRetiredHandCrossbowLongDesc(retiredItem.LongDesc);
+                retiredItem.SaveBiotaToDatabase();
             }
+        }
+
+        private static void RetireHandCrossbow(WorldObject item)
+        {
+            item.RemoveProperty(PropertyBool.IsHandCrossbow);
+
+            if (!string.IsNullOrWhiteSpace(item.Name) && item.Name.StartsWith("Hand ", StringComparison.OrdinalIgnoreCase))
+                item.Name = item.Name.Substring(5);
+
+            item.ItemType = ItemType.MissileWeapon;
+            item.ValidLocations = EquipMask.MissileWeapon;
+            item.DefaultCombatStyle = CombatStyle.Crossbow;
+            item.WeaponSkill = Skill.MissileWeapons;
+            item.W_WeaponType = WeaponType.Crossbow;
+            item.AmmoType = ACE.Entity.Enum.AmmoType.Bolt;
+            item.ObjScale = null;
+
+            item.WieldRequirements = WieldRequirement.Training;
+            item.WieldSkillType = (int)Skill.MissileWeapons;
+            item.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
+
+            if (item.WieldSkillType2 == (int)Skill.DualWield)
+            {
+                item.WieldRequirements2 = WieldRequirement.Invalid;
+                item.WieldSkillType2 = null;
+                item.WieldDifficulty2 = null;
+            }
+
+            item.WieldRequirements3 = WieldRequirement.Invalid;
+            item.WieldSkillType3 = null;
+            item.WieldDifficulty3 = null;
+            item.WieldRequirements4 = WieldRequirement.Invalid;
+            item.WieldSkillType4 = null;
+            item.WieldDifficulty4 = null;
         }
 
         private enum HandCrossbowConversion
@@ -114,9 +161,9 @@ namespace ACE.Server.WorldObjects
             return 1.0 + ((value.Value - 1.0) * 2.0);
         }
 
-        private static string GetCurrentHandCrossbowLongDesc(string longDesc)
+        private static string GetRetiredHandCrossbowLongDesc(string longDesc)
         {
-            const string current = "Hand Crossbow: this one-handed crossbow is half the size of a normal crossbow, uses half the normal crossbow damage modifier, and fires compact bolts at roughly half deadly-prismatic force. It uses the missile accuracy bar with a stand-still dual-wield attack animation. It requires specialized Missile Weapons and specialized Dual Wield; equip it with another hand crossbow or pair it with a shield.";
+            const string current = "Retired Hand Crossbow: this item has been restored to the normal crossbow combat path. It now equips as a missile weapon and no longer uses the experimental one-handed or dual-wield behavior.";
 
             if (string.IsNullOrWhiteSpace(longDesc))
                 return current;
@@ -169,6 +216,65 @@ namespace ACE.Server.WorldObjects
             return TryCreateInInventoryWithNetworking(item, out _);
         }
 
+        private bool CanAcquireIronmanRestrictedItem(WorldObject item, Container sourceRootOwner, out string message)
+        {
+            message = null;
+
+            if (!IsRestrictedGearMode || !IsGearProvenanceTracked(item))
+                return true;
+
+            var provenance = GetGearProvenance(item);
+            if (provenance != null && provenance.Value != CurrentGearProvenance)
+            {
+                message = GetGearProvenanceBlockMessage(provenance.Value);
+                return false;
+            }
+
+            if (sourceRootOwner is Player sourcePlayer && sourcePlayer.CurrentGearProvenance != CurrentGearProvenance)
+            {
+                message = "Restricted characters can only take gear from the same challenge mode.";
+                return false;
+            }
+
+            if (provenance == null
+                && sourceRootOwner is Storage
+                && item?.GetProperty(PropertyBool.IsIronmanItem) != true)
+            {
+                message = "Restricted characters cannot take unprovenanced gear from storage.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private string GetGearProvenanceBlockMessage(int provenance)
+        {
+            return provenance switch
+            {
+                GearProvenanceNormal => "That gear belongs to the normal economy.",
+                GearProvenanceHardcore => "That gear belongs to the Hardcore economy.",
+                GearProvenanceIronman => "That gear belongs to the Ironman economy.",
+                _ => "That gear belongs to another challenge economy."
+            };
+        }
+
+        private void StampGearProvenance(WorldObject item)
+        {
+            if (!IsGearProvenanceTracked(item))
+                return;
+
+            var provenance = GetGearProvenance(item) ?? CurrentGearProvenance;
+            if (item.GetProperty(PropertyInt.GearProvenance) == null)
+                item.SetProperty(PropertyInt.GearProvenance, provenance);
+
+            if (provenance == GearProvenanceIronman)
+            {
+                item.SetProperty(PropertyBool.IsIronmanItem, true);
+                if (!item.Name.EndsWith(" [IM]"))
+                    item.Name = item.Name + " [IM]";
+            }
+        }
+
         /// <summary>
         /// If enough burden is available, this will try to add (via create) an item to the main pack. If the main pack is full, it will try to add it to the first side pack with room.
         /// </summary>
@@ -177,17 +283,10 @@ namespace ACE.Server.WorldObjects
             if (!TryAddToInventory(item, out container)) // We don't have enough burden available or no empty pack slot.
                 return false;
 
-            // DerpACE Ironman: any item that enters an Ironman's inventory is auto-tagged
-            // as an Ironman item. This is what lets corpse/chest/vendor loot survive the
-            // wield/use checks while still preventing trades from non-Ironman players.
-            // Equipable loot (items with workmanship) also get a [IM] name prefix so the
-            // player can distinguish Ironman-bound gear at a glance.
-            if (GetProperty(PropertyBool.IsIronman) == true && item.GetProperty(PropertyBool.IsIronmanItem) != true)
-            {
-                item.SetProperty(PropertyBool.IsIronmanItem, true);
-                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.EndsWith(" [IM]"))
-                    item.Name = item.Name + " [IM]";
-            }
+            // DerpACE challenge economies: stamp real gear with the mode of the player
+            // who first brings it into their inventory. Normal players stay unrestricted;
+            // Hardcore and Ironman-family players can only use matching stamped gear.
+            StampGearProvenance(item);
 
             Session.Network.EnqueueSend(new GameMessageCreateObject(item));
 
@@ -944,6 +1043,13 @@ namespace ACE.Server.WorldObjects
                 return false;
             }
 
+            if (itemRootOwner != this && containerRootOwner == this && !CanAcquireIronmanRestrictedItem(item, itemRootOwner, out var ironmanMessage))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, ironmanMessage));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, itemGuid));
+                return false;
+            }
+
             if (itemRootOwner != this && containerRootOwner == this && !HasEnoughBurdenToAddToInventory(item))
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You are too encumbered to carry that!"));
@@ -961,6 +1067,13 @@ namespace ACE.Server.WorldObjects
             if (container is Corpse)
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, $"You cannot put {item.Name} in that.")); // Custom error message
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, itemGuid));
+                return false;
+            }
+
+            if (NomadRunePouch.IsPouch(container) && !NomadRune.IsNomadRune(item))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Only Nomad Runes can be stored in a Nomad Rune Pouch."));
                 Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, itemGuid));
                 return false;
             }
@@ -1475,17 +1588,8 @@ namespace ACE.Server.WorldObjects
                 containerRootOwner.Value += (item.Value ?? 0);
             }
 
-            // DerpACE Ironman: tag items moving into an Ironman player's inventory from
-            // real external containers (chest, corpse, etc.). Loose landscape pickups are
-            // not tagged so dropped player gear cannot be laundered into Ironman gear.
-            if (itemRootOwner != null
-                && containerRootOwner == this && GetProperty(PropertyBool.IsIronman) == true
-                && item.GetProperty(PropertyBool.IsIronmanItem) != true)
-            {
-                item.SetProperty(PropertyBool.IsIronmanItem, true);
-                if (item.GetProperty(PropertyInt.ItemWorkmanship) != null && !item.Name.EndsWith(" [IM]"))
-                    item.Name = item.Name + " [IM]";
-            }
+            if (containerRootOwner == this)
+                StampGearProvenance(item);
 
             // when moving from a non-stuck container to a different container,
             // the database must be synced immediately
@@ -1789,6 +1893,13 @@ namespace ACE.Server.WorldObjects
         {
             // Console.WriteLine($"-> DoHandleActionGetAndWieldItem({item.Name}, {itemRootOwner?.Name}, {wasEquipped}, {wieldedLocation})");
 
+            if (itemRootOwner != this && !CanAcquireIronmanRestrictedItem(item, itemRootOwner, out var ironmanMessage))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, ironmanMessage));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                return false;
+            }
+
             var wieldError = CheckWieldRequirements(item);
 
             if (wieldError != WeenieError.None)
@@ -1816,8 +1927,6 @@ namespace ACE.Server.WorldObjects
                     mainWeapon = null;
 
                 mainWeapon = mainWeapon ?? GetEquippedMissileWeapon() ?? GetEquippedWand();
-                if (mainWeapon?.IsHandCrossbow == true)
-                    mainWeapon = null;
 
                 // special case: instead of sending the typical DequipItem -> GetAndWieldItem here,
                 // the client just sends GetAndWieldItem, and the server is responsible for detecting if DequipItem is needed
@@ -2001,6 +2110,8 @@ namespace ACE.Server.WorldObjects
                 return false;
             }
 
+            StampGearProvenance(item);
+
             // if wielding from a loose container, we must save immediately
             if (fromContainer != null && !fromContainer.Stuck)
                 item.SaveBiotaToDatabase();
@@ -2037,20 +2148,20 @@ namespace ACE.Server.WorldObjects
                         }
 
                         mainhand = GetEquippedMainHand();
-                        if (mainhand?.IsHandCrossbow == true && !item.IsShield && !item.IsHandCrossbow)
-                        {
-                            log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) with hand crossbow '{mainhand.Name}'");
-                            return false;
-                        }
 
-                        if (item.IsHandCrossbow && mainhand != null && !mainhand.IsHandCrossbow)
+                        if (item.IsSpellFocus)
                         {
-                            log.Warn($"'{Name}' tried to wield hand crossbow '{item.Name}' ({item.Guid}) with non-hand-crossbow '{mainhand.Name}'");
-                            return false;
+                            if (!CanPairSpellFocusWithMainhand(item, mainhand))
+                            {
+                                log.Warn($"'{Name}' tried to wield spell focus '{item.Name}' ({item.Guid}) with incompatible mainhand '{mainhand?.Name}'");
+                                return false;
+                            }
+
+                            break;
                         }
 
                         // Remove any Two Handed, Caster (magic), or Missile Weapons
-                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand)))
+                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{mainhand.Name}'");
                             return false;
@@ -2098,7 +2209,7 @@ namespace ACE.Server.WorldObjects
                     case EquipMask.TwoHanded:
                         // Should not have any items in the shield/offhand slot, two-handed weapons, missile weapons or casters
                         offhand = GetEquippedOffHand();
-                        if (offhand != null)
+                        if (offhand != null && !(offhand.IsSpellFocus && CanPairMainhandWithSpellFocus(item, offhand)))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{offhand.Name}'");
                             return false;
@@ -2115,26 +2226,21 @@ namespace ACE.Server.WorldObjects
                     case EquipMask.MeleeWeapon:
                         // Should not have any Caster, Missile, or TwoHanders equipped
                         offhand = GetEquippedOffHand();
-                        if (item.IsHandCrossbow && offhand != null && !offhand.IsShield && !offhand.IsHandCrossbow)
+
+                        if (offhand?.IsSpellFocus == true && !CanPairMainhandWithSpellFocus(item, offhand))
                         {
-                            log.Warn($"'{Name}' tried to wield hand crossbow '{item.Name}' ({item.Guid}) with non-hand-crossbow offhand '{offhand.Name}'");
+                            log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) with spell focus '{offhand.Name}'");
                             return false;
                         }
 
-                        if (offhand?.IsHandCrossbow == true && !item.IsHandCrossbow)
-                        {
-                            log.Warn($"'{Name}' tried to wield non-hand-crossbow '{item.Name}' ({item.Guid}) with hand crossbow offhand '{offhand.Name}'");
-                            return false;
-                        }
-
-                        if (offhand != null && (offhand.IsTwoHanded || offhand.IsCaster || offhand.IsAmmoLauncher && !IsHandCrossbowWeapon(offhand)))
+                        if (offhand != null && (offhand.IsTwoHanded || offhand.IsCaster || offhand.IsAmmoLauncher))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{offhand.Name}'");
                             return false;
                         }
 
                         mainhand = GetEquippedMainHand();
-                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand)))
+                        if (mainhand != null && (mainhand.IsTwoHanded || mainhand.IsCaster || mainhand.IsAmmoLauncher))
                         {
                             log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{mainhand.Name}'");
                             return false;
@@ -2146,7 +2252,7 @@ namespace ACE.Server.WorldObjects
                         if (item.IsCaster)
                         {
                             offhand = GetEquippedOffHand();
-                            if (offhand != null)
+                            if (offhand != null && !CanPairMainhandWithSpellFocus(item, offhand))
                             {
                                 log.Warn($"'{Name}' tried to wield '{item.Name}' ({item.Guid}) in slot {wieldedLocation}, which conflicts with '{offhand.Name}'");
                                 return false;
@@ -2185,9 +2291,15 @@ namespace ACE.Server.WorldObjects
                     if (offhand != null)
                     {
                         // Can't wield these with anything else!
-                        if (mainhand.IsTwoHanded || mainhand.IsAmmoLauncher && !IsHandCrossbowWeapon(mainhand) || mainhand.IsCaster)
+                        if (mainhand.IsTwoHanded || mainhand.IsAmmoLauncher || mainhand.IsCaster && offhand?.IsSpellFocus != true)
                         {
                             log.Warn($"'{Name}' is illegally wielding '{mainhand.Name}' ({mainhand.Guid}) and {offhand.Name}' ({offhand.Guid})");
+                            return false;
+                        }
+
+                        if (offhand?.IsSpellFocus == true && !CanPairMainhandWithSpellFocus(mainhand, offhand))
+                        {
+                            log.Warn($"'{Name}' is illegally wielding '{mainhand.Name}' ({mainhand.Guid}) and spell focus '{offhand.Name}' ({offhand.Guid})");
                             return false;
                         }
                     }
@@ -2250,11 +2362,11 @@ namespace ACE.Server.WorldObjects
 
         private WeenieError CheckWieldRequirements(WorldObject item)
         {
-            // DerpACE Ironman: cannot wield items that aren't flagged as Ironman items,
-            // unless the item has no workmanship (quest items, keys, tokens, notes, etc.).
-            if (GetProperty(PropertyBool.IsIronman) == true
-                && item.GetProperty(PropertyBool.IsIronmanItem) != true
-                && item.GetProperty(PropertyInt.ItemWorkmanship) != null)
+            // DerpACE challenge economies: normal players can wear anything, but
+            // Hardcore and Ironman-family players can only wear gear stamped for their mode.
+            if (IsRestrictedGearMode
+                && IsGearProvenanceTracked(item)
+                && GetGearProvenance(item) != CurrentGearProvenance)
                 return WeenieError.YouCannotUseThatItem;
 
             // DerpACE Ironman Nomad: cannot wield weapons or casters of any kind.
@@ -2292,26 +2404,32 @@ namespace ACE.Server.WorldObjects
             if (allowedWielder != null && (allowedWielder != Guid.Full))
                 return WeenieError.YouDoNotOwnThatItem; // Unsure of the exact message
 
-            var result = CheckWieldRequirement(item.WieldRequirements, item.WieldSkillType, item.WieldDifficulty);
+            if (item.IsSpellFocus && !HasSpecializedSpellFocusSkill())
+            {
+                Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You must specialize War Magic, Life Magic, or Void Magic to wield a spell focus."));
+                return WeenieError.SkillTooLow;
+            }
+
+            var result = CheckWieldRequirement(item, item.WieldRequirements, item.WieldSkillType, item.WieldDifficulty);
             if (result != WeenieError.None)
                 return result;
 
-            result = CheckWieldRequirement(item.WieldRequirements2, item.WieldSkillType2, item.WieldDifficulty2);
+            result = CheckWieldRequirement(item, item.WieldRequirements2, item.WieldSkillType2, item.WieldDifficulty2);
             if (result != WeenieError.None)
                 return result;
 
-            result = CheckWieldRequirement(item.WieldRequirements3, item.WieldSkillType3, item.WieldDifficulty3);
+            result = CheckWieldRequirement(item, item.WieldRequirements3, item.WieldSkillType3, item.WieldDifficulty3);
             if (result != WeenieError.None)
                 return result;
 
-            result = CheckWieldRequirement(item.WieldRequirements4, item.WieldSkillType4, item.WieldDifficulty4);
+            result = CheckWieldRequirement(item, item.WieldRequirements4, item.WieldSkillType4, item.WieldDifficulty4);
             if (result != WeenieError.None)
                 return result;
 
             return WeenieError.None;
         }
 
-        private WeenieError CheckWieldRequirement(WieldRequirement wieldRequirement, int? wieldSkillType, int? wieldDifficulty)
+        private WeenieError CheckWieldRequirement(WorldObject item, WieldRequirement wieldRequirement, int? wieldSkillType, int? wieldDifficulty)
         {
             var skillOrAttribute = wieldSkillType ?? 0;
             var difficulty = (uint)(wieldDifficulty ?? 0);
@@ -2321,7 +2439,7 @@ namespace ACE.Server.WorldObjects
                 case WieldRequirement.Skill:
 
                     // verify skill level - current / buffed
-                    var skill = GetCreatureSkill(ConvertToMoASkill((Skill)skillOrAttribute), false);
+                    var skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
                     if (skill.Current < difficulty)
                         return WeenieError.SkillTooLow;
                     break;
@@ -2329,7 +2447,7 @@ namespace ACE.Server.WorldObjects
                 case WieldRequirement.RawSkill:
 
                     // verify skill level - base
-                    skill = GetCreatureSkill(ConvertToMoASkill((Skill)skillOrAttribute), false);
+                    skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
                     if (skill.Base < difficulty)
                         return WeenieError.SkillTooLow;
                     break;
@@ -2376,7 +2494,7 @@ namespace ACE.Server.WorldObjects
                 case WieldRequirement.Training:
 
                     // verify skill is trained / specialized
-                    skill = GetCreatureSkill(ConvertToMoASkill((Skill)skillOrAttribute), false);
+                    skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
                     if ((int)skill.AdvancementClass < difficulty)
                         return WeenieError.SkillTooLow;
                     break;
@@ -2416,7 +2534,6 @@ namespace ACE.Server.WorldObjects
             return WeenieError.None;
         }
 
-
         // =========================================
         // Game Action Handlers - Inventory Stacking 
         // =========================================
@@ -2442,6 +2559,13 @@ namespace ACE.Server.WorldObjects
 
             var stack = FindObject(new ObjectGuid(stackId), SearchLocations.LocationsICanMove, out var stackFoundInContainer, out var stackRootOwner, out _);
             var container = FindObject(new ObjectGuid(containerId), SearchLocations.MyInventory | SearchLocations.Landblock | SearchLocations.LastUsedContainer, out _, out var containerRootOwner, out _) as Container;
+
+            if (stackRootOwner != this && containerRootOwner == this && !CanAcquireIronmanRestrictedItem(stack, stackRootOwner, out var ironmanMessage))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, ironmanMessage));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, stackId));
+                return;
+            }
 
             if (stack == null)
             {
@@ -3064,6 +3188,13 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (sourceStackRootOwner != this && targetStackRootOwner == this && !CanAcquireIronmanRestrictedItem(sourceStack, sourceStackRootOwner, out var ironmanMessage))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, ironmanMessage));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, mergeFromGuid));
+                return;
+            }
+
             if (sourceStackRootOwner != this && targetStackRootOwner == this && !HasEnoughBurdenToAddToInventory(sourceStack))
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You are too encumbered to carry that!"));
@@ -3115,6 +3246,13 @@ namespace ACE.Server.WorldObjects
             {
                 log.WarnFormat("Player 0x{0:X8}:{1} tried to merge different items 0x{2:X8}:{3} and 0x{4:X8}:{5}.", Guid.Full, Name, sourceStack.Guid.Full, sourceStack.Name, targetStack.Guid.Full, targetStack.Name);
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Stacks not compatible!")); // Custom error message
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, mergeFromGuid, WeenieError.YouCannotMergeDifferentStacks));
+                return;
+            }
+
+            if (NomadRune.IsNomadRune(sourceStack) && NomadRune.IsNomadRune(targetStack) && sourceStack.SpellDID != targetStack.SpellDID)
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Nomad Runes can only be merged with runes of the same spell."));
                 Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, mergeFromGuid, WeenieError.YouCannotMergeDifferentStacks));
                 return;
             }
@@ -3473,11 +3611,24 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            if ((GetProperty(PropertyBool.IsIronman) == true) ^ (target.GetProperty(PropertyBool.IsIronman) == true))
+            if (IsIronmanFamily ^ target.IsIronmanFamily)
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only give items to other Ironmen."));
                 Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
                 target.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(target.Session, "Ironmen can only receive items from other Ironmen."));
+                return;
+            }
+
+            StampGearProvenance(item);
+            var provenance = GetGearProvenance(item);
+            if (target.IsRestrictedGearMode
+                && IsGearProvenanceTracked(item)
+                && provenance != null
+                && provenance.Value != target.CurrentGearProvenance)
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "That gear belongs to another challenge economy."));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                target.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(target.Session, "That gear belongs to another challenge economy."));
                 return;
             }
 

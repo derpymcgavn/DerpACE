@@ -125,8 +125,82 @@ namespace ACE.Server.WorldObjects
             SortBiotasIntoInventory(inventory);
             AddBiotasToEquippedObjects(wieldedItems);
             ConvertLegacyHandCrossbows();
+            NormalizeIronmanFamilyFlags();
+            NomadRune.NormalizeExistingRunes(this);
 
             UpdateCoinValue(false);
+        }
+
+        public bool IsIronmanFamily => GetProperty(PropertyBool.IsIronman) == true
+            || GetProperty(PropertyBool.IsIronmanNomad) == true
+            || GetProperty(PropertyBool.IsIronmanBlind) == true;
+
+        public const int GearProvenanceNormal = 1;
+        public const int GearProvenanceHardcore = 2;
+        public const int GearProvenanceIronman = 3;
+
+        public bool IsRestrictedGearMode => IsIronmanFamily || GetProperty(PropertyBool.IsHardcore) == true;
+
+        public int CurrentGearProvenance => IsIronmanFamily
+            ? GearProvenanceIronman
+            : GetProperty(PropertyBool.IsHardcore) == true
+                ? GearProvenanceHardcore
+                : GearProvenanceNormal;
+
+        public static bool IsIronmanFamilyPlayer(IPlayer player)
+        {
+            return player?.GetProperty(PropertyBool.IsIronman) == true
+                || player?.GetProperty(PropertyBool.IsIronmanNomad) == true
+                || player?.GetProperty(PropertyBool.IsIronmanBlind) == true;
+        }
+
+        public static int GetGearProvenanceForPlayer(IPlayer player)
+        {
+            if (IsIronmanFamilyPlayer(player))
+                return GearProvenanceIronman;
+
+            return player?.GetProperty(PropertyBool.IsHardcore) == true
+                ? GearProvenanceHardcore
+                : GearProvenanceNormal;
+        }
+
+        public static bool IsGearProvenanceTracked(WorldObject item)
+        {
+            return item?.GetProperty(PropertyInt.ItemWorkmanship) != null;
+        }
+
+        public static int? GetGearProvenance(WorldObject item)
+        {
+            var provenance = item?.GetProperty(PropertyInt.GearProvenance);
+            if (provenance != null)
+                return provenance.Value;
+
+            if (item?.GetProperty(PropertyBool.IsIronmanItem) == true)
+                return GearProvenanceIronman;
+
+            return null;
+        }
+
+        public bool CanReceiveChallengeMagicAidFrom(Player sourcePlayer, string aidName = "magic")
+        {
+            if (sourcePlayer == null || sourcePlayer == this || !IsRestrictedGearMode)
+                return true;
+
+            if (sourcePlayer.CurrentGearProvenance == CurrentGearProvenance)
+                return true;
+
+            sourcePlayer.SendMessage($"{Name}'s challenge vow rejects your {aidName}.", ChatMessageType.Magic);
+            SendMessage($"{sourcePlayer.Name} attempts to aid you with {aidName}, but your challenge vow rejects it.", ChatMessageType.Magic);
+            return false;
+        }
+
+        private void NormalizeIronmanFamilyFlags()
+        {
+            if (GetProperty(PropertyBool.IsIronman) == true)
+                return;
+
+            if (GetProperty(PropertyBool.IsIronmanNomad) == true || GetProperty(PropertyBool.IsIronmanBlind) == true)
+                SetProperty(PropertyBool.IsIronman, true);
         }
 
         public override void InitPhysicsObj()

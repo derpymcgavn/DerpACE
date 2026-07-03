@@ -105,7 +105,7 @@ namespace ACE.Server.WorldObjects
         public bool VerifyRequirements(Player player, CreatureSkill skill, SkillBase skillBase)
         {
             // DerpACE Ironman: cannot train, specialize, or lower skills after commitment.
-            if (player.GetProperty(PropertyBool.IsIronman) == true)
+            if (player.IsIronmanFamily)
             {
                 player.Session.Network.EnqueueSend(new GameEventWeenieError(player.Session, WeenieError.YouFailToAlterSkill));
                 player.SendMessage("Ironmen cannot alter their skills — your skills were set at the moment of commitment.");

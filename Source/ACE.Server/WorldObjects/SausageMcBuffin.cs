@@ -160,7 +160,7 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            if (player.GetProperty(PropertyBool.IsIronman) ?? false)
+            if (player.IsIronmanFamily)
             {
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat(
                     $"{npc.Name} melts slightly. \"n4h n4h n4h... ur ironm4n d00d. gr1nd it y0urself!!!!!!11one\"",

@@ -341,6 +341,8 @@ namespace ACE.Server.Network.Structure
 
             SuppressInactiveUnarmedArmorAppraisal(wo);
             AddUnarmedDamageAppraisalLongDesc(wo);
+            AddArmorSortAppraisalLongDesc(wo, examiner);
+            AddBattlemageAppraisalLongDesc(wo, examiner);
 
             BuildFlags();
         }
@@ -458,6 +460,80 @@ namespace ACE.Server.Network.Structure
                 DamageType.Slash => "Slashing",
                 _ => "Physical",
             };
+        }
+
+        private void AddArmorSortAppraisalLongDesc(WorldObject wo, Player examiner)
+        {
+            if (wo.ArmorSortDamageType == null || (wo.ArmorSortDamageBonus ?? 0) <= 0)
+                return;
+
+            var damageType = wo.ArmorSortDamageType.Value;
+            var damageName = GetVerboseDamageTypeName(damageType);
+            var itemBonus = Math.Min(3, Math.Max(1, wo.ArmorSortDamageBonus.Value));
+            var effectDetails = $"\n\nResonant Weave: +{itemBonus} {damageName} damage on matching outgoing melee, missile, and spell projectile hits.";
+            effectDetails += "\nMatching equipped pieces harmonize with diminishing returns: strongest resonance full value, then half value, then quarter value, rounded to the nearest whole damage.";
+
+            var currentDetails = "";
+            if (examiner != null)
+            {
+                var breakdown = examiner.GetArmorSortDamageBreakdown(damageType);
+                if (breakdown.Applies)
+                    currentDetails = $"\nYour equipped {damageName} total right now: +{breakdown.TotalBonus} from raw pieces [{breakdown.RawBonusText}].";
+                else
+                    currentDetails = $"\nYour equipped {damageName} total right now: +0. Equip this piece to contribute to that total.";
+            }
+
+            if (PropertiesString.TryGetValue(PropertyString.LongDesc, out var longDesc) && !string.IsNullOrWhiteSpace(longDesc))
+            {
+                var hasEffectDetails = longDesc.Contains("Resonant Weave:") || longDesc.Contains("Armor +Damage:") || longDesc.Contains("Armor Sort:");
+                var hasCurrentDetails = longDesc.Contains("Your equipped");
+                var details = hasEffectDetails ? "" : effectDetails;
+
+                if (!hasCurrentDetails)
+                    details += currentDetails;
+
+                if (string.IsNullOrWhiteSpace(details))
+                    return;
+
+                PropertiesString[PropertyString.LongDesc] = longDesc.TrimEnd() + details;
+            }
+            else
+                PropertiesString[PropertyString.LongDesc] = (effectDetails + currentDetails).TrimStart();
+        }
+
+        private static string GetVerboseDamageTypeName(DamageType damageType)
+        {
+            return damageType switch
+            {
+                DamageType.Bludgeon => "Bludgeoning",
+                DamageType.Cold => "Frost",
+                DamageType.Electric => "Lightning",
+                DamageType.Health => "Health",
+                DamageType.Stamina => "Stamina",
+                DamageType.Mana => "Mana",
+                DamageType.Pierce => "Piercing",
+                DamageType.Slash => "Slashing",
+                _ => damageType.ToString(),
+            };
+        }
+
+        private void AddBattlemageAppraisalLongDesc(WorldObject wo, Player examiner)
+        {
+            if (examiner == null || !examiner.TryGetBattlemageWarMagicRequirement(wo, out var current, out var required, out var meetsRequirement))
+                return;
+
+            var status = meetsRequirement ? "ready" : "too low";
+            var details = $"\n\nBattlemage Helm: War Magic {current}/{required} ({status}) can supplement this Light Weapons requirement.";
+
+            if (PropertiesString.TryGetValue(PropertyString.LongDesc, out var longDesc) && !string.IsNullOrWhiteSpace(longDesc))
+            {
+                if (longDesc.Contains("Battlemage Helm:"))
+                    return;
+
+                PropertiesString[PropertyString.LongDesc] = longDesc.TrimEnd() + details;
+            }
+            else
+                PropertiesString[PropertyString.LongDesc] = details.TrimStart();
         }
 
         private void BuildProperties(WorldObject wo)

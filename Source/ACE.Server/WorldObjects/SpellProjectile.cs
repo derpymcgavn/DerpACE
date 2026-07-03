@@ -142,6 +142,9 @@ namespace ACE.Server.WorldObjects
             if (spellID == CustomSpellManager.SpiralStarSpellId)
                 return ProjectileSpellType.Ring;
 
+            if (spellID == CustomSpellManager.FrostWaveShieldSpellId)
+                return ProjectileSpellType.Ring;
+
             if (spellID == CustomSpellManager.ChainLightningSpellId && spell.NumProjectiles > 1)
                 return ProjectileSpellType.Volley;
 
@@ -489,6 +492,7 @@ namespace ACE.Server.WorldObjects
             if (Spell.MetaSpellType == ACE.Entity.Enum.SpellType.LifeProjectile)
             {
                 lifeMagicDamage = LifeProjectileDamage * Spell.DamageRatio;
+                lifeMagicDamage += sourcePlayer?.GetArmorSortDamageBreakdown(Spell.DamageType).TotalBonus ?? 0;
 
                 // could life magic projectiles crit?
                 // if so, did they use the same 1.5x formula as war magic, instead of 2.0x?
@@ -558,6 +562,7 @@ namespace ACE.Server.WorldObjects
                     }
                 }
                 baseDamage = ThreadSafeRandom.Next(Spell.MinDamage, Spell.MaxDamage);
+                baseDamage += sourcePlayer?.GetArmorSortDamageBreakdown(Spell.DamageType).TotalBonus ?? 0;
 
                 weaponResistanceMod = GetWeaponResistanceModifier(weapon, sourceCreature, attackSkill, Spell.DamageType);
 

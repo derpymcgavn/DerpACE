@@ -142,6 +142,9 @@ namespace ACE.Server.WorldObjects
 
         public virtual void ActOnUse(WorldObject activator)
         {
+            if (activator is Player player && IsSpellFocus && player.TryBeginSpellFocusAttunement(this))
+                return;
+
             // empty base - individual WorldObject types should override
 
             var msg = $"{Name}.ActOnUse({activator.Name}) - undefined for wcid {WeenieClassId} type {WeenieType}";
@@ -213,7 +216,7 @@ namespace ACE.Server.WorldObjects
             // only seems to be used for summoning so far...
             if (ItemSkillLimit != null && ItemSkillLevelLimit != null)
             {
-                var skill = activator.ConvertToMoASkill((Skill)ItemSkillLimit.Value);
+                var skill = player.GetBattlemageAdjustedItemSkill(this, ItemSkillLimit.Value);
                 var playerSkill = player.GetCreatureSkill(skill);
 
                 if (playerSkill.Current < ItemSkillLevelLimit.Value)
@@ -222,7 +225,7 @@ namespace ACE.Server.WorldObjects
 
             if (UseRequiresSkill != null)
             {
-                var skill = activator.ConvertToMoASkill((Skill)UseRequiresSkill.Value);
+                var skill = player.GetBattlemageAdjustedItemSkill(this, (Skill)UseRequiresSkill.Value);
                 var playerSkill = player.GetCreatureSkill(skill);
 
                 if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained)
@@ -245,7 +248,7 @@ namespace ACE.Server.WorldObjects
             // again, only seems to be for summoning so far...
             if (UseRequiresSkillSpec != null)
             {
-                var skill = activator.ConvertToMoASkill((Skill)UseRequiresSkillSpec.Value);
+                var skill = player.GetBattlemageAdjustedItemSkill(this, (Skill)UseRequiresSkillSpec.Value);
                 var playerSkill = player.GetCreatureSkill(skill);
 
                 if (playerSkill.AdvancementClass < SkillAdvancementClass.Specialized)

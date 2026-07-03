@@ -257,10 +257,12 @@ namespace ACE.Server.WorldObjects
 
                 if (topDamager.IsPlayer)
                 {
-                    var topDamagerPlayer = topDamager.TryGetAttacker();
+                    var topDamagerPlayer = topDamager.TryGetAttacker() as Player;
                     if (topDamagerPlayer != null)
                     {
                         topDamagerPlayer.CreatureKills = (topDamagerPlayer.CreatureKills ?? 0) + 1;
+                        topDamagerPlayer.TryAdvanceSlayerGems(this);
+                        NomadRune.TryDropForNomad(topDamagerPlayer, this);
                         LeaderboardCache.InvalidatePlayers();
                     }
                 }
@@ -764,16 +766,22 @@ namespace ACE.Server.WorldObjects
                 else
                     GenerateTreasure_Olthoi(killer, corpse);
 
-                // DerpACE Ironman: tag all loot on monster corpses killed by an Ironman player
-                // so the items pass the wield gate and get the [IM] name prefix.
-                if (killer != null && killer.TryGetAttacker() is Player killerIronman
-                    && killerIronman.GetProperty(PropertyBool.IsIronman) == true)
+                // DerpACE challenge economies: stamp corpse gear with the killer's mode
+                // so restricted characters cannot launder normal/hardcore/ironman loot
+                // by letting someone else make the kill.
+                if (killer != null && killer.TryGetAttacker() is Player corpseKillerPlayer)
                 {
                     foreach (var lootItem in corpse.Inventory.Values)
                     {
-                        lootItem.SetProperty(PropertyBool.IsIronmanItem, true);
-                        if (lootItem.GetProperty(PropertyInt.ItemWorkmanship) != null && !lootItem.Name.EndsWith(" [IM]"))
-                            lootItem.Name = lootItem.Name + " [IM]";
+                        if (Player.IsGearProvenanceTracked(lootItem))
+                            lootItem.SetProperty(PropertyInt.GearProvenance, corpseKillerPlayer.CurrentGearProvenance);
+
+                        if (corpseKillerPlayer.CurrentGearProvenance == Player.GearProvenanceIronman)
+                        {
+                            lootItem.SetProperty(PropertyBool.IsIronmanItem, true);
+                            if (Player.IsGearProvenanceTracked(lootItem) && !lootItem.Name.EndsWith(" [IM]"))
+                                lootItem.Name = lootItem.Name + " [IM]";
+                        }
                     }
                 }
 

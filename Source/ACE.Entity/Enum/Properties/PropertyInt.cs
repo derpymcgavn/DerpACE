@@ -694,6 +694,22 @@ namespace ACE.Entity.Enum.Properties
         MorphicPreviousCreatureWCID              = 9039,
         // DerpACE: cooking glove progress toward Well Fed.
         WellFedFoodCount                         = 9040,
+        // DerpACE: armor sort affixes, storing a DamageType and flat outgoing damage bonus.
+        [AssessmentProperty]
+        ArmorSortDamageType                      = 9041,
+        [AssessmentProperty]
+        ArmorSortDamageBonus                     = 9042,
+        [AssessmentProperty]
+        SpellFocusAttunement                     = 9043,
+        SpellFocusVisualSourceWcid               = 9044,
+        [AssessmentProperty]
+        SpellFocusUpgradeLevel                   = 9045,
+        [AssessmentProperty]
+        NomadRitualSchool                        = 9046,
+        [AssessmentProperty]
+        NomadRitualTier                          = 9047,
+        // DerpACE: hidden gear economy provenance. 1 = Normal, 2 = Hardcore, 3 = Ironman-family.
+        GearProvenance                           = 9048,
     }
 
     public static class PropertyIntExtensions
@@ -734,6 +750,7 @@ namespace ACE.Entity.Enum.Properties
                 case PropertyInt.FriendType:
                     return System.Enum.GetName(typeof(CreatureType), value);
                 case PropertyInt.DamageType:
+                case PropertyInt.ArmorSortDamageType:
                 case PropertyInt.ResistanceModifierType:
                     return System.Enum.GetName(typeof(DamageType), value);
                 case PropertyInt.CurrentWieldedLocation:

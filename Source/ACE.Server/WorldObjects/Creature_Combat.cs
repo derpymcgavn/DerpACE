@@ -64,7 +64,7 @@ namespace ACE.Server.WorldObjects
 
             //Console.WriteLine($"{Name}.SetCombatMode({combatMode}), CombatStance: {combatStance}");
 
-            if (combatMode != CombatMode.NonCombat && CurrentMotionState.Stance == combatStance)
+            if (combatMode != CombatMode.NonCombat && CurrentMotionState.Stance == combatStance && CombatMode == combatMode)
             {
                 queueTime = 0.0f;
                 return 0.0f;
@@ -445,6 +445,9 @@ namespace ACE.Server.WorldObjects
         public float GetAttributeMod(WorldObject weapon)
         {
             var isBow = weapon != null && weapon.IsBow;
+
+            if (this is Player player && player.IsBattlemageLightWeapon(weapon))
+                return SkillFormula.GetAttributeMod((int)player.GetBattlemageFocusDamageSkill(), false);
 
             //var attribute = isBow || GetCurrentWeaponSkill() == Skill.FinesseWeapons ? Coordination : Strength;
             var attribute = isBow || weapon?.WeaponSkill == Skill.FinesseWeapons ? Coordination : Strength;

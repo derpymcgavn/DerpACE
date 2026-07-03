@@ -384,6 +384,12 @@ namespace ACE.Server.Command.Handlers
             var remainingAttachments = new List<MailAttachment>();
             foreach (var att in msg.Attachments)
             {
+                if (player.IsRestrictedGearMode && AttachmentGearProvenance(att) is int provenance && provenance != player.CurrentGearProvenance)
+                {
+                    remainingAttachments.Add(att);
+                    continue;
+                }
+
                 var bankSlot = BankConfig.EnableBank
                     ? BankConfig.Items.FirstOrDefault(i => i.Id == att.Wcid)
                     : null;
@@ -532,6 +538,16 @@ namespace ACE.Server.Command.Handlers
                 return false;
             }
 
+            var targetProvenance = Player.GetGearProvenanceForPlayer(target);
+            var targetRestricted = Player.IsIronmanFamilyPlayer(target) || target.GetProperty(PropertyBool.IsHardcore) == true;
+            if (targetRestricted && attachments != null && attachments.Any(att => AttachmentGearProvenance(att) is int provenance && provenance != targetProvenance))
+            {
+                sender.SendMessage("[MAIL] That gear belongs to another challenge economy.");
+                if (refundOnFailure)
+                    RefundAttachments(sender, pyreals, attachments);
+                return false;
+            }
+
             var msg = new MailMessage
             {
                 SenderName  = sender.Name,
@@ -595,14 +611,23 @@ namespace ACE.Server.Command.Handlers
         private static bool IsMixedIronmanAssetTransfer(ACE.Server.Entity.IPlayer first, ACE.Server.Entity.IPlayer second)
         {
             if (first == null || second == null)
-                return IsIronmanPlayer(first) || IsIronmanPlayer(second);
+                return Player.IsIronmanFamilyPlayer(first) || Player.IsIronmanFamilyPlayer(second);
 
-            return IsIronmanPlayer(first) ^ IsIronmanPlayer(second);
+            return Player.IsIronmanFamilyPlayer(first) ^ Player.IsIronmanFamilyPlayer(second);
         }
 
-        private static bool IsIronmanPlayer(ACE.Server.Entity.IPlayer player)
+        private static int? AttachmentGearProvenance(MailAttachment attachment)
         {
-            return player?.GetProperty(PropertyBool.IsIronman) == true;
+            if (attachment?.Snapshot?.Ints != null
+                && attachment.Snapshot.Ints.TryGetValue((int)PropertyInt.GearProvenance, out var provenance))
+                return provenance;
+
+            if (attachment?.Snapshot?.Bools != null
+                && attachment.Snapshot.Bools.TryGetValue((int)PropertyBool.IsIronmanItem, out var isIronmanItem)
+                && isIronmanItem)
+                return Player.GearProvenanceIronman;
+
+            return null;
         }
 
         // -- item-shipping helpers --------------------------------------------
@@ -684,6 +709,8 @@ namespace ACE.Server.Command.Handlers
             var fromInv   = Math.Min(heldInv, stackSize);
             var fromBank  = stackSize - fromInv;
 
+            StampMailGearProvenance(player, item);
+
             if (fromInv > 0 && !player.TryConsumeFromInventoryWithNetworking(item, fromInv))
             {
                 player.SendMessage("[MAIL] Failed to remove item from your inventory.");
@@ -709,6 +736,19 @@ namespace ACE.Server.Command.Handlers
                 Snapshot  = snapshot
             };
             return true;
+        }
+
+        private static void StampMailGearProvenance(Player player, WorldObject item)
+        {
+            if (!Player.IsGearProvenanceTracked(item))
+                return;
+
+            var provenance = Player.GetGearProvenance(item) ?? player.CurrentGearProvenance;
+            if (item.GetProperty(PropertyInt.GearProvenance) == null)
+                item.SetProperty(PropertyInt.GearProvenance, provenance);
+
+            if (provenance == Player.GearProvenanceIronman)
+                item.SetProperty(PropertyBool.IsIronmanItem, true);
         }
 
         // -- biota snapshot helpers --------------------------------------------

@@ -68,6 +68,7 @@ namespace ACE.Server.Entity
 
         public BaseDamageMod BaseDamageMod;
         public float BaseDamage { get; set; }
+        public int ArmorSortDamageBonus;
 
         public float AttributeMod;
         public float PowerMod;
@@ -441,6 +442,13 @@ namespace ACE.Server.Entity
             if (DamageSource.ItemType == ItemType.MissileWeapon)
                 BaseDamageMod.ElementalBonus = WorldObject.GetMissileElementalDamageBonus(Weapon, attacker, DamageType);
 
+            if (attacker is Player armorSortPlayer)
+            {
+                var armorSort = armorSortPlayer.GetArmorSortDamageBreakdown(DamageType);
+                ArmorSortDamageBonus = armorSort.TotalBonus;
+                BaseDamageMod.ElementalBonus += ArmorSortDamageBonus;
+            }
+
             BaseDamage = (float)ThreadSafeRandom.Next(BaseDamageMod.MinDamage, BaseDamageMod.MaxDamage);
         }
 
@@ -590,6 +598,9 @@ namespace ACE.Server.Entity
 
                 if (BaseDamageMod.ElementalBonus != 0)
                     info += $"ElementalDamageBonus: {BaseDamageMod.ElementalBonus}\n";
+
+                if (ArmorSortDamageBonus != 0)
+                    info += $"ArmorSortDamageBonus: +{ArmorSortDamageBonus} {DamageType}\n";
             }
 
             // critical hit

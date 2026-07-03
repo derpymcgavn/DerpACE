@@ -11,6 +11,7 @@ using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
+using ACE.Server.DerpAce;
 using ACE.Server.WorldObjects;
 using ACE.Server.Managers;
 
@@ -412,9 +413,24 @@ namespace ACE.Server.Factories
                 player.ChannelsAllowed = player.ChannelsActive;
             }
 
+            GrantDerptideIntroBook(player);
+
             CharacterCreateSetDefaultCharacterOptions(player);
 
             return CreateResult.Success;
+        }
+
+        private static void GrantDerptideIntroBook(Player player)
+        {
+            var introBook = WorldObjectFactory.CreateNewWorldObject(HardcodedWeenies.DerptideIntroBookWeenieClassId);
+            if (introBook == null)
+            {
+                log.Warn($"GrantDerptideIntroBook: unable to create WCID {HardcodedWeenies.DerptideIntroBookWeenieClassId}.");
+                return;
+            }
+
+            if (!player.TryAddToInventory(introBook))
+                log.Warn($"GrantDerptideIntroBook: unable to add {introBook.Name} to {player.Name}'s inventory.");
         }
 
         private static WorldObject GetClothingObject(uint weenieClassId, uint palette, double shade)

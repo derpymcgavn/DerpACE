@@ -496,6 +496,15 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyInt.UnarmedBaseDamage, baseDamage);
             wo.SetProperty(PropertyInt.UnarmedDamageType, (int)damageType);
             wo.SetProperty(PropertyFloat.UnarmedDamageVariance, variance);
+            wo.SetProperty(PropertyInt.Damage, baseDamage);
+            wo.SetProperty(PropertyInt.WeaponSkill, (int)Skill.UnarmedCombat);
+            wo.SetProperty(PropertyInt.WeaponTime, slotLabel == "Gauntlets" ? 35 : 45);
+            wo.SetProperty(PropertyFloat.DamageVariance, variance);
+            wo.SetProperty(PropertyFloat.DamageMod, 1.0);
+            wo.SetProperty(PropertyFloat.WeaponOffense, ACE.Server.Managers.PropertyManager.GetDouble("unarmed_nomad_item_attack_mod").Item);
+            wo.SetProperty(PropertyFloat.WeaponDefense, 1.08);
+            wo.SetProperty(PropertyFloat.WeaponMissileDefense, 1.08);
+            wo.SetProperty(PropertyFloat.WeaponMagicDefense, 1.08);
 
             // Apply the matching UiEffects outline so the item glows with its element in the UI.
             // Stamp W_DamageType too so any downstream code that keys off it (e.g. ArmorLevel display
@@ -539,7 +548,7 @@ namespace ACE.Server.Factories
             var inscription =
                 $"Inscribed by M. Stranger:\n" +
                 $"These {slotLabel.ToLowerInvariant()} channel {elementName.ToLowerInvariant()} when struck unarmed.\n" +
-                $"Base Damage: {baseDamage}  Variance: {variance:0.00}  Element: {elementName} ({damageType})\n" +
+                $"Base Damage: {baseDamage}  Variance: {variance:0.00}  Attack Mod: {wo.WeaponOffense:0.000}  Element: {elementName} ({damageType})\n" +
                 $"{procDescription}";
 
             wo.SetProperty(PropertyString.Inscription, inscription);

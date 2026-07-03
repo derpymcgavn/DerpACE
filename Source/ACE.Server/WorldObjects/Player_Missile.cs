@@ -2,9 +2,12 @@ using System;
 using System.Numerics;
 
 using ACE.Entity.Enum;
+using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
+using ACE.Server.Physics;
 using ACE.Server.Physics.Animation;
 
 namespace ACE.Server.WorldObjects
@@ -77,7 +80,6 @@ namespace ACE.Server.WorldObjects
 
             var weapon = GetEquippedMissileWeapon();
             var ammo = GetEquippedAmmo();
-            var usingHandCrossbow = weapon?.IsHandCrossbow == true;
 
             // sanity check
             accuracyLevel = Math.Clamp(accuracyLevel, 0.0f, 1.0f);
@@ -94,8 +96,6 @@ namespace ACE.Server.WorldObjects
             if (MissileTarget == null)
             {
                 AccuracyLevel = accuracyLevel;  // verify
-                if (usingHandCrossbow)
-                    DualWieldAlternate = true;
             }
 
             // get world object of target guid
@@ -157,8 +157,6 @@ namespace ACE.Server.WorldObjects
                 OnAttackDone();
                 return;
             }
-            var handCrossbowShot = weapon.IsHandCrossbow;
-
             var ammo = weapon.IsAmmoLauncher ? GetEquippedAmmo() : weapon;
             if (ammo == null)
             {
@@ -214,9 +212,6 @@ namespace ACE.Server.WorldObjects
 
             // calculate projectile spawn pos and velocity
             var localOrigin = GetProjectileSpawnOrigin(ammo.WeenieClassId, aimLevel);
-            if (handCrossbowShot && weapon.CurrentWieldedLocation == EquipMask.Shield)
-                localOrigin.X *= -1.0f;
-
             var velocity = CalculateProjectileVelocity(localOrigin, target, projectileSpeed, out Vector3 origin, out Quaternion orientation);
 
             //Console.WriteLine($"Velocity: {velocity}");
@@ -232,7 +227,7 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            var launchTime = EnqueueMotionPersist(actionChain, aimLevel);
+            EnqueueMotionPersist(actionChain, aimLevel);
 
             // launch projectile
             actionChain.AddAction(this, () =>
@@ -250,13 +245,6 @@ namespace ACE.Server.WorldObjects
                 UpdateVitalDelta(Stamina, -staminaCost);
 
                 var projectile = LaunchProjectile(launcher, ammo, target, origin, orientation, velocity);
-                if (handCrossbowShot)
-                {
-                    ApplyHandCrossbowProjectileScale(projectile, ammo);
-                    if (GetDualWieldWeapon()?.IsHandCrossbow == true)
-                        DualWieldAlternate = !DualWieldAlternate;
-                }
-
                 UpdateAmmoAfterLaunch(ammo);
             });
 
@@ -277,7 +265,7 @@ namespace ACE.Server.WorldObjects
 
             // reload animation
             var animSpeed = GetAnimSpeed();
-            var reloadTime = EnqueueMotionPersist(actionChain, stance, MotionCommand.Reload, animSpeed);
+            EnqueueMotionPersist(actionChain, stance, MotionCommand.Reload, animSpeed);
 
             // reset for next projectile
             EnqueueMotionPersist(actionChain, stance, MotionCommand.Ready);
@@ -288,7 +276,7 @@ namespace ACE.Server.WorldObjects
             {
                 if (CombatMode == CombatMode.Missile)
                     EnqueueBroadcast(new GameMessageParentEvent(this, ammo, ACE.Entity.Enum.ParentLocation.RightHand, ACE.Entity.Enum.Placement.RightHandCombat));
-            }); 
+            });
 
             actionChain.AddDelaySeconds(linkTime);
 

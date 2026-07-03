@@ -40,6 +40,7 @@ namespace ACE.Server.Managers
         public const uint MeteorFragmentSpellId = 65006;
         public const uint SpiralStarLashSpellId = 65007;
         public const uint ChainLightningArcSpellId = 65008;
+        public const uint FrostWaveShieldSpellId = 65009;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
@@ -49,7 +50,8 @@ namespace ACE.Server.Managers
                 || spellId == VoidConfusionSpellId
                 || spellId == MeteorFragmentSpellId
                 || spellId == SpiralStarLashSpellId
-                || spellId == ChainLightningArcSpellId;
+                || spellId == ChainLightningArcSpellId
+                || spellId == FrostWaveShieldSpellId;
         }
 
         private const string ContentDirectoryEnvVar = "DERPACE_CUSTOM_SPELLS_DIR";
@@ -73,11 +75,14 @@ namespace ACE.Server.Managers
             EnsureDefaultWellFedSpell();
             EnsureDefaultWarMageSpells();
             EnsureDefaultVoidConfusionSpell();
+            EnsureDefaultFrostWaveShieldSpell();
 
             var loaded = LoadAll();
             ForceLoadDefaultWellFedSpell();
             ForceLoadDefaultWarMageVisualSpells();
+            ForceLoadDefaultFrostWaveShieldSpell();
             EnsureWarMageSpecialTrajectories();
+            EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
             log.Info($"CustomSpellManager: Initialized. Loaded {loaded} custom spell definition(s) from {ContentDir}.");
         }
@@ -87,7 +92,9 @@ namespace ACE.Server.Managers
             var loaded = LoadAll();
             ForceLoadDefaultWellFedSpell();
             ForceLoadDefaultWarMageVisualSpells();
+            ForceLoadDefaultFrostWaveShieldSpell();
             EnsureWarMageSpecialTrajectories();
+            EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
             log.Info($"CustomSpellManager: Reloaded {loaded} custom spell definition(s) from {ContentDir}.");
             return loaded;
@@ -130,6 +137,16 @@ namespace ACE.Server.Managers
             {
                 foreach (var entry in customSpells.EnumerateArray())
                     TryApply(entry, "built-in WarMageVisuals.json");
+            }
+        }
+
+        private static void ForceLoadDefaultFrostWaveShieldSpell()
+        {
+            using var doc = JsonDocument.Parse(DefaultFrostWaveShieldJson, JsonOptions);
+            if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in customSpells.EnumerateArray())
+                    TryApply(entry, "built-in FrostWaveShield.json");
             }
         }
 
@@ -1130,6 +1147,15 @@ namespace ACE.Server.Managers
             File.WriteAllText(fallbackPath, DefaultVoidConfusionJson);
         }
 
+        private static void EnsureDefaultFrostWaveShieldSpell()
+        {
+            var path = Path.Combine(ContentDir, "FrostWaveShield.json");
+            if (File.Exists(path) && File.ReadAllText(path).Contains("\"Id\": 65009"))
+                return;
+
+            File.WriteAllText(path, DefaultFrostWaveShieldJson);
+        }
+
         private static void EnsureWarMageSpecialTrajectories()
         {
             NormalizeProjectileSpell(
@@ -1215,6 +1241,54 @@ namespace ACE.Server.Managers
                 createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.35f },
                 padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
                 peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+        }
+
+        private static void EnsureFrostWaveShieldVisuals()
+        {
+            if (!DatManager.PortalDat.SpellTable.Spells.TryGetValue(FrostWaveShieldSpellId, out var spellBase))
+                return;
+
+            var dbSpell = DatabaseManager.World.GetCachedSpell(FrostWaveShieldSpellId);
+            var templateDbSpell = DatabaseManager.World.GetCachedSpell(4216);
+            if (dbSpell == null)
+                return;
+
+            SetSpellBase(spellBase, nameof(SpellBase.Name), "Frost Wave Shield");
+            SetSpellWords(spellBase, "Frost Wave Shield");
+            SetSpellBase(spellBase, nameof(SpellBase.Desc), "A frost wave orbits the caster, chilling nearby monsters over 15 seconds.");
+            SetSpellBase(spellBase, nameof(SpellBase.School), MagicSchool.WarMagic);
+            SetSpellBase(spellBase, nameof(SpellBase.Icon), 0x06001037u);
+            SetSpellBase(spellBase, nameof(SpellBase.Category), (SpellCategory)FrostWaveShieldSpellId);
+            SetSpellBase(spellBase, nameof(SpellBase.Bitfield), (uint)(SpellFlags.Beneficial | SpellFlags.SelfTargeted | SpellFlags.NotResearchable));
+            SetSpellBase(spellBase, nameof(SpellBase.MetaSpellType), SpellType.Enchantment);
+            SetSpellBase(spellBase, nameof(SpellBase.BaseMana), 85u);
+            SetSpellBase(spellBase, nameof(SpellBase.Power), 400u);
+            SetSpellBase(spellBase, nameof(SpellBase.Duration), 15.0);
+            SetSpellBase(spellBase, nameof(SpellBase.CasterEffect), (uint)PlayScript.EnchantUpBlue);
+            SetSpellBase(spellBase, nameof(SpellBase.TargetEffect), (uint)PlayScript.BreatheFrost);
+            SetSpellBase(spellBase, nameof(SpellBase.NonComponentTargetType), (uint)ItemType.Creature);
+
+            dbSpell.Name = "Frost Wave Shield";
+            dbSpell.Wcid = templateDbSpell?.Wcid ?? dbSpell.Wcid;
+            dbSpell.EType = (uint)DamageType.Cold;
+            dbSpell.DamageType = (int)DamageType.Cold;
+            dbSpell.BaseIntensity = 90;
+            dbSpell.Variance = 30;
+            dbSpell.NumProjectiles = 4;
+            dbSpell.NumProjectilesVariance = 0;
+            dbSpell.SpreadAngle = 360.0f;
+            dbSpell.NonTracking = true;
+            dbSpell.CreateOffsetOriginX = 0.0f;
+            dbSpell.CreateOffsetOriginY = 0.0f;
+            dbSpell.CreateOffsetOriginZ = 0.75f;
+            dbSpell.PaddingOriginX = 0.6f;
+            dbSpell.PaddingOriginY = 0.0f;
+            dbSpell.PaddingOriginZ = 0.0f;
+            dbSpell.PeturbationOriginX = 0.0f;
+            dbSpell.PeturbationOriginY = 0.0f;
+            dbSpell.PeturbationOriginZ = 0.0f;
+
+            GetSpellCache()[FrostWaveShieldSpellId] = dbSpell;
         }
 
         private static void NormalizeProjectileSpell(uint spellId, SpellId templateSpellId, string name, DamageType damageType, int baseIntensity, int variance, int numProjectiles, float spreadAngle, bool nonTracking, JsonVector3 createOffset, JsonVector3 padding, JsonVector3 peturbation)
@@ -1494,6 +1568,42 @@ namespace ACE.Server.Managers
       ""NonTracking"": false,
       ""CasterEffect"": ""SpecialStatePurple"",
       ""TargetEffect"": ""BlackMadness""
+    }
+  ]
+}
+";
+
+        private const string DefaultFrostWaveShieldJson =
+@"{
+  ""CustomSpells"": [
+    {
+      ""Template"": 4216,
+      ""Id"": 65009,
+      ""Name"": ""Frost Wave Shield"",
+      ""SpellWords"": ""Frost Wave Shield"",
+      ""Desc"": ""A frost wave orbits the caster, chilling nearby monsters over 15 seconds."",
+      ""School"": ""WarMagic"",
+      ""Icon"": ""0x06001037"",
+      ""Category"": 65009,
+      ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
+      ""MetaSpellType"": ""Enchantment"",
+      ""BaseMana"": 85,
+      ""Power"": 400,
+      ""Duration"": 15,
+      ""NonComponentTargetType"": ""Creature"",
+      ""EType"": ""Cold"",
+      ""DamageType"": ""Cold"",
+      ""BaseIntensity"": 90,
+      ""Variance"": 30,
+      ""NumProjectiles"": 4,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 360,
+      ""NonTracking"": true,
+      ""CreateOffset"": [0, 0, 0.75],
+      ""Padding"": [0.6, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpBlue"",
+      ""TargetEffect"": ""BreatheFrost""
     }
   ]
 }

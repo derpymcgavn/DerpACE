@@ -317,7 +317,7 @@ namespace ACE.Server.WorldObjects
             if (Level > startingLevel)
             {
                 // DerpACE Ironman: suppress skill credits from level-up message and always show 0
-                bool isIronman = GetProperty(PropertyBool.IsIronman) == true;
+                bool isIronman = IsIronmanFamily;
 
                 var message = (Level == maxLevel) ? $"You have reached the maximum level of {Level}!" : $"You are now level {Level}!";
 
@@ -348,7 +348,7 @@ namespace ACE.Server.WorldObjects
                     AllegianceNode.OnLevelUp();
 
                 // DerpACE: apply level-gated Ironman skill grants
-                if (GetProperty(PropertyBool.IsIronman) == true)
+                if (IsIronmanFamily)
                     ACE.Server.Factories.IronmanFactory.CheckIronmanLevelGrants(this);
 
                 Session.Network.EnqueueSend(levelUp);

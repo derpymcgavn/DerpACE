@@ -43,7 +43,7 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Current DerpACE Abilities And Commands (June 21, 2026)
+### Current DerpACE Abilities And Commands (July 3, 2026)
 This section is the current operator-facing source of truth for active DerpACE systems. Older patch notes below are historical and may describe earlier balance values.
 
 #### Runtime Config Toggles
@@ -60,12 +60,12 @@ This section is the current operator-facing source of truth for active DerpACE s
 | Vampiric jewelry | `enable_vampiric_jewelry` plus `vampiric_jewelry_*` | Yes | Controls new loot rolls and live regen/on-hit behavior. |
 | Prepatch variants | `enable_prepatch_variants` plus `prepatch_*` | Yes, future rolls | Controls selected prepatch-style item variants. |
 | Vendor random loot | `vendor_random_loot_enabled` plus `vendor_*` | Yes, future vendor loads/restocks | Vendor inventories reroll when the vendor reloads. |
-| Ironman / Nomad | `ironman_enabled` plus `ironman_*` | Yes | Gates opt-in commands and controls default blind/hardcore support values. |
+| Ironman / Nomad / Hardcore | `ironman_enabled` plus `ironman_*` | Yes | Gates opt-in commands and controls blind/hardcore support values. Challenge gear provenance and magic-aid isolation are live code rules. |
 | Bank | `enable_bank` plus `bank_*` | Yes | Controls coin banking, direct deposit, vendor bank spend, and overflow behavior. |
 | Admin map | `admin_map_enabled` plus `admin_map_*` | Yes | `@derpconfig reload` restarts the map service with the new host, port, token, image, and calibration settings. |
 | Custom spells | JSON files plus `@customspells` commands | Reload command | No hard-off JSON toggle yet; spell packages are an import/export pipeline and custom spell data is intentionally loaded through `@customspells reload` or startup. |
 | Custom ClothingBase | JSON files plus `@cb*` commands | Reload command | No hard-off JSON toggle yet; custom clothing is a data merge pipeline keyed by ClothingBase id filenames. |
-| Fixed utility items | Item WCIDs and live item behavior | Item-specific | Foci containers, Aetherial Quiver, random dye, and the weapon appearance tailoring kit are currently always available if their weenies exist. |
+| Fixed utility items | Item WCIDs and live item behavior | Item-specific | Foci containers, Aetherial Quiver, random dye, weapon appearance tailoring kit, spell focus, Slayer Gems, Nomad tools/runes, and starter books are currently always available if their weenies exist. |
 
 #### Admin Commands
 | Command | Purpose |
@@ -95,8 +95,21 @@ This section is the current operator-facing source of truth for active DerpACE s
 | `/ironman char` | Shows current Ironman progression. Blind Ironmen only see unlocked skills, not future milestones. |
 | `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |
 | `/ironman topkillers`, `/ironmantopkillers` | Shows creatures with the most Ironman kills. |
+| `/hardcore on`, `/hardcore confirm` | Begins and confirms Hardcore challenge mode. Hardcore uses its own gear provenance economy and death rules. |
+| `/hardcoretop` | Shows Hardcore leaderboard. |
+| `/topkillers`, `/hardcoretopkillers` | Shows creature kill/death leaderboards. |
+| `/gquest` | Shows the current global kill quest target, server progress, time remaining, and your personal progress. |
+| `/mail help` | Shows player mail commands for text mail, MMD payment, item shipping, COD, claiming, declining, and deleting. |
+| `/bank list`, `/bank store`, `/bank take` | Stores and withdraws bankable items. |
+| `/cash list`, `/cash give`, `/cash take` | Shows, deposits, and withdraws banked currency. |
+| `/ddt` | Toggles direct-deposit opt-out for the character. |
+| `/tp <player>`, `/tp accept`, `/tp decline`, `/tp cancel` | Player teleport request workflow when teleport is enabled. |
+| `/pop`, `/population` | Shows online population. |
+| `/cast-style npc|normal|toggle|status` | Controls compatible player casting animation style. |
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `pugilist`, `combo`, `flurry`, `rake`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `handcrossbow`, `dinnerware`, `discus`, `platter`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
+Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `pugilist`, `combo`, `flurry`, `rake`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `platter`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
+
+`handcrossbow` loot conversion is intentionally retired for now. Legacy hand crossbows are converted away on login so players are not left with broken combat-mode or dual-wield state.
 
 #### Weapon And Caster Mutators
 | Mutator | Eligible loot | Current effect |
@@ -114,7 +127,6 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `sentinel` | Spears and two-handed spears | Goldleaf Sentinel. Hits at configured power or higher build same-target poise. At full stacks, drains target stamina, returns part of it, gives short damage reduction, and starts a visible cooldown. |
 | `stalker` | Bows | First registered hit on a target can gain bonus damage. |
 | `breacher` | Crossbows | Always recovers a small part of armor-mitigated damage as bonus pierce damage. |
-| `handcrossbow` | Crossbows | Converts a crossbow into a 0.25-scale hand crossbow: dual-wield melee-slot weapon, requires specialized Missile Weapons and Dual Wield, uses bolt ammo, halves launcher mods and ordinary bolt projectile damage. Dual-wield attacks fire visible bolts from the active hand. New ammo WCID `2000601` creates half-damage prismatic `Handcrossbow Bolts`. |
 | `dartflinger` | Dart flinger atlatl family only | Ricochet-style bounce behavior for dartflingers. Separate from standard atlatls. |
 | `reaper` | Standard atlatls only | Killing blows can restore a small percentage of max health. Does not roll on dartflingers. |
 | `dinnerware` | Throwable dinnerware | Banquet spin/bounce behavior. Projectiles visually bounce up to 5 targets with falling damage: 100%, 50%, 25%, 10%, 5%. |
@@ -150,6 +162,7 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | `rejuvenatingdance` | Footwear | Same dance behavior, but restores stamina. |
 | `replenishingdance` | Footwear | Same dance behavior, but restores mana. |
 | `unarmed` | Handwear and footwear | Adds unarmed surrogate damage, damage type, variance, offense/defense, speed, icon overlay, and combat UI effect for truly unarmed attacks. |
+| Elemental force | Armor | Armor pieces can roll +1 to +3 elemental force bonuses. The appraisal text is verbose, uses the matching element overlay style, and the bonuses stack with diminishing returns like Aetheria. |
 
 #### Important `@lootconfig` Keys
 | Family | Keys |
@@ -170,6 +183,12 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Weapon Appearance Tailoring Kit | WCID `420420423` creates a non-destructive weapon appearance stamp from a donor weapon, then applies that appearance to a same-family destination weapon while preserving destination stats, spells, procs, damage type, and particles. |
 | Foci Containers | Foci WCIDs `15268`, `15269`, `15270`, `15271`, `43173` act as 15-slot side containers for scarabs, prismatic tapers, and mana stones, and contents persist across relog. |
 | Aetherial Quiver | WCID `2000600` acts as self-replenishing prismatic ammunition for bows, crossbows, and atlatls, tuned slightly below deadly prismatics. |
+| Slayer Gems | WCIDs `2000602` dormant and `2000603` charged. Dormant gems attune to an allowed creature type, gain kill XP while carried, play a skill-up effect at level 100, and become charged automatically. Charged gems can add creature slayer to a fully tinkered weapon/wand/missile weapon with a 50% destruction risk and a 2-2.75% slayer modifier. |
+| Spell Focus | WCID `2000604` is an offhand shield-slot mage focus. Major Atlan stones attune elements; Black Fire / Enhanced Black Fire / Armor Upgrade Kit upgrades improve magical AL while base AL remains 10. Focus-first setups allow compatible wands/staffs one-handed and can use NPC cast animation/charge. |
+| Nomad Runes And Tools | WCIDs `2000605`-`2000611` cover Nomad Rune, Rune Pouch, Rune Loom, Ritual Rune, Scavenger's Mortar, Scavenger's Hexdust, and The Road That Keeps You. Runes have limited uses, ritual runes merge school buffs, and Hexdust gives Nomads an Assess Creature-driven Imperil-style tool. |
+| Derptide Intro Book | WCID `2000612` is granted to every newly created character. It explains challenge paths, mail, bank, leaderboards, custom loot, spell focuses, and survival basics. |
+| Battlemage Helm | Battlemage gear lets War Magic substitute for compatible Light Weapon wield and activation requirements while equipped, with green/red appraisal feedback on affected weapons. |
+| Challenge Economy And Magic Isolation | Normal players can wear any gear. Hardcore and Ironman-family characters use hidden gear provenance tags and may only equip/trade/mail restricted gear from their matching challenge economy. Helpful magic aid, heals, transfers, friendly negative dispels, item buffs, and Hierophant echo heals are isolated across challenge economies. |
 | Random Dye | WCID `420420420` applies a random palette to compatible armor, clothing, weapons, casters, and shields. |
 | Admin Map Web UI | Optional read-only web service showing visible online players on a real Dereth coordinate map. Configure in `DerpAce.json`: `admin_map_enabled`, `admin_map_host` default `127.0.0.1`, `admin_map_port` default `9110`, `admin_map_token`, `admin_map_show_admins`, `admin_map_refresh_seconds`, `admin_map_image_path` default `Data/AdminMap/dereth-map.jpg`, and the four `admin_map_bounds_*_pct` calibration edges. Visit `http://127.0.0.1:9110/`; JSON is at `/api/players`. Clicking an indoor/dungeon player generates a cached top-down SVG floor plan for that dungeon landblock from server DAT geometry and overlays player dots; JSON is at `/api/dungeon?landblock=0x........`. `@derpconfig reload` restarts the service with new settings. |
 

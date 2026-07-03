@@ -9,6 +9,8 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
+        private const int SlayerGemChance = 250000;
+
         public static Dictionary<int, int> RareChances { get; } = new Dictionary<int, int>()
         {
             { 1, 2500 },
@@ -49,6 +51,9 @@ namespace ACE.Server.Factories
             // Check to make sure there *IS* a chance. Less than/equal to 0 would mean zero chance, so we can stop here
             if (rare_drop_rate_percent <= 0)
                 return null;
+
+            if (ThreadSafeRandom.Next(1, SlayerGemChance) == 1)
+                return SlayerGem.CreateRandomDormantGem();
 
             rare_drop_rate_percent = Math.Min(rare_drop_rate_percent / 100, 1);
             int t1_chance = (int)Math.Round(1 / rare_drop_rate_percent); // Default PropertyManager value results in a 1 in 2,500 chance
@@ -102,6 +107,9 @@ namespace ACE.Server.Factories
         /// </summary>
         public static int GetRareTier(uint rareWCID)
         {
+            if (rareWCID == SlayerGem.DormantWeenieClassId || rareWCID == SlayerGem.ChargedWeenieClassId)
+                return 3;
+
             var wcid = (int)rareWCID;
 
             foreach (var kvp in RareWCIDs)

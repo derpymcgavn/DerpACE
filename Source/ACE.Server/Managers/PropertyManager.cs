@@ -683,6 +683,8 @@ namespace ACE.Server.Managers
                 ("unarmed_skill_for_max_damage", new Property<double>(400.0, "if unarmed_combat_upgrades is enabled, the Light Weapons skill at which truly-unarmed base damage reaches unarmed_max_base_damage. Skill above this is clamped.")),
                 ("unarmed_variance", new Property<double>(0.75, "if unarmed_combat_upgrades is enabled, the damage variance for truly-unarmed strikes.")),
                 ("unarmed_damage_scalar", new Property<double>(0.5, "DerpACE: scales the bonus damage added by unarmed combos and hit/kill streaks. 0 = no bonus, 1 = full multiplier. Default 0.5 keeps combos rewarding without doubling post-mitigation damage.")),
+                ("unarmed_nomad_attack_mod", new Property<double>(1.08, "DerpACE: innate WeaponOffense modifier for Ironman Nomads fighting truly bare-handed, used when no unarmed gauntlets or boots provide an attack mod.")),
+                ("unarmed_nomad_item_attack_mod", new Property<double>(1.15, "DerpACE: WeaponOffense modifier stamped onto Mysterious Stranger Nomad gauntlets/shoes.")),
                 ("unarmed_steel_boot_damage_per_al", new Property<double>(0.04, "if unarmed_combat_upgrades is enabled, bonus base damage per point of armor level on equipped Steel boots when striking at high attack power.")),
                 ("unarmed_steel_boot_power_threshold", new Property<double>(0.5, "if unarmed_combat_upgrades is enabled, the minimum PowerLevel (0-1) before steel boot bonus damage starts applying. Bonus scales linearly from 0% at this threshold up to 100% at full power.")),
                 ("unlocker_window", new Property<double>(10.0, "The number of seconds a player unlocking a chest has exclusive access to first opening the chest.")),

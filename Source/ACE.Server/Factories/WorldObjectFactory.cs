@@ -33,6 +33,9 @@ namespace ACE.Server.Factories
             if (weenie.WeenieClassId == 15268 || weenie.WeenieClassId == 15269 || weenie.WeenieClassId == 15270 || weenie.WeenieClassId == 15271 || weenie.WeenieClassId == 43173)
                 return new Container(weenie, guid);
 
+            if (weenie.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
+                return new NomadRunePouch(weenie, guid);
+
             var objWeenieType = weenie.WeenieType;
 
             switch (objWeenieType)
@@ -67,6 +70,10 @@ namespace ACE.Server.Factories
                 case WeenieType.Food:
                     return new Food(weenie, guid);
                 case WeenieType.Gem:
+                    if (weenie.WeenieClassId == SlayerGem.DormantWeenieClassId || weenie.WeenieClassId == SlayerGem.ChargedWeenieClassId)
+                        return new SlayerGem(weenie, guid);
+                    if (weenie.WeenieClassId == NomadRitualRune.NomadRitualRuneWeenieClassId)
+                        return new NomadRitualRune(weenie, guid);
                     return new Gem(weenie, guid);
                 case WeenieType.Game:
                     return new Game(weenie, guid);
@@ -161,6 +168,9 @@ namespace ACE.Server.Factories
             if (biota.WeenieClassId == 15268 || biota.WeenieClassId == 15269 || biota.WeenieClassId == 15270 || biota.WeenieClassId == 15271 || biota.WeenieClassId == 43173)
                 return new Container(biota);
 
+            if (biota.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
+                return new NomadRunePouch(biota);
+
             switch (biota.WeenieType)
             {
                 case WeenieType.Undef:
@@ -192,6 +202,10 @@ namespace ACE.Server.Factories
                 case WeenieType.Food:
                     return new Food(biota);
                 case WeenieType.Gem:
+                    if (biota.WeenieClassId == SlayerGem.DormantWeenieClassId || biota.WeenieClassId == SlayerGem.ChargedWeenieClassId)
+                        return new SlayerGem(biota);
+                    if (biota.WeenieClassId == NomadRitualRune.NomadRitualRuneWeenieClassId)
+                        return new NomadRitualRune(biota);
                     return new Gem(biota);
                 case WeenieType.Game:
                     return new Game(biota);

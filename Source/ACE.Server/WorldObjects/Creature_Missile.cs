@@ -449,9 +449,6 @@ namespace ACE.Server.WorldObjects
 
         public Sound GetLaunchMissileSound(WorldObject weapon)
         {
-            if (weapon?.IsHandCrossbow == true)
-                return Sound.CrossbowRelease;
-
             switch (weapon.DefaultCombatStyle)
             {
                 case CombatStyle.Bow:

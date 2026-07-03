@@ -174,50 +174,6 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} pierces through armor — {armorIgnoreChance}% chance on each shot to completely ignore the target's armor for that hit.";
             }
 
-            // Hand Crossbow: crossbow mutator that keeps normal crossbow behavior, but equips
-            // one-handed and uses the dual-wield attack stance while standing still.
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
-                && TryRollWeaponModifier(
-                profile,
-                roll,
-                ref specialModifierApplied,
-                0.01f,
-                5,
-                roll.WeaponType == TreasureWeaponType.Crossbow
-                    && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsBreachersCrossbow) != true,
-                "handcrossbow"))
-            {
-                wo.Name = "Hand " + wo.Name;
-                wo.ItemType = ItemType.MeleeWeapon | ItemType.MissileWeapon;
-                wo.ValidLocations = EquipMask.MeleeWeapon;
-                wo.DefaultCombatStyle = CombatStyle.DualWield;
-                wo.WeaponSkill = Skill.MissileWeapons;
-                wo.W_WeaponType = WeaponType.Crossbow;
-                wo.W_AttackType = AttackType.Thrust;
-                wo.AmmoType = AmmoType.Bolt;
-                wo.DamageMod = wo.DamageMod.HasValue ? wo.DamageMod.Value * 0.5 : wo.DamageMod;
-                wo.ObjScale = 0.5f;
-                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHandCrossbow, true);
-
-                wo.WieldRequirements = WieldRequirement.Training;
-                wo.WieldSkillType = (int)Skill.MissileWeapons;
-                wo.WieldDifficulty = (int)SkillAdvancementClass.Specialized;
-                wo.WieldRequirements2 = WieldRequirement.Training;
-                wo.WieldSkillType2 = (int)Skill.DualWield;
-                wo.WieldDifficulty2 = (int)SkillAdvancementClass.Specialized;
-                wo.WieldRequirements3 = WieldRequirement.Invalid;
-                wo.WieldSkillType3 = null;
-                wo.WieldDifficulty3 = null;
-                wo.WieldRequirements4 = WieldRequirement.Invalid;
-                wo.WieldSkillType4 = null;
-                wo.WieldDifficulty4 = null;
-
-                wo.IconOverlayId = MutatorOverlayHandCrossbow;
-                ApplyLootUiEffect(wo, UiEffects.Piercing);
-
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nHand Crossbow: this one-handed crossbow is half the size of a normal crossbow, uses half the normal crossbow damage modifier, and fires compact bolts at roughly half deadly-prismatic force. It uses the missile accuracy bar with a stand-still dual-wield attack animation. It requires specialized Missile Weapons and specialized Dual Wield; equip it with another hand crossbow or pair it with a shield.";
-            }
-
             // Reaper's Atlatl: atlatl-only kill-fed sustain. Separate from Dartflinger.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ReaperAtlatlEnabled
                 && TryRollWeaponModifier(

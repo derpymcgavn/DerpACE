@@ -299,6 +299,9 @@ namespace ACE.Server.WorldObjects
             if (this is Gem || this is Food || this is Hook)
                 targetCreature = target as Creature;
 
+            if (IsChallengeMagicAid(spell) && !CanApplyChallengeMagicAid(spell, targetCreature ?? target, itemCaster ?? weapon))
+                return false;
+
             if (spell.School == MagicSchool.LifeMagic || spell.MetaSpellType == SpellType.Dispel)
             {
                 // NonComponentTargetType should be 0 for untargeted spells.
@@ -386,6 +389,25 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
+        private static bool IsChallengeMagicAid(Spell spell)
+        {
+            if (spell.IsBeneficial)
+                return true;
+
+            return (spell.MetaSpellType == SpellType.Dispel || spell.MetaSpellType == SpellType.FellowDispel)
+                && spell.Align == DispelType.Negative;
+        }
+
+        private bool CanApplyChallengeMagicAid(Spell spell, WorldObject target, WorldObject caster)
+        {
+            var targetPlayer = (target as Player) ?? (target?.Wielder as Player);
+            if (targetPlayer == null)
+                return true;
+
+            var sourcePlayer = (this as Player) ?? (caster as Player) ?? (caster?.Wielder as Player);
+            return targetPlayer.CanReceiveChallengeMagicAidFrom(sourcePlayer, spell.Name);
+        }
+
         /// <summary>
         /// Plays the caster/target effects for a spell
         /// </summary>
@@ -408,18 +430,8 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public void CreateEnchantment(WorldObject target, WorldObject caster, WorldObject weapon, Spell spell, bool equip = false, bool fromProc = false, bool isWeaponSpell = false)
         {
-            // DerpACE Ironman: refuse to enchant an Ironman target if the caster is not also an Ironman.
-            // (Self-buffs and items wielded by the Ironman are still allowed because both source and target are the same player or their own gear.)
-            if (target is Player ironTarget && ironTarget.GetProperty(PropertyBool.IsIronman) == true)
-            {
-                var sourcePlayer = (this as Player) ?? (caster as Player);
-                if (sourcePlayer != null && sourcePlayer != ironTarget && sourcePlayer.GetProperty(PropertyBool.IsIronman) != true)
-                {
-                    sourcePlayer.SendMessage($"{ironTarget.Name} is an Ironman and cannot be aided by your magic.");
-                    ironTarget.SendMessage($"{sourcePlayer.Name} attempts to enchant you, but your Ironman vow rejects the spell.");
-                    return;
-                }
-            }
+            if (IsChallengeMagicAid(spell) && !CanApplyChallengeMagicAid(spell, target, caster ?? weapon))
+                return;
 
             // weird itemCaster -> caster collapsing going on here -- fixme
 
@@ -746,6 +758,7 @@ namespace ACE.Server.WorldObjects
                 if (!fellow.IsAlive) continue;
                 if (fellow.CurrentLandblock == null || fellow.CurrentLandblock != caster.CurrentLandblock) continue;
                 if (Vector3.DistanceSquared(fellow.Location.ToGlobal(), casterPos) > rangeSq) continue;
+                if (!fellow.CanReceiveChallengeMagicAidFrom(caster, "Hierophant echo")) continue;
 
                 var applied = fellow.UpdateVitalDelta(fellow.Health, echoAmount);
                 if (applied <= 0) continue;

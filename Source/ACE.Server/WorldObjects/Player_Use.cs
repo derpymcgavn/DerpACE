@@ -84,6 +84,30 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (target.IsSpellFocus && TryAttuneSpellFocusWithAtlanStone(sourceItem, target))
+                return;
+
+            if (sourceItem.IsSpellFocus && TryAttuneSpellFocusWithAtlanStone(target, sourceItem))
+                return;
+
+            if (target.IsSpellFocus && TryUpgradeSpellFocusWithItem(sourceItem, target))
+                return;
+
+            if (sourceItem.IsSpellFocus && TryUpgradeSpellFocusWithItem(target, sourceItem))
+                return;
+
+            if (target.IsSpellFocus && TryTailorSpellFocusAppearance(sourceItem, target))
+                return;
+
+            if (sourceItem.IsSpellFocus && TryTailorSpellFocusAppearance(target, sourceItem))
+                return;
+
+            if (NomadRuneMergeTool.TryUse(this, sourceItem, target))
+                return;
+
+            if (ScavengersHexdust.TryUse(this, sourceItem, target))
+                return;
+
             // handle objects with built-in spells
             if (sourceItem.SpellDID != null)
             {

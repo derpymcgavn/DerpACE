@@ -60,10 +60,6 @@ namespace ACE.Server.Factories
 
             ["breacher"] = "breacher",
             ["breachercrossbow"] = "breacher",
-            ["handcrossbow"] = "handcrossbow",
-            ["handxbow"] = "handcrossbow",
-            ["pistolcrossbow"] = "handcrossbow",
-            ["pocketcrossbow"] = "handcrossbow",
 
             ["dinnerware"] = "dinnerware",
             ["discus"] = "discus",
@@ -138,7 +134,6 @@ namespace ACE.Server.Factories
             ["sentinel"] = TreasureWeaponType.Spear,
             ["stalker"] = TreasureWeaponType.Bow,
             ["breacher"] = TreasureWeaponType.Crossbow,
-            ["handcrossbow"] = TreasureWeaponType.Crossbow,
             ["dinnerware"] = TreasureWeaponType.ThrownDinnerware,
             ["discus"] = TreasureWeaponType.Discus,
             ["platter"] = TreasureWeaponType.Platter,
@@ -222,6 +217,16 @@ namespace ACE.Server.Factories
             ["replenishing"] = "replenishingdance",
             ["replendance"] = "replenishingdance",
             ["manadance"] = "replenishingdance",
+
+            ["armorsort"] = "armorsort",
+            ["sort"] = "armorsort",
+            ["damagearmor"] = "armorsort",
+            ["spellarmor"] = "armorsort",
+
+            ["battlemage"] = "battlemage",
+            ["battlemagehelm"] = "battlemage",
+            ["warblade"] = "battlemage",
+            ["spellbladehelm"] = "battlemage",
         };
 
         public static bool TryResolveWeaponMutator(string name, out string canonicalName)
@@ -250,7 +255,6 @@ namespace ACE.Server.Factories
                 "sentinel",
                 "stalker",
                 "breacher",
-                "handcrossbow",
                 "dinnerware/banquet",
                 "discus/warriorprincess",
                 "platter/flyingbuffet",
@@ -310,7 +314,9 @@ namespace ACE.Server.Factories
                 "unarmed/brawler",
                 "healingdance",
                 "rejuvenatingdance",
-                "replenishingdance"
+                "replenishingdance",
+                "armorsort/sort",
+                "battlemage/battlemagehelm"
             });
         }
 
@@ -338,7 +344,6 @@ namespace ACE.Server.Factories
                 "sentinel"    => wo.GetProperty(PropertyBool.IsSentinelSpear) == true,
                 "stalker"     => wo.GetProperty(PropertyBool.IsStalkersBow) == true,
                 "breacher"    => wo.GetProperty(PropertyBool.IsBreachersCrossbow) == true,
-                "handcrossbow"=> wo.GetProperty(PropertyBool.IsHandCrossbow) == true,
                 "dinnerware"  => wo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true,
                 "discus"      => wo.WeenieClassId == (uint)WeenieClassName.discus
                                  && wo.GetProperty(PropertyBool.IsDinnerwareWeapon) == true,
@@ -393,6 +398,8 @@ namespace ACE.Server.Factories
                 "healingdance"      => wo.GetProperty(PropertyBool.IsHealingDanceBoots) == true,
                 "rejuvenatingdance" => wo.GetProperty(PropertyBool.IsRejuvenatingDanceBoots) == true,
                 "replenishingdance" => wo.GetProperty(PropertyBool.IsReplenishingDanceBoots) == true,
+                "armorsort"         => (wo.ArmorSortDamageBonus ?? 0) > 0,
+                "battlemage"        => wo.GetProperty(PropertyBool.IsBattlemageHelm) == true,
                 _            => false,
             };
         }

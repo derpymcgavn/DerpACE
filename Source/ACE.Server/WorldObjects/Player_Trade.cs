@@ -161,6 +161,13 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (!CanTransferIronmanRestrictedItemTo(target, wo, out var ironmanMessage))
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, ironmanMessage));
+                Session.Network.EnqueueSend(new GameEventTradeFailure(Session, itemGuid, WeenieError.None));
+                return;
+            }
+
             if (wo.IsUniqueOrContainsUnique && !target.CheckUniques(wo, this))
             {
                 // WeenieError.TooManyUniqueItems / WeenieErrorWithString._CannotCarryAnymore?
@@ -397,8 +404,30 @@ namespace ACE.Server.WorldObjects
 
         private bool IsMixedIronmanTrade(Player partner)
         {
-            return (GetProperty(PropertyBool.IsIronman) == true)
-                ^ (partner.GetProperty(PropertyBool.IsIronman) == true);
+            return IsIronmanFamily ^ partner.IsIronmanFamily;
+        }
+
+        private bool CanTransferIronmanRestrictedItemTo(Player target, WorldObject item, out string message)
+        {
+            message = null;
+
+            if (target == null || !target.IsRestrictedGearMode || !IsGearProvenanceTracked(item))
+                return true;
+
+            var provenance = GetGearProvenance(item) ?? CurrentGearProvenance;
+            if (item.GetProperty(PropertyInt.GearProvenance) == null)
+                item.SetProperty(PropertyInt.GearProvenance, provenance);
+
+            if (provenance == GearProvenanceIronman)
+                item.SetProperty(PropertyBool.IsIronmanItem, true);
+
+            if (provenance != target.CurrentGearProvenance)
+            {
+                message = "That gear belongs to another challenge economy.";
+                return false;
+            }
+
+            return true;
         }
 
         private bool VerifyTrade_Inventory(Player partner)
@@ -417,6 +446,9 @@ namespace ACE.Server.WorldObjects
                 partner.HandleActionDeclineTrade(partner.Session);
                 return false;
             }
+
+            if (!VerifyTrade_IronmanItems(partner, self_items, partner_items))
+                return false;
 
             var playerACanAddToInventory = CanAddToInventory(partner_items, out var selfEncumbered, out var selfPackSpace);
             var playerBCanAddToInventory = partner.CanAddToInventory(self_items, out var partnerEncumbered, out var partnerPackSpace);
@@ -467,6 +499,35 @@ namespace ACE.Server.WorldObjects
             partner.ClearTradeAcceptance();
 
             return false;
+        }
+
+        private bool VerifyTrade_IronmanItems(Player partner, List<WorldObject> selfItems, List<WorldObject> partnerItems)
+        {
+            foreach (var item in selfItems)
+            {
+                if (!CanTransferIronmanRestrictedItemTo(partner, item, out var message))
+                {
+                    Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, message));
+                    partner.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, message));
+                    ClearTradeAcceptance();
+                    partner.ClearTradeAcceptance();
+                    return false;
+                }
+            }
+
+            foreach (var item in partnerItems)
+            {
+                if (!partner.CanTransferIronmanRestrictedItemTo(this, item, out var message))
+                {
+                    Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, message));
+                    partner.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, message));
+                    ClearTradeAcceptance();
+                    partner.ClearTradeAcceptance();
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public Dictionary<ObjectGuid, HashSet<ObjectGuid>> KnownTradeObjs = new Dictionary<ObjectGuid, HashSet<ObjectGuid>>();
