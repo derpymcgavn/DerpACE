@@ -843,6 +843,7 @@ namespace ACE.Server.WorldObjects
         private List<WorldObject> GenerateTreasure(DamageHistoryInfo killer, Corpse corpse)
         {
             var droppedItems = new List<WorldObject>();
+            var killerPlayer = killer?.TryGetAttacker() as Player;
 
             // create death treasure from loot generation factory
             if (DeathTreasure != null)
@@ -850,6 +851,8 @@ namespace ACE.Server.WorldObjects
                 List<WorldObject> items = LootGenerationFactory.CreateRandomLootObjects(DeathTreasure);
                 foreach (WorldObject wo in items)
                 {
+                    NomadQuestTrophy.StampIfEligible(killerPlayer, this, wo);
+
                     if (corpse != null)
                         corpse.TryAddToInventory(wo);
                     else
@@ -933,11 +936,15 @@ namespace ACE.Server.WorldObjects
 
                 if (corpse != null)
                 {
+                    NomadQuestTrophy.StampIfEligible(killerPlayer, this, item);
                     corpse.TryAddToInventory(item);
                     EnqueueBroadcast(new GameMessagePublicUpdateInstanceID(item, PropertyInstanceId.Container, corpse.Guid), new GameMessagePickupEvent(item));
                 }
                 else
+                {
+                    NomadQuestTrophy.StampIfEligible(killerPlayer, this, item);
                     droppedItems.Add(item);
+                }
             }
 
             // contain and non-wielded treasure create
@@ -954,6 +961,8 @@ namespace ACE.Server.WorldObjects
 
                     if (wo != null)
                     {
+                        NomadQuestTrophy.StampIfEligible(killerPlayer, this, wo);
+
                         if (corpse != null)
                             corpse.TryAddToInventory(wo);
                         else

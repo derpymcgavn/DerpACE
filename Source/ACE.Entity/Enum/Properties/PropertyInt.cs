@@ -710,6 +710,12 @@ namespace ACE.Entity.Enum.Properties
         NomadRitualTier                          = 9047,
         // DerpACE: hidden gear economy provenance. 1 = Normal, 2 = Hardcore, 3 = Ironman-family.
         GearProvenance                           = 9048,
+        // DerpACE: hidden Nomad trophy ownership for semi-dynamic quests. Stores character object guid.
+        NomadTrophyOwner                         = 9049,
+        // DerpACE: hidden source creature WCID for Nomad self-found trophy quest checks.
+        NomadTrophySourceWcid                    = 9050,
+        // DerpACE: hidden source creature type for Nomad self-found trophy quest checks.
+        NomadTrophySourceCreatureType            = 9051,
     }
 
     public static class PropertyIntExtensions
