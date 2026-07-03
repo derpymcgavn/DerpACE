@@ -718,6 +718,8 @@ namespace ACE.Entity.Enum.Properties
         NomadTrophySourceCreatureType            = 9051,
         // DerpACE: hidden global quest epoch when this self-found trophy was generated.
         NomadTrophyQuestEpoch                    = 9052,
+        // DerpACE: hidden Unix timestamp when this self-found trophy was generated.
+        NomadTrophyFoundTimestamp                = 9053,
     }
 
     public static class PropertyIntExtensions

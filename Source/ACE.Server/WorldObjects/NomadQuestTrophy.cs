@@ -1,3 +1,4 @@
+using ACE.Common;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Managers;
@@ -17,6 +18,7 @@ namespace ACE.Server.WorldObjects
             item.SetProperty(PropertyInt.NomadTrophyOwner, unchecked((int)player.Guid.Full));
             item.SetProperty(PropertyInt.NomadTrophySourceWcid, unchecked((int)source.WeenieClassId));
             item.SetProperty(PropertyInt.NomadTrophyQuestEpoch, GlobalKillQuestManager.CurrentEpoch);
+            item.SetProperty(PropertyInt.NomadTrophyFoundTimestamp, (int)Time.GetUnixTime());
 
             var creatureType = source.GetProperty(PropertyInt.CreatureType);
             if (creatureType != null)

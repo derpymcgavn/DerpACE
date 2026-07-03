@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 
 using log4net;
 
+using ACE.Common;
 using ACE.Common.Performance;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -34,6 +35,8 @@ namespace ACE.Server.Managers
         public static volatile uint CurrentItemWcid = 0;
         public static volatile int ItemRewardPercent = 0;
         public static DateTime QuestExpiry = DateTime.UtcNow;
+        public static volatile int QuestStartTimestamp = 0;
+        public static volatile int QuestExpiryTimestamp = 0;
         public static volatile int CurrentEpoch = 0;
 
         private static volatile int _completionCount = 0;
@@ -104,6 +107,10 @@ namespace ACE.Server.Managers
                 return;
 
             if ((item.GetProperty(PropertyInt.NomadTrophyQuestEpoch) ?? -1) != epoch)
+                return;
+
+            var foundTimestamp = item.GetProperty(PropertyInt.NomadTrophyFoundTimestamp);
+            if (foundTimestamp == null || foundTimestamp.Value < QuestStartTimestamp || foundTimestamp.Value > QuestExpiryTimestamp)
                 return;
 
             if (!_itemRaceCompletedEpochs.TryAdd(epoch, 1))
@@ -195,6 +202,8 @@ namespace ACE.Server.Managers
             CurrentItemName = null;
             CurrentItemWcid = 0;
             ItemRewardPercent = 0;
+            QuestStartTimestamp = (int)Time.GetUnixTime();
+            QuestExpiryTimestamp = QuestStartTimestamp + (30 * 60);
             QuestExpiry = DateTime.UtcNow.AddMinutes(30);
 
             if (ShouldRollItemRace())
