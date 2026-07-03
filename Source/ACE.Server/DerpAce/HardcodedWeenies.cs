@@ -19,7 +19,9 @@ namespace ACE.Server.DerpAce
     {
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
+        public const uint NomadSurvivalTomeWeenieClassId = 2000611;
         public const uint DerptideIntroBookWeenieClassId = 2000612;
+        public const uint IronmanGuideBookWeenieClassId = 2000613;
 
         private const uint MortarAndPestleWeenieClassId = 4751;
         private const uint PowderedMalachiteWeenieClassId = 8321;
@@ -42,6 +44,7 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildScavengersHexdust());
                 DatabaseManager.World.SetCachedWeenie(BuildNomadSurvivalTome());
                 DatabaseManager.World.SetCachedWeenie(BuildDerptideIntroBook());
+                DatabaseManager.World.SetCachedWeenie(BuildIronmanGuideBook());
                 DatabaseManager.World.SetCachedWeenie(BuildSausageMcBuffin());
 
                 log.Info("DerpACE: Hardcoded weenies registered.");
@@ -629,7 +632,7 @@ namespace ACE.Server.DerpAce
         {
             var w = new Weenie
             {
-                WeenieClassId = 2000611,
+                WeenieClassId = NomadSurvivalTomeWeenieClassId,
                 ClassName     = "ace2000611-nomadsurvivaltome",
                 WeenieType    = WeenieType.Book,
 
@@ -675,6 +678,62 @@ namespace ACE.Server.DerpAce
             AddBookPage(w, "VI. The Rule of Three Pockets\n\nOne pocket is for escape: recall, stamina, anything that buys distance.\n\nOne pocket is for the next fight: runes, hexdust, food, and whatever keeps your hands moving.\n\nOne pocket is for shame: trophies you swear will matter later, strange rocks, lucky bones, and the spoon you will not explain.\n\nWhen all three pockets are full, go home. The road kills most often when it convinces you to take one more room.");
             AddBookPage(w, "VII. How to Lose Correctly\n\nYou will miss. You will be evaded. You will meet things that make your best plan look like a wet napkin.\n\nWhen that happens, stop proving bravery to nobody. Back up. Dust the target. Change element. Use a shield. Break line of sight. Drag one enemy instead of three. A living coward learns more than a heroic corpse.\n\nThe Nomad's pride is not in never needing help. It is in needing very little, very well.");
             AddBookPage(w, "VIII. Last Advice by Firelight\n\nBuff before danger. Carry Hexdust. Keep spare shoes. Respect evades. Never trust a room with too much floor.\n\nIf a stranger offers you a perfect weapon, ask what it eats. If a chest looks generous, ask who taught it manners. If the road gets quiet, sit down and listen until it confesses.\n\nAnd when you have nothing left, check again. Most people overlook the thing that saves them because it is dirty, small, and already in their hand.");
+
+            return w;
+        }
+
+        private static Weenie BuildIronmanGuideBook()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = IronmanGuideBookWeenieClassId,
+                ClassName     = "ace2000613-ironmanguide",
+                WeenieType    = WeenieType.Book,
+
+                PropertiesInt          = new Dictionary<PropertyInt, int>(),
+                PropertiesBool         = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat        = new Dictionary<PropertyFloat, double>(),
+                PropertiesString       = new Dictionary<PropertyString, string>(),
+                PropertiesDID          = new Dictionary<PropertyDataId, uint>(),
+                PropertiesBook         = new PropertiesBook { MaxNumPages = 8, MaxNumCharsPerPage = 1800 },
+                PropertiesBookPageData = new List<PropertiesBookPageData>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType]        = (int)ItemType.Writable;
+            w.PropertiesInt[PropertyInt.PaletteTemplate] = 28;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]  = 50;
+            w.PropertiesInt[PropertyInt.Mass]            = 50;
+            w.PropertiesInt[PropertyInt.Value]           = 1000;
+            w.PropertiesInt[PropertyInt.ItemUseable]     = (int)Usable.ContainedViewedRemote;
+            w.PropertiesInt[PropertyInt.MaxStackSize]    = 1;
+            w.PropertiesInt[PropertyInt.StackSize]       = 1;
+            w.PropertiesInt[PropertyInt.PhysicsState]    = 1044;
+
+            w.PropertiesBool[PropertyBool.Inscribable] = false;
+            w.PropertiesBool[PropertyBool.IsSellable]  = false;
+            w.PropertiesBool[PropertyBool.Inelastic]   = true;
+            w.PropertiesBool[PropertyBool.IgnoreAuthor]= true;
+            w.PropertiesBool[PropertyBool.IsIronmanItem] = true;
+
+            w.PropertiesString[PropertyString.Name]        = "The Road Less Traveled";
+            w.PropertiesString[PropertyString.ShortDesc]   = "A field guide for Ironman characters.";
+            w.PropertiesString[PropertyString.LongDesc]    = "A plain-spoken guide for those who have taken the Ironman road: self-found gear, isolated aid, limited lives, and measured ambition.";
+            w.PropertiesString[PropertyString.Inscription] = "The road is less traveled because it charges interest.";
+            w.PropertiesString[PropertyString.ScribeName]  = "The Derptide Guides";
+            w.PropertiesString[PropertyString.ScribeAccount] = "prewritten";
+
+            w.PropertiesDID[PropertyDataId.Setup] = 0x0200018B;
+            w.PropertiesDID[PropertyDataId.Icon]  = 0x06001036;
+            CopySetupAndIcon(w, TomeWeenieClassId);
+
+            AddIronmanGuidePage(w, "I. The First Promise\n\nYou have chosen Ironman. The server heard you. The road heard you. Your pack, spellbook, and old certainties have been taken apart and replaced with a new bargain.\n\nYou are self-found now. What you wear should come from your own challenge family: your kills, your quests, your vendors, your fellow Ironmen.\n\nNormal players may wear anything. You may not. That is not punishment. That is the shape of the game you asked to play.");
+            AddIronmanGuidePage(w, "II. Lives and Panic\n\nIronman carries Hardcore blood. Lives matter. Death is not just a repair bill with dramatic music.\n\nSome life milestones may return a life as you climb, but do not spend lives as if the road owes you more. It does not.\n\nWhen danger turns strange, leave. Recall. Break line of sight. Drink too early instead of too late. Cowardice is what fools call survival before they understand it.");
+            AddIronmanGuidePage(w, "III. Gear Provenance\n\nChallenge gear is marked quietly. Ironman-family gear belongs to Ironman-family characters. Hardcore gear belongs to Hardcore. Normal characters can wear anything, but restricted characters cannot freely borrow from the wider world.\n\nThis applies across looting, trading, mail, and wielding. If an item refuses you, it may have been touched by the wrong economy.\n\nThe cleanest rule is simple: if your path did not earn it, do not build around it.");
+            AddIronmanGuidePage(w, "IV. Magic Aid\n\nThe vow rejects outside help.\n\nHelpful enchantments, heals, transfers, friendly negative dispels, item buffs, and support echoes are isolated across challenge economies. Your own buffs and your own gear still work. Other Ironman-family aid can help Ironman-family characters.\n\nDo not stand next to a normal buff line and wonder why the universe is being rude. It is not rude. It is consistent.");
+            AddIronmanGuidePage(w, "V. Fellows, Trade, and Mail\n\nIronman-family characters may fellow and trade with other Ironman-family characters. They should not cross the wall with normal characters.\n\nMail follows the same spirit. It can carry messages, MMDs, and items, but challenge attachments are checked when shipped and claimed.\n\nUse /mail help if you need the command shapes. Use /ironman char to check your own progression. Use /ironman top if you need inspiration, rivalry, or a list of future ghosts.");
+            AddIronmanGuidePage(w, "VI. Blind Ironman\n\nBlind Ironman hides the road ahead and spends experience into your plan as it opens. It is not weaker. It is simply less willing to hand you the map.\n\nYou will see what you have become, not every step you have not earned yet.\n\nIf you chose blind, resist the urge to turn every surprise into a spreadsheet. Some doors should stay closed until you are standing in front of them.");
+            AddIronmanGuidePage(w, "VII. Loot, Quests, and Strange Stones\n\nSlayer Gems, global hunts, custom armor forces, spell focuses, and odd mutators all still exist for you, but the source matters. Keep your finds clean.\n\nGlobal quests can be checked with /gquest. Leaderboards are useful, but they are also bait. Chase them if you like; just remember the board does not pay death's bill.\n\nIf an item has strange text, read it twice before selling it once.");
+            AddIronmanGuidePage(w, "VIII. Last Counsel\n\nIronman is not about proving you need nobody. It is about learning what you can do when the easy doors are shut.\n\nKeep backups. Carry recalls. Respect hollow damage. Do not let one good drop convince you that you are immortal.\n\nThe road less traveled is not empty. It is full of people who walked too loudly. Step softer.");
 
             return w;
         }
@@ -739,6 +798,11 @@ namespace ACE.Server.DerpAce
         }
 
         private static void AddDerptideIntroPage(Weenie book, string text)
+        {
+            AddBookPage(book, text, "The Derptide Guides");
+        }
+
+        private static void AddIronmanGuidePage(Weenie book, string text)
         {
             AddBookPage(book, text, "The Derptide Guides");
         }

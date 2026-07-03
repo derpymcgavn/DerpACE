@@ -9,6 +9,7 @@ using ACE.DatLoader.FileTypes;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
+using ACE.Server.DerpAce;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
 using ACE.Server.Network.Enum;
@@ -271,6 +272,7 @@ namespace ACE.Server.Factories
                 // GiveStarterGear uses StarterGearFactory which correctly maps racial weapons
                 // and all other skill-based starter items from starterGear.json
                 GiveStarterGear(player);
+                GrantChallengeBook(player, HardcodedWeenies.IronmanGuideBookWeenieClassId, "Ironman");
 
                 // Final pass after all conversion actions so every remaining item is correctly tagged.
                 TagAllPossessions(player);
@@ -371,6 +373,7 @@ namespace ACE.Server.Factories
                 player.SendMessage("Nomad step 6/6: granting starter gear...");
                 GiveStarterGear(player);
                 GiveNomadGauntletsAndShoes(player);
+                GrantChallengeBook(player, HardcodedWeenies.NomadSurvivalTomeWeenieClassId, "Nomad");
                 TagAllPossessions(player);
                 AutoSpendBlindIronmanXp(player);
 
@@ -401,6 +404,24 @@ namespace ACE.Server.Factories
         {
             player.SetProperty(PropertyBool.IsIronmanNomad, true);
             player.SetModeTitle("NOMAD");
+        }
+
+        private static void GrantChallengeBook(Player player, uint wcid, string pathName)
+        {
+            var book = WorldObjectFactory.CreateNewWorldObject(wcid);
+            if (book == null)
+            {
+                player.SendMessage($"[{pathName}] Failed to create path guide book (wcid {wcid}).");
+                return;
+            }
+
+            book.SetProperty(PropertyBool.IsIronmanItem, true);
+            book.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
+
+            if (player.TryCreateInInventoryWithNetworking(book))
+                player.SendMessage($"[{pathName}] A guide book has been placed in your pack: {book.Name}.");
+            else
+                player.SendMessage($"[{pathName}] Failed to place {book.Name} in your pack.");
         }
 
         // Weenie class ids used to create the nomad's elemental gauntlets and shoes.
@@ -1208,6 +1229,24 @@ namespace ACE.Server.Factories
 
         // ---------- Inventory wipe ----------
 
+        private static readonly HashSet<uint> IronmanPreservedStarterItemWcids = new HashSet<uint>
+        {
+            5084,  // Calling Stone
+            33613, // Pathwarden Token
+            48886, // Mud Golem Essence
+            30985, // Sho Letter From Home
+            30986, // Gharu'ndim Letter From Home
+            30987, // Viamontian Letter From Home
+            30988, // Aluvian Letter From Home
+            43018, // Gear Knight Letter From Home
+            43019, // Umbraen/Penumbraen Letter From Home
+            42979, // Core Plating Integrator
+            43022, // Core Plating Deintegrator
+            HardcodedWeenies.DerptideIntroBookWeenieClassId,
+            HardcodedWeenies.IronmanGuideBookWeenieClassId,
+            HardcodedWeenies.NomadSurvivalTomeWeenieClassId,
+        };
+
         private static void WipeInventory(Player player)
         {
             // Snapshot then destroy every wielded + carried item.
@@ -1216,6 +1255,9 @@ namespace ACE.Server.Factories
             {
                 try
                 {
+                    if (ShouldPreserveIronmanConversionItem(item))
+                        continue;
+
                     if (item.WielderId != null)
                     {
                         // Equipped — dequip first via direct unwield path
@@ -1230,6 +1272,23 @@ namespace ACE.Server.Factories
                     // Swallow individual item failures so a single broken item doesn't abort the whole wipe.
                 }
             }
+        }
+
+        private static bool ShouldPreserveIronmanConversionItem(WorldObject item)
+        {
+            if (item == null)
+                return false;
+
+            if (IronmanPreservedStarterItemWcids.Contains(item.WeenieClassId))
+                return true;
+
+            if (item.WeenieType == WeenieType.Book || (item.ItemType & ItemType.Writable) != 0)
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(item.Quest))
+                return true;
+
+            return false;
         }
 
         // ---------- Spell wipe ----------
