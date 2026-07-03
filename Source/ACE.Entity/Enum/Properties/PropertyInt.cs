@@ -716,6 +716,8 @@ namespace ACE.Entity.Enum.Properties
         NomadTrophySourceWcid                    = 9050,
         // DerpACE: hidden source creature type for Nomad self-found trophy quest checks.
         NomadTrophySourceCreatureType            = 9051,
+        // DerpACE: hidden global quest epoch when this self-found trophy was generated.
+        NomadTrophyQuestEpoch                    = 9052,
     }
 
     public static class PropertyIntExtensions

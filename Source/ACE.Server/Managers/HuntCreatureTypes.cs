@@ -101,6 +101,39 @@ namespace ACE.Server.Managers
             (CreatureType.Anekshay,           "A'nekshay",          15, 30),
         };
 
+        public static readonly (uint wcid, string name)[] GlobalItemQuestPool =
+        {
+            (3669, "Drudge Charm"),
+            (3670, "Copper Golem Heart"),
+            (3671, "Granite Golem Heart"),
+            (3672, "Iron Golem Heart"),
+            (3673, "Wood Golem Heart"),
+            (3674, "Ash Gromnie Tooth"),
+            (3675, "Ivory Gromnie Tooth"),
+            (3676, "Jade Gromnie Tooth"),
+            (3677, "Swamp Gromnie Tooth"),
+            (3678, "Olthoi Carapace"),
+            (3679, "Olthoi Claw"),
+            (4232, "Small Armoredillo Hide"),
+            (4233, "Armoredillo Hide"),
+            (4234, "Large Armoredillo Hide"),
+            (4235, "Thin Gromnie Hide"),
+            (4236, "Gromnie Hide"),
+            (4237, "Thick Gromnie Hide"),
+            (4238, "Small Reedshark Hide"),
+            (4239, "Reedshark Hide"),
+            (4240, "Small Mattekar Hide"),
+            (4241, "Mattekar Hide"),
+            (4258, "Slithis Eyestalk"),
+            (4266, "Old Skeleton Bones"),
+            (6055, "Cracked Crystal Shard"),
+            (6056, "Small Crystal Shard"),
+            (6057, "Tiny Crystal Shard"),
+            (6058, "Shadow Shard"),
+            (6059, "Shadow Sliver"),
+            (6060, "Shadow Speck"),
+        };
+
         public static IReadOnlyList<CreatureType> SlayerTypes { get; } = GlobalQuestPool
             .Select(entry => entry.type)
             .Distinct()

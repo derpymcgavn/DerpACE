@@ -287,6 +287,7 @@ namespace ACE.Server.WorldObjects
             // who first brings it into their inventory. Normal players stay unrestricted;
             // Hardcore and Ironman-family players can only use matching stamped gear.
             StampGearProvenance(item);
+            GlobalKillQuestManager.OnItemAcquired(this, item);
 
             Session.Network.EnqueueSend(new GameMessageCreateObject(item));
 
@@ -1589,7 +1590,10 @@ namespace ACE.Server.WorldObjects
             }
 
             if (containerRootOwner == this)
+            {
                 StampGearProvenance(item);
+                GlobalKillQuestManager.OnItemAcquired(this, item);
+            }
 
             // when moving from a non-stuck container to a different container,
             // the database must be synced immediately
@@ -2111,6 +2115,7 @@ namespace ACE.Server.WorldObjects
             }
 
             StampGearProvenance(item);
+            GlobalKillQuestManager.OnItemAcquired(this, item);
 
             // if wielding from a loose container, we must save immediately
             if (fromContainer != null && !fromContainer.Stuck)

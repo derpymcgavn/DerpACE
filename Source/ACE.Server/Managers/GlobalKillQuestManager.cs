@@ -1,58 +1,52 @@
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 
 using log4net;
 
 using ACE.Common.Performance;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Managers
 {
     /// <summary>
-    /// Rolls a global kill quest every 30 minutes.
-    /// All online players receive the same target creature and kill count.
-    /// On completion each player earns a 4x XP bonus based on the XP they personally
-    /// accumulated from quest kills.
+    /// Rolls a global quest every 30 minutes. Quests can be kill hunts or self-found item races.
     /// </summary>
     public static class GlobalKillQuestManager
     {
+        public enum GlobalQuestKind
+        {
+            Hunt,
+            ItemRace,
+        }
+
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-        // Fires once every 30 minutes
         private static readonly RateLimiter _ticker = new RateLimiter(1, TimeSpan.FromMinutes(30));
 
-        // Quest state — written only from the main world thread; read from any landblock thread.
-        public static volatile string   CurrentCreatureName = null;
-        public static volatile uint     CurrentCreatureTypeId = 0;
-        public static volatile int      RequiredKills       = 0;
-        public static          DateTime QuestExpiry         = DateTime.UtcNow;
-        public static volatile int      CurrentEpoch        = 0;
+        public static volatile GlobalQuestKind CurrentKind = GlobalQuestKind.Hunt;
+        public static volatile string CurrentCreatureName = null;
+        public static volatile uint CurrentCreatureTypeId = 0;
+        public static volatile int RequiredKills = 0;
+        public static volatile string CurrentItemName = null;
+        public static volatile uint CurrentItemWcid = 0;
+        public static volatile int ItemRewardPercent = 0;
+        public static DateTime QuestExpiry = DateTime.UtcNow;
+        public static volatile int CurrentEpoch = 0;
 
-        // Count of players who finished the current quest (for the wrap-up message)
         private static volatile int _completionCount = 0;
-
-        // Key = (epoch << 32 | playerGuid) so old-epoch progress is silently orphaned when a new quest rolls.
         private static ConcurrentDictionary<ulong, (int kills, long xp)> _progress = new ConcurrentDictionary<ulong, (int kills, long xp)>();
+        private static ConcurrentDictionary<int, byte> _itemRaceCompletedEpochs = new ConcurrentDictionary<int, byte>();
 
         private static readonly Random _rng = new Random();
 
-        // ----------------------------------------------------------------
-        //  Initialization
-        // ----------------------------------------------------------------
-
         public static void Initialize()
         {
-            RollNewQuest(announceToAll: false); // Prime immediately with no announcement at startup
+            RollNewQuest(announceToAll: false);
             log.Info("[GlobalKillQuest] Initialized. First quest active.");
         }
-
-        // ----------------------------------------------------------------
-        //  Tick — called from WorldManager.UpdateGameWorld()
-        // ----------------------------------------------------------------
 
         public static void Tick()
         {
@@ -63,76 +57,90 @@ namespace ACE.Server.Managers
             RollNewQuest(announceToAll: true);
         }
 
-        // ----------------------------------------------------------------
-        //  Called from Creature_Death.OnDeath_GrantXP() on any kill
-        // ----------------------------------------------------------------
-
-        /// <param name="player">The player who earned XP for this kill.</param>
-        /// <param name="creature">The creature that died.</param>
-        /// <param name="xpEarned">The raw XP the player earned from this kill (before EarnXP modifiers).</param>
         public static void OnCreatureKilled(Player player, Creature creature, long xpEarned)
         {
-            var name   = CurrentCreatureName;
+            var name = CurrentCreatureName;
             var typeId = CurrentCreatureTypeId;
             var target = RequiredKills;
-            var epoch  = CurrentEpoch;
+            var epoch = CurrentEpoch;
 
-            if (name == null || typeId == 0 || target == 0)
+            if (CurrentKind != GlobalQuestKind.Hunt || name == null || typeId == 0 || target == 0)
                 return;
 
-            // Don't accept kills after the quest window has closed
             if (DateTime.UtcNow > QuestExpiry)
                 return;
 
-            // Match against the actual CreatureType id chosen for the quest.
             if (creature?.CreatureType == null || (uint)creature.CreatureType.Value != typeId)
                 return;
 
-            var key      = MakeKey(player.Guid.Full, epoch);
+            var key = MakeKey(player.Guid.Full, epoch);
             var newEntry = _progress.AddOrUpdate(key,
-                addValue:         (1, xpEarned),
+                addValue: (1, xpEarned),
                 updateValueFactory: (k, old) => (old.kills + 1, old.xp + xpEarned));
 
-            // Progress message every 5 kills, or at the final kill
             if (newEntry.kills == target)
-            {
-                CompleteQuest(player, name, target, newEntry.xp, epoch);
-            }
+                CompleteHunt(player, name, target, newEntry.xp, epoch);
             else if (newEntry.kills % 5 == 0 || newEntry.kills == 1)
-            {
                 player.SendMessage($"[Global Quest] {newEntry.kills}/{target} {name}s slain.", ChatMessageType.Broadcast);
-            }
         }
 
-        // ----------------------------------------------------------------
-        //  Query — used by /gquest command
-        // ----------------------------------------------------------------
-
-        public static (string name, int required, DateTime expiry, int myKills) GetStatus(Player player)
+        public static void OnItemAcquired(Player player, WorldObject item)
         {
-            var name  = CurrentCreatureName;
-            var kills = RequiredKills;
+            var itemName = CurrentItemName;
+            var itemWcid = CurrentItemWcid;
+            var rewardPercent = ItemRewardPercent;
             var epoch = CurrentEpoch;
 
-            int myKills = 0;
-            if (name != null && player != null)
+            if (CurrentKind != GlobalQuestKind.ItemRace || itemName == null || itemWcid == 0 || rewardPercent <= 0)
+                return;
+
+            if (player == null || item == null || item.WeenieClassId != itemWcid)
+                return;
+
+            if (DateTime.UtcNow > QuestExpiry)
+                return;
+
+            if (!NomadQuestTrophy.IsSelfFoundFor(player, item, itemWcid))
+                return;
+
+            if ((item.GetProperty(PropertyInt.NomadTrophyQuestEpoch) ?? -1) != epoch)
+                return;
+
+            if (!_itemRaceCompletedEpochs.TryAdd(epoch, 1))
+                return;
+
+            CompleteItemRace(player, itemName, rewardPercent);
+        }
+
+        public static GlobalQuestStatus GetStatus(Player player)
+        {
+            var kind = CurrentKind;
+            var epoch = CurrentEpoch;
+
+            var myKills = 0;
+            if (kind == GlobalQuestKind.Hunt && CurrentCreatureName != null && player != null)
             {
                 if (_progress.TryGetValue(MakeKey(player.Guid.Full, epoch), out var entry))
                     myKills = entry.kills;
             }
 
-            return (name, kills, QuestExpiry, myKills);
+            return new GlobalQuestStatus
+            {
+                Kind = kind,
+                TargetName = kind == GlobalQuestKind.ItemRace ? CurrentItemName : CurrentCreatureName,
+                RequiredKills = kind == GlobalQuestKind.Hunt ? RequiredKills : 0,
+                MyKills = myKills,
+                Expiry = QuestExpiry,
+                ItemWcid = kind == GlobalQuestKind.ItemRace ? CurrentItemWcid : 0,
+                RewardPercent = kind == GlobalQuestKind.ItemRace ? ItemRewardPercent : 0,
+                Completed = kind == GlobalQuestKind.ItemRace && _itemRaceCompletedEpochs.ContainsKey(epoch),
+            };
         }
 
-        // ----------------------------------------------------------------
-        //  Private helpers
-        // ----------------------------------------------------------------
-
-        private static void CompleteQuest(Player player, string creatureName, int target, long totalXp, int epoch)
+        private static void CompleteHunt(Player player, string creatureName, int target, long totalXp, int epoch)
         {
-            // Remove so they can't trigger completion again (race-safe: only the first caller who lands kills == target does this)
             if (!_progress.TryRemove(MakeKey(player.Guid.Full, epoch), out _))
-                return; // another thread beat us — already completed
+                return;
 
             System.Threading.Interlocked.Increment(ref _completionCount);
 
@@ -145,53 +153,141 @@ namespace ACE.Server.Managers
 
             var globalMsg = $"[Global Quest] {player.Name} has completed the hunt and slain {target} {creatureName}s!";
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(globalMsg, ChatMessageType.WorldBroadcast));
-            PlayerManager.LogBroadcastChat(ACE.Entity.Enum.Channel.AllBroadcast, player, globalMsg);
+            PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, globalMsg);
 
             log.Info($"[GlobalKillQuest] {player.Name} completed quest: kill {target} {creatureName}s, bonus XP {bonus:N0}");
         }
 
+        private static void CompleteItemRace(Player player, string itemName, int rewardPercent)
+        {
+            System.Threading.Interlocked.Increment(ref _completionCount);
+
+            var levelXp = player.GetXPToNextLevel(player.Level ?? 1);
+            var bonus = (long)Math.Round((double)levelXp * (rewardPercent / 100.0));
+            if (bonus < 1)
+                bonus = 1;
+
+            player.EarnXP(bonus, XpType.Quest);
+
+            player.SendMessage(
+                $"[Global Quest Complete!] You recovered {itemName} first and earned {bonus:N0} bonus XP ({rewardPercent}% of level XP)!",
+                ChatMessageType.Broadcast);
+
+            var globalMsg = $"[Global Quest] {player.Name} recovered {itemName} first and wins the item race!";
+            PlayerManager.BroadcastToAll(new GameMessageSystemChat(globalMsg, ChatMessageType.WorldBroadcast));
+            PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, globalMsg);
+
+            log.Info($"[GlobalKillQuest] {player.Name} completed item race: {itemName}, reward {rewardPercent}% level XP ({bonus:N0})");
+        }
+
         private static void RollNewQuest(bool announceToAll)
         {
-            // Wrap up the previous quest before rolling a new one
-            if (announceToAll && CurrentCreatureName != null)
-            {
-                var count = _completionCount;
-                string wrapUp;
-                if (count == 0)
-                    wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. No adventurers completed the task this time.";
-                else if (count == 1)
-                    wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. 1 adventurer answered the call!";
-                else
-                    wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. {count} adventurers answered the call!";
+            if (announceToAll && GetCurrentTargetName() != null)
+                BroadcastWrapUp();
 
-                PlayerManager.BroadcastToAll(new GameMessageSystemChat(wrapUp, ChatMessageType.WorldBroadcast));
-                PlayerManager.LogBroadcastChat(ACE.Entity.Enum.Channel.AllBroadcast, null, wrapUp);
-            }
-
-            var entry = HuntCreatureTypes.GlobalQuestPool[_rng.Next(HuntCreatureTypes.GlobalQuestPool.Length)];
-            var kills = _rng.Next(entry.minKills, entry.maxKills + 1);
-
-            // Atomically bump epoch — old in-flight progress becomes orphaned under the old epoch key
             CurrentEpoch++;
             _completionCount = 0;
             _progress = new ConcurrentDictionary<ulong, (int kills, long xp)>();
+            _itemRaceCompletedEpochs = new ConcurrentDictionary<int, byte>();
+            CurrentCreatureName = null;
+            CurrentCreatureTypeId = 0;
+            RequiredKills = 0;
+            CurrentItemName = null;
+            CurrentItemWcid = 0;
+            ItemRewardPercent = 0;
+            QuestExpiry = DateTime.UtcNow.AddMinutes(30);
 
-            CurrentCreatureName   = entry.name;
+            if (ShouldRollItemRace())
+                RollNewItemRace(announceToAll);
+            else
+                RollNewHunt(announceToAll);
+        }
+
+        private static void RollNewHunt(bool announceToAll)
+        {
+            var entry = HuntCreatureTypes.GlobalQuestPool[_rng.Next(HuntCreatureTypes.GlobalQuestPool.Length)];
+            var kills = _rng.Next(entry.minKills, entry.maxKills + 1);
+
+            CurrentKind = GlobalQuestKind.Hunt;
+            CurrentCreatureName = entry.name;
             CurrentCreatureTypeId = (uint)entry.type;
-            RequiredKills         = kills;
-            QuestExpiry           = DateTime.UtcNow.AddMinutes(30);
+            RequiredKills = kills;
 
             if (announceToAll)
             {
                 var msg = $"[Global Quest] A new hunt has begun! Slay {kills} {entry.name}s within the next 30 minutes for a 4x XP bonus! Type /gquest for details.";
                 PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
-                PlayerManager.LogBroadcastChat(ACE.Entity.Enum.Channel.AllBroadcast, null, msg);
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
             }
 
             log.Info($"[GlobalKillQuest] New quest rolled: kill {kills} {entry.name}s (CreatureType {entry.type})");
         }
 
-        private static ulong MakeKey(uint playerGuid, int epoch) =>
-            ((ulong)(uint)epoch << 32) | playerGuid;
+        private static void RollNewItemRace(bool announceToAll)
+        {
+            var entry = HuntCreatureTypes.GlobalItemQuestPool[_rng.Next(HuntCreatureTypes.GlobalItemQuestPool.Length)];
+            var rewardPercent = _rng.Next(10, 201);
+
+            CurrentKind = GlobalQuestKind.ItemRace;
+            CurrentItemName = entry.name;
+            CurrentItemWcid = entry.wcid;
+            ItemRewardPercent = rewardPercent;
+
+            if (announceToAll)
+            {
+                var msg = $"[Global Quest] A new scavenger race has begun! First adventurer to personally recover {entry.name} earns {rewardPercent}% of level XP! Traded copies do not count. Type /gquest for details.";
+                PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
+            }
+
+            log.Info($"[GlobalKillQuest] New quest rolled: first self-found {entry.name} (WCID {entry.wcid}), reward {rewardPercent}% level XP");
+        }
+
+        private static void BroadcastWrapUp()
+        {
+            var count = _completionCount;
+            string wrapUp;
+
+            if (CurrentKind == GlobalQuestKind.ItemRace)
+                wrapUp = count == 0
+                    ? $"[Global Quest] The race for {CurrentItemName} has ended. Nobody recovered one in time."
+                    : $"[Global Quest] The race for {CurrentItemName} has ended.";
+            else if (count == 0)
+                wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. No adventurers completed the task this time.";
+            else if (count == 1)
+                wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. 1 adventurer answered the call!";
+            else
+                wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. {count} adventurers answered the call!";
+
+            PlayerManager.BroadcastToAll(new GameMessageSystemChat(wrapUp, ChatMessageType.WorldBroadcast));
+            PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, wrapUp);
+        }
+
+        private static bool ShouldRollItemRace()
+        {
+            return HuntCreatureTypes.GlobalItemQuestPool.Length > 0 && _rng.Next(0, 4) == 0;
+        }
+
+        private static string GetCurrentTargetName()
+        {
+            return CurrentKind == GlobalQuestKind.ItemRace ? CurrentItemName : CurrentCreatureName;
+        }
+
+        private static ulong MakeKey(uint playerGuid, int epoch)
+        {
+            return ((ulong)(uint)epoch << 32) | playerGuid;
+        }
+    }
+
+    public class GlobalQuestStatus
+    {
+        public GlobalKillQuestManager.GlobalQuestKind Kind { get; set; }
+        public string TargetName { get; set; }
+        public int RequiredKills { get; set; }
+        public int MyKills { get; set; }
+        public DateTime Expiry { get; set; }
+        public uint ItemWcid { get; set; }
+        public int RewardPercent { get; set; }
+        public bool Completed { get; set; }
     }
 }

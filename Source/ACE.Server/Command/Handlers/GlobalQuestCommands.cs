@@ -23,27 +23,44 @@ namespace ACE.Server.Command.Handlers
 
             try
             {
-                var (name, required, expiry, myKills) = GlobalKillQuestManager.GetStatus(player);
+                var status = GlobalKillQuestManager.GetStatus(player);
 
-                if (name == null || required == 0)
+                if (status.TargetName == null)
                 {
                     player.SendMessage("[Global Quest] No quest is currently active.", ChatMessageType.Broadcast);
                     return;
                 }
 
-                var remaining = expiry - DateTime.UtcNow;
+                var remaining = status.Expiry - DateTime.UtcNow;
                 var timeStr   = remaining.TotalSeconds > 0
                     ? $"{(int)remaining.TotalMinutes}m {remaining.Seconds:00}s"
                     : "EXPIRED";
 
-                player.SendMessage(
-                    $"[Global Quest]\n" +
-                    $"  Target:    {name}\n" +
-                    $"  Required:  {required} kills\n" +
-                    $"  Your kills: {myKills}/{required}\n" +
-                    $"  Time left:  {timeStr}\n" +
-                    $"  Reward:    4x XP of your accumulated quest kills on completion.",
-                    ChatMessageType.Broadcast);
+                if (status.Kind == GlobalKillQuestManager.GlobalQuestKind.ItemRace)
+                {
+                    var completedText = status.Completed ? "yes" : "no";
+                    player.SendMessage(
+                        $"[Global Quest]\n" +
+                        $"  Type:      Item race\n" +
+                        $"  Target:    {status.TargetName} (WCID {status.ItemWcid})\n" +
+                        $"  Rule:      First self-found copy wins. Traded copies do not count.\n" +
+                        $"  Completed: {completedText}\n" +
+                        $"  Time left: {timeStr}\n" +
+                        $"  Reward:    {status.RewardPercent}% of level XP.",
+                        ChatMessageType.Broadcast);
+                }
+                else
+                {
+                    player.SendMessage(
+                        $"[Global Quest]\n" +
+                        $"  Type:      Hunt\n" +
+                        $"  Target:    {status.TargetName}\n" +
+                        $"  Required:  {status.RequiredKills} kills\n" +
+                        $"  Your kills: {status.MyKills}/{status.RequiredKills}\n" +
+                        $"  Time left:  {timeStr}\n" +
+                        $"  Reward:    4x XP of your accumulated quest kills on completion.",
+                        ChatMessageType.Broadcast);
+                }
             }
             catch (Exception ex)
             {

@@ -1,17 +1,22 @@
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.Managers;
 
 namespace ACE.Server.WorldObjects
 {
+    /// <summary>
+    /// Hidden self-found trophy stamps for Nomad quests and global item races.
+    /// </summary>
     public static class NomadQuestTrophy
     {
         public static void StampIfEligible(Player player, Creature source, WorldObject item)
         {
-            if (player?.IsIronmanNomad != true || source == null || item == null || !IsQuestTrophyCandidate(item))
+            if (player == null || source == null || item == null || !IsQuestTrophyCandidate(item))
                 return;
 
             item.SetProperty(PropertyInt.NomadTrophyOwner, unchecked((int)player.Guid.Full));
             item.SetProperty(PropertyInt.NomadTrophySourceWcid, unchecked((int)source.WeenieClassId));
+            item.SetProperty(PropertyInt.NomadTrophyQuestEpoch, GlobalKillQuestManager.CurrentEpoch);
 
             var creatureType = source.GetProperty(PropertyInt.CreatureType);
             if (creatureType != null)
