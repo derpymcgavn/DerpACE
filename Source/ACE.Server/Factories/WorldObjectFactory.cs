@@ -36,6 +36,16 @@ namespace ACE.Server.Factories
             if (weenie.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
                 return new NomadRunePouch(weenie, guid);
 
+            if (weenie.WeenieClassId == DerpAce.HardcodedWeenies.NomadPathwardenChestWeenieClassId)
+                return new ChallengeStarterChest(weenie, guid);
+
+            if (PathwardenRobeWcids.Contains(weenie.WeenieClassId))
+            {
+                var robe = new Clothing(weenie, guid);
+                TryOpenPathwardenRobeFeet(robe);
+                return robe;
+            }
+
             var objWeenieType = weenie.WeenieType;
 
             switch (objWeenieType)
@@ -170,6 +180,16 @@ namespace ACE.Server.Factories
 
             if (biota.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
                 return new NomadRunePouch(biota);
+
+            if (biota.WeenieClassId == DerpAce.HardcodedWeenies.NomadPathwardenChestWeenieClassId)
+                return new ChallengeStarterChest(biota);
+
+            if (PathwardenRobeWcids.Contains(biota.WeenieClassId))
+            {
+                var robe = new Clothing(biota);
+                TryOpenPathwardenRobeFeet(robe);
+                return robe;
+            }
 
             switch (biota.WeenieType)
             {
@@ -389,9 +409,38 @@ namespace ACE.Server.Factories
             if (worldObject == null)
                 GuidManager.RecycleDynamicGuid(guid);
             else
-                TryApplyPrePatchVariant(worldObject);
+                TryApplyDerpObjectFixups(worldObject);
 
             return worldObject;
+        }
+
+        private static readonly HashSet<uint> PathwardenRobeWcids = new HashSet<uint>
+        {
+            40439,
+            40454,
+            40455,
+            40456,
+        };
+
+        private static void TryApplyDerpObjectFixups(WorldObject wo)
+        {
+            TryApplyPrePatchVariant(wo);
+            TryOpenPathwardenRobeFeet(wo);
+        }
+
+        private static void TryOpenPathwardenRobeFeet(WorldObject wo)
+        {
+            if (wo == null || !PathwardenRobeWcids.Contains(wo.WeenieClassId))
+                return;
+
+            if (wo.ValidLocations.HasValue)
+                wo.ValidLocations = wo.ValidLocations.Value & ~EquipMask.FootWear;
+
+            if (wo.ClothingPriority.HasValue)
+                wo.ClothingPriority = wo.ClothingPriority.Value & ~CoverageMask.Feet;
+
+            if (wo.VisualClothingPriority.HasValue)
+                wo.VisualClothingPriority = wo.VisualClothingPriority.Value & ~CoverageMask.Feet;
         }
 
         /// <summary>

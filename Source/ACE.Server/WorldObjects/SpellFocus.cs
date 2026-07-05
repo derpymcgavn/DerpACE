@@ -420,7 +420,7 @@ namespace ACE.Server.WorldObjects
                 ? "No magical armor upgrades have been applied."
                 : $"Magical armor rank: {Math.Clamp(upgradeLevel, 0, SpellFocusMaxUpgradeLevel)}. Base armor remains 10.";
 
-            return $"A shield-slot spell focus for specialized War, Life, or Void mages. It may be used with a caster or caster staff, or with a Battlemage Helm and an eligible Light Weapon. Attune it by using a Major elemental Atlan Stone or Black Fire Atlan Stone on it. Armor Upgrade Kits improve only its magical armor, so hollow attacks still treat it as 10 AL. Current attunement: {attunementText}. {upgradeText}{visualText}";
+            return $"A shield-slot spell focus for specialized War, Life, or Void mages. It may be used with a caster or caster staff, or with a Battlemage Helm and an eligible Light Weapon. Battlemage Helms also support one-handed caster-and-focus setups. Attune it by using a Major elemental Atlan Stone or Black Fire Atlan Stone on it. Armor Upgrade Kits improve only its magical armor, so hollow attacks still treat it as 10 AL. Current attunement: {attunementText}. {upgradeText}{visualText}";
         }
 
         private static string GetSpellFocusVisualSourceName(WorldObject focus)

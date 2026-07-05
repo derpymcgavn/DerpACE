@@ -289,7 +289,7 @@ namespace ACE.Server.Factories
             wo.IconOverlayId = MutatorOverlayBattlemage;
             ApplyLootUiEffect(wo, UiEffects.Magical);
 
-            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nBattlemage: while this helm is equipped, War Magic can satisfy Light Weapons wield requirements. Your light weapon attacks use War Magic for attack checks and Focus for physical damage scaling.";
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nBattlemage: while this helm is equipped, War Magic can satisfy Light Weapons wield requirements. Your light weapon attacks use War Magic for attack checks and Focus for physical damage scaling. Casters may also be paired with a spell focus for one-handed battlemage casting.";
         }
 
         private static readonly DamageType[] ArmorSortDamageTypes =
@@ -330,7 +330,7 @@ namespace ACE.Server.Factories
 
             wo.ArmorSortDamageType = damageType;
             wo.ArmorSortDamageBonus = bonus;
-            wo.IconOverlayId = IconOverlay_ItemMaxLevel[bonus - 1];
+            wo.IconOverlayId = GetArmorResonanceOverlay(damageType);
 
             var suffix = $"of {damageName} Resonance +{bonus}";
             if (!wo.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
@@ -855,7 +855,7 @@ namespace ACE.Server.Factories
             // WeaponSkill must be set so the appraisal panel shows the correct skill line
             wo.WeaponSkill = Skill.UnarmedCombat;
 
-            // ── Weapon combat properties so the surrogate reads identically to a melee weapon ──
+            // Weapon combat properties so the surrogate reads identically to a melee weapon
             // WeaponOffense / WeaponDefense. Endgame content leans heavily on evades,
             // so high-tier unarmed armor needs attack mods in the same band as real melee weapons.
             float offMin, offMax, defMin, defMax;
@@ -878,9 +878,13 @@ namespace ACE.Server.Factories
                 _ => ThreadSafeRandom.Next(25, 35),
             };
 
-            // Missile / Magic defense (same as MissileMagicDefense.Roll for the tier)
-            wo.WeaponMissileDefense = MissileMagicDefense.Roll(profile.Tier);
-            wo.WeaponMagicDefense   = MissileMagicDefense.Roll(profile.Tier);
+            // Rare off-axis defenses. The item's main value is unarmed damage,
+            // offense, and melee defense; missile/magic defense should be a bonus roll.
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+                wo.WeaponMissileDefense = MissileMagicDefense.Roll(profile.Tier);
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+                wo.WeaponMagicDefense = MissileMagicDefense.Roll(profile.Tier);
 
             // Update item name and description
             var slotType = isGauntlet ? "Gauntlets" : "Boots";
@@ -888,8 +892,7 @@ namespace ACE.Server.Factories
             var attackStyle = isGauntlet ? "light" : "heavy";
             wo.Name = $"{wo.Name} of {damageTypeName} {attackName}";
 
-            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThese {slotType.ToLower()} grant {baseDamage} {damageTypeName} damage for {attackStyle} unarmed attacks (no weapon equipped)."
-                + $"\nOffense: {wo.WeaponOffense:F3}  Defense: {wo.WeaponDefense:F3}  Speed: {wo.WeaponTime}";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThese {slotType.ToLower()} grant {baseDamage} {damageTypeName} damage for {attackStyle} unarmed attacks (no weapon equipped).";
 
             // Add visual overlay for unarmed-enabled items
             wo.IconOverlayId = MutatorOverlayUnarmed;

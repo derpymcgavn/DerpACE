@@ -917,6 +917,16 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
+            // DerpACE Global Quest: drunken event mobs drop stamped event beer for Ulgrim turn-ins.
+            var drunkenBeer = GlobalKillQuestManager.TryCreateDrunkenBeerDrop(killerPlayer, this);
+            if (drunkenBeer != null)
+            {
+                if (corpse != null)
+                    corpse.TryAddToInventory(drunkenBeer);
+                else
+                    droppedItems.Add(drunkenBeer);
+            }
+
             // move wielded treasure over, which also should include Wielded objects not marked for destroy on death.
             // allow server operators to configure this behavior due to errors in createlist post 16py data
             var dropFlags = PropertyManager.GetBool("creatures_drop_createlist_wield").Item ? DestinationType.WieldTreasure : DestinationType.Treasure;

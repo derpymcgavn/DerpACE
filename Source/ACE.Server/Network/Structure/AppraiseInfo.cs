@@ -423,17 +423,6 @@ namespace ACE.Server.Network.Structure
                 ? $"\n\nUnarmed Damage: {baseDamage} {damageTypeName} ({variance:P0} variance) for {attackName} while no weapon is equipped."
                 : $"\n\nUnarmed Damage: 0 (dormant while a weapon or caster is equipped).\nPotential: {baseDamage} {damageTypeName} ({variance:P0} variance) for {attackName} when no weapon is equipped.";
 
-            if (active && (wo.WeaponOffense.HasValue || wo.WeaponDefense.HasValue || wo.WeaponTime.HasValue))
-            {
-                var offense = wo.WeaponOffense.HasValue ? $"Offense: {wo.WeaponOffense.Value:P1}" : null;
-                var defense = wo.WeaponDefense.HasValue ? $"Defense: {wo.WeaponDefense.Value:P1}" : null;
-                var speed = wo.WeaponTime.HasValue ? $"Speed: {wo.WeaponTime.Value}" : null;
-
-                var statLine = string.Join("  ", new[] { offense, defense, speed }.Where(x => x != null));
-                if (!string.IsNullOrWhiteSpace(statLine))
-                    details += $"\n{statLine}";
-            }
-
             details += $"\nThese {slotType} are compatible with the nomad unarmed system.";
 
             if (PropertiesString.TryGetValue(PropertyString.LongDesc, out var longDesc) && !string.IsNullOrWhiteSpace(longDesc))

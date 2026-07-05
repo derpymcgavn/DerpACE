@@ -104,11 +104,11 @@ namespace ACE.Server.WorldObjects
 
         public bool VerifyRequirements(Player player, CreatureSkill skill, SkillBase skillBase)
         {
-            // DerpACE Ironman: cannot train, specialize, or lower skills after commitment.
-            if (player.IsIronmanFamily)
+            // DerpACE Ironman: skill respec tools unlock only at the final skill milestone.
+            if (player.IsIronmanSkillRespecLocked)
             {
                 player.Session.Network.EnqueueSend(new GameEventWeenieError(player.Session, WeenieError.YouFailToAlterSkill));
-                player.SendMessage("Ironmen cannot alter their skills — your skills were set at the moment of commitment.");
+                player.SendMessage($"Ironmen cannot use skill respec tools until level {Player.IronmanSkillRespecUnlockLevel}.");
                 return false;
             }
 

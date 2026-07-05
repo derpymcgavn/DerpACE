@@ -15,6 +15,19 @@ namespace ACE.Server.WorldObjects
 {
     partial class Player
     {
+        public const int IronmanSkillRespecUnlockLevel = 275;
+
+        public bool IsIronmanSkillRespecLocked => IsIronmanFamily && (Level ?? 1) < IronmanSkillRespecUnlockLevel;
+
+        public bool VerifyIronmanSkillRespecUnlocked()
+        {
+            if (!IsIronmanSkillRespecLocked)
+                return true;
+
+            Session.Network.EnqueueSend(new GameMessageSystemChat($"Ironmen cannot use skill respec tools until level {IronmanSkillRespecUnlockLevel}.", ChatMessageType.Broadcast));
+            return false;
+        }
+
         /// <summary>
         /// Handles the GameAction 0x46 - RaiseSkill network message from client
         /// </summary>
@@ -871,6 +884,9 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool ResetSkill(Skill skill, bool refund = true)
         {
+            if (!VerifyIronmanSkillRespecUnlocked())
+                return false;
+
             var creatureSkill = GetCreatureSkill(skill, false);
 
             if (creatureSkill == null || creatureSkill.AdvancementClass < SkillAdvancementClass.Trained)

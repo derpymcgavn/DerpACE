@@ -108,6 +108,9 @@ namespace ACE.Server.WorldObjects
             if (ScavengersHexdust.TryUse(this, sourceItem, target))
                 return;
 
+            if (GlobalKillQuestManager.TryTurnInDrunkenBeer(this, sourceItem, target))
+                return;
+
             // handle objects with built-in spells
             if (sourceItem.SpellDID != null)
             {

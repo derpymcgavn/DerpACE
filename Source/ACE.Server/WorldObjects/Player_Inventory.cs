@@ -127,6 +127,62 @@ namespace ACE.Server.WorldObjects
             item.WieldDifficulty4 = null;
         }
 
+        private void NormalizeNomadUnarmedItems()
+        {
+            foreach (var item in GetAllPossessions())
+            {
+                if (!IsNomadUnarmedItem(item))
+                    continue;
+
+                var changed = false;
+
+                if (item.WeaponMissileDefense.HasValue)
+                {
+                    item.WeaponMissileDefense = null;
+                    changed = true;
+                }
+
+                if (item.WeaponMagicDefense.HasValue)
+                {
+                    item.WeaponMagicDefense = null;
+                    changed = true;
+                }
+
+                var cleanedLongDesc = CleanNomadUnarmedLongDesc(item.LongDesc);
+                if (!string.Equals(cleanedLongDesc, item.LongDesc, StringComparison.Ordinal))
+                {
+                    item.LongDesc = cleanedLongDesc;
+                    changed = true;
+                }
+
+                if (changed)
+                    item.SaveBiotaToDatabase();
+            }
+        }
+
+        private static bool IsNomadUnarmedItem(WorldObject item)
+        {
+            if (item == null || (item.UnarmedBaseDamage ?? 0) <= 0)
+                return false;
+
+            var validLocs = (EquipMask)(item.ValidLocations ?? 0);
+            return validLocs.HasFlag(EquipMask.HandWear) || validLocs.HasFlag(EquipMask.FootWear);
+        }
+
+        private static string CleanNomadUnarmedLongDesc(string longDesc)
+        {
+            if (string.IsNullOrWhiteSpace(longDesc))
+                return longDesc;
+
+            var lines = longDesc.Replace("\r\n", "\n").Split('\n');
+            var kept = lines.Where(line =>
+                !line.TrimStart().StartsWith("Offense:", StringComparison.OrdinalIgnoreCase)
+                && !line.TrimStart().StartsWith("Defense:", StringComparison.OrdinalIgnoreCase)
+                && !line.TrimStart().StartsWith("Speed:", StringComparison.OrdinalIgnoreCase));
+
+            return string.Join("\n", kept).TrimEnd();
+        }
+
         private enum HandCrossbowConversion
         {
             None,
@@ -1923,7 +1979,7 @@ namespace ACE.Server.WorldObjects
             }
 
             // Unwield wand/missile launcher/two-handed if dual wielding
-            if (wieldedLocation == EquipMask.Shield && !item.IsShield)
+            if (wieldedLocation == EquipMask.Shield && !item.IsShield && !item.IsSpellFocus)
             {
                 var mainWeapon = GetEquippedMeleeWeapon(true);
 
@@ -2397,7 +2453,7 @@ namespace ACE.Server.WorldObjects
             }
             else if (IsGearKnightPlayer)
             {
-                // DerpACE: Gear Knights can wear any armor — skip the gear-plating requirement.
+                // DerpACE: Gear Knights can wear any armor Ã¢â‚¬â€ skip the gear-plating requirement.
             }    
             else
             {
@@ -3739,6 +3795,8 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (TryHandlePathwardenChallengeTokenTurnIn(target, item, itemFoundInContainer, itemRootOwner, itemWasEquipped))
+                return;
             if (item is PetDevice petDevice && petDevice.Pet is not null)
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You must unsummon your pet before you can transfer this item!"));
@@ -3829,6 +3887,61 @@ namespace ACE.Server.WorldObjects
             }
         }
 
+        private const uint PathwardenThorolfWeenieClassId = 33596;
+        private const uint PathwardenTokenWeenieClassId = 33613;
+
+        private bool TryHandlePathwardenChallengeTokenTurnIn(WorldObject target, WorldObject item, Container itemFoundInContainer, Container itemRootOwner, bool itemWasEquipped)
+        {
+            if (target?.WeenieClassId != PathwardenThorolfWeenieClassId || item?.WeenieClassId != PathwardenTokenWeenieClassId)
+                return false;
+
+            if (GetProperty(PropertyBool.IsIronman) != true)
+            {
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                Session.Network.EnqueueSend(new GameEventTell(target, "That token is meant for those who have already chosen a harder path.", this, ChatMessageType.Tell));
+                return true;
+            }
+
+            var keyWcid = IsIronmanNomad
+                ? ACE.Server.DerpAce.HardcodedWeenies.NomadSupplyKeyWeenieClassId
+                : ACE.Server.DerpAce.HardcodedWeenies.IronmanSupplyKeyWeenieClassId;
+
+            var key = WorldObjectFactory.CreateNewWorldObject(keyWcid);
+            if (key == null)
+            {
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                Session.Network.EnqueueSend(new GameEventTell(target, "I know what you need, but my pack seems to have swallowed it. Tell an admin.", this, ChatMessageType.Tell));
+                return true;
+            }
+
+            var itemsToReceive = new ItemsToReceive(this);
+            itemsToReceive.Add(keyWcid, 1);
+            if (itemsToReceive.PlayerExceedsLimits)
+            {
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
+                Session.Network.EnqueueSend(new GameEventTell(target, "Make room in your pack, then show me the token again.", this, ChatMessageType.Tell));
+                return true;
+            }
+
+            if (!RemoveItemForGive(item, itemFoundInContainer, itemWasEquipped, itemRootOwner, 1, out var tokenGiven, destroy: true))
+                return true;
+
+            tokenGiven?.Destroy();
+
+            Session.Network.EnqueueSend(new GameMessageSystemChat($"You give {target.Name} {item.Name}.", ChatMessageType.Broadcast));
+            target.EnqueueBroadcast(new GameMessageSound(target.Guid, Sound.ReceiveItem));
+            Session.Network.EnqueueSend(new GameEventTell(target, IsIronmanNomad
+                ? "A road with no weapons still needs a key. Take this, Nomad."
+                : "Iron suits you. Take this key and open the proper chest.", this, ChatMessageType.Tell));
+
+            if (!TryCreateForGive(target, key))
+            {
+                key.Destroy();
+                Session.Network.EnqueueSend(new GameEventTell(target, "Your pack refused the key. Make room and speak to an admin; I have already taken the token.", this, ChatMessageType.Tell));
+            }
+
+            return true;
+        }
         private void HandleIOUTurnIn(WorldObject target, WorldObject iouToTurnIn)
         {
             Session.Network.EnqueueSend(new GameMessageSystemChat($"You allow {target.Name} to examine your {iouToTurnIn.NameWithMaterial}.", ChatMessageType.Broadcast));

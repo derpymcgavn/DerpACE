@@ -7,13 +7,14 @@ using ACE.Common;
 using ACE.Common.Performance;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.Factories;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Managers
 {
     /// <summary>
-    /// Rolls a global quest every 30 minutes. Quests can be kill hunts or self-found item races.
+    /// Rolls a global quest every 30 minutes. Quests can be kill hunts, self-found item races, or event mob turn-ins.
     /// </summary>
     public static class GlobalKillQuestManager
     {
@@ -21,7 +22,33 @@ namespace ACE.Server.Managers
         {
             Hunt,
             ItemRace,
+            DrunkenMobHunt,
         }
+
+        public const uint DrunkenBeerWcid = 2469; // smallbeer
+        public const int DrunkenBeerRequiredTurnIns = 10;
+
+        private static readonly string[] DrunkenBeerNames =
+        {
+            "Ulgrim's Missing Breakfast",
+            "Suspicious Tusker Lager",
+            "Warm Emergency Stout",
+            "Half-Full Victory Ale",
+            "Bottle of Absolutely Not Portal Fuel",
+            "Questionable Lugian Brown Ale",
+            "Ulgrim's Emergency Spare",
+            "Foamy Tusker Regret"
+        };
+
+        private static readonly string[] DrunkenMobPrefixes =
+        {
+            "Drunken",
+            "Wobbling",
+            "Ale-Soaked",
+            "Belligerent",
+            "Tipsy",
+            "Soused"
+        };
 
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
@@ -119,16 +146,111 @@ namespace ACE.Server.Managers
             CompleteItemRace(player, itemName, rewardPercent);
         }
 
+        public static bool TryApplyDrunkenMob(Creature creature)
+        {
+            if (CurrentKind != GlobalQuestKind.DrunkenMobHunt || DateTime.UtcNow > QuestExpiry)
+                return false;
+
+            if (creature == null || creature is Player || creature is Pet || creature.IsNPC)
+                return false;
+
+            if (creature.GetProperty(PropertyBool.IsDrunkenMob) == true)
+                return false;
+
+            var isMonster = creature.Attackable || creature.TargetingTactic != TargetingTactic.None;
+            if (!isMonster)
+                return false;
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.03f)
+                return false;
+
+            creature.SetProperty(PropertyBool.IsDrunkenMob, true);
+            creature.Name = $"{DrunkenMobPrefixes[ThreadSafeRandom.Next(0, DrunkenMobPrefixes.Length - 1)]} {creature.Name}";
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.05f;
+            creature.Shade = Math.Clamp((creature.Shade ?? 1.0) * 0.85, 0.25, 1.0);
+            creature.SetProperty(PropertyInt.GearDamage, 1);
+
+            if (creature.Health?.Current > 0)
+            {
+                var boost = (uint)Math.Max(1, Math.Round(creature.Health.MaxValue * 0.20));
+                creature.Health.StartingValue += boost;
+                creature.Health.Current = creature.Health.MaxValue;
+            }
+
+            return true;
+        }
+
+        public static WorldObject TryCreateDrunkenBeerDrop(Player player, Creature source)
+        {
+            if (CurrentKind != GlobalQuestKind.DrunkenMobHunt || DateTime.UtcNow > QuestExpiry)
+                return null;
+
+            if (player == null || source?.GetProperty(PropertyBool.IsDrunkenMob) != true)
+                return null;
+
+            var beer = WorldObjectFactory.CreateNewWorldObject(DrunkenBeerWcid);
+            if (beer == null)
+                return null;
+
+            beer.Name = DrunkenBeerNames[ThreadSafeRandom.Next(0, DrunkenBeerNames.Length - 1)];
+            beer.LongDesc = "A bottle recovered from a drunken creature during Ulgrim's global beer emergency. Bring it to Ulgrim the Unpleasant before the event ends.";
+            NomadQuestTrophy.StampIfEligible(player, source, beer);
+            return beer;
+        }
+
+        public static bool TryTurnInDrunkenBeer(Player player, WorldObject beer, WorldObject target)
+        {
+            if (player == null || beer == null || target == null || beer.WeenieClassId != DrunkenBeerWcid)
+                return false;
+
+            if (!IsUlgrim(target))
+                return false;
+
+            if (CurrentKind != GlobalQuestKind.DrunkenMobHunt || DateTime.UtcNow > QuestExpiry)
+            {
+                player.SendMessage("Ulgrim squints at the bottle. 'Too late. The emergency has matured into history.'", ChatMessageType.Broadcast);
+                player.SendUseDoneEvent();
+                return true;
+            }
+
+            if (!IsValidEventBeer(player, beer))
+            {
+                player.SendMessage("Ulgrim refuses the bottle. 'This one doesn't smell like today's disaster.'", ChatMessageType.Broadcast);
+                player.SendUseDoneEvent();
+                return true;
+            }
+
+            if (!player.TryConsumeFromInventoryWithNetworking(beer, 1))
+            {
+                player.SendMessage("Ulgrim reaches for the beer, but it slips away somehow.", ChatMessageType.Broadcast);
+                player.SendUseDoneEvent();
+                return true;
+            }
+
+            var key = MakeKey(player.Guid.Full, CurrentEpoch);
+            var newEntry = _progress.AddOrUpdate(key,
+                addValue: (1, 0),
+                updateValueFactory: (k, old) => (old.kills + 1, old.xp));
+
+            if (newEntry.kills >= DrunkenBeerRequiredTurnIns)
+                CompleteDrunkenMobHunt(player, newEntry.kills);
+            else
+                player.SendMessage($"[Global Quest] Ulgrim accepts the beer. {newEntry.kills}/{DrunkenBeerRequiredTurnIns} recovered.", ChatMessageType.Broadcast);
+
+            player.SendUseDoneEvent();
+            return true;
+        }
+
         public static GlobalQuestStatus GetStatus(Player player)
         {
             var kind = CurrentKind;
             var epoch = CurrentEpoch;
 
-            var myKills = 0;
-            if (kind == GlobalQuestKind.Hunt && CurrentCreatureName != null && player != null)
+            var myProgress = 0;
+            if ((kind == GlobalQuestKind.Hunt || kind == GlobalQuestKind.DrunkenMobHunt) && player != null)
             {
                 if (_progress.TryGetValue(MakeKey(player.Guid.Full, epoch), out var entry))
-                    myKills = entry.kills;
+                    myProgress = entry.kills;
             }
 
             return new GlobalQuestStatus
@@ -136,12 +258,31 @@ namespace ACE.Server.Managers
                 Kind = kind,
                 TargetName = kind == GlobalQuestKind.ItemRace ? CurrentItemName : CurrentCreatureName,
                 RequiredKills = kind == GlobalQuestKind.Hunt ? RequiredKills : 0,
-                MyKills = myKills,
+                RequiredTurnIns = kind == GlobalQuestKind.DrunkenMobHunt ? DrunkenBeerRequiredTurnIns : 0,
+                MyKills = kind == GlobalQuestKind.Hunt ? myProgress : 0,
+                MyTurnIns = kind == GlobalQuestKind.DrunkenMobHunt ? myProgress : 0,
                 Expiry = QuestExpiry,
                 ItemWcid = kind == GlobalQuestKind.ItemRace ? CurrentItemWcid : 0,
-                RewardPercent = kind == GlobalQuestKind.ItemRace ? ItemRewardPercent : 0,
+                RewardPercent = kind == GlobalQuestKind.ItemRace || kind == GlobalQuestKind.DrunkenMobHunt ? ItemRewardPercent : 0,
                 Completed = kind == GlobalQuestKind.ItemRace && _itemRaceCompletedEpochs.ContainsKey(epoch),
             };
+        }
+
+        private static bool IsValidEventBeer(Player player, WorldObject beer)
+        {
+            if (!NomadQuestTrophy.IsSelfFoundFor(player, beer, DrunkenBeerWcid))
+                return false;
+
+            if ((beer.GetProperty(PropertyInt.NomadTrophyQuestEpoch) ?? -1) != CurrentEpoch)
+                return false;
+
+            var foundTimestamp = beer.GetProperty(PropertyInt.NomadTrophyFoundTimestamp);
+            return foundTimestamp != null && foundTimestamp.Value >= QuestStartTimestamp && foundTimestamp.Value <= QuestExpiryTimestamp;
+        }
+
+        private static bool IsUlgrim(WorldObject target)
+        {
+            return target is Creature && (target.Name ?? string.Empty).Contains("Ulgrim", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void CompleteHunt(Player player, string creatureName, int target, long totalXp, int epoch)
@@ -187,6 +328,30 @@ namespace ACE.Server.Managers
             log.Info($"[GlobalKillQuest] {player.Name} completed item race: {itemName}, reward {rewardPercent}% level XP ({bonus:N0})");
         }
 
+        private static void CompleteDrunkenMobHunt(Player player, int turnedIn)
+        {
+            if (!_itemRaceCompletedEpochs.TryAdd(CurrentEpoch, 1))
+                return;
+
+            System.Threading.Interlocked.Increment(ref _completionCount);
+
+            var levelXp = player.GetXPToNextLevel(player.Level ?? 1);
+            var bonus = (long)Math.Round((double)levelXp * (ItemRewardPercent / 100.0));
+            if (bonus < 1)
+                bonus = 1;
+
+            player.EarnXP(bonus, XpType.Quest);
+            player.SendMessage($"[Global Quest Complete!] Ulgrim accepts your {turnedIn}th event beer and awards {bonus:N0} XP ({ItemRewardPercent}% of level XP)!", ChatMessageType.Broadcast);
+
+            var globalMsg = $"[Global Quest] {player.Name} sobered up Dereth by bringing {DrunkenBeerRequiredTurnIns} dubious beers to Ulgrim!";
+            PlayerManager.BroadcastToAll(new GameMessageSystemChat(globalMsg, ChatMessageType.WorldBroadcast));
+            PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, globalMsg);
+
+            log.Info($"[GlobalKillQuest] {player.Name} completed drunken mob hunt, reward {ItemRewardPercent}% level XP ({bonus:N0})");
+
+            RollNewQuest(announceToAll: true);
+        }
+
         private static void RollNewQuest(bool announceToAll)
         {
             if (announceToAll && GetCurrentTargetName() != null)
@@ -206,7 +371,9 @@ namespace ACE.Server.Managers
             QuestExpiryTimestamp = QuestStartTimestamp + (30 * 60);
             QuestExpiry = DateTime.UtcNow.AddMinutes(30);
 
-            if (ShouldRollItemRace())
+            if (ShouldRollDrunkenMobHunt())
+                RollNewDrunkenMobHunt(announceToAll);
+            else if (ShouldRollItemRace())
                 RollNewItemRace(announceToAll);
             else
                 RollNewHunt(announceToAll);
@@ -252,6 +419,24 @@ namespace ACE.Server.Managers
             log.Info($"[GlobalKillQuest] New quest rolled: first self-found {entry.name} (WCID {entry.wcid}), reward {rewardPercent}% level XP");
         }
 
+        private static void RollNewDrunkenMobHunt(bool announceToAll)
+        {
+            CurrentKind = GlobalQuestKind.DrunkenMobHunt;
+            CurrentCreatureName = "Drunken Mob";
+            CurrentItemName = "Ulgrim's event beer";
+            CurrentItemWcid = DrunkenBeerWcid;
+            ItemRewardPercent = _rng.Next(50, 151);
+
+            if (announceToAll)
+            {
+                var msg = $"[Global Quest] Ulgrim has misplaced his emergency beer stash! Find drunken mobs, recover {DrunkenBeerRequiredTurnIns} event beers, and bring them to Ulgrim for {ItemRewardPercent}% of level XP. Type /gquest for details.";
+                PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
+            }
+
+            log.Info($"[GlobalKillQuest] New drunken mob hunt rolled: {DrunkenBeerRequiredTurnIns} beers, reward {ItemRewardPercent}% level XP");
+        }
+
         private static void BroadcastWrapUp()
         {
             var count = _completionCount;
@@ -261,6 +446,10 @@ namespace ACE.Server.Managers
                 wrapUp = count == 0
                     ? $"[Global Quest] The race for {CurrentItemName} has ended. Nobody recovered one in time."
                     : $"[Global Quest] The race for {CurrentItemName} has ended.";
+            else if (CurrentKind == GlobalQuestKind.DrunkenMobHunt)
+                wrapUp = count == 0
+                    ? "[Global Quest] Ulgrim's beer emergency has ended. Nobody brought enough of the evidence."
+                    : "[Global Quest] Ulgrim's beer emergency has ended.";
             else if (count == 0)
                 wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. No adventurers completed the task this time.";
             else if (count == 1)
@@ -270,6 +459,11 @@ namespace ACE.Server.Managers
 
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(wrapUp, ChatMessageType.WorldBroadcast));
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, wrapUp);
+        }
+
+        private static bool ShouldRollDrunkenMobHunt()
+        {
+            return _rng.Next(0, 5) == 0;
         }
 
         private static bool ShouldRollItemRace()
@@ -293,7 +487,9 @@ namespace ACE.Server.Managers
         public GlobalKillQuestManager.GlobalQuestKind Kind { get; set; }
         public string TargetName { get; set; }
         public int RequiredKills { get; set; }
+        public int RequiredTurnIns { get; set; }
         public int MyKills { get; set; }
+        public int MyTurnIns { get; set; }
         public DateTime Expiry { get; set; }
         public uint ItemWcid { get; set; }
         public int RewardPercent { get; set; }

@@ -234,6 +234,7 @@ namespace ACE.Entity.Enum.Properties
         IsReaperMob                      = 9040,
         IsNecromancerMob                 = 9041,
         IsWarderMob                      = 9044,
+        IsDrunkenMob                     = 9045,
         IsRicochetAtlatl                 = 9048,
         IsRicochetProjectile             = 9049,
 

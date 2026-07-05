@@ -125,6 +125,7 @@ namespace ACE.Server.WorldObjects
             SortBiotasIntoInventory(inventory);
             AddBiotasToEquippedObjects(wieldedItems);
             ConvertLegacyHandCrossbows();
+            NormalizeNomadUnarmedItems();
             NormalizeIronmanFamilyFlags();
             NomadRune.NormalizeExistingRunes(this);
 

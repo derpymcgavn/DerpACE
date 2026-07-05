@@ -273,9 +273,12 @@ namespace ACE.Server.Entity
                 if (Biota.StackSize.HasValue && Biota.StackSize > 0)
                     wo.SetStackSize(Biota.StackSize);
 
-                // DerpACE: Apply creature mutators (Vampiric, Thief, Scout, Simulacrum, and future expansions)
+                // DerpACE: Apply event and creature mutators (drunken global quest, Vampiric, Thief, Scout, Simulacrum, and future expansions)
                 if (wo is Creature creature)
-                    ACE.Server.Factories.CreatureMutatorManager.TryApplyMutators(creature);
+                {
+                    if (!GlobalKillQuestManager.TryApplyDrunkenMob(creature))
+                        ACE.Server.Factories.CreatureMutatorManager.TryApplyMutators(creature);
+                }
 
                 objects.Add(wo);
             }

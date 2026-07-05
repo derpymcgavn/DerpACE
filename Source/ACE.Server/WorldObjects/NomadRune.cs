@@ -146,6 +146,39 @@ namespace ACE.Server.WorldObjects
             return families.Select(family => family[tier - 1]).ToList();
         }
 
+        public static List<SpellId> GetStarterSpells(Player player)
+        {
+            var spells = new List<SpellId>();
+
+            if (player == null)
+                return spells;
+
+            if (PlayerHasSchool(player, NomadRuneSchool.Creature))
+            {
+                spells.Add(SpellId.StrengthSelf1);
+                spells.Add(SpellId.EnduranceSelf1);
+                spells.Add(SpellId.CoordinationSelf1);
+                spells.Add(SpellId.QuicknessSelf1);
+            }
+
+            if (PlayerHasSchool(player, NomadRuneSchool.Life))
+            {
+                spells.Add(SpellId.ArmorSelf1);
+                spells.Add(SpellId.InvulnerabilitySelf1);
+                spells.Add(SpellId.RegenerationSelf1);
+                spells.Add(SpellId.RejuvenationSelf1);
+            }
+
+            if (PlayerHasSchool(player, NomadRuneSchool.Item))
+            {
+                spells.Add(SpellId.BloodDrinkerSelf1);
+                spells.Add(SpellId.DefenderSelf1);
+                spells.Add(SpellId.Impenetrability1);
+            }
+
+            return spells;
+        }
+
         public static bool PlayerHasSchool(Player player, NomadRuneSchool school)
         {
             if (player == null)
@@ -214,7 +247,7 @@ namespace ACE.Server.WorldObjects
             return spells;
         }
 
-        private static void PrepareRune(WorldObject rune, SpellId spellId)
+        public static void PrepareRune(WorldObject rune, SpellId spellId)
         {
             var spell = new Spell((uint)spellId);
             var spellName = spell.NotFound ? spellId.ToString() : spell.Name;

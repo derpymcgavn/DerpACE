@@ -22,10 +22,16 @@ namespace ACE.Server.DerpAce
         public const uint NomadSurvivalTomeWeenieClassId = 2000611;
         public const uint DerptideIntroBookWeenieClassId = 2000612;
         public const uint IronmanGuideBookWeenieClassId = 2000613;
+        public const uint IronmanPathwardenChestWeenieClassId = 3238931;
+        public const uint NomadPathwardenChestWeenieClassId = 2000615;
+        public const uint IronmanSupplyKeyWeenieClassId = 3238934;
+        public const uint NomadSupplyKeyWeenieClassId = 2000616;
 
         private const uint MortarAndPestleWeenieClassId = 4751;
         private const uint PowderedMalachiteWeenieClassId = 8321;
         private const uint TomeWeenieClassId = 9092;
+        private const uint ArcanePedestalWeenieClassId = 11930;
+        private const uint BrownSackWeenieClassId = 166;
 
         public static void RegisterAll()
         {
@@ -45,6 +51,10 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildNomadSurvivalTome());
                 DatabaseManager.World.SetCachedWeenie(BuildDerptideIntroBook());
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanGuideBook());
+                DatabaseManager.World.SetCachedWeenie(BuildIronmanPathwardenChest());
+                DatabaseManager.World.SetCachedWeenie(BuildIronmanSupplyKey());
+                DatabaseManager.World.SetCachedWeenie(BuildNomadSupplyKey());
+                DatabaseManager.World.SetCachedWeenie(BuildNomadPathwardenChest());
                 DatabaseManager.World.SetCachedWeenie(BuildSausageMcBuffin());
 
                 log.Info("DerpACE: Hardcoded weenies registered.");
@@ -73,7 +83,7 @@ namespace ACE.Server.DerpAce
         }
 
         /// <summary>
-        /// Aetherial Quiver (WCID 2000600) — the universal infinite ammo.
+        /// Aetherial Quiver (WCID 2000600) - the universal infinite ammo.
         /// Runtime behavior lives in <see cref="WorldObjects.UniversalAmmunition"/>; this is just
         /// the weenie shell so the factory can instantiate it on demand.
         /// </summary>
@@ -156,7 +166,7 @@ namespace ACE.Server.DerpAce
         }
 
         /// <summary>
-        /// Sausage McBuffin (WCID 2000500) — the N00B Buffer NPC.
+        /// Sausage McBuffin (WCID 2000500) - the N00B Buffer NPC.
         /// Buff casting behavior is hardcoded in <see cref="WorldObjects.SausageMcBuffin"/>;
         /// this is the creature weenie shell so it can be spawned and used in the world without SQL.
         /// </summary>
@@ -306,7 +316,7 @@ namespace ACE.Server.DerpAce
 
             w.PropertiesString[PropertyString.Name]     = "Unattuned Spell Focus";
             w.PropertiesString[PropertyString.Use]      = "Use an elemental Atlan stone on the focus to attune it. Use armor upgrade kits to improve its magical armor. Use it on a weapon or caster to copy that item's appearance.";
-            w.PropertiesString[PropertyString.LongDesc] = "A shield-slot spell focus for specialized War, Life, or Void mages. It may be used with a caster or caster staff, or with a Battlemage Helm and an eligible Light Weapon. Attune it with a Major elemental Atlan Stone or Black Fire Atlan Stone. Armor Upgrade Kits improve only its magical armor; base armor remains 10.";
+            w.PropertiesString[PropertyString.LongDesc] = "A shield-slot spell focus for specialized War, Life, or Void mages. It may be used with a caster or caster staff, or with a Battlemage Helm and an eligible Light Weapon. Battlemage Helms also support one-handed caster-and-focus setups. Attune it with a Major elemental Atlan Stone or Black Fire Atlan Stone. Armor Upgrade Kits improve only its magical armor; base armor remains 10.";
 
             w.PropertiesDID[PropertyDataId.Setup]              = 33558442;
             w.PropertiesDID[PropertyDataId.SoundTable]         = 536870932;
@@ -448,6 +458,7 @@ namespace ACE.Server.DerpAce
 
             w.PropertiesDID[PropertyDataId.Setup] = 0x0200018B;
             w.PropertiesDID[PropertyDataId.Icon]  = 0x06001036;
+            CopySetupAndIcon(w, BrownSackWeenieClassId);
 
             return w;
         }
@@ -474,7 +485,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.Value]           = 25000;
             w.PropertiesInt[PropertyInt.ItemUseable]     = (int)Usable.SourceContainedTargetContained;
             w.PropertiesInt[PropertyInt.TargetType]      = (int)ItemType.Gem;
-            w.PropertiesInt[PropertyInt.UiEffects]       = (int)UiEffects.Magical;
+            w.PropertiesInt[PropertyInt.UiEffects]       = (int)(UiEffects.Magical | UiEffects.Nether);
             w.PropertiesInt[PropertyInt.MaxStackSize]    = 1;
             w.PropertiesInt[PropertyInt.StackSize]       = 1;
             w.PropertiesInt[PropertyInt.PhysicsState]    = 1044;
@@ -490,6 +501,7 @@ namespace ACE.Server.DerpAce
 
             w.PropertiesDID[PropertyDataId.Setup] = 0x0200018B;
             w.PropertiesDID[PropertyDataId.Icon]  = 0x06001036;
+            CopySetupAndIcon(w, ArcanePedestalWeenieClassId);
 
             return w;
         }
@@ -822,6 +834,208 @@ namespace ACE.Server.DerpAce
                 IgnoreAuthor = true,
                 PageText = text
             });
+        }
+
+        private static Weenie BuildIronmanPathwardenChest()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = IronmanPathwardenChestWeenieClassId,
+                ClassName     = "ace3238931-ironmanchest",
+                WeenieType    = WeenieType.Chest,
+
+                PropertiesInt       = new Dictionary<PropertyInt, int>(),
+                PropertiesBool      = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat     = new Dictionary<PropertyFloat, double>(),
+                PropertiesString    = new Dictionary<PropertyString, string>(),
+                PropertiesDID       = new Dictionary<PropertyDataId, uint>(),
+                PropertiesGenerator = new List<PropertiesGenerator>(),
+            };
+
+            w.PropertiesBool[PropertyBool.Stuck]              = true;
+            w.PropertiesBool[PropertyBool.Open]               = false;
+            w.PropertiesBool[PropertyBool.Locked]             = true;
+            w.PropertiesBool[PropertyBool.IgnoreCollisions]   = true;
+            w.PropertiesBool[PropertyBool.ReportCollisions]   = true;
+            w.PropertiesBool[PropertyBool.GravityStatus]      = true;
+            w.PropertiesBool[PropertyBool.Attackable]         = true;
+            w.PropertiesBool[PropertyBool.ChestRegenOnClose]  = true;
+
+            w.PropertiesInt[PropertyInt.ItemType]             = (int)ItemType.Container;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]       = 14750;
+            w.PropertiesInt[PropertyInt.ItemsCapacity]        = 120;
+            w.PropertiesInt[PropertyInt.ContainersCapacity]   = 8;
+            w.PropertiesInt[PropertyInt.ItemUseable]          = (int)Usable.ViewedRemote;
+            w.PropertiesInt[PropertyInt.Value]                = 2500;
+            w.PropertiesInt[PropertyInt.ResistLockpick]       = 9999;
+            w.PropertiesInt[PropertyInt.MaxGeneratedObjects]  = 11;
+            w.PropertiesInt[PropertyInt.InitGeneratedObjects] = 11;
+            w.PropertiesInt[PropertyInt.PhysicsState]         = 1048;
+            w.PropertiesInt[PropertyInt.GeneratorType]        = (int)GeneratorType.Relative;
+
+            w.PropertiesDID[PropertyDataId.Setup]              = 33554556;
+            w.PropertiesDID[PropertyDataId.MotionTable]        = 150994948;
+            w.PropertiesDID[PropertyDataId.SoundTable]         = 536870945;
+            w.PropertiesDID[PropertyDataId.Icon]               = 100667424;
+            w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 872415275;
+
+            w.PropertiesFloat[PropertyFloat.ResetInterval]     = 1;
+            w.PropertiesFloat[PropertyFloat.DefaultScale]      = 1;
+            w.PropertiesFloat[PropertyFloat.GeneratorRadius]   = 1;
+            w.PropertiesFloat[PropertyFloat.UseRadius]         = 1;
+
+            w.PropertiesString[PropertyString.Name]            = "Ironman Chest";
+            w.PropertiesString[PropertyString.LockCode]        = "ironmanchestkey";
+            w.PropertiesString[PropertyString.Use]             = "Use this item to open it and see its contents.";
+
+            AddChestGenerator(w, 41513, 0);
+            AddChestGenerator(w, 4616, 1);
+            AddChestGenerator(w, 3238927, 2);
+            AddChestGenerator(w, 3238929, 3);
+            AddChestGenerator(w, 3238925, 4);
+            AddChestGenerator(w, 3238930, 5);
+            AddChestGenerator(w, 3238928, 6);
+            AddChestGenerator(w, 3238926, 7);
+
+            return w;
+        }
+
+        private static Weenie BuildIronmanSupplyKey()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = IronmanSupplyKeyWeenieClassId,
+                ClassName     = "ace3238934-ironmansupplykey",
+                WeenieType    = WeenieType.Key,
+
+                PropertiesInt    = new Dictionary<PropertyInt, int>(),
+                PropertiesBool   = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat  = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID    = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesBool[PropertyBool.Inscribable]   = true;
+            w.PropertiesBool[PropertyBool.DestroyOnSell] = true;
+
+            w.PropertiesInt[PropertyInt.ItemType]        = (int)ItemType.Key;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]  = 10;
+            w.PropertiesInt[PropertyInt.Mass]            = 20;
+            w.PropertiesInt[PropertyInt.ItemUseable]     = (int)Usable.SourceContainedTargetRemote;
+            w.PropertiesInt[PropertyInt.Value]           = 0;
+            w.PropertiesInt[PropertyInt.Bonded]          = (int)BondedStatus.Bonded;
+            w.PropertiesInt[PropertyInt.MaxStructure]    = 1;
+            w.PropertiesInt[PropertyInt.Structure]       = 1;
+            w.PropertiesInt[PropertyInt.PhysicsState]    = 1044;
+            w.PropertiesInt[PropertyInt.TargetType]      = (int)(ItemType.Container | ItemType.Lockable);
+            w.PropertiesInt[PropertyInt.Attuned]         = (int)AttunedStatus.Attuned;
+
+            w.PropertiesDID[PropertyDataId.Setup]              = 33554784;
+            w.PropertiesDID[PropertyDataId.SoundTable]         = 536870932;
+            w.PropertiesDID[PropertyDataId.Icon]               = 100668438;
+            w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 872415275;
+
+            w.PropertiesString[PropertyString.Name]            = "Ironman Supply Key";
+            w.PropertiesString[PropertyString.KeyCode]         = "ironmanchestkey";
+            w.PropertiesString[PropertyString.Use]             = "Use this item on a locked chest to unlock it.";
+            w.PropertiesString[PropertyString.LongDesc]        = "This key unlocks the Ironman Supply chest.";
+
+            return w;
+        }
+
+        private static Weenie BuildNomadSupplyKey()
+        {
+            var w = BuildIronmanSupplyKey();
+            w.WeenieClassId = NomadSupplyKeyWeenieClassId;
+            w.ClassName = "ace2000616-nomadsupplykey";
+            w.PropertiesString[PropertyString.Name] = "Nomad Supply Key";
+            w.PropertiesString[PropertyString.KeyCode] = "nomadchestkey";
+            w.PropertiesString[PropertyString.LongDesc] = "This key unlocks the Nomad Pathwarden chest.";
+            return w;
+        }
+
+        private static void AddChestGenerator(Weenie chest, uint wcid, int slot)
+        {
+            chest.PropertiesGenerator.Add(new PropertiesGenerator
+            {
+                Probability = -1,
+                WeenieClassId = wcid,
+                Delay = 0,
+                InitCreate = 1,
+                MaxCreate = 1,
+                WhenCreate = RegenerationType.PickUp,
+                WhereCreate = RegenLocationType.Contain,
+                StackSize = -1,
+                PaletteId = 0,
+                Shade = 0,
+                ObjCellId = 0,
+                OriginX = 0,
+                OriginY = 0,
+                OriginZ = 0,
+                AnglesW = 1,
+                AnglesX = 0,
+                AnglesY = 0,
+                AnglesZ = 0,
+            });
+        }
+
+        private static Weenie BuildNomadPathwardenChest()
+        {
+            return BuildChallengePathwardenChest(
+                NomadPathwardenChestWeenieClassId,
+                "ace2000615-nomadpathwardenchest",
+                "Nomad Pathwarden Chest",
+                "Use this chest to take the Nomad Ironman path. This is permanent and will reroll your character into the weaponless scavenger path.",
+                UiEffects.BoostStamina);
+        }
+
+        private static Weenie BuildChallengePathwardenChest(uint wcid, string className, string name, string longDesc, UiEffects effect)
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = wcid,
+                ClassName     = className,
+                WeenieType    = WeenieType.Chest,
+
+                PropertiesInt    = new Dictionary<PropertyInt, int>(),
+                PropertiesBool   = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat  = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID    = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType]           = (int)ItemType.Container;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]     = 200;
+            w.PropertiesInt[PropertyInt.Mass]               = 200;
+            w.PropertiesInt[PropertyInt.ItemsCapacity]      = 0;
+            w.PropertiesInt[PropertyInt.ContainersCapacity] = 0;
+            w.PropertiesInt[PropertyInt.ItemUseable]        = (int)Usable.Remote;
+            w.PropertiesInt[PropertyInt.UiEffects]          = (int)effect;
+            w.PropertiesInt[PropertyInt.Value]              = 0;
+            w.PropertiesInt[PropertyInt.ActivationResponse] = (int)(ActivationResponse.Use | ActivationResponse.Animate);
+            w.PropertiesInt[PropertyInt.PhysicsState]       = 1044;
+
+            w.PropertiesBool[PropertyBool.Attackable]       = false;
+            w.PropertiesBool[PropertyBool.Stuck]            = true;
+            w.PropertiesBool[PropertyBool.Visibility]       = true;
+            if (wcid == NomadPathwardenChestWeenieClassId)
+            {
+                w.PropertiesBool[PropertyBool.Locked]        = true;
+                w.PropertiesBool[PropertyBool.DefaultLocked] = true;
+            }
+
+            w.PropertiesFloat[PropertyFloat.UseRadius]      = 3.0;
+            w.PropertiesFloat[PropertyFloat.ResetInterval]  = 120.0;
+
+            w.PropertiesString[PropertyString.Name]         = name;
+            if (wcid == NomadPathwardenChestWeenieClassId)
+                w.PropertiesString[PropertyString.LockCode] = "nomadchestkey";
+            w.PropertiesString[PropertyString.ShortDesc]    = "A Pathwarden challenge chest.";
+            w.PropertiesString[PropertyString.LongDesc]     = longDesc;
+            w.PropertiesString[PropertyString.Use]          = longDesc;
+
+            CopySetupAndIcon(w, 33609);
+            return w;
         }
 
         private static Weenie BuildSausageMcBuffin()

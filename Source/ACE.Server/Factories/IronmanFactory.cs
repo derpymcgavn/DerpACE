@@ -310,8 +310,7 @@ namespace ACE.Server.Factories
         ///   * Arcane Lore is specialized in addition to being pre-trained.
         ///   * Player is flagged IsIronmanNomad — wielding any weapon/caster is blocked.
         ///   * Natural body AL is 450 in clothes only; worn armor is half effective.
-        /// Starter gear still flows through GiveStarterGear (the equip restrictions block
-        /// nomads from actually wielding weapons granted to the Light Weapons skill).
+        /// Starter gear uses a Nomad-specific kit instead of generic Pathwarden armor/weapons.
         /// </summary>
         public static void InitializeIronmanNomad(Player player, bool noNonHuman = false, bool blind = false)
         {
@@ -371,7 +370,7 @@ namespace ACE.Server.Factories
             chain.AddAction(player, () =>
             {
                 player.SendMessage("Nomad step 6/6: granting starter gear...");
-                GiveStarterGear(player);
+                GiveNomadStarterGear(player);
                 GiveNomadGauntletsAndShoes(player);
                 GrantChallengeBook(player, HardcodedWeenies.NomadSurvivalTomeWeenieClassId, "Nomad");
                 TagAllPossessions(player);
@@ -524,8 +523,6 @@ namespace ACE.Server.Factories
             wo.SetProperty(PropertyFloat.DamageMod, 1.0);
             wo.SetProperty(PropertyFloat.WeaponOffense, ACE.Server.Managers.PropertyManager.GetDouble("unarmed_nomad_item_attack_mod").Item);
             wo.SetProperty(PropertyFloat.WeaponDefense, 1.08);
-            wo.SetProperty(PropertyFloat.WeaponMissileDefense, 1.08);
-            wo.SetProperty(PropertyFloat.WeaponMagicDefense, 1.08);
 
             // Apply the matching UiEffects outline so the item glows with its element in the UI.
             // Stamp W_DamageType too so any downstream code that keys off it (e.g. ArmorLevel display
@@ -1304,6 +1301,43 @@ namespace ACE.Server.Factories
         }
 
         // ---------- Starter gear ----------
+
+        private const uint NomadStarterRobeWcid = 40439;
+
+        private static void GiveNomadStarterGear(Player player)
+        {
+            NomadRunePouch.EnsureFor(player, notify: false);
+
+            var robe = WorldObjectFactory.CreateNewWorldObject(NomadStarterRobeWcid);
+            if (robe != null)
+            {
+                robe.SetProperty(PropertyBool.IsIronmanItem, true);
+                robe.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
+                robe.SetProperty(PropertyInt.PaletteTemplate, 39);
+                robe.SetProperty(PropertyFloat.Shade, 0.8583308693778472);
+                if (!player.TryCreateInInventoryWithNetworking(robe))
+                    player.SendMessage("[Nomad] Failed to place your Pathwarden robe in your pack.");
+            }
+            else
+                player.SendMessage($"[Nomad] Failed to create starter robe (wcid {NomadStarterRobeWcid}).");
+
+            var starterSpells = NomadRune.GetStarterSpells(player);
+            foreach (var spellId in starterSpells)
+            {
+                var rune = WorldObjectFactory.CreateNewWorldObject(NomadRune.NomadRuneWeenieClassId);
+                if (rune == null)
+                    continue;
+
+                NomadRune.PrepareRune(rune, spellId);
+                rune.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
+
+                if (!NomadRunePouch.TryStoreRune(player, rune, notify: false) && !player.TryCreateInInventoryWithNetworking(rune))
+                    player.SendMessage($"[Nomad] Failed to place {rune.Name} in your pack.");
+            }
+
+            if (starterSpells.Count > 0)
+                player.SendMessage($"[Nomad] {starterSpells.Count} level 1 rune stacks have been tucked away for the road.");
+        }
 
         /// <summary>
         /// Grants the standard new-character starter gear based on the player's current trained/specialized skills,

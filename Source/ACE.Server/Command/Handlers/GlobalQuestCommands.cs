@@ -12,7 +12,7 @@ namespace ACE.Server.Command.Handlers
         [CommandHandler("gquest", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Show the current global kill quest status.",
             "Usage: /gquest\n" +
-            "Displays the current global hunt target, kills required, time remaining, and your personal progress.")]
+            "Displays the current global quest target, requirements, time remaining, and your personal progress.")]
         public static void HandleGQuest(Session session, params string[] parameters)
         {
             var player = session?.Player;
@@ -45,6 +45,18 @@ namespace ACE.Server.Command.Handlers
                         $"  Target:    {status.TargetName} (WCID {status.ItemWcid})\n" +
                         $"  Rule:      First self-found copy wins. Traded copies do not count.\n" +
                         $"  Completed: {completedText}\n" +
+                        $"  Time left: {timeStr}\n" +
+                        $"  Reward:    {status.RewardPercent}% of level XP.",
+                        ChatMessageType.Broadcast);
+                }
+                else if (status.Kind == GlobalKillQuestManager.GlobalQuestKind.DrunkenMobHunt)
+                {
+                    player.SendMessage(
+                        $"[Global Quest]\n" +
+                        $"  Type:      Drunken mob hunt\n" +
+                        $"  Target:    Drunken mobs\n" +
+                        $"  Rule:      Kill drunken mobs, loot their event beer, and use the beer on Ulgrim the Unpleasant.\n" +
+                        $"  Turn-ins:  {status.MyTurnIns}/{status.RequiredTurnIns}\n" +
                         $"  Time left: {timeStr}\n" +
                         $"  Reward:    {status.RewardPercent}% of level XP.",
                         ChatMessageType.Broadcast);

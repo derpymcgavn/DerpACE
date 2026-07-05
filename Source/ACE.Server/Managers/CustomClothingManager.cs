@@ -15,18 +15,9 @@ using ACE.DatLoader.FileTypes;
 namespace ACE.Server.Managers
 {
     /// <summary>
-    /// Loads custom ClothingTable JSON overrides from Data/CustomClothingBase/ and
-    /// merges them into portal.dat entries at runtime — no dat patching required.
-    ///
-    /// JSON files must be named {id:X8}.json (e.g. 10001234.json).
-    /// Both new IDs (not in the portal.dat) and overrides for existing IDs are supported.
-    ///
-    /// JSON format mirrors the OptimShi/CustomClothingBase mod for file compatibility.
-    /// Uint values may be decimal ("268435456") or hex ("0x10000000").
-    ///
-    /// Admin commands (Developer access):
-    ///   @cbexport 0x10001234  — export an existing entry to JSON
-    ///   @cbreload             — reload all JSON files and flush the ClothingTable cache
+    /// Loads CustomClothingBase-compatible JSON files from Data/CustomClothingBase.
+    /// New ClothingBase IDs are isolated. Existing portal.dat ClothingBase IDs are ignored
+    /// unless the JSON explicitly sets AllowBaseOverride to true.
     /// </summary>
     public static class CustomClothingManager
     {
@@ -36,41 +27,32 @@ namespace ACE.Server.Managers
         private const uint ClothingBaseMinId = 0x10000000;
         private const uint ClothingBaseMaxId = 0x10FFFFFF;
 
-        /// <summary>Path to the folder that holds JSON override files.</summary>
         public static string ContentDir { get; private set; }
 
-        // Parsed custom tables, keyed by clothing table ID
-        private static readonly ConcurrentDictionary<uint, ClothingTable> _custom
-            = new ConcurrentDictionary<uint, ClothingTable>();
-
-        // ──────────────────────────────────────────────────────────────────────
-        // Lifecycle
-        // ──────────────────────────────────────────────────────────────────────
+        private static readonly ConcurrentDictionary<uint, ClothingTable> _custom = new ConcurrentDictionary<uint, ClothingTable>();
+        private static readonly ConcurrentDictionary<uint, bool> _allowBaseOverride = new ConcurrentDictionary<uint, bool>();
 
         public static void Initialize(string contentDir = null)
         {
             ContentDir = ResolveContentDir(contentDir);
-
             Directory.CreateDirectory(ContentDir);
 
-            // Wire the hook BEFORE loading so any concurrent ReadFromDat<ClothingTable> call
-            // that races with us still goes through MergeCustom.
             DatDatabase.ClothingTableMergeHook = MergeCustom;
 
+            _custom.Clear();
+            _allowBaseOverride.Clear();
             LoadAll();
 
-            // Flush any ClothingTable entries that may already have been cached by an earlier
-            // ReadFromDat<ClothingTable> call (e.g. CharGen warmup) so the merge is applied.
             var flushed = ClearCache();
-
             log.Info($"CustomClothingManager: Initialized. Loaded {_custom.Count} custom clothing table(s) from {ContentDir} (flushed {flushed} cached entries).");
         }
 
-        /// <summary>Reload all JSON files from disk and flush the ClothingTable cache.</summary>
         public static void Reload()
         {
             _custom.Clear();
+            _allowBaseOverride.Clear();
             LoadAll();
+
             var flushed = ClearCache();
             log.Info($"CustomClothingManager: Reloaded {_custom.Count} custom clothing table(s) (flushed {flushed} cached entries).");
         }
@@ -87,10 +69,6 @@ namespace ACE.Server.Managers
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "CustomClothingBase");
         }
 
-        // ──────────────────────────────────────────────────────────────────────
-        // Loading
-        // ──────────────────────────────────────────────────────────────────────
-
         private static void LoadAll()
         {
             if (!Directory.Exists(ContentDir))
@@ -106,30 +84,20 @@ namespace ACE.Server.Managers
                 return;
             }
 
-            int loaded = 0;
+            var loaded = 0;
             foreach (var path in files)
             {
                 try
                 {
                     var json = File.ReadAllText(path);
-                    var table = ParseJson(json);
+                    var table = ParseJson(json, out var allowBaseOverride);
                     if (table == null)
                     {
                         log.Warn($"CustomClothingManager: '{path}' parsed to null table.");
                         continue;
                     }
 
-                    // Resolve the table Id from the filename if the JSON didn't supply one,
-                    // and reconcile decimal-vs-hex filename forms (e.g. "268437777.json" and
-                    // "10004611.json" both resolve to 0x10004611 — same uint). The filename
-                    // accepts: "<id>.json" or "<id>_label.json", and <id> may be:
-                    //   * hex with 0x prefix:    0x10004611
-                    //   * 8-char hex (no prefix): 10004611
-                    //   * pure decimal:          268437777
-                    // ClothingBase IDs always fall in [0x10000000, 0x10FFFFFF], which is
-                    // used to disambiguate "pure decimal in the hex range" from "hex digits".
                     var fileNameId = TryParseIdFromFileName(path);
-
                     if (table.Id == 0 && fileNameId != 0)
                     {
                         table.Id = fileNameId;
@@ -151,7 +119,14 @@ namespace ACE.Server.Managers
                         continue;
                     }
 
+                    if (DatManager.PortalDat?.AllFiles?.ContainsKey(table.Id) == true && !allowBaseOverride)
+                    {
+                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' targets existing portal.dat ClothingBase 0x{table.Id:X8}. Skipped to avoid changing every item that uses that base. Use @cbclone with a new custom ID, or set AllowBaseOverride=true if this is intentional.");
+                        continue;
+                    }
+
                     _custom[table.Id] = table;
+                    _allowBaseOverride[table.Id] = allowBaseOverride;
                     loaded++;
                     log.Debug($"CustomClothingManager: Loaded 0x{table.Id:X8} ({table.Id}) from {Path.GetFileName(path)}");
                 }
@@ -164,63 +139,26 @@ namespace ACE.Server.Managers
             log.Info($"CustomClothingManager: Loaded {loaded}/{files.Length} custom clothing table(s) from {ContentDir}");
         }
 
-        /// <summary>
-        /// Parses a ClothingBase id from a file name. Supports "0x10004611", "10004611"
-        /// (8-char hex), and "268437777" (decimal). Any "_label" suffix is ignored.
-        /// Returns 0 when the leading token can't be parsed as either form.
-        /// </summary>
-        private static uint TryParseIdFromFileName(string path)
-        {
-            var stem = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
-
-            // Take everything up to the first '_' or '-' so "10004611_male_plate" works.
-            var sepIdx = stem.IndexOfAny(new[] { '_', '-', ' ' });
-            var idToken = sepIdx >= 0 ? stem.Substring(0, sepIdx) : stem;
-
-            if (string.IsNullOrEmpty(idToken))
-                return 0;
-
-            return ParseClothingBaseIdToken(idToken);
-        }
-
-        private static bool IsClothingBaseId(uint id)
-            => id >= ClothingBaseMinId && id <= ClothingBaseMaxId;
-
-        // ──────────────────────────────────────────────────────────────────────
-        // Hook implementation
-        // ──────────────────────────────────────────────────────────────────────
-
         private static ClothingTable MergeCustom(uint fileId, ClothingTable existing)
         {
             if (!_custom.TryGetValue(fileId, out var custom))
                 return existing;
 
-            // For brand-new IDs the dat reader returned null so Id was never set
+            if (DatManager.PortalDat?.AllFiles?.ContainsKey(fileId) == true
+                && (!_allowBaseOverride.TryGetValue(fileId, out var allowBaseOverride) || !allowBaseOverride))
+                return existing;
+
             if (existing.Id == 0)
                 existing.Id = fileId;
 
             foreach (var kv in custom.ClothingBaseEffects)
-            {
-                if (existing.ClothingBaseEffects.ContainsKey(kv.Key))
-                    existing.ClothingBaseEffects[kv.Key] = kv.Value;
-                else
-                    existing.ClothingBaseEffects.Add(kv.Key, kv.Value);
-            }
+                existing.ClothingBaseEffects[kv.Key] = kv.Value;
 
             foreach (var kv in custom.ClothingSubPalEffects)
-            {
-                if (existing.ClothingSubPalEffects.ContainsKey(kv.Key))
-                    existing.ClothingSubPalEffects[kv.Key] = kv.Value;
-                else
-                    existing.ClothingSubPalEffects.Add(kv.Key, kv.Value);
-            }
+                existing.ClothingSubPalEffects[kv.Key] = kv.Value;
 
             return existing;
         }
-
-        // ──────────────────────────────────────────────────────────────────────
-        // Cache management
-        // ──────────────────────────────────────────────────────────────────────
 
         public static uint ClearCache()
         {
@@ -230,7 +168,7 @@ namespace ACE.Server.Managers
             uint count = 0;
             foreach (var kv in DatManager.PortalDat.FileCache)
             {
-                if (kv.Key >= 0x10000000 && kv.Key <= 0x10FFFFFF)
+                if (kv.Key >= ClothingBaseMinId && kv.Key <= ClothingBaseMaxId)
                 {
                     if (DatManager.PortalDat.FileCache.TryRemove(kv.Key, out _))
                         count++;
@@ -240,46 +178,55 @@ namespace ACE.Server.Managers
             return count;
         }
 
-        // ──────────────────────────────────────────────────────────────────────
-        // Export
-        // ──────────────────────────────────────────────────────────────────────
-
         public static string Export(uint clothingBaseId, out string outPath, string label = null)
+        {
+            return Export(clothingBaseId, clothingBaseId, out outPath, label, true);
+        }
+
+        public static string ExportClone(uint sourceClothingBaseId, uint newClothingBaseId, out string outPath, string label = null)
+        {
+            return Export(sourceClothingBaseId, newClothingBaseId, out outPath, label, false);
+        }
+
+        private static string Export(uint sourceClothingBaseId, uint outputClothingBaseId, out string outPath, string label, bool allowBaseOverride)
         {
             outPath = null;
 
-            if (clothingBaseId < 0x10000000 || clothingBaseId > 0x10FFFFFF)
-                return $"0x{clothingBaseId:X8} is not a valid ClothingBase ID (range 0x10000000\u20130x10FFFFFF).";
+            if (!IsClothingBaseId(sourceClothingBaseId))
+                return $"0x{sourceClothingBaseId:X8} is not a valid ClothingBase ID (range 0x10000000-0x10FFFFFF).";
 
-            if (!DatManager.PortalDat.AllFiles.ContainsKey(clothingBaseId))
-                return $"ClothingBase 0x{clothingBaseId:X8} not found in portal.dat.";
+            if (!IsClothingBaseId(outputClothingBaseId))
+                return $"0x{outputClothingBaseId:X8} is not a valid ClothingBase ID (range 0x10000000-0x10FFFFFF).";
 
-            var table = DatManager.PortalDat.ReadFromDat<ClothingTable>(clothingBaseId);
-            var json = SerializeJson(table);
+            if (!DatManager.PortalDat.AllFiles.ContainsKey(sourceClothingBaseId))
+                return $"ClothingBase 0x{sourceClothingBaseId:X8} not found in portal.dat.";
 
-            // Sanitize label: strip path-unsafe characters, collapse whitespace to underscores
+            if (!allowBaseOverride && DatManager.PortalDat.AllFiles.ContainsKey(outputClothingBaseId))
+                return $"New ClothingBase 0x{outputClothingBaseId:X8} already exists in portal.dat. Pick an unused custom ID so base items are not changed.";
+
+            var table = DatManager.PortalDat.ReadFromDat<ClothingTable>(sourceClothingBaseId);
+            table.Id = outputClothingBaseId;
+            var json = SerializeJson(table, allowBaseOverride);
+
             var suffix = string.IsNullOrWhiteSpace(label)
                 ? string.Empty
-                : "_" + System.Text.RegularExpressions.Regex.Replace(
-                    label.Trim(),
-                    @"[^\w\-. ]",
-                    string.Empty).Replace(' ', '_').TrimEnd('_', '.');
+                : "_" + System.Text.RegularExpressions.Regex.Replace(label.Trim(), @"[^\w\-. ]", string.Empty).Replace(' ', '_').TrimEnd('_', '.');
 
-            outPath = Path.Combine(ContentDir, $"{clothingBaseId:X8}{suffix}.json");
+            outPath = Path.Combine(ContentDir, $"{outputClothingBaseId:X8}{suffix}.json");
             Directory.CreateDirectory(ContentDir);
             File.WriteAllText(outPath, json);
 
-            return null; // null = success
+            return null;
         }
 
-        // ──────────────────────────────────────────────────────────────────────
-        // JSON parsing
-        // ──────────────────────────────────────────────────────────────────────
-
-        private static ClothingTable ParseJson(string json)
+        private static ClothingTable ParseJson(string json, out bool allowBaseOverride)
         {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { AllowTrailingCommas = true });
             var root = doc.RootElement;
+
+            allowBaseOverride = false;
+            if (TryGetProperty(root, "AllowBaseOverride", out var allowEl))
+                allowBaseOverride = allowEl.ValueKind == JsonValueKind.True || (allowEl.ValueKind == JsonValueKind.String && bool.TryParse(allowEl.GetString(), out var parsed) && parsed);
 
             var table = new ClothingTable();
 
@@ -289,21 +236,13 @@ namespace ACE.Server.Managers
             if (TryGetProperty(root, "ClothingBaseEffects", out var cbeEl))
             {
                 foreach (var prop in cbeEl.EnumerateObject())
-                {
-                    uint key = ParseUintStr(prop.Name);
-                    var effect = ParseClothingBaseEffect(prop.Value);
-                    table.ClothingBaseEffects[key] = effect;
-                }
+                    table.ClothingBaseEffects[ParseUintStr(prop.Name)] = ParseClothingBaseEffect(prop.Value);
             }
 
             if (TryGetProperty(root, "ClothingSubPalEffects", out var cspeEl))
             {
                 foreach (var prop in cspeEl.EnumerateObject())
-                {
-                    uint key = ParseUintStr(prop.Name);
-                    var effect = ParseCloSubPalEffect(prop.Value);
-                    table.ClothingSubPalEffects[key] = effect;
-                }
+                    table.ClothingSubPalEffects[ParseUintStr(prop.Name)] = ParseCloSubPalEffect(prop.Value);
             }
 
             return table;
@@ -319,8 +258,8 @@ namespace ACE.Server.Managers
                 {
                     var coe = new CloObjectEffect
                     {
-                        Index   = TryGetProperty(item, "Index",   out var idx)  ? ParseUint(idx)  : 0,
-                        ModelId = TryGetProperty(item, "ModelId", out var mid)  ? ParseUint(mid)  : 0,
+                        Index = TryGetProperty(item, "Index", out var idx) ? ParseUint(idx) : 0,
+                        ModelId = TryGetProperty(item, "ModelId", out var mid) ? ParseUint(mid) : 0,
                     };
 
                     if (TryGetProperty(item, "CloTextureEffects", out var texArr))
@@ -364,8 +303,8 @@ namespace ACE.Server.Managers
                         {
                             pal.Ranges.Add(new CloSubPaletteRange
                             {
-                                Offset    = TryGetProperty(r, "Offset",    out var off) ? ParseUint(off) : 0,
-                                NumColors = TryGetProperty(r, "NumColors", out var nc)  ? ParseUint(nc)  : 0,
+                                Offset = TryGetProperty(r, "Offset", out var off) ? ParseUint(off) : 0,
+                                NumColors = TryGetProperty(r, "NumColors", out var nc) ? ParseUint(nc) : 0,
                             });
                         }
                     }
@@ -395,7 +334,17 @@ namespace ACE.Server.Managers
             return false;
         }
 
-        // Parses a JsonElement that may be decimal or hex string, or a plain JSON number
+        private static uint TryParseIdFromFileName(string path)
+        {
+            var stem = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
+            var sepIdx = stem.IndexOfAny(new[] { '_', '-', ' ' });
+            var idToken = sepIdx >= 0 ? stem.Substring(0, sepIdx) : stem;
+            return string.IsNullOrEmpty(idToken) ? 0 : ParseClothingBaseIdToken(idToken);
+        }
+
+        private static bool IsClothingBaseId(uint id)
+            => id >= ClothingBaseMinId && id <= ClothingBaseMaxId;
+
         private static uint ParseUint(JsonElement el)
         {
             if (el.ValueKind == JsonValueKind.Number)
@@ -420,39 +369,33 @@ namespace ACE.Server.Managers
             s = s.Trim();
 
             if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-            {
-                return uint.TryParse(s.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
-                    ? hexId : 0u;
-            }
+                return uint.TryParse(s.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var prefixedHex) ? prefixedHex : 0u;
 
             foreach (var c in s)
             {
                 if (!char.IsDigit(c))
-                {
-                    return uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId)
-                        ? hexId : 0u;
-                }
+                    return uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex) ? hex : 0u;
             }
 
-            if (!uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decId))
+            if (!uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec))
                 return 0;
 
-            if (IsClothingBaseId(decId))
-                return decId;
+            if (IsClothingBaseId(dec))
+                return dec;
 
-            if (s.Length == 8
-                && uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexId8)
-                && IsClothingBaseId(hexId8))
-                return hexId8;
+            if (s.Length == 8 && uint.TryParse(s, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex8) && IsClothingBaseId(hex8))
+                return hex8;
 
-            return decId;
+            return dec;
         }
 
         private static uint ParseUintStr(string s)
         {
-            if (string.IsNullOrEmpty(s)) return 0;
+            if (string.IsNullOrEmpty(s))
+                return 0;
+
             if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-                return uint.Parse(s[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                return uint.Parse(s.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
             foreach (var c in s)
             {
@@ -463,51 +406,44 @@ namespace ACE.Server.Managers
             return uint.Parse(s, CultureInfo.InvariantCulture);
         }
 
-        // ──────────────────────────────────────────────────────────────────────
-        // JSON serialization (for export)
-        // ──────────────────────────────────────────────────────────────────────
-
-        private static string SerializeJson(ClothingTable table)
+        private static string SerializeJson(ClothingTable table, bool allowBaseOverride = false)
         {
-            var root = new JsonObject();
-            root["Id"] = $"0x{table.Id:X8}";
+            var root = new JsonObject
+            {
+                ["Id"] = $"0x{table.Id:X8}"
+            };
 
-            // ClothingBaseEffects
+            if (allowBaseOverride)
+                root["AllowBaseOverride"] = true;
+
             var cbeNode = new JsonObject();
-            // Build a lookup of setupId -> (race, sex) for all player setups
             var setupIdToLabel = new Dictionary<uint, string>();
             try
             {
-                var charGen = ACE.DatLoader.DatManager.PortalDat?.CharGen;
+                var charGen = DatManager.PortalDat?.CharGen;
                 if (charGen != null)
                 {
                     foreach (var hg in charGen.HeritageGroups.Values)
-                    {
-                        foreach (var gender in hg.Genders.Values)
-                        {
-                            // e.g. "Aluvian Male"
-                            var label = $"{hg.Name} {gender.Name}";
-                            setupIdToLabel[gender.SetupID] = label;
-                        }
-                    }
+                    foreach (var gender in hg.Genders.Values)
+                        setupIdToLabel[gender.SetupID] = $"{hg.Name} {gender.Name}";
                 }
             }
-            catch { /* ignore errors, fallback to no comments */ }
+            catch { }
 
             foreach (var kv in table.ClothingBaseEffects)
             {
                 var effectNode = new JsonObject();
-                var effectsArr = new JsonArray();
-
-                // If this setupId is a known player race/sex, add a _comment
                 if (setupIdToLabel.TryGetValue(kv.Key, out var label))
                     effectNode["_comment"] = label;
 
+                var effectsArr = new JsonArray();
                 foreach (var coe in kv.Value.CloObjectEffects)
                 {
-                    var coeNode = new JsonObject();
-                    coeNode["Index"]   = coe.Index;
-                    coeNode["ModelId"] = $"0x{coe.ModelId:X8}";
+                    var coeNode = new JsonObject
+                    {
+                        ["Index"] = coe.Index,
+                        ["ModelId"] = $"0x{coe.ModelId:X8}",
+                    };
 
                     var texArr = new JsonArray();
                     foreach (var tex in coe.CloTextureEffects)
@@ -518,6 +454,7 @@ namespace ACE.Server.Managers
                             ["NewTexture"] = $"0x{tex.NewTexture:X8}",
                         });
                     }
+
                     coeNode["CloTextureEffects"] = texArr;
                     effectsArr.Add(coeNode);
                 }
@@ -527,28 +464,32 @@ namespace ACE.Server.Managers
             }
             root["ClothingBaseEffects"] = cbeNode;
 
-            // ClothingSubPalEffects
             var cspeNode = new JsonObject();
             foreach (var kv in table.ClothingSubPalEffects)
             {
-                var effectNode = new JsonObject();
-                effectNode["Icon"] = $"0x{kv.Value.Icon:X8}";
+                var effectNode = new JsonObject
+                {
+                    ["Icon"] = $"0x{kv.Value.Icon:X8}"
+                };
 
                 var palArr = new JsonArray();
                 foreach (var pal in kv.Value.CloSubPalettes)
                 {
-                    var palNode = new JsonObject();
-                    palNode["PaletteSet"] = $"0x{pal.PaletteSet:X8}";
+                    var palNode = new JsonObject
+                    {
+                        ["PaletteSet"] = $"0x{pal.PaletteSet:X8}"
+                    };
 
                     var rangesArr = new JsonArray();
                     foreach (var r in pal.Ranges)
                     {
                         rangesArr.Add(new JsonObject
                         {
-                            ["Offset"]    = r.Offset,
+                            ["Offset"] = r.Offset,
                             ["NumColors"] = r.NumColors,
                         });
                     }
+
                     palNode["Ranges"] = rangesArr;
                     palArr.Add(palNode);
                 }

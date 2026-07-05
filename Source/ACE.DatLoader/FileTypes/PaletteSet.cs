@@ -1,11 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace ACE.DatLoader.FileTypes
 {
     /// <summary>
-    /// These are client_portal.dat files starting with 0x0F. 
+    /// These are client_portal.dat files starting with 0x0F.
     /// They contain, as the name may imply, a set of palettes (0x04 files)
     /// </summary>
     [DatFileType(DatFileType.PaletteSet)]
@@ -16,6 +15,15 @@ namespace ACE.DatLoader.FileTypes
         public override void Unpack(BinaryReader reader)
         {
             Id = reader.ReadUInt32();
+
+            // CustomClothingBase-compatible behavior: some custom clothing JSON points
+            // PaletteSet directly at a palette (0x04...) instead of a palette-set (0x0F...).
+            // Treat that raw palette as a one-entry set so the normal clothing pipeline works.
+            if (Id >= 0x04000000 && Id <= 0x04FFFFFF)
+            {
+                PaletteList.Add(Id);
+                return;
+            }
 
             PaletteList.Unpack(reader);
         }

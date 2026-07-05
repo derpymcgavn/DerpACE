@@ -110,7 +110,7 @@ namespace ACE.Server.WorldObjects
             if (rune.GetProperty(PropertyInt.StackUnitMass) == null)
                 rune.SetProperty(PropertyInt.StackUnitMass, 5);
             rune.SetStackSize(RitualRuneUses);
-            rune.SetProperty(PropertyInt.UiEffects, (int)GetSchoolUiEffect(school));
+            rune.SetProperty(PropertyInt.UiEffects, (int)(GetSchoolUiEffect(school) | ACE.Entity.Enum.UiEffects.Frost));
             if (iconId != 0)
                 rune.SetProperty(PropertyDataId.Icon, iconId);
         }

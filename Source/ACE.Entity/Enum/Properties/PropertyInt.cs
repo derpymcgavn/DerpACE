@@ -720,6 +720,12 @@ namespace ACE.Entity.Enum.Properties
         NomadTrophyQuestEpoch                    = 9052,
         // DerpACE: hidden Unix timestamp when this self-found trophy was generated.
         NomadTrophyFoundTimestamp                = 9053,
+        // DerpACE: Nomad Scavenger trial target CreatureType.
+        NomadScavengerTrialCreatureType          = 9054,
+        // DerpACE: Nomad Scavenger trial corpse grind progress.
+        NomadScavengerTrialProgress              = 9055,
+        // DerpACE: Nomad Scavenger trial completion flag. 1 = complete.
+        NomadScavengerTrialComplete              = 9056,
     }
 
     public static class PropertyIntExtensions
