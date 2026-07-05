@@ -601,6 +601,12 @@ namespace ACE.Server.DerpAce
         public int IronmanHardcoreStartingLives { get; set; } = 1;
         [JsonPropertyName("ironman_hardcore_seconds_between_deaths")]
         public float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 5.0f;
+        [JsonPropertyName("ironman_xp_scalar")]
+        public float IronmanXpScalar { get; set; } = 0.75f;
+        [JsonPropertyName("nomad_xp_scalar")]
+        public float NomadXpScalar { get; set; } = 0.75f;
+        [JsonPropertyName("hardcore_xp_scalar")]
+        public float HardcoreXpScalar { get; set; } = 1.0f;
 
         // ── Bank ─────────────────────────────────────────────────────────────
         [JsonPropertyName("enable_bank")]

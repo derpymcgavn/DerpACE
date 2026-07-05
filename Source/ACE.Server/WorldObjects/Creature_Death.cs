@@ -918,6 +918,15 @@ namespace ACE.Server.WorldObjects
             }
 
             // DerpACE Global Quest: drunken event mobs drop stamped event beer for Ulgrim turn-ins.
+            var t8Currency = GlobalKillQuestManager.TryCreateT8CurrencyDrop(killerPlayer, this);
+            if (t8Currency != null)
+            {
+                if (corpse != null)
+                    corpse.TryAddToInventory(t8Currency);
+                else
+                    droppedItems.Add(t8Currency);
+            }
+
             var drunkenBeer = GlobalKillQuestManager.TryCreateDrunkenBeerDrop(killerPlayer, this);
             if (drunkenBeer != null)
             {

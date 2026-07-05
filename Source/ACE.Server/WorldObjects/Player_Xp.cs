@@ -32,18 +32,32 @@ namespace ACE.Server.WorldObjects
             // should this be passed upstream to fellowship / allegiance?
             var enchantment = GetXPAndLuminanceModifier(xpType);
 
-            var m_amount = (long)Math.Round(amount * enchantment * modifier);
+            var challengeScalar = GetChallengeXpScalar();
+            var m_amount = (long)Math.Round(amount * enchantment * modifier * challengeScalar);
 
             if (m_amount < 0)
             {
                 log.Warn($"{Name}.EarnXP({amount}, {shareType})");
-                log.Warn($"modifier: {modifier}, enchantment: {enchantment}, m_amount: {m_amount}");
+                log.Warn($"modifier: {modifier}, enchantment: {enchantment}, challengeScalar: {challengeScalar}, m_amount: {m_amount}");
                 return;
             }
 
             GrantXP(m_amount, xpType, shareType);
         }
 
+        private float GetChallengeXpScalar()
+        {
+            if (IsIronmanNomad)
+                return Math.Max(0.0f, DerpACEConfig.NomadXpScalar);
+
+            if (IsIronmanFamily)
+                return Math.Max(0.0f, DerpACEConfig.IronmanXpScalar);
+
+            if (GetProperty(PropertyBool.IsHardcore) == true)
+                return Math.Max(0.0f, DerpACEConfig.HardcoreXpScalar);
+
+            return 1.0f;
+        }
         /// <summary>
         /// Directly grants XP to the player, without the XP modifier
         /// </summary>

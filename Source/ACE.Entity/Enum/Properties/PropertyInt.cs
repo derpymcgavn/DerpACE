@@ -726,6 +726,8 @@ namespace ACE.Entity.Enum.Properties
         NomadScavengerTrialProgress              = 9055,
         // DerpACE: Nomad Scavenger trial completion flag. 1 = complete.
         NomadScavengerTrialComplete              = 9056,
+        // DerpACE: hidden marker for global quest currency drops already counted for a player.
+        GlobalQuestCurrencyCountedEpoch          = 9057,
     }
 
     public static class PropertyIntExtensions

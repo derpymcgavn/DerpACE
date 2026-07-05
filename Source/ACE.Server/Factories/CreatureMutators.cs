@@ -242,7 +242,7 @@ namespace ACE.Server.Factories
             creature.SetProperty(PropertyInt.ExplodingMobElement, (int)element);
 
             // Visual tell: color by element and scale-up
-            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.45f;
             switch (element)
             {
                 case DamageType.Fire:
@@ -301,6 +301,97 @@ namespace ACE.Server.Factories
         }
     }
 
+    /// <summary>
+    /// DerpACE: Enchanter mob mutator - smaller support caster that wards nearby allies.
+    /// </summary>
+    public class EnchanterMutator : CreatureMutator
+    {
+        public override string Identifier => "enchanter";
+        public override string Name => "Enchanter";
+        public override string Description => "Rotates palette and periodically wards nearby allies with broad protection.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsEnchanterMob;
+        public override string NamePrefix => "Enchanted";
+
+        public EnchanterMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.HealerMobChance;
+            Enabled = DerpACEConfig.EnableMobModifiers;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            creature.ObjScale = Math.Max(0.25f, (creature.ObjScale ?? 1.0f) - 0.124f);
+            creature.PaletteTemplate = (int)PaletteTemplate.Purple;
+            creature.Shade = 0.6;
+
+            if (creature.Mana != null && creature.Mana.MaxValue > 0)
+            {
+                var manaBoost = (uint)(creature.Mana.MaxValue * 0.75);
+                creature.Mana.StartingValue += manaBoost;
+                creature.Mana.Current = creature.Mana.MaxValue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// DerpACE: Shaman mob mutator - elemental melee mage with periodic ring attacks.
+    /// </summary>
+    public class ShamanMutator : CreatureMutator
+    {
+        public override string Identifier => "shaman";
+        public override string Name => "Shaman";
+        public override string Description => "Elemental melee mage that casts ring attacks between melee swings.";
+        public override PropertyBool? MutatorFlag => PropertyBool.IsShamanMob;
+        public override string NamePrefix => "Shamanic";
+
+        public ShamanMutator()
+        {
+            MinTier = DerpACEConfig.MobModifierMinTier;
+            Chance = DerpACEConfig.NecromancerMobChance;
+            Enabled = DerpACEConfig.EnableMobModifiers;
+        }
+
+        protected override void Apply(Creature creature, int tier)
+        {
+            var elements = new[] { DamageType.Fire, DamageType.Cold, DamageType.Acid, DamageType.Electric };
+            var element = elements[ThreadSafeRandom.Next(0, elements.Length - 1)];
+            creature.SetProperty(PropertyInt.ExplodingMobElement, (int)element);
+
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.12f;
+            switch (element)
+            {
+                case DamageType.Cold:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Blue;
+                    creature.Shade = 0.55;
+                    creature.Name = $"Frost {creature.Name}";
+                    break;
+                case DamageType.Acid:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Green;
+                    creature.Shade = 0.65;
+                    creature.Name = $"Acid {creature.Name}";
+                    break;
+                case DamageType.Electric:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Yellow;
+                    creature.Shade = 0.75;
+                    creature.Name = $"Storm {creature.Name}";
+                    break;
+                case DamageType.Fire:
+                default:
+                    creature.PaletteTemplate = (int)PaletteTemplate.Red;
+                    creature.Shade = 0.8;
+                    creature.Name = $"Flame {creature.Name}";
+                    break;
+            }
+
+            if (creature.Mana != null && creature.Mana.MaxValue > 0)
+            {
+                var manaBoost = (uint)(creature.Mana.MaxValue * 0.35);
+                creature.Mana.StartingValue += manaBoost;
+                creature.Mana.Current = creature.Mana.MaxValue;
+            }
+        }
+    }
     /// <summary>
     /// DerpACE: Tank mob mutator â€” high HP, physical damage reduction, bonus healing received,
     /// and boosted Light Weapons + Shield skills.
@@ -448,10 +539,10 @@ namespace ACE.Server.Factories
     public class WarderMutator : CreatureMutator
     {
         public override string Identifier => "warder";
-        public override string Name => "Warder";
-        public override string Description => "Wards nearby creatures, blocking offensive spells cast against them.";
+        public override string Name => "Warden";
+        public override string Description => "Massive protector that absorbs damage for nearby allied creatures and disrupts hostile magic.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsWarderMob;
-        public override string NamePrefix => "Warding";
+        public override string NamePrefix => "Warden";
 
         public WarderMutator()
         {
@@ -462,13 +553,20 @@ namespace ACE.Server.Factories
 
         protected override void Apply(Creature creature, int tier)
         {
-            // Wardens favor magic defense
+            // Wardens are meant to be killed first: huge health pool, then defensive skills.
             var magicDef = creature.GetCreatureSkill(Skill.MagicDefense);
             if (magicDef != null && magicDef.AdvancementClass >= SkillAdvancementClass.Trained)
             {
                 magicDef.Ranks += 100;
                 magicDef.InitLevel += 100;
                 creature.Skills[Skill.MagicDefense] = magicDef;
+            }
+
+            if (creature.Health != null && creature.Health.MaxValue > 0)
+            {
+                var hpBoost = (uint)(creature.Health.MaxValue * 4.0);
+                creature.Health.StartingValue += hpBoost;
+                creature.Health.Current = creature.Health.MaxValue;
             }
 
             // Mana boost so the visual feels supported
@@ -480,7 +578,7 @@ namespace ACE.Server.Factories
             }
 
             // Visual tell: bright blue and slightly larger â€” telegraph that they buff allies
-            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.2f;
+            creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.45f;
             creature.PaletteTemplate = (int)PaletteTemplate.Blue;
             creature.Shade = 0.4;
         }

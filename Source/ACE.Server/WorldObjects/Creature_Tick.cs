@@ -36,9 +36,13 @@ namespace ACE.Server.WorldObjects
 
             DamageHistory.TryPrune();
 
-            // DerpACE: Healer mob heartbeat
+            // DerpACE: support / caster mutator heartbeats
             if (IsHealerMob)
                 TryHealerHeartbeat(currentUnixTime);
+            if (IsEnchanterMob)
+                TryEnchanterHeartbeat(currentUnixTime);
+            if (IsShamanMob)
+                TryShamanHeartbeat(currentUnixTime);
 
             // delete items when RemainingLifespan <= 0
             foreach (var expireItem in expireItems)

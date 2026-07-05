@@ -46,9 +46,9 @@ namespace ACE.Server.Factories
         public virtual bool UseTierScaling { get; set; } = true;
 
         /// <summary>
-        /// Maximum chance at MaxTier when UseTierScaling is true. Default 0.04 (4%).
+        /// Maximum chance at MaxTier when UseTierScaling is true. Default 0.0015 (0.15%).
         /// </summary>
-        public virtual float MaxChance { get; set; } = 0.04f;
+        public virtual float MaxChance { get; set; } = 0.0015f;
 
         /// <summary>
         /// Maximum tier for scaling. Default 8.
@@ -106,13 +106,14 @@ namespace ACE.Server.Factories
             if (UseTierScaling && tier >= MinTier)
             {
                 if (tier >= MaxTier)
-                    effectiveChance = MaxChance;
+                    effectiveChance = Math.Max(Chance, MaxChance);
                 else
                 {
                     // Linear interpolation from Chance at MinTier to MaxChance at MaxTier
                     float tierRange = MaxTier - MinTier;
                     float tierProgress = (tier - MinTier) / tierRange;
-                    effectiveChance = Chance + (MaxChance - Chance) * tierProgress;
+                    var maxChance = Math.Max(Chance, MaxChance);
+                    effectiveChance = Chance + (maxChance - Chance) * tierProgress;
                 }
             }
 

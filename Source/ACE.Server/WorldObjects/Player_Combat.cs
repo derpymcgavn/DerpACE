@@ -2395,6 +2395,9 @@ namespace ACE.Server.WorldObjects
                 return 0;
             }
 
+            if (Creature.TryRedirectWardenDamage(this, source, damageType, _amount, bodyPart, crit, attackConditions, out var redirectedDamage))
+                return redirectedDamage;
+
             if (_amount < 0)
             {
                 log.Error($"{Name}.TakeDamage({source?.Name} ({source?.Guid}), {damageType}, {_amount}) - negative damage, this shouldn't happen");

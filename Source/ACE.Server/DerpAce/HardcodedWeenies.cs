@@ -26,12 +26,14 @@ namespace ACE.Server.DerpAce
         public const uint NomadPathwardenChestWeenieClassId = 2000615;
         public const uint IronmanSupplyKeyWeenieClassId = 3238934;
         public const uint NomadSupplyKeyWeenieClassId = 2000616;
+        public const uint DrunkenEventBeerWeenieClassId = 2000617;
 
         private const uint MortarAndPestleWeenieClassId = 4751;
         private const uint PowderedMalachiteWeenieClassId = 8321;
         private const uint TomeWeenieClassId = 9092;
         private const uint ArcanePedestalWeenieClassId = 11930;
         private const uint BrownSackWeenieClassId = 166;
+        private const uint SmallBeerWeenieClassId = 2469;
 
         public static void RegisterAll()
         {
@@ -55,6 +57,7 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanSupplyKey());
                 DatabaseManager.World.SetCachedWeenie(BuildNomadSupplyKey());
                 DatabaseManager.World.SetCachedWeenie(BuildNomadPathwardenChest());
+                DatabaseManager.World.SetCachedWeenie(BuildDrunkenEventBeer());
                 DatabaseManager.World.SetCachedWeenie(BuildSausageMcBuffin());
 
                 log.Info("DerpACE: Hardcoded weenies registered.");
@@ -1038,6 +1041,50 @@ namespace ACE.Server.DerpAce
             return w;
         }
 
+        private static Weenie BuildDrunkenEventBeer()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = DrunkenEventBeerWeenieClassId,
+                ClassName     = "ace2000617-ulgrimsdubiousbeer",
+                WeenieType    = WeenieType.Food,
+
+                PropertiesInt    = new Dictionary<PropertyInt, int>(),
+                PropertiesBool   = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat  = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID    = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType]             = (int)ItemType.Food;
+            w.PropertiesInt[PropertyInt.PaletteTemplate]      = 27;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]       = 50;
+            w.PropertiesInt[PropertyInt.Mass]                 = 50;
+            w.PropertiesInt[PropertyInt.Value]                = 0;
+            w.PropertiesInt[PropertyInt.MaxStackSize]         = 1;
+            w.PropertiesInt[PropertyInt.StackSize]            = 1;
+            w.PropertiesInt[PropertyInt.StackUnitEncumbrance] = 50;
+            w.PropertiesInt[PropertyInt.StackUnitMass]        = 50;
+            w.PropertiesInt[PropertyInt.StackUnitValue]       = 0;
+            w.PropertiesInt[PropertyInt.ItemUseable]          = (int)Usable.Contained;
+            w.PropertiesInt[PropertyInt.UiEffects]            = (int)UiEffects.BoostMana;
+            w.PropertiesInt[PropertyInt.PhysicsState]         = 1044;
+
+            w.PropertiesBool[PropertyBool.IsSellable] = false;
+            w.PropertiesBool[PropertyBool.Inelastic]  = true;
+
+            w.PropertiesFloat[PropertyFloat.DefaultScale] = 0.7;
+
+            w.PropertiesString[PropertyString.Name]     = "Ulgrim's Dubious Beer";
+            w.PropertiesString[PropertyString.Use]      = "Bring this to Ulgrim the Unpleasant during the drunken mob hunt.";
+            w.PropertiesString[PropertyString.LongDesc] = "An event beer pried from a drunken creature. It smells like poor choices and temporary global importance.";
+
+            w.PropertiesDID[PropertyDataId.Setup] = 0x0200018B;
+            w.PropertiesDID[PropertyDataId.Icon]  = 0x06001036;
+            CopySetupAndIcon(w, SmallBeerWeenieClassId);
+
+            return w;
+        }
         private static Weenie BuildSausageMcBuffin()
         {
             var w = new Weenie

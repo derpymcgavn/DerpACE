@@ -698,6 +698,15 @@ namespace ACE.Server.Managers
         /// <summary>Short debounce (seconds) between duplicate death events that count toward life loss. Default 5 seconds.</summary>
         public static float IronmanHardcoreSecondsBetweenDeaths { get; set; } = 5f;
 
+        /// <summary>XP scalar applied to standard Ironman earnings after server XP modifiers. Default 0.75 (75%).</summary>
+        public static float IronmanXpScalar { get; set; } = 0.75f;
+
+        /// <summary>XP scalar applied to Nomad Ironman earnings after server XP modifiers. Default 0.75 (75%).</summary>
+        public static float NomadXpScalar { get; set; } = 0.75f;
+
+        /// <summary>XP scalar applied to standalone Hardcore earnings after server XP modifiers. Default 1.0 (100%).</summary>
+        public static float HardcoreXpScalar { get; set; } = 1.0f;
+
         // ---------- Vampiric Jewelry (rings / necklaces / bracelets) ----------
 
         /// <summary>Per-jewelry-piece chance (0-1) at lootgen to roll the Vampiric affix. Default 0.04.</summary>

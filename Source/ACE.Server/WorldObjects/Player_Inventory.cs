@@ -3797,6 +3797,10 @@ namespace ACE.Server.WorldObjects
 
             if (TryHandlePathwardenChallengeTokenTurnIn(target, item, itemFoundInContainer, itemRootOwner, itemWasEquipped))
                 return;
+
+            if (GlobalKillQuestManager.TryTurnInDrunkenBeer(this, item, target))
+                return;
+
             if (item is PetDevice petDevice && petDevice.Pet is not null)
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "You must unsummon your pet before you can transfer this item!"));

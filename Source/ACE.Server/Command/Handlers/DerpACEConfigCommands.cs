@@ -158,6 +158,9 @@ namespace ACE.Server.Command.Handlers
             "  healermob.threshold   HealerMobHealThreshold (float 0-1)\n" +
             "  healermob.cooldown    HealerMobCooldownSeconds (float)\n" +
             "  ironman.enabled       IronmanEnabled (bool, master switch)\n" +
+            "  ironman.xp            IronmanXpScalar (float, default 0.75)\n" +
+            "  nomad.xp              NomadXpScalar (float, default 0.75)\n" +
+            "  hardcore.xp           HardcoreXpScalar (float, default 1.0)\n" +
             "  vendor.loot           VendorRandomLootEnabled (bool, master switch)\n" +
             "  vendor.lootmin        VendorRandomLootMinItems (int, min items per category)\n" +
             "  vendor.lootmax        VendorRandomLootMaxItems (int, max items per category)")]
@@ -313,6 +316,9 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  tankmob.healbonus    = {DerpACEConfig.TankMobHealBonus}x");
                 sb.AppendLine($"  tankmob.skillbonus   = +{DerpACEConfig.TankMobSkillBonus}");
                 sb.AppendLine($"  ironman.enabled      = {DerpACEConfig.IronmanEnabled}");
+                sb.AppendLine($"  ironman.xp           = {DerpACEConfig.IronmanXpScalar:P0}  ({DerpACEConfig.IronmanXpScalar})");
+                sb.AppendLine($"  nomad.xp             = {DerpACEConfig.NomadXpScalar:P0}  ({DerpACEConfig.NomadXpScalar})");
+                sb.AppendLine($"  hardcore.xp          = {DerpACEConfig.HardcoreXpScalar:P0}  ({DerpACEConfig.HardcoreXpScalar})");
                 sb.AppendLine($"  vendor.loot          = {DerpACEConfig.VendorRandomLootEnabled}");
                 sb.AppendLine($"  vendor.lootmin       = {DerpACEConfig.VendorRandomLootMinItems}");
                 sb.AppendLine($"  vendor.lootmax       = {DerpACEConfig.VendorRandomLootMaxItems}");
@@ -923,6 +929,21 @@ namespace ACE.Server.Command.Handlers
                     case "ironman.enabled":
                         if (!bool.TryParse(raw, out var ime)) { BadValue(session, key, "bool"); return; }
                         DerpACEConfig.IronmanEnabled = ime;
+                        break;
+
+                    case "ironman.xp":
+                        if (!TryFloat(out var imxp)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.IronmanXpScalar = Math.Max(0.0f, imxp);
+                        break;
+
+                    case "nomad.xp":
+                        if (!TryFloat(out var nomx)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.NomadXpScalar = Math.Max(0.0f, nomx);
+                        break;
+
+                    case "hardcore.xp":
+                        if (!TryFloat(out var hcxp)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HardcoreXpScalar = Math.Max(0.0f, hcxp);
                         break;
 
                     case "vendor.loot":

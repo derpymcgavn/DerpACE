@@ -43,6 +43,8 @@ namespace ACE.Server.Factories
                 RegisterMutator(new NocturnalMutator());
                 RegisterMutator(new ExplodingMutator());
                 RegisterMutator(new HealerMutator());
+                RegisterMutator(new EnchanterMutator());
+                RegisterMutator(new ShamanMutator());
                 RegisterMutator(new TankMutator());
                 RegisterMutator(new ReaperMutator());
                 RegisterMutator(new NecromancerMutator());
@@ -129,26 +131,78 @@ namespace ACE.Server.Factories
 
             lock (_lock)
             {
-                foreach (var mutator in _mutators.Values.OrderBy(m => ThreadSafeRandom.Next(0, 999999)))
-                {
-                    if (!mutator.Enabled) continue;
+                var candidates = _mutators.Values
+                    .Where(m => m.Enabled)
+                    .OrderBy(m => ThreadSafeRandom.Next(0, 999999))
+                    .ToList();
 
+                var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var mutator in candidates)
+                {
                     try
                     {
-                        if (mutator.TryApply(creature, tier))
-                        {
-                            // Only one mutator per creature for now (matches old behavior)
-                            // Future: allow stacking mutators with a priority system
+                        if (!mutator.TryApply(creature, tier))
+                            continue;
 
-                            break;
-                        }
+                        applied.Add(mutator.Identifier);
+                        break;
                     }
                     catch (Exception ex)
                     {
                         log.Error($"Error applying mutator {mutator.Name} to {creature.Name}: {ex.Message}");
                     }
                 }
+
+                if (applied.Count == 0)
+                    return;
+
+                var maxMutators = GetMaxMutatorsForTier(tier);
+                while (applied.Count < maxMutators && RollBonusMutatorSlot(tier, applied.Count))
+                {
+                    var bonus = candidates
+                        .Where(m => !applied.Contains(m.Identifier) && m.CanApply(creature, tier))
+                        .OrderBy(m => ThreadSafeRandom.Next(0, 999999))
+                        .FirstOrDefault();
+
+                    if (bonus == null)
+                        break;
+
+                    try
+                    {
+                        if (bonus.ForceApply(creature))
+                            applied.Add(bonus.Identifier);
+                        else
+                            break;
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error($"Error bonus-applying mutator {bonus.Name} to {creature.Name}: {ex.Message}");
+                        break;
+                    }
+                }
             }
+        }
+
+        /// <summary>
+        /// Finds a mutator by name (case-insensitive).
+        /// </summary>
+        private static int GetMaxMutatorsForTier(int tier)
+        {
+            if (tier >= 8) return 4;
+            if (tier >= 7) return 3;
+            if (tier >= 5) return 2;
+            return 1;
+        }
+
+        private static bool RollBonusMutatorSlot(int tier, int alreadyApplied)
+        {
+            if (tier < 5 || alreadyApplied <= 0)
+                return false;
+
+            var baseChance = tier >= 8 ? 0.55f : tier >= 7 ? 0.40f : tier >= 6 ? 0.30f : 0.20f;
+            var diminishing = (float)Math.Pow(0.55f, alreadyApplied - 1);
+            return ThreadSafeRandom.Next(0.0f, 1.0f) < baseChance * diminishing;
         }
 
         /// <summary>
@@ -232,6 +286,12 @@ namespace ACE.Server.Factories
                 case "healer":
                 case "medic":
                     return "healer";
+                case "enchant":
+                case "enchanter":
+                    return "enchanter";
+                case "sham":
+                case "shaman":
+                    return "shaman";
                 case "tank":
                 case "guardian":
                 case "defender":

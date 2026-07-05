@@ -398,6 +398,9 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.IronmanCreditsToPlanFor             = c.IronmanCreditsToPlanFor;
             DerpACEConfig.IronmanHardcoreStartingLives        = c.IronmanHardcoreStartingLives;
             DerpACEConfig.IronmanHardcoreSecondsBetweenDeaths = c.IronmanHardcoreSecondsBetweenDeaths;
+            DerpACEConfig.IronmanXpScalar                     = Math.Max(0.0f, c.IronmanXpScalar);
+            DerpACEConfig.NomadXpScalar                       = Math.Max(0.0f, c.NomadXpScalar);
+            DerpACEConfig.HardcoreXpScalar                    = Math.Max(0.0f, c.HardcoreXpScalar);
 
             // ── Bank ──────────────────────────────────────────────────────────
             DerpAce.Bank.BankConfig.EnableBank          = c.EnableBank;
