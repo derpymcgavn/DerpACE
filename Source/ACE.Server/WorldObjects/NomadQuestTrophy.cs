@@ -12,7 +12,7 @@ namespace ACE.Server.WorldObjects
     {
         public static void StampIfEligible(Player player, Creature source, WorldObject item)
         {
-            if (player == null || source == null || item == null || !IsQuestTrophyCandidate(item))
+            if (player == null || source == null || item == null || !ShouldStamp(player, item) || !IsQuestTrophyCandidate(item))
                 return;
 
             item.SetProperty(PropertyInt.NomadTrophyOwner, unchecked((int)player.Guid.Full));
@@ -55,6 +55,17 @@ namespace ACE.Server.WorldObjects
 
             var stampedType = item.GetProperty(PropertyInt.NomadTrophySourceCreatureType);
             return stampedType != null && stampedType.Value == (int)creatureType;
+        }
+
+        private static bool ShouldStamp(Player player, WorldObject item)
+        {
+            if (GlobalKillQuestManager.CurrentKind == GlobalKillQuestManager.GlobalQuestKind.ItemRace && item.WeenieClassId == GlobalKillQuestManager.CurrentItemWcid)
+                return true;
+
+            if (GlobalKillQuestManager.CurrentKind == GlobalKillQuestManager.GlobalQuestKind.DrunkenMobHunt && item.WeenieClassId == GlobalKillQuestManager.DrunkenBeerWcid)
+                return true;
+
+            return player.GetProperty(PropertyBool.IsIronmanNomad) == true;
         }
 
         private static bool IsQuestTrophyCandidate(WorldObject item)

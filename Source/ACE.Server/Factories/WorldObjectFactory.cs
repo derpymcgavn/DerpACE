@@ -35,10 +35,6 @@ namespace ACE.Server.Factories
 
             if (weenie.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
                 return new NomadRunePouch(weenie, guid);
-
-            if (weenie.WeenieClassId == DerpAce.HardcodedWeenies.NomadPathwardenChestWeenieClassId)
-                return new ChallengeStarterChest(weenie, guid);
-
             if (PathwardenRobeWcids.Contains(weenie.WeenieClassId))
             {
                 var robe = new Clothing(weenie, guid);
@@ -180,10 +176,6 @@ namespace ACE.Server.Factories
 
             if (biota.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
                 return new NomadRunePouch(biota);
-
-            if (biota.WeenieClassId == DerpAce.HardcodedWeenies.NomadPathwardenChestWeenieClassId)
-                return new ChallengeStarterChest(biota);
-
             if (PathwardenRobeWcids.Contains(biota.WeenieClassId))
             {
                 var robe = new Clothing(biota);

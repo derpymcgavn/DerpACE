@@ -9,7 +9,7 @@ namespace ACE.DatLoader
 
         public DatReader(string datFilePath, uint offset, uint size, uint blockSize)
         {
-            using (var stream = new FileStream(datFilePath, FileMode.Open, FileAccess.Read))
+            using (var stream = new FileStream(datFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 Buffer = ReadDat(stream, offset, size, blockSize);
 
@@ -42,11 +42,12 @@ namespace ACE.DatLoader
                 }
                 else
                 {
-                    stream.Read(buffer, bufferOffset, Convert.ToInt32(blockSize) - 4); // Read in our sector into the buffer[]
-                    bufferOffset += Convert.ToInt32(blockSize) - 4; // Adjust this so we know where in our buffer[] the next sector gets appended to
+                    var readSize = Math.Min(size, blockSize - 4);
+                    stream.Read(buffer, bufferOffset, Convert.ToInt32(readSize)); // Read in our sector into the buffer[]
+                    bufferOffset += Convert.ToInt32(readSize); // Adjust this so we know where in our buffer[] the next sector gets appended to
                     stream.Seek(nextAddress, SeekOrigin.Begin); // Move the file pointer to the start of the next sector we read above.
                     nextAddress = GetNextAddress(stream, 0); // Get the start location of the next sector.
-                    size -= (blockSize - 4); // Decrease this by the amount of data we just read into buffer[] so we know how much more to go
+                    size -= readSize; // Decrease this by the amount of data we just read into buffer[] so we know how much more to go
                 }
             }
 

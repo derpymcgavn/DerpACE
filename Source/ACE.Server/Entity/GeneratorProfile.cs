@@ -123,6 +123,7 @@ namespace ACE.Server.Entity
         private static readonly TimeSpan SpawnFailureBackoffBase = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan SpawnFailureBackoffMax = TimeSpan.FromMinutes(15);
         private const int SpawnFailureDisableThreshold = 3;
+        private const float OpenSpaceSearchRadius = 2.5f;
 
         /// <summary>
         /// Returns TRUE if this profile is not currently on timed-out as a result of being notified of destruction/pick-up
@@ -357,10 +358,13 @@ namespace ACE.Server.Entity
 
             ApplyGeneratorInstance(obj);
 
-            if (!VerifyLandblock(obj) || !VerifyWalkableSlope(obj))
+            if (!VerifyLandblock(obj))
                 return false;
 
-            return obj.EnterWorld();
+            if (!(obj is Creature) && !VerifyWalkableSlope(obj))
+                return false;
+
+            return EnterWorldWithOpenSpaceSearch(obj);
         }
 
         public bool Spawn_Scatter(WorldObject obj)
@@ -443,7 +447,25 @@ namespace ACE.Server.Entity
             obj.Location = new ACE.Entity.Position(Generator.Location);
             ApplyGeneratorInstance(obj);
 
-            return obj.EnterWorld();
+            return EnterWorldWithOpenSpaceSearch(obj);
+        }
+
+        private bool EnterWorldWithOpenSpaceSearch(WorldObject obj)
+        {
+            if (!(obj is Creature) || obj.Location == null)
+                return obj.EnterWorld();
+
+            var previousScatter = obj.ScatterPos;
+            obj.ScatterPos = new SetPosition(new Physics.Common.Position(obj.Location), SetPositionFlags.RandomScatter, OpenSpaceSearchRadius);
+
+            try
+            {
+                return obj.EnterWorld();
+            }
+            finally
+            {
+                obj.ScatterPos = previousScatter;
+            }
         }
 
         private void ApplyGeneratorInstance(WorldObject obj)

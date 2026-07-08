@@ -1464,6 +1464,8 @@ namespace ACE.Server.WorldObjects
 
             if (attackType == CombatType.Melee)
             {
+                TryProcShieldBash(attacker);
+
                 var fencerWeapon = GetEquippedWeapon(true);
                 var evadeBase = Math.Max(8.0f, fencerWeapon?.Damage ?? 0);
                 TryProcFencerRiposte(creatureAttacker, evadeBase, true);
@@ -1743,8 +1745,8 @@ namespace ACE.Server.WorldObjects
 
             var newPosition = new ACE.Entity.Position(target.Location)
             {
-                PositionX = target.Location.PositionX + (float)(dx / distance) * ShieldBashKnockbackDistance,
-                PositionY = target.Location.PositionY + (float)(dy / distance) * ShieldBashKnockbackDistance,
+                PositionX = target.Location.PositionX + (float)(dx / distance) * UnarmedKnockbackDistance,
+                PositionY = target.Location.PositionY + (float)(dy / distance) * UnarmedKnockbackDistance,
             };
 
             if (newPosition.Landblock != target.Location.Landblock)
@@ -1772,8 +1774,8 @@ namespace ACE.Server.WorldObjects
 
             var newPosition = new ACE.Entity.Position(target.Location)
             {
-                PositionX = target.Location.PositionX + (float)(dx / distance) * UnarmedKnockbackDistance,
-                PositionY = target.Location.PositionY + (float)(dy / distance) * UnarmedKnockbackDistance,
+                PositionX = target.Location.PositionX + (float)(dx / distance) * ShieldBashKnockbackDistance,
+                PositionY = target.Location.PositionY + (float)(dy / distance) * ShieldBashKnockbackDistance,
             };
 
             if (newPosition.Landblock != target.Location.Landblock)
@@ -1953,7 +1955,7 @@ namespace ACE.Server.WorldObjects
             if (damageTaken > 0 && damageEvent.ShieldMod != 1.0f)
             {
                 TryProcShieldThornsReflect(source, damageEvent, (uint)damageTaken);
-                TryProcShieldAffixesOnBlock(source, damageEvent, (uint)damageTaken);
+                TryProcShieldBash(source);
             }
 
             return damageTaken;
@@ -2113,7 +2115,7 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
-        private void TryProcShieldAffixesOnBlock(WorldObject source, DamageEvent damageEvent, uint damageTaken)
+        private void TryProcShieldBash(WorldObject source)
         {
             if (source is not Creature attacker || attacker.IsDead || IsDead)
                 return;

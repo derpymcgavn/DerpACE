@@ -14,6 +14,7 @@ namespace ACE.Server.WorldObjects
     public static class ScavengersHexdust
     {
         public const uint MundaneMortarAndPestleWeenieClassId = 4751;
+        public const uint BoneGrinderWeenieClassId = 2000619;
         public const uint ScavengersMortarWeenieClassId = 2000609;
         public const uint ScavengersHexdustWeenieClassId = 2000610;
 
@@ -47,7 +48,7 @@ namespace ACE.Server.WorldObjects
             if (player == null || source == null)
                 return false;
 
-            if (source.WeenieClassId == MundaneMortarAndPestleWeenieClassId)
+            if (source.WeenieClassId == BoneGrinderWeenieClassId || source.WeenieClassId == MundaneMortarAndPestleWeenieClassId)
                 return TryScavengerTrial(player, source, target);
 
             if (source.WeenieClassId == ScavengersMortarWeenieClassId)
@@ -59,6 +60,27 @@ namespace ACE.Server.WorldObjects
             return false;
         }
 
+        public static void EnsureBoneGrinderFor(Player player)
+        {
+            if (player?.IsIronmanNomad != true || IsScavengerTrialComplete(player))
+                return;
+
+            foreach (var item in player.GetAllPossessions())
+            {
+                if (item.WeenieClassId == BoneGrinderWeenieClassId || item.WeenieClassId == ScavengersMortarWeenieClassId)
+                    return;
+            }
+
+            var grinder = WorldObjectFactory.CreateNewWorldObject(BoneGrinderWeenieClassId);
+            if (grinder == null)
+                return;
+
+            grinder.SetProperty(PropertyBool.IsIronmanItem, true);
+            grinder.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
+
+            if (player.TryCreateInInventoryWithNetworking(grinder))
+                player.Session?.Network.EnqueueSend(new GameMessageSystemChat("A Bone Grinder has been tucked into your pack for the Scavenger path.", ChatMessageType.Broadcast));
+        }
         private static bool TryScavengerTrial(Player player, WorldObject mundaneMortar, WorldObject target)
         {
             if (!ValidateNomadAssess(player))

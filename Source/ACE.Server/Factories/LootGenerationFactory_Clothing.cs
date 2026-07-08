@@ -129,7 +129,7 @@ namespace ACE.Server.Factories
             wo.IconOverlayId = MutatorOverlayBashing;
             ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
-            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block to bash the attacker. A bash deals bludgeoning damage based on shield armor level, capped at 10% of your current health, pushes monsters back 10 feet, and can interrupt monster spell windups. Cooldown: 8 seconds.";
+            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block or melee evade to bash the attacker. A bash deals bludgeoning damage based on shield armor level, capped at 10% of your current health, pushes monsters back 10 feet, and can interrupt monster spell windups. Cooldown: 8 seconds.";
         }
 
         private static void ApplyProjectileReflectShield(WorldObject wo)

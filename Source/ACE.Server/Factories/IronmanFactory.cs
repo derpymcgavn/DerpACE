@@ -1308,6 +1308,15 @@ namespace ACE.Server.Factories
         {
             NomadRunePouch.EnsureFor(player, notify: false);
 
+            var boneGrinder = WorldObjectFactory.CreateNewWorldObject(ScavengersHexdust.BoneGrinderWeenieClassId);
+            if (boneGrinder != null)
+            {
+                boneGrinder.SetProperty(PropertyBool.IsIronmanItem, true);
+                boneGrinder.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
+                if (!player.TryCreateInInventoryWithNetworking(boneGrinder))
+                    player.SendMessage("[Nomad] Failed to place your Bone Grinder in your pack.");
+            }
+
             var robe = WorldObjectFactory.CreateNewWorldObject(NomadStarterRobeWcid);
             if (robe != null)
             {

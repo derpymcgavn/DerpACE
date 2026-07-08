@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Keep NuGet satellite resource assemblies from copying every localized culture folder into bin output. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+</Project>

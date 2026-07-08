@@ -19,7 +19,7 @@ namespace ACE.Server.Tests
         {
             // copy config.js and initialize configuration
             var testDir = AppContext.BaseDirectory;
-            var serverDir = Path.GetFullPath(Path.Combine(testDir, "..", "..", "..", "..", "..", "ACE.Server"));
+            var serverDir = TestPaths.FindServerDirectory();
             var configSource = Path.Combine(serverDir, "Config.js");
 
             if (!File.Exists(configSource))

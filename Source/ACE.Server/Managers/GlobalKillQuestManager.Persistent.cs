@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -33,6 +33,9 @@ namespace ACE.Server.Managers
         private static ConcurrentDictionary<string, PersistentGlobalQuestProgress> _persistentProgress = new ConcurrentDictionary<string, PersistentGlobalQuestProgress>();
         private static int _nextPersistentEpoch = 100000;
         private static DateTime _nextPersistentTick = DateTime.MinValue;
+        private static readonly TimeSpan PersistentSaveDebounce = TimeSpan.FromSeconds(15);
+        private static bool _persistentStateDirty;
+        private static DateTime _nextPersistentSave = DateTime.MinValue;
 
         private static string PersistentStateDirectory => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "GlobalQuests");
         private static string PersistentStatePath => Path.Combine(PersistentStateDirectory, "global_quests.json");
@@ -43,7 +46,7 @@ namespace ACE.Server.Managers
             {
                 LoadPersistentState();
                 EnsurePersistentLanes(DateTime.UtcNow, false);
-                SavePersistentStateUnsafe();
+                SavePersistentStateNowUnsafe();
             }
         }
 
@@ -57,17 +60,19 @@ namespace ACE.Server.Managers
 
             lock (_persistentLock)
             {
+                var rolledQuest = false;
                 foreach (var quest in _persistentQuests.Values.ToList())
                 {
                     if (quest.Expiry <= now)
                     {
                         BroadcastPersistentWrapUp(quest);
                         RollPersistentQuest(quest.Lane, true, now);
+                        rolledQuest = true;
                     }
                 }
 
-                EnsurePersistentLanes(now, true);
-                SavePersistentStateUnsafe();
+                rolledQuest |= EnsurePersistentLanes(now, true);
+                SavePersistentStateIfDueUnsafe(now, rolledQuest);
             }
         }
 
@@ -81,7 +86,7 @@ namespace ACE.Server.Managers
             {
                 foreach (var quest in ActivePersistentQuests(DateTime.UtcNow))
                 {
-                    if (quest.Kind != GlobalQuestKind.T8LuminanceHunt || !IsTier8Creature(creature))
+                    if (quest.Kind != GlobalQuestKind.T8LuminanceHunt || !IsTier8Creature(creature) || IsNonRepeatPersistentQuestCompleted(player, quest))
                         continue;
 
                     var progress = AddPersistentProgress(player, quest, 1);
@@ -91,7 +96,7 @@ namespace ACE.Server.Managers
                         player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} tier 8 creatures slain.", ChatMessageType.Broadcast);
                 }
 
-                SavePersistentStateUnsafe();
+                SavePersistentStateIfDueUnsafe(DateTime.UtcNow);
             }
 
             foreach (var complete in completions)
@@ -108,7 +113,7 @@ namespace ACE.Server.Managers
             {
                 foreach (var quest in ActivePersistentQuests(DateTime.UtcNow))
                 {
-                    if (quest.Kind != GlobalQuestKind.T8CurrencyHunt || item.WeenieClassId != quest.ItemWcid)
+                    if (quest.Kind != GlobalQuestKind.T8CurrencyHunt || item.WeenieClassId != quest.ItemWcid || IsNonRepeatPersistentQuestCompleted(player, quest))
                         continue;
 
                     if (!IsValidPersistentDrop(player, item, quest))
@@ -122,10 +127,10 @@ namespace ACE.Server.Managers
                     if (progress.Count >= quest.Required)
                         completions.Add(() => CompletePersistentT8Currency(player, quest));
                     else
-                        player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} {quest.ItemName}s recovered.", ChatMessageType.Broadcast);
+                        player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} forged Derp Coins recovered.", ChatMessageType.Broadcast);
                 }
 
-                SavePersistentStateUnsafe();
+                SavePersistentStateIfDueUnsafe(DateTime.UtcNow);
             }
 
             foreach (var complete in completions)
@@ -149,9 +154,8 @@ namespace ACE.Server.Managers
                 return null;
 
             currency.Name = quest.ItemName ?? currency.Name;
-            currency.MaxStackSize = 1;
             currency.SetStackSize(1);
-            currency.LongDesc = $"A quest-stamped {GetLaneLabel(quest.Lane)} global currency token recovered from a tier 8 creature.";
+            currency.LongDesc = $"A corrupted forged Derp Coin recovered during the {GetLaneLabel(quest.Lane)} Correct the Corruption quest.";
             StampPersistentDrop(player, source, currency, quest);
             return currency;
         }
@@ -204,8 +208,8 @@ namespace ACE.Server.Managers
                 return;
 
             player.EarnLuminance(quest.LuminanceReward, XpType.Quest, ShareType.None);
-            player.SendMessage($"[Global Quest Complete:{GetLaneLabel(quest.Lane)}] You recovered {quest.Required} {quest.ItemName}s and earned {quest.LuminanceReward:N0} luminance!", ChatMessageType.Broadcast);
-            BroadcastPersistentCompletion(player, quest, $"{player.Name} completed the {GetLaneLabel(quest.Lane)} tier 8 {quest.ItemName} hunt!");
+            player.SendMessage($"[Global Quest Complete:{GetLaneLabel(quest.Lane)}] You corrected {quest.Required} forged Derp Coins and earned {quest.LuminanceReward:N0} luminance!", ChatMessageType.Broadcast);
+            BroadcastPersistentCompletion(player, quest, $"{player.Name} helped Correct the Corruption during the {GetLaneLabel(quest.Lane)} quest!");
         }
 
         private static bool TryFinishPersistentQuest(Player player, PersistentGlobalQuest quest)
@@ -216,13 +220,18 @@ namespace ACE.Server.Managers
                 if (!_persistentProgress.TryRemove(key, out _))
                     return false;
 
-                var completedKey = MakePersistentCompleteKey(player.Guid.Full, quest.Epoch);
-                if (_persistentProgress.ContainsKey(completedKey))
-                    return false;
+                if (IsNonRepeatPersistentQuest(quest))
+                {
+                    var completedKey = MakePersistentCompleteKey(player.Guid.Full, quest.Epoch);
+                    if (_persistentProgress.ContainsKey(completedKey))
+                        return false;
 
-                _persistentProgress[completedKey] = new PersistentGlobalQuestProgress { Count = 1, Completed = true };
+                    _persistentProgress[completedKey] = new PersistentGlobalQuestProgress { Count = 1, Completed = true };
+                    MarkPersistentStateDirtyUnsafe();
+                }
+
                 quest.CompletionCount++;
-                SavePersistentStateUnsafe();
+                SavePersistentStateNowUnsafe();
                 return true;
             }
         }
@@ -230,6 +239,7 @@ namespace ACE.Server.Managers
         private static PersistentGlobalQuestProgress AddPersistentProgress(Player player, PersistentGlobalQuest quest, int amount)
         {
             var key = MakePersistentKey(player.Guid.Full, quest.Epoch);
+            MarkPersistentStateDirtyUnsafe();
             return _persistentProgress.AddOrUpdate(key,
                 new PersistentGlobalQuestProgress { Count = amount },
                 (k, old) => { old.Count += amount; return old; });
@@ -240,13 +250,19 @@ namespace ACE.Server.Managers
             return _persistentQuests.Values.Where(q => q != null && q.Expiry > now);
         }
 
-        private static void EnsurePersistentLanes(DateTime now, bool announce)
+        private static bool EnsurePersistentLanes(DateTime now, bool announce)
         {
+            var rolledQuest = false;
             foreach (var lane in new[] { GlobalQuestLane.Hourly, GlobalQuestLane.Daily, GlobalQuestLane.Weekly })
             {
                 if (!_persistentQuests.TryGetValue(lane, out var quest) || quest == null || quest.Expiry <= now)
+                {
                     RollPersistentQuest(lane, announce, now);
+                    rolledQuest = true;
+                }
             }
+
+            return rolledQuest;
         }
 
         private static void RollPersistentQuest(GlobalQuestLane lane, bool announce, DateTime now)
@@ -254,6 +270,7 @@ namespace ACE.Server.Managers
             var quest = CreatePersistentQuest(lane, now);
             _persistentQuests[lane] = quest;
             PrunePersistentProgress();
+            MarkPersistentStateDirtyUnsafe(now);
             if (announce)
                 BroadcastPersistentStart(quest);
         }
@@ -271,15 +288,41 @@ namespace ACE.Server.Managers
             quest.QuestExpiryTimestamp = quest.QuestStartTimestamp + (int)GetPersistentDuration(lane).TotalSeconds;
 
             if (lane == GlobalQuestLane.Hourly && ShouldRollT8CurrencyHunt())
-                ConfigurePersistentCurrencyQuest(quest, 8, 17, 100000, 250001);
+                ConfigurePersistentCurrencyQuest(quest, 8, 17, 5000, 50001);
             else if (lane == GlobalQuestLane.Weekly)
-                ConfigurePersistentCurrencyQuest(quest, 40, 81, 500000, 1250001);
+                ConfigurePersistentCurrencyQuest(quest, 40, 81, 5000, 50001);
             else if (lane == GlobalQuestLane.Daily)
-                ConfigurePersistentLuminanceQuest(quest, 75, 151, 150000, 350001);
+                ConfigurePersistentLuminanceQuest(quest, 75, 151, 5000, 50001);
             else
-                ConfigurePersistentLuminanceQuest(quest, 30, 61, 75000, 200001);
-
+                ConfigurePersistentLuminanceQuest(quest, 30, 61, 5000, 50001);
+            NormalizePersistentQuestReward(quest);
             return quest;
+        }
+
+        private static void NormalizePersistentQuestReward(PersistentGlobalQuest quest)
+        {
+            if (quest == null)
+                return;
+
+            if (quest.LuminanceReward > 0)
+                quest.LuminanceReward = Math.Max(5000, Math.Min(50000, quest.LuminanceReward));
+
+            if (quest.Kind == GlobalQuestKind.T8CurrencyHunt)
+            {
+                var currency = GetT8CurrencyBankItem();
+                quest.ItemName = currency.name;
+                quest.ItemWcid = currency.wcid;
+            }
+        }
+
+        private static bool IsNonRepeatPersistentQuestCompleted(Player player, PersistentGlobalQuest quest)
+        {
+            return IsNonRepeatPersistentQuest(quest) && _persistentProgress.ContainsKey(MakePersistentCompleteKey(player.Guid.Full, quest.Epoch));
+        }
+
+        private static bool IsNonRepeatPersistentQuest(PersistentGlobalQuest quest)
+        {
+            return quest.Lane == GlobalQuestLane.Daily || quest.Lane == GlobalQuestLane.Weekly;
         }
         private static void ConfigurePersistentLuminanceQuest(PersistentGlobalQuest quest, int minRequired, int maxRequired, int minLum, int maxLum)
         {
@@ -326,7 +369,7 @@ namespace ACE.Server.Managers
         {
             var lane = GetLaneLabel(quest.Lane);
             var msg = quest.Kind == GlobalQuestKind.T8CurrencyHunt
-                ? $"[Global Quest:{lane}] Tier 8 creatures may drop quest-stamped {quest.ItemName}s. Recover {quest.Required} for {quest.LuminanceReward:N0} luminance. Type /gquest for details."
+                ? $"[Global Quest:{lane}] Correct the Corruption: recover {quest.Required} forged Derp Coins from tier 8 creatures for {quest.LuminanceReward:N0} luminance. Type /gquest for details."
                 : $"[Global Quest:{lane}] Slay {quest.Required} tier 8 creatures for {quest.LuminanceReward:N0} luminance. Type /gquest for details.";
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
@@ -336,7 +379,7 @@ namespace ACE.Server.Managers
         {
             var lane = GetLaneLabel(quest.Lane);
             var msg = quest.Kind == GlobalQuestKind.T8CurrencyHunt
-                ? $"[Global Quest:{lane}] The tier 8 {quest.ItemName} hunt has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it."
+                ? $"[Global Quest:{lane}] Correct the Corruption has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it."
                 : $"[Global Quest:{lane}] The tier 8 luminance hunt has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it.";
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
@@ -362,7 +405,10 @@ namespace ACE.Server.Managers
                     return;
                 _nextPersistentEpoch = Math.Max(state.NextEpoch, 100000);
                 foreach (var quest in state.Quests ?? new List<PersistentGlobalQuest>())
+                {
+                    NormalizePersistentQuestReward(quest);
                     _persistentQuests[quest.Lane] = quest;
+                }
                 foreach (var entry in state.Progress ?? new List<PersistentGlobalQuestProgressEntry>())
                     _persistentProgress[entry.Key] = entry.Progress ?? new PersistentGlobalQuestProgress();
             }
@@ -372,7 +418,23 @@ namespace ACE.Server.Managers
             }
         }
 
-        private static void SavePersistentStateUnsafe()
+        private static void MarkPersistentStateDirtyUnsafe(DateTime? now = null)
+        {
+            _persistentStateDirty = true;
+            var saveAt = (now ?? DateTime.UtcNow) + PersistentSaveDebounce;
+            if (_nextPersistentSave == DateTime.MinValue || saveAt < _nextPersistentSave)
+                _nextPersistentSave = saveAt;
+        }
+
+        private static void SavePersistentStateIfDueUnsafe(DateTime now, bool force = false)
+        {
+            if (!force && (!_persistentStateDirty || now < _nextPersistentSave))
+                return;
+
+            SavePersistentStateNowUnsafe();
+        }
+
+        private static void SavePersistentStateNowUnsafe()
         {
             try
             {
@@ -384,6 +446,8 @@ namespace ACE.Server.Managers
                     Progress = _persistentProgress.Select(kvp => new PersistentGlobalQuestProgressEntry { Key = kvp.Key, Progress = kvp.Value }).ToList(),
                 };
                 File.WriteAllText(PersistentStatePath, JsonSerializer.Serialize(state, _persistentJsonOptions));
+                _persistentStateDirty = false;
+                _nextPersistentSave = DateTime.MinValue;
             }
             catch (Exception ex)
             {

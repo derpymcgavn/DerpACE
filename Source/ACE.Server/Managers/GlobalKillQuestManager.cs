@@ -221,25 +221,24 @@ namespace ACE.Server.Managers
 
         public static WorldObject TryCreateT8CurrencyDrop(Player player, Creature source)
         {
-            if (CurrentKind != GlobalQuestKind.T8CurrencyHunt || DateTime.UtcNow > QuestExpiry)
-                return TryCreatePersistentT8CurrencyDrop(player, source);
-
             if (player == null || !IsTier8Creature(source))
                 return null;
 
-            if (ThreadSafeRandom.Next(0, 100) >= T8CurrencyDropChancePercent)
-                return null;
+            var currentHalfHourActive = CurrentKind == GlobalQuestKind.T8CurrencyHunt && DateTime.UtcNow <= QuestExpiry;
+            if (currentHalfHourActive && ThreadSafeRandom.Next(0, 100) < T8CurrencyDropChancePercent)
+            {
+                var currency = WorldObjectFactory.CreateNewWorldObject(CurrentItemWcid);
+                if (currency != null)
+                {
+                    currency.Name = CurrentItemName ?? currency.Name;
+                    currency.SetStackSize(1);
+                    currency.LongDesc = "A corrupted forged Derp Coin recovered from a tier 8 creature. Pick it up before the quest ends to count it toward Correct the Corruption.";
+                    StampGlobalQuestDrop(player, source, currency);
+                    return currency;
+                }
+            }
 
-            var currency = WorldObjectFactory.CreateNewWorldObject(CurrentItemWcid);
-            if (currency == null)
-                return null;
-
-            currency.Name = CurrentItemName ?? currency.Name;
-            currency.MaxStackSize = 1;
-            currency.SetStackSize(1);
-            currency.LongDesc = "A global quest currency token recovered from a tier 8 creature. Pick it up before the quest ends to count it.";
-            StampGlobalQuestDrop(player, source, currency);
-            return currency;
+            return TryCreatePersistentT8CurrencyDrop(player, source);
         }
 
         public static WorldObject TryCreateDrunkenBeerDrop(Player player, Creature source)
@@ -360,7 +359,7 @@ namespace ACE.Server.Managers
             if (newEntry.kills >= RequiredKills)
                 CompleteT8CurrencyHunt(player, RequiredKills, LuminanceReward, CurrentEpoch);
             else
-                player.SendMessage($"[Global Quest] {newEntry.kills}/{RequiredKills} {CurrentItemName}s recovered.", ChatMessageType.Broadcast);
+                player.SendMessage($"[Global Quest] {newEntry.kills}/{RequiredKills} forged Derp Coins recovered.", ChatMessageType.Broadcast);
         }
 
         private static bool IsValidEventBeer(Player player, WorldObject beer)
@@ -468,13 +467,13 @@ namespace ACE.Server.Managers
 
             System.Threading.Interlocked.Increment(ref _completionCount);
             player.EarnLuminance(luminance, XpType.Quest, ShareType.None);
-            player.SendMessage($"[Global Quest Complete!] You recovered {target} {CurrentItemName}s from tier 8 creatures and earned {luminance:N0} luminance!", ChatMessageType.Broadcast);
+            player.SendMessage($"[Global Quest Complete!] You corrected {target} forged Derp Coins from tier 8 creatures and earned {luminance:N0} luminance!", ChatMessageType.Broadcast);
 
-            var globalMsg = $"[Global Quest] {player.Name} completed the tier 8 {CurrentItemName} hunt!";
+            var globalMsg = $"[Global Quest] {player.Name} helped Correct the Corruption!";
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(globalMsg, ChatMessageType.WorldBroadcast));
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, globalMsg);
 
-            log.Info($"[GlobalKillQuest] {player.Name} completed T8 currency hunt, reward {luminance:N0} luminance");
+            log.Info($"[GlobalKillQuest] {player.Name} completed Correct the Corruption, reward {luminance:N0} luminance");
         }
 
         private static void CompleteDrunkenMobHunt(Player player, int turnedIn)
@@ -576,7 +575,7 @@ namespace ACE.Server.Managers
         private static void RollNewT8LuminanceHunt(bool announceToAll)
         {
             var kills = _rng.Next(15, 36);
-            var luminance = _rng.Next(25000, 100001);
+            var luminance = _rng.Next(5000, 50001);
 
             CurrentKind = GlobalQuestKind.T8LuminanceHunt;
             CurrentCreatureName = "Tier 8 Creature";
@@ -596,7 +595,7 @@ namespace ACE.Server.Managers
         private static void RollNewT8CurrencyHunt(bool announceToAll)
         {
             var required = _rng.Next(4, 11);
-            var luminance = _rng.Next(50000, 150001);
+            var luminance = _rng.Next(5000, 50001);
             var currency = GetT8CurrencyBankItem();
 
             CurrentKind = GlobalQuestKind.T8CurrencyHunt;
@@ -608,12 +607,12 @@ namespace ACE.Server.Managers
 
             if (announceToAll)
             {
-                var msg = $"[Global Quest] A tier 8 currency hunt has begun! Tier 8 creatures may drop quest-stamped {CurrentItemName}s. Recover {required} within 30 minutes for {luminance:N0} luminance. Type /gquest for details.";
+                var msg = $"[Global Quest] Correct the Corruption has begun! Recover {required} forged Derp Coins from tier 8 creatures within 30 minutes for {luminance:N0} luminance. Type /gquest for details.";
                 PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
                 PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
             }
 
-            log.Info($"[GlobalKillQuest] New T8 currency hunt rolled: {required} {CurrentItemName}, reward {luminance:N0} luminance");
+            log.Info($"[GlobalKillQuest] New Correct the Corruption quest rolled: {required} {CurrentItemName}, reward {luminance:N0} luminance");
         }
 
         private static void RollNewDrunkenMobHunt(bool announceToAll)
@@ -653,8 +652,8 @@ namespace ACE.Server.Managers
                     : $"[Global Quest] The tier 8 luminance hunt has ended. {count} adventurer{(count == 1 ? "" : "s")} completed the task!";
             else if (CurrentKind == GlobalQuestKind.T8CurrencyHunt)
                 wrapUp = count == 0
-                    ? $"[Global Quest] The tier 8 {CurrentItemName} hunt has ended. Nobody recovered enough in time."
-                    : $"[Global Quest] The tier 8 {CurrentItemName} hunt has ended. {count} adventurer{(count == 1 ? "" : "s")} completed the task!";
+                    ? $"[Global Quest] Correct the Corruption has ended. Nobody recovered enough forged Derp Coins in time."
+                    : $"[Global Quest] Correct the Corruption has ended. {count} adventurer{(count == 1 ? "" : "s")} completed the task!";
             else if (count == 0)
                 wrapUp = $"[Global Quest] The hunt for {RequiredKills} {CurrentCreatureName}s has ended. No adventurers completed the task this time.";
             else if (count == 1)
@@ -688,13 +687,7 @@ namespace ACE.Server.Managers
 
         private static (string name, uint wcid) GetT8CurrencyBankItem()
         {
-            foreach (var item in BankConfig.Items)
-            {
-                if (item.Id == DerpACEConfig.DerpcoinWcid)
-                    return (item.Name, item.Id);
-            }
-
-            return ("Derp Coin", DerpACEConfig.DerpcoinWcid);
+            return ("Horribly Forged Derp Coin", HardcodedWeenies.HorriblyForgedDerpCoinWeenieClassId);
         }
 
         private static string GetCurrentTargetName()

@@ -44,7 +44,7 @@ namespace ACE.DatLoader
 
             FilePath = filePath;
 
-            stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+            stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
             stream.Seek(DAT_HEADER_OFFSET, SeekOrigin.Begin);
             using (var reader = new BinaryReader(stream, System.Text.Encoding.Default, true))

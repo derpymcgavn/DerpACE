@@ -79,6 +79,7 @@ namespace ACE.Server.WorldObjects
             AuraManager.FireAuras(this);
 
             NomadRunePouch.EnsureFor(this, notify: false);
+            ScavengersHexdust.EnsureBoneGrinderFor(this);
 
             // Update or override certain properties sent to client.
 
