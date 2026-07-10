@@ -143,6 +143,7 @@ namespace ACE.Server.Command.Handlers
             "  blast.ratemax         WeaponBlastProcRateMax (float, per-hit fire rate max)\n" +
             "  mobmod.enabled        MobModifierEnabled (bool, master switch)\n" +
             "  mobmod.tier           MobModifierMinTier (int)\n" +
+            "  mobmod.defcap         MobModifierDefenseSkillCap (int, 0=disabled)\n" +
             "  vampiric.chance       VampiricMobChance (float 0-1)\n" +
             "  vampiric.lifestealmin VampiricLifestealMin (int %)\n" +
             "  vampiric.lifestealmax VampiricLifestealMax (int %)\n" +
@@ -296,6 +297,7 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  blast.ratemax        = {DerpACEConfig.WeaponBlastProcRateMax:G4} per-hit blast fire rate max");
                 sb.AppendLine($"  mobmod.enabled       = {DerpACEConfig.MobModifierEnabled}");
                 sb.AppendLine($"  mobmod.tier          = {DerpACEConfig.MobModifierMinTier}");
+                sb.AppendLine($"  mobmod.defcap        = {DerpACEConfig.MobModifierDefenseSkillCap} effective defense cap (0=disabled)");
                 sb.AppendLine($"  vampiric.chance      = {DerpACEConfig.VampiricMobChance:P1}  ({DerpACEConfig.VampiricMobChance})");
                 sb.AppendLine($"  vampiric.lifestealmin= {DerpACEConfig.VampiricLifestealMin}%");
                 sb.AppendLine($"  vampiric.lifestealmax= {DerpACEConfig.VampiricLifestealMax}%");
@@ -849,6 +851,10 @@ namespace ACE.Server.Command.Handlers
                     case "mobmod.tier":
                         if (!TryInt(out var mmt)) { BadValue(session, key, "int"); return; }
                         DerpACEConfig.MobModifierMinTier = mmt;
+                        break;
+                    case "mobmod.defcap":
+                        if (!TryInt(out var mmdc)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.MobModifierDefenseSkillCap = Math.Max(0, mmdc);
                         break;
                     case "vampiric.chance":
                         if (!TryFloat(out var vmc)) { BadValue(session, key, "float"); return; }

@@ -179,7 +179,7 @@ namespace ACE.Server.WorldObjects
 
             //Console.WriteLine($"EffectiveMagicDefense: {effectiveMagicDefense}");
 
-            return effectiveMagicDefense;
+            return ClampMutatedMobDefenseSkill(effectiveMagicDefense);
         }
     }
 }

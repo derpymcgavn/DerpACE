@@ -224,7 +224,7 @@ namespace ACE.Server.Managers
             if (player == null || !IsTier8Creature(source))
                 return null;
 
-            var currentHalfHourActive = CurrentKind == GlobalQuestKind.T8CurrencyHunt && DateTime.UtcNow <= QuestExpiry;
+            var currentHalfHourActive = false;
             if (currentHalfHourActive && ThreadSafeRandom.Next(0, 100) < T8CurrencyDropChancePercent)
             {
                 var currency = WorldObjectFactory.CreateNewWorldObject(CurrentItemWcid);
@@ -524,8 +524,6 @@ namespace ACE.Server.Managers
                 RollNewDrunkenMobHunt(announceToAll);
             else if (ShouldRollT8LuminanceHunt())
                 RollNewT8LuminanceHunt(announceToAll);
-            else if (ShouldRollT8CurrencyHunt())
-                RollNewT8CurrencyHunt(announceToAll);
             else if (ShouldRollItemRace())
                 RollNewItemRace(announceToAll);
             else

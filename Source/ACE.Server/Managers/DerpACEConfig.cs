@@ -572,6 +572,9 @@ namespace ACE.Server.Managers
         /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 2 (starts at tier 2).</summary>
         public static int MobModifierMinTier { get; set; } = 2;
 
+        /// <summary>Effective melee/missile/magic defense cap for mobs with DerpACE mutators. 0 disables. Default 600.</summary>
+        public static int MobModifierDefenseSkillCap { get; set; } = 600;
+
         /// <summary>Per-spawn chance (0-1) for the Nocturnal modifier to land on an eligible mob (only at night). Default 0.0005 (1 in 2000).</summary>
         public static float NocturnalMobChance { get; set; } = 0.0005f;
 

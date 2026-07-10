@@ -187,6 +187,8 @@ namespace ACE.Server.DerpAce
         public bool MobModifierEnabled { get; set; } = true;
         [JsonPropertyName("mob_modifier_min_tier")]
         public int MobModifierMinTier { get; set; } = 2;
+        [JsonPropertyName("mob_modifier_defense_skill_cap")]
+        public int MobModifierDefenseSkillCap { get; set; } = 600;
         [JsonPropertyName("mob_nocturnal_chance")]
         public float NocturnalMobChance { get; set; } = 0.0005f;
         [JsonPropertyName("mob_exploding_chance")]

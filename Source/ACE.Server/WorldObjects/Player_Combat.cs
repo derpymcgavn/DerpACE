@@ -1756,10 +1756,48 @@ namespace ACE.Server.WorldObjects
             target.NextMoveTime = Math.Max(target.NextMoveTime, Timers.RunningTime + 0.25f);
         }
 
+        private void PlayShieldBashAnimation()
+        {
+            var stance = CurrentMotionState?.Stance ?? MotionStance.SwordShieldCombat;
+            if (stance == MotionStance.Invalid)
+                stance = MotionStance.SwordShieldCombat;
+
+            var height = AttackHeight ?? ACE.Entity.Enum.AttackHeight.Medium;
+            var motionCommand = MotionCommand.OffhandPunchFastMed;
+            var motions = CombatTable.GetMotion(stance, height, AttackType.OffhandPunch, MotionCommand.Invalid);
+            if (motions != null && motions.Count > 0 && motions[0] != MotionCommand.Invalid)
+                motionCommand = motions[0];
+
+            var motion = new Motion(stance, motionCommand, 1.4f);
+            CurrentMotionState = motion;
+            EnqueueBroadcastMotion(motion, applyPhysics: true);
+        }
+
+        private void PlayShieldBashSounds(Creature target)
+        {
+            var exertionSound = (Sound)((uint)Sound.Heave1 + (uint)ThreadSafeRandom.Next(0, 3));
+            EnqueueBroadcast(new GameMessageSound(Guid, exertionSound, 1.0f));
+
+            if (target.IsAlive)
+            {
+                var damageSound = (Sound)((uint)Sound.Damage1 + (uint)ThreadSafeRandom.Next(0, 3));
+                target.EnqueueBroadcast(new GameMessageSound(target.Guid, damageSound, 1.0f));
+            }
+        }
         private void TryApplyShieldBashKnockback(Creature target)
         {
-            if (target == null || !target.IsMonster || Location == null || target.Location == null)
+            if (!TryGetShieldBashKnockbackPosition(target, out var newPosition))
                 return;
+
+            target.NextMoveTime = Math.Max(target.NextMoveTime, Timers.RunningTime + 0.35f);
+            target.FakeTeleport(newPosition);
+        }
+
+        private bool TryGetShieldBashKnockbackPosition(Creature target, out ACE.Entity.Position newPosition)
+        {
+            newPosition = null;
+            if (target == null || !target.IsMonster || Location == null || target.Location == null || target.CurrentLandblock == null)
+                return false;
 
             var dx = target.Location.PositionX - Location.PositionX;
             var dy = target.Location.PositionY - Location.PositionY;
@@ -1772,19 +1810,42 @@ namespace ACE.Server.WorldObjects
                 distance = 1;
             }
 
-            var newPosition = new ACE.Entity.Position(target.Location)
+            foreach (var pushDistance in new[] { ShieldBashKnockbackDistance, 7.0f, 4.0f, 2.0f })
             {
-                PositionX = target.Location.PositionX + (float)(dx / distance) * ShieldBashKnockbackDistance,
-                PositionY = target.Location.PositionY + (float)(dy / distance) * ShieldBashKnockbackDistance,
-            };
+                var candidate = new ACE.Entity.Position(target.Location)
+                {
+                    PositionX = target.Location.PositionX + (float)(dx / distance) * pushDistance,
+                    PositionY = target.Location.PositionY + (float)(dy / distance) * pushDistance,
+                    InstanceId = target.Location.InstanceId,
+                };
 
-            if (newPosition.Landblock != target.Location.Landblock)
-                return;
+                if (candidate.Landblock != target.Location.Landblock)
+                    continue;
 
-            target.FakeTeleport(newPosition);
-            target.NextMoveTime = Math.Max(target.NextMoveTime, Timers.RunningTime + 0.25f);
+                if (!PrepareShieldBashKnockbackPosition(target, candidate))
+                    continue;
+
+                newPosition = candidate;
+                return true;
+            }
+
+            return false;
         }
 
+        private static bool PrepareShieldBashKnockbackPosition(Creature target, ACE.Entity.Position candidate)
+        {
+            if (target.CurrentLandblock.IsDungeon || candidate.Indoors)
+            {
+                if (candidate.Landblock != target.Location.Landblock)
+                    return false;
+
+                AdjustDungeon(candidate);
+                return candidate.Landblock == target.Location.Landblock;
+            }
+
+            candidate.AdjustMapCoords();
+            return candidate.Landblock == target.Location.Landblock && candidate.IsWalkable();
+        }
         /// <summary>
         /// Returns the BaseDamageMod for a truly-unarmed player attack (no weapon, no hand/foot armor).
         ///
@@ -2147,8 +2208,8 @@ namespace ACE.Server.WorldObjects
 
             attacker.TakeDamage(this, DamageType.Bludgeon, bashDamage);
             attacker.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SparkMidRightFront);
-            var stance = CurrentMotionState?.Stance ?? MotionStance.SwordShieldCombat;
-            EnqueueBroadcastMotion(new Motion(stance, MotionCommand.AttackHigh1));
+            PlayShieldBashAnimation();
+            PlayShieldBashSounds(attacker);
             ApplyVisualEffects(ACE.Entity.Enum.PlayScript.ShieldUpBlue);
             TryApplyShieldBashKnockback(attacker);
             var interrupted = attacker.TryInterruptMagicWindup(this);

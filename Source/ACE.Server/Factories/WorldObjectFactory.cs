@@ -80,6 +80,8 @@ namespace ACE.Server.Factories
                         return new SlayerGem(weenie, guid);
                     if (weenie.WeenieClassId == NomadRitualRune.NomadRitualRuneWeenieClassId)
                         return new NomadRitualRune(weenie, guid);
+                    if (weenie.WeenieClassId == FlutterStone.FlutterStoneWeenieClassId)
+                        return new FlutterStone(weenie, guid);
                     return new Gem(weenie, guid);
                 case WeenieType.Game:
                     return new Game(weenie, guid);
@@ -218,6 +220,8 @@ namespace ACE.Server.Factories
                         return new SlayerGem(biota);
                     if (biota.WeenieClassId == NomadRitualRune.NomadRitualRuneWeenieClassId)
                         return new NomadRitualRune(biota);
+                    if (biota.WeenieClassId == FlutterStone.FlutterStoneWeenieClassId)
+                        return new FlutterStone(biota);
                     return new Gem(biota);
                 case WeenieType.Game:
                     return new Game(biota);

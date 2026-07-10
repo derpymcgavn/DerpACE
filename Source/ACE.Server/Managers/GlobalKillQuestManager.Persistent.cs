@@ -65,6 +65,7 @@ namespace ACE.Server.Managers
                 {
                     if (quest.Expiry <= now)
                     {
+                        AwardAndRemoveExpiredPersistentCurrency(quest);
                         BroadcastPersistentWrapUp(quest);
                         RollPersistentQuest(quest.Lane, true, now);
                         rolledQuest = true;
@@ -144,7 +145,12 @@ namespace ACE.Server.Managers
 
             PersistentGlobalQuest quest;
             lock (_persistentLock)
-                quest = ActivePersistentQuests(DateTime.UtcNow).FirstOrDefault(q => q.Kind == GlobalQuestKind.T8CurrencyHunt);
+            {
+                quest = ActivePersistentQuests(DateTime.UtcNow)
+                    .Where(q => q.Kind == GlobalQuestKind.T8CurrencyHunt && !IsNonRepeatPersistentQuestCompleted(player, q))
+                    .OrderBy(q => q.Lane == GlobalQuestLane.Daily ? 0 : 1)
+                    .FirstOrDefault();
+            }
 
             if (quest == null || ThreadSafeRandom.Next(0, 100) >= T8CurrencyDropChancePercent)
                 return null;
@@ -206,6 +212,8 @@ namespace ACE.Server.Managers
         {
             if (!TryFinishPersistentQuest(player, quest))
                 return;
+
+            RemovePersistentCurrencyCoins(player, quest);
 
             player.EarnLuminance(quest.LuminanceReward, XpType.Quest, ShareType.None);
             player.SendMessage($"[Global Quest Complete:{GetLaneLabel(quest.Lane)}] You corrected {quest.Required} forged Derp Coins and earned {quest.LuminanceReward:N0} luminance!", ChatMessageType.Broadcast);
@@ -287,12 +295,10 @@ namespace ACE.Server.Managers
             };
             quest.QuestExpiryTimestamp = quest.QuestStartTimestamp + (int)GetPersistentDuration(lane).TotalSeconds;
 
-            if (lane == GlobalQuestLane.Hourly && ShouldRollT8CurrencyHunt())
-                ConfigurePersistentCurrencyQuest(quest, 8, 17, 5000, 50001);
-            else if (lane == GlobalQuestLane.Weekly)
+            if (lane == GlobalQuestLane.Weekly)
                 ConfigurePersistentCurrencyQuest(quest, 40, 81, 5000, 50001);
             else if (lane == GlobalQuestLane.Daily)
-                ConfigurePersistentLuminanceQuest(quest, 75, 151, 5000, 50001);
+                ConfigurePersistentCurrencyQuest(quest, 15, 36, 5000, 50001);
             else
                 ConfigurePersistentLuminanceQuest(quest, 30, 61, 5000, 50001);
             NormalizePersistentQuestReward(quest);
@@ -365,6 +371,62 @@ namespace ACE.Server.Managers
             return found != null && found.Value >= quest.QuestStartTimestamp && found.Value <= quest.QuestExpiryTimestamp;
         }
 
+        private static void AwardAndRemoveExpiredPersistentCurrency(PersistentGlobalQuest quest)
+        {
+            if (quest == null || quest.Kind != GlobalQuestKind.T8CurrencyHunt)
+                return;
+
+            var paidCount = 0;
+            foreach (var player in PlayerManager.GetAllOnline())
+            {
+                var progressKey = MakePersistentKey(player.Guid.Full, quest.Epoch);
+                var completedKey = MakePersistentCompleteKey(player.Guid.Full, quest.Epoch);
+                var completed = _persistentProgress.ContainsKey(completedKey);
+                var trackedCount = _persistentProgress.TryGetValue(progressKey, out var progress) ? progress.Count : 0;
+                var removedCount = RemovePersistentCurrencyCoins(player, quest);
+                var countForReward = Math.Max(trackedCount, removedCount);
+
+                if (!completed && countForReward > 0 && quest.Required > 0 && quest.LuminanceReward > 0)
+                {
+                    var ratio = Math.Min(1.0, countForReward / (double)quest.Required);
+                    var luminance = Math.Max(1, (long)Math.Round(quest.LuminanceReward * ratio));
+                    player.EarnLuminance(luminance, XpType.Quest, ShareType.None);
+                    player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] Correct the Corruption ended. You recovered {countForReward}/{quest.Required} forged Derp Coins and earned {luminance:N0} luminance.", ChatMessageType.Broadcast);
+                    paidCount++;
+                }
+
+                if (trackedCount > 0)
+                    _persistentProgress.TryRemove(progressKey, out _);
+            }
+
+            if (paidCount > 0)
+            {
+                MarkPersistentStateDirtyUnsafe();
+                log.Info($"[GlobalKillQuest] Correct the Corruption {GetLaneLabel(quest.Lane)} expired with {paidCount} partial payout(s).");
+            }
+        }
+
+        private static int RemovePersistentCurrencyCoins(Player player, PersistentGlobalQuest quest)
+        {
+            if (player == null || quest == null || quest.ItemWcid == 0)
+                return 0;
+
+            var removed = 0;
+            var coins = player.GetAllPossessions()
+                .Where(item => item != null
+                    && item.WeenieClassId == quest.ItemWcid
+                    && (item.GetProperty(PropertyInt.NomadTrophyQuestEpoch) ?? -1) == quest.Epoch)
+                .ToList();
+
+            foreach (var coin in coins)
+            {
+                var amount = Math.Max(1, coin.StackSize ?? 1);
+                if (player.TryConsumeFromInventoryWithNetworking(coin, amount))
+                    removed += amount;
+            }
+
+            return removed;
+        }
         private static void BroadcastPersistentStart(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);

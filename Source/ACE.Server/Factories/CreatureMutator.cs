@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ACE.Common;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Factories
@@ -204,6 +205,8 @@ namespace ACE.Server.Factories
             BoostVital(creature.Stamina, statMult);
             BoostVital(creature.Mana, statMult);
 
+            ApplyMutatorDefenseSkillCap(creature);
+
             // Visual scale
             creature.ObjScale = (creature.ObjScale ?? 1.0f) + scaleAdd;
 
@@ -224,7 +227,31 @@ namespace ACE.Server.Factories
             vital.StartingValue = boosted;
             vital.Current = vital.MaxValue;
         }
+        private static void ApplyMutatorDefenseSkillCap(Creature creature)
+        {
+            var cap = DerpACEConfig.MobModifierDefenseSkillCap;
+            if (cap <= 0)
+                return;
 
+            CapDefenseSkill(creature, Skill.MeleeDefense, (uint)cap);
+            CapDefenseSkill(creature, Skill.MissileDefense, (uint)cap);
+            CapDefenseSkill(creature, Skill.MagicDefense, (uint)cap);
+        }
+
+        private static void CapDefenseSkill(Creature creature, Skill skillType, uint cap)
+        {
+            var skill = creature.GetCreatureSkill(skillType, false);
+            if (skill == null || skill.Current <= cap)
+                return;
+
+            var excess = skill.Current - cap;
+            var rankReduction = (ushort)Math.Min(skill.Ranks, excess);
+            skill.Ranks -= rankReduction;
+            excess -= rankReduction;
+
+            if (excess > 0)
+                skill.InitLevel = skill.InitLevel > excess ? skill.InitLevel - excess : 0;
+        }
         /// <summary>
         /// Override this to apply your mutator's stat changes / behavior flags.
         /// </summary>

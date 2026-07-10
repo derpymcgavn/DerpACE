@@ -7,6 +7,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.Network.Structure;
@@ -536,7 +537,16 @@ namespace ACE.Server.WorldObjects
 
             if (IsExhausted) effectiveDefense = 0;
 
-            return effectiveDefense;
+            return ClampMutatedMobDefenseSkill(effectiveDefense);
+        }
+
+        private uint ClampMutatedMobDefenseSkill(uint effectiveDefense)
+        {
+            var cap = DerpACEConfig.MobModifierDefenseSkillCap;
+            if (cap <= 0 || this is Player || this is Pet || (GetProperty(PropertyInt.MutatorCount) ?? 0) <= 0)
+                return effectiveDefense;
+
+            return Math.Min(effectiveDefense, (uint)cap);
         }
 
         /// <summary>

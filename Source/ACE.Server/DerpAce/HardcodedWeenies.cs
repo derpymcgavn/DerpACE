@@ -35,6 +35,7 @@ namespace ACE.Server.DerpAce
         private const uint ArcanePedestalWeenieClassId = 11930;
         private const uint BrownSackWeenieClassId = 166;
         private const uint SmallBeerWeenieClassId = 2469;
+        private const uint MajorShiveringStoneWeenieClassId = 6123;
 
         public static void RegisterAll()
         {
@@ -61,6 +62,7 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildNomadPathwardenChest());
                 DatabaseManager.World.SetCachedWeenie(BuildDrunkenEventBeer());
                 DatabaseManager.World.SetCachedWeenie(BuildHorriblyForgedDerpCoin());
+                DatabaseManager.World.SetCachedWeenie(BuildFlutterStone());
                 DatabaseManager.World.SetCachedWeenie(BuildSausageMcBuffin());
 
                 log.Info("DerpACE: Hardcoded weenies registered.");
@@ -1157,7 +1159,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.EncumbranceVal]       = 1;
             w.PropertiesInt[PropertyInt.Mass]                 = 1;
             w.PropertiesInt[PropertyInt.Value]                = 0;
-            w.PropertiesInt[PropertyInt.MaxStackSize]         = 100;
+            w.PropertiesInt[PropertyInt.MaxStackSize]         = 1000;
             w.PropertiesInt[PropertyInt.StackSize]            = 1;
             w.PropertiesInt[PropertyInt.StackUnitEncumbrance] = 1;
             w.PropertiesInt[PropertyInt.StackUnitMass]        = 1;
@@ -1177,6 +1179,55 @@ namespace ACE.Server.DerpAce
             w.PropertiesDID[PropertyDataId.Icon]               = 0x0600754B;
             w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 0x3400002B;
             w.PropertiesDID[PropertyDataId.IconOverlay]        = 0x06002AC6;
+
+            return w;
+        }
+
+        private static Weenie BuildFlutterStone()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = WorldObjects.FlutterStone.FlutterStoneWeenieClassId,
+                ClassName     = "ace2000620-flutterstone",
+                WeenieType    = WeenieType.Gem,
+
+                PropertiesInt    = new Dictionary<PropertyInt, int>(),
+                PropertiesBool   = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat  = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID    = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType]             = (int)ItemType.Gem;
+            w.PropertiesInt[PropertyInt.PaletteTemplate]      = (int)PaletteTemplate.Blue;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]       = 1;
+            w.PropertiesInt[PropertyInt.Mass]                 = 1;
+            w.PropertiesInt[PropertyInt.Value]                = 5000;
+            w.PropertiesInt[PropertyInt.MaxStackSize]         = 1000;
+            w.PropertiesInt[PropertyInt.StackSize]            = 1;
+            w.PropertiesInt[PropertyInt.StackUnitEncumbrance] = 1;
+            w.PropertiesInt[PropertyInt.StackUnitMass]        = 1;
+            w.PropertiesInt[PropertyInt.StackUnitValue]       = 5000;
+            w.PropertiesInt[PropertyInt.ItemUseable]          = (int)Usable.Contained;
+            w.PropertiesInt[PropertyInt.ItemDifficulty]       = 250;
+            w.PropertiesInt[PropertyInt.UiEffects]            = (int)UiEffects.Magical;
+            w.PropertiesInt[PropertyInt.PhysicsState]         = 1044;
+
+            w.PropertiesBool[PropertyBool.Inelastic] = true;
+
+            w.PropertiesFloat[PropertyFloat.DefaultScale] = 0.7;
+
+            w.PropertiesString[PropertyString.Name]      = "Flutter Stone";
+            w.PropertiesString[PropertyString.ShortDesc] = "An arcane stone that carries the bearer a short distance forward.";
+            w.PropertiesString[PropertyString.Use]       = "Use this stone to flutter twenty feet forward. Requires Arcane Lore 250.";
+            w.PropertiesString[PropertyString.LongDesc]  = "A softly humming stone that turns a mage's intent into a sudden forward flutter. It does not open a portal or teleport the bearer; it urges the body into one brief impossible stride.";
+
+            w.PropertiesDID[PropertyDataId.Setup]              = 0x0200018B;
+            w.PropertiesDID[PropertyDataId.SoundTable]         = 0x20000014;
+            w.PropertiesDID[PropertyDataId.Icon]               = 0x06001036;
+            w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 0x3400002B;
+            w.PropertiesDID[PropertyDataId.IconOverlay]        = 0x06002AC5;
+            CopySetupAndIcon(w, MajorShiveringStoneWeenieClassId);
 
             return w;
         }

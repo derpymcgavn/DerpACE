@@ -186,6 +186,7 @@ namespace ACE.Server.DerpAce
             // ── Mob Modifiers ─────────────────────────────────────────────────
             DerpACEConfig.MobModifierEnabled          = c.MobModifierEnabled;
             DerpACEConfig.MobModifierMinTier          = c.MobModifierMinTier;
+            DerpACEConfig.MobModifierDefenseSkillCap  = c.MobModifierDefenseSkillCap;
             DerpACEConfig.NocturnalMobChance          = c.NocturnalMobChance;
             DerpACEConfig.ExplodingMobChance          = c.ExplodingMobChance;
             DerpACEConfig.ExplodingMobRadius          = c.ExplodingMobRadius;
