@@ -147,7 +147,7 @@ namespace ACE.Server.Entity
             40301,  // Verdant Moar
         };
 
-        public static DamageEvent CalculateDamage(Creature attacker, Creature defender, WorldObject damageSource, MotionCommand? attackMotion = null, AttackHook attackHook = null)
+        public static DamageEvent CalculateDamage(Creature attacker, Creature defender, WorldObject damageSource, MotionCommand? attackMotion = null, AttackHook attackHook = null, bool forceHit = false, bool forceCritical = false)
         {
             var damageEvent = new DamageEvent();
             damageEvent.AttackMotion = attackMotion;
@@ -155,14 +155,14 @@ namespace ACE.Server.Entity
             if (damageSource == null)
                 damageSource = attacker;
 
-            var damage = damageEvent.DoCalculateDamage(attacker, defender, damageSource);
+            var damage = damageEvent.DoCalculateDamage(attacker, defender, damageSource, forceHit, forceCritical);
 
             damageEvent.HandleLogging(attacker, defender);
 
             return damageEvent;
         }
 
-        private float DoCalculateDamage(Creature attacker, Creature defender, WorldObject damageSource)
+        private float DoCalculateDamage(Creature attacker, Creature defender, WorldObject damageSource, bool forceHit, bool forceCritical)
         {
             var playerAttacker = attacker as Player;
             var playerDefender = defender as Player;
@@ -207,7 +207,7 @@ namespace ACE.Server.Entity
                 Overpower = Creature.GetOverpower(attacker, defender);
 
             // evasion chance
-            if (!Overpower)
+            if (!Overpower && !forceHit)
             {
                 EvasionChance = GetEvadeChance(attacker, defender);
                 if (EvasionChance > ThreadSafeRandom.Next(0.0f, 1.0f))
@@ -270,9 +270,9 @@ namespace ACE.Server.Entity
             if (playerDefender != null && (playerDefender.IsLoggingOut || playerDefender.PKLogout))
                 CriticalChance = 1.0f;
 
-            if (CriticalChance > ThreadSafeRandom.Next(0.0f, 1.0f))
+            if (forceCritical || CriticalChance > ThreadSafeRandom.Next(0.0f, 1.0f))
             {
-                if (playerDefender != null && playerDefender.AugmentationCriticalDefense > 0)
+                if (!forceCritical && playerDefender != null && playerDefender.AugmentationCriticalDefense > 0)
                 {
                     var criticalDefenseMod = playerAttacker != null ? 0.05f : 0.25f;
                     var criticalDefenseChance = playerDefender.AugmentationCriticalDefense * criticalDefenseMod;

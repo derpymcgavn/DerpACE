@@ -3560,6 +3560,8 @@ namespace ACE.Server.WorldObjects
                 targetStack.SaveBiotaToDatabase();
             }
 
+            GlobalKillQuestManager.OnStackableMerged(this, sourceStack, targetStack, amount);
+
             return true;
         }
 

@@ -5,6 +5,7 @@ using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
+using ACE.Server.Network.Sequence;
 
 namespace ACE.Server.WorldObjects
 {
@@ -12,8 +13,8 @@ namespace ACE.Server.WorldObjects
     {
         public const uint FlutterStoneWeenieClassId = 2000620;
         private const double FlutterDistanceFeet = 20.0;
-        private const int FlutterStoneCooldownId = 2042;
-        private const double DefaultCooldownSeconds = 30.0;
+        internal const int FlutterStoneCooldownId = 2042;
+        internal const double DefaultCooldownSeconds = 30.0;
         private const double SpecializedArcaneLoreCooldownSeconds = 20.0;
 
         private static readonly double[] SafeFlutterDistances =
@@ -78,7 +79,8 @@ namespace ACE.Server.WorldObjects
             }
 
             player.ApplyVisualEffects(PlayScript.LayingofHands, 1.0f);
-            player.FakeTeleport(destination);
+            player.Sequences.GetNextSequence(SequenceType.ObjectForcePosition);
+            player.UpdatePlayerPosition(destination, true);
             player.Session?.Network.EnqueueSend(new GameMessageSystemChat("The Flutter Stone flutters you forward.", ChatMessageType.Broadcast));
 
             if ((GetProperty(PropertyBool.UnlimitedUse) ?? false) == false)

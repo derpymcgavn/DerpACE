@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Linq;
 
 using log4net;
 
@@ -28,6 +29,12 @@ namespace ACE.Server.Managers
             DrunkenMobHunt,
             T8LuminanceHunt,
             T8CurrencyHunt,
+            MutatorHunt,
+            DungeonHunt,
+            HighRiskHunt,
+            T8MutatorHunt,
+            T8DungeonHunt,
+            CardinalTrek,
         }
 
         public const uint DrunkenBeerWcid = HardcodedWeenies.DrunkenEventBeerWeenieClassId;
@@ -75,6 +82,7 @@ namespace ACE.Server.Managers
 
         private static volatile int _completionCount = 0;
         private static ConcurrentDictionary<ulong, (int kills, long xp)> _progress = new ConcurrentDictionary<ulong, (int kills, long xp)>();
+        private static ConcurrentDictionary<ulong, byte> _completedProgress = new ConcurrentDictionary<ulong, byte>();
         private static ConcurrentDictionary<int, byte> _itemRaceCompletedEpochs = new ConcurrentDictionary<int, byte>();
 
         private static readonly Random _rng = new Random();
@@ -100,52 +108,82 @@ namespace ACE.Server.Managers
         {
             OnPersistentCreatureKilled(player, creature);
             var kind = CurrentKind;
-            var name = CurrentCreatureName;
-            var typeId = CurrentCreatureTypeId;
             var target = RequiredKills;
             var epoch = CurrentEpoch;
 
-            if (DateTime.UtcNow > QuestExpiry)
+            if (player == null || creature == null || DateTime.UtcNow > QuestExpiry || !IsHalfHourKillQuest(kind) || target <= 0)
                 return;
 
-            if (kind == GlobalQuestKind.Hunt)
-            {
-                if (name == null || typeId == 0 || target == 0)
-                    return;
-
-                if (creature?.CreatureType == null || (uint)creature.CreatureType.Value != typeId)
-                    return;
-
-                var key = MakeKey(player.Guid.Full, epoch);
-                var newEntry = _progress.AddOrUpdate(key,
-                    addValue: (1, xpEarned),
-                    updateValueFactory: (k, old) => (old.kills + 1, old.xp + xpEarned));
-
-                if (newEntry.kills == target)
-                    CompleteHunt(player, name, target, newEntry.xp, epoch);
-                else if (newEntry.kills % 5 == 0 || newEntry.kills == 1)
-                    player.SendMessage($"[Global Quest] {newEntry.kills}/{target} {name}s slain.", ChatMessageType.Broadcast);
-
+            if (IsHalfHourCompleted(player, epoch) || !MatchesKillQuest(kind, player, creature, CurrentCreatureTypeId))
                 return;
-            }
 
-            if (kind == GlobalQuestKind.T8LuminanceHunt)
+            var key = MakeKey(player.Guid.Full, epoch);
+            var newEntry = _progress.AddOrUpdate(key,
+                addValue: (1, xpEarned),
+                updateValueFactory: (k, old) => (old.kills + 1, old.xp + xpEarned));
+
+            if (newEntry.kills == target)
             {
-                if (!IsTier8Creature(creature) || target == 0)
-                    return;
-
-                var key = MakeKey(player.Guid.Full, epoch);
-                var newEntry = _progress.AddOrUpdate(key,
-                    addValue: (1, 0),
-                    updateValueFactory: (k, old) => (old.kills + 1, old.xp));
-
-                if (newEntry.kills == target)
+                if (kind == GlobalQuestKind.T8LuminanceHunt)
                     CompleteT8LuminanceHunt(player, target, LuminanceReward, epoch);
-                else if (newEntry.kills % 5 == 0 || newEntry.kills == 1)
-                    player.SendMessage($"[Global Quest] {newEntry.kills}/{target} tier 8 creatures slain.", ChatMessageType.Broadcast);
+                else
+                    CompleteHunt(player, CurrentCreatureName ?? "creature", target, newEntry.xp, epoch);
+            }
+            else if (newEntry.kills % 5 == 0 || newEntry.kills == 1)
+                player.SendMessage($"[Global Quest] {newEntry.kills}/{target} {CurrentCreatureName ?? "creatures"} defeated.", ChatMessageType.Broadcast);
+        }
+
+        private static bool IsHalfHourKillQuest(GlobalQuestKind kind)
+        {
+            return kind == GlobalQuestKind.Hunt
+                || kind == GlobalQuestKind.T8LuminanceHunt
+                || kind == GlobalQuestKind.MutatorHunt
+                || kind == GlobalQuestKind.DungeonHunt
+                || kind == GlobalQuestKind.HighRiskHunt;
+        }
+
+        private static bool MatchesKillQuest(GlobalQuestKind kind, Player player, Creature creature, uint creatureTypeId = 0)
+        {
+            switch (kind)
+            {
+                case GlobalQuestKind.Hunt:
+                    return creatureTypeId != 0 && creature.CreatureType != null && (uint)creature.CreatureType.Value == creatureTypeId;
+                case GlobalQuestKind.T8LuminanceHunt:
+                    return IsTier8Creature(creature);
+                case GlobalQuestKind.MutatorHunt:
+                    return HasCreatureMutator(creature);
+                case GlobalQuestKind.DungeonHunt:
+                    return IsDungeonCreature(creature);
+                case GlobalQuestKind.HighRiskHunt:
+                    return creature.Level != null && creature.Level.Value >= Math.Max(25, (player.Level ?? 1) + 25);
+                case GlobalQuestKind.T8MutatorHunt:
+                    return IsTier8Creature(creature) && HasCreatureMutator(creature);
+                case GlobalQuestKind.T8DungeonHunt:
+                    return IsTier8Creature(creature) && IsDungeonCreature(creature);
+                default:
+                    return false;
             }
         }
 
+        private static bool HasCreatureMutator(Creature creature)
+        {
+            if (creature == null)
+                return false;
+
+            foreach (var mutator in CreatureMutatorManager.Mutators.Values)
+            {
+                if (mutator.MutatorFlag != null && creature.GetProperty(mutator.MutatorFlag.Value) == true)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsDungeonCreature(Creature creature)
+        {
+            return creature?.Location?.Indoors == true
+                || creature?.CurrentLandblock?.PhysicsLandblock?.IsDungeon == true;
+        }
         public static void OnItemAcquired(Player player, WorldObject item)
         {
             OnPersistentItemAcquired(player, item);
@@ -182,7 +220,7 @@ namespace ACE.Server.Managers
             if (!_itemRaceCompletedEpochs.TryAdd(epoch, 1))
                 return;
 
-            CompleteItemRace(player, itemName, rewardPercent);
+            CompleteItemRace(player, itemName, rewardPercent, epoch);
         }
 
         public static bool TryApplyDrunkenMob(Creature creature)
@@ -200,7 +238,7 @@ namespace ACE.Server.Managers
             if (!isMonster)
                 return false;
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.03f)
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.06f)
                 return false;
 
             creature.SetProperty(PropertyBool.IsDrunkenMob, true);
@@ -276,6 +314,13 @@ namespace ACE.Server.Managers
                 return true;
             }
 
+            if (IsHalfHourCompleted(player, CurrentEpoch))
+            {
+                player.SendMessage("Ulgrim waves you away. 'You already did your part. Leave some glory for the rest.'", ChatMessageType.Broadcast);
+                player.SendUseDoneEvent();
+                return true;
+            }
+
             if (!IsValidEventBeer(player, beer))
             {
                 player.SendMessage("Ulgrim refuses the bottle. 'This one doesn't smell like today's disaster.'", ChatMessageType.Broadcast);
@@ -310,7 +355,7 @@ namespace ACE.Server.Managers
             var epoch = CurrentEpoch;
 
             var myProgress = 0;
-            if ((kind == GlobalQuestKind.Hunt || kind == GlobalQuestKind.DrunkenMobHunt || kind == GlobalQuestKind.T8LuminanceHunt || kind == GlobalQuestKind.T8CurrencyHunt) && player != null)
+            if ((IsHalfHourKillQuest(kind) || kind == GlobalQuestKind.DrunkenMobHunt || kind == GlobalQuestKind.T8CurrencyHunt) && player != null)
             {
                 if (_progress.TryGetValue(MakeKey(player.Guid.Full, epoch), out var entry))
                     myProgress = entry.kills;
@@ -321,15 +366,16 @@ namespace ACE.Server.Managers
                 Lane = GlobalQuestLane.HalfHour,
                 Kind = kind,
                 TargetName = kind == GlobalQuestKind.ItemRace || kind == GlobalQuestKind.T8CurrencyHunt ? CurrentItemName : CurrentCreatureName,
-                RequiredKills = kind == GlobalQuestKind.Hunt || kind == GlobalQuestKind.T8LuminanceHunt ? RequiredKills : 0,
+                RequiredKills = IsHalfHourKillQuest(kind) ? RequiredKills : 0,
                 RequiredTurnIns = kind == GlobalQuestKind.DrunkenMobHunt ? DrunkenBeerRequiredTurnIns : kind == GlobalQuestKind.T8CurrencyHunt ? RequiredKills : 0,
-                MyKills = kind == GlobalQuestKind.Hunt || kind == GlobalQuestKind.T8LuminanceHunt ? myProgress : 0,
+                MyKills = IsHalfHourKillQuest(kind) ? myProgress : 0,
                 MyTurnIns = kind == GlobalQuestKind.DrunkenMobHunt || kind == GlobalQuestKind.T8CurrencyHunt ? myProgress : 0,
                 Expiry = QuestExpiry,
                 ItemWcid = kind == GlobalQuestKind.ItemRace || kind == GlobalQuestKind.T8CurrencyHunt ? CurrentItemWcid : 0,
                 RewardPercent = kind == GlobalQuestKind.ItemRace || kind == GlobalQuestKind.DrunkenMobHunt ? ItemRewardPercent : 0,
                 LuminanceReward = kind == GlobalQuestKind.T8LuminanceHunt || kind == GlobalQuestKind.T8CurrencyHunt ? LuminanceReward : 0,
-                Completed = kind == GlobalQuestKind.ItemRace && _itemRaceCompletedEpochs.ContainsKey(epoch),
+                Completed = player != null && (IsHalfHourCompleted(player, epoch)
+                    || kind == GlobalQuestKind.ItemRace && _itemRaceCompletedEpochs.ContainsKey(epoch)),
             };
         }
 
@@ -342,15 +388,50 @@ namespace ACE.Server.Managers
 
         private static void TryRecordT8Currency(Player player, WorldObject item)
         {
-            if (!IsValidGlobalQuestDrop(player, item, CurrentItemWcid))
+            if (IsHalfHourCompleted(player, CurrentEpoch) || !IsValidGlobalQuestDrop(player, item, CurrentItemWcid))
                 return;
 
-            if ((item.GetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch) ?? -1) == CurrentEpoch)
+            var amount = GetUncountedCurrencyAmount(item, CurrentEpoch);
+            if (amount <= 0)
                 return;
 
-            item.SetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch, CurrentEpoch);
+            MarkCurrencyCounted(item, CurrentEpoch, amount);
+            AddT8CurrencyProgress(player, amount);
+        }
 
-            var amount = Math.Max(1, item.StackSize ?? 1);
+        public static void OnStackableMerged(Player player, WorldObject sourceStack, WorldObject targetStack, int amount)
+        {
+            if (player == null || sourceStack == null || targetStack == null || amount <= 0)
+                return;
+
+            OnPersistentCurrencyStackMerged(player, sourceStack, targetStack, amount);
+
+            if (IsHalfHourCompleted(player, CurrentEpoch))
+                return;
+
+            if (CurrentKind != GlobalQuestKind.T8CurrencyHunt || DateTime.UtcNow > QuestExpiry || CurrentItemWcid == 0)
+                return;
+
+            if (sourceStack.WeenieClassId != CurrentItemWcid || targetStack.WeenieClassId != CurrentItemWcid)
+                return;
+
+            if (!IsValidGlobalQuestDrop(player, sourceStack, CurrentItemWcid))
+                return;
+
+            var count = GetUncountedCurrencyAmount(sourceStack, CurrentEpoch, amount);
+            if (count <= 0)
+                return;
+
+            CopyGlobalQuestDropStamp(sourceStack, targetStack);
+            MarkCurrencyCounted(targetStack, CurrentEpoch, count);
+            AddT8CurrencyProgress(player, count);
+        }
+
+        private static void AddT8CurrencyProgress(Player player, int amount)
+        {
+            if (IsHalfHourCompleted(player, CurrentEpoch))
+                return;
+
             var key = MakeKey(player.Guid.Full, CurrentEpoch);
             var newEntry = _progress.AddOrUpdate(key,
                 addValue: (amount, 0),
@@ -360,6 +441,58 @@ namespace ACE.Server.Managers
                 CompleteT8CurrencyHunt(player, RequiredKills, LuminanceReward, CurrentEpoch);
             else
                 player.SendMessage($"[Global Quest] {newEntry.kills}/{RequiredKills} forged Derp Coins recovered.", ChatMessageType.Broadcast);
+        }
+
+        private static int GetUncountedCurrencyAmount(WorldObject item, int epoch, int requestedAmount = int.MaxValue)
+        {
+            if (item == null)
+                return 0;
+
+            var stackAmount = Math.Max(1, item.StackSize ?? 1);
+            var limit = requestedAmount == int.MaxValue ? stackAmount : Math.Clamp(requestedAmount, 0, stackAmount);
+            var counted = (item.GetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch) ?? -1) == epoch
+                ? Math.Clamp(item.GetProperty(PropertyInt.GlobalQuestCurrencyCountedAmount) ?? 0, 0, stackAmount)
+                : 0;
+
+            return Math.Min(limit, Math.Max(0, stackAmount - counted));
+        }
+
+        private static void MarkCurrencyCounted(WorldObject item, int epoch, int amount)
+        {
+            if (item == null || amount <= 0)
+                return;
+
+            var stackAmount = Math.Max(1, item.StackSize ?? 1);
+            var counted = (item.GetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch) ?? -1) == epoch
+                ? Math.Clamp(item.GetProperty(PropertyInt.GlobalQuestCurrencyCountedAmount) ?? 0, 0, stackAmount)
+                : 0;
+
+            item.SetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch, epoch);
+            item.SetProperty(PropertyInt.GlobalQuestCurrencyCountedAmount, Math.Clamp(counted + amount, 0, stackAmount));
+        }
+
+        private static void CopyGlobalQuestDropStamp(WorldObject source, WorldObject target)
+        {
+            if (source == null || target == null)
+                return;
+
+            var sourceEpoch = source.GetProperty(PropertyInt.NomadTrophyQuestEpoch);
+            var targetEpoch = target.GetProperty(PropertyInt.NomadTrophyQuestEpoch);
+            if (sourceEpoch == null || (targetEpoch != null && targetEpoch != sourceEpoch))
+                return;
+
+            CopyIntProperty(source, target, PropertyInt.NomadTrophyOwner);
+            CopyIntProperty(source, target, PropertyInt.NomadTrophySourceWcid);
+            CopyIntProperty(source, target, PropertyInt.NomadTrophySourceCreatureType);
+            CopyIntProperty(source, target, PropertyInt.NomadTrophyQuestEpoch);
+            CopyIntProperty(source, target, PropertyInt.NomadTrophyFoundTimestamp);
+        }
+
+        private static void CopyIntProperty(WorldObject source, WorldObject target, PropertyInt property)
+        {
+            var value = source.GetProperty(property);
+            if (value != null)
+                target.SetProperty(property, value.Value);
         }
 
         private static bool IsValidEventBeer(Player player, WorldObject beer)
@@ -403,7 +536,7 @@ namespace ACE.Server.Managers
 
         private static void CompleteHunt(Player player, string creatureName, int target, long totalXp, int epoch)
         {
-            if (!_progress.TryRemove(MakeKey(player.Guid.Full, epoch), out _))
+            if (!TryCompleteHalfHour(player, epoch))
                 return;
 
             System.Threading.Interlocked.Increment(ref _completionCount);
@@ -422,7 +555,7 @@ namespace ACE.Server.Managers
             log.Info($"[GlobalKillQuest] {player.Name} completed quest: kill {target} {creatureName}s, bonus XP {bonus:N0}");
         }
 
-        private static void CompleteItemRace(Player player, string itemName, int rewardPercent)
+        private static void CompleteItemRace(Player player, string itemName, int rewardPercent, int epoch)
         {
             System.Threading.Interlocked.Increment(ref _completionCount);
 
@@ -442,11 +575,14 @@ namespace ACE.Server.Managers
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, globalMsg);
 
             log.Info($"[GlobalKillQuest] {player.Name} completed item race: {itemName}, reward {rewardPercent}% level XP ({bonus:N0})");
+
+            if (CurrentKind == GlobalQuestKind.ItemRace && CurrentEpoch == epoch)
+                RollNewQuest(announceToAll: true);
         }
 
         private static void CompleteT8LuminanceHunt(Player player, int target, long luminance, int epoch)
         {
-            if (!_progress.TryRemove(MakeKey(player.Guid.Full, epoch), out _))
+            if (!TryCompleteHalfHour(player, epoch))
                 return;
 
             System.Threading.Interlocked.Increment(ref _completionCount);
@@ -462,7 +598,7 @@ namespace ACE.Server.Managers
 
         private static void CompleteT8CurrencyHunt(Player player, int target, long luminance, int epoch)
         {
-            if (!_progress.TryRemove(MakeKey(player.Guid.Full, epoch), out _))
+            if (!TryCompleteHalfHour(player, epoch))
                 return;
 
             System.Threading.Interlocked.Increment(ref _completionCount);
@@ -478,7 +614,7 @@ namespace ACE.Server.Managers
 
         private static void CompleteDrunkenMobHunt(Player player, int turnedIn)
         {
-            if (!_itemRaceCompletedEpochs.TryAdd(CurrentEpoch, 1))
+            if (!TryCompleteHalfHour(player, CurrentEpoch))
                 return;
 
             System.Threading.Interlocked.Increment(ref _completionCount);
@@ -496,8 +632,6 @@ namespace ACE.Server.Managers
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, globalMsg);
 
             log.Info($"[GlobalKillQuest] {player.Name} completed drunken mob hunt, reward {ItemRewardPercent}% level XP ({bonus:N0})");
-
-            RollNewQuest(announceToAll: true);
         }
 
         private static void RollNewQuest(bool announceToAll)
@@ -505,9 +639,13 @@ namespace ACE.Server.Managers
             if (announceToAll && GetCurrentTargetName() != null)
                 BroadcastWrapUp();
 
+            if (CurrentKind == GlobalQuestKind.DrunkenMobHunt)
+                CleanupDrunkenMobs();
+
             CurrentEpoch++;
             _completionCount = 0;
             _progress = new ConcurrentDictionary<ulong, (int kills, long xp)>();
+            _completedProgress = new ConcurrentDictionary<ulong, byte>();
             _itemRaceCompletedEpochs = new ConcurrentDictionary<int, byte>();
             CurrentCreatureName = null;
             CurrentCreatureTypeId = 0;
@@ -520,14 +658,81 @@ namespace ACE.Server.Managers
             QuestExpiryTimestamp = QuestStartTimestamp + (30 * 60);
             QuestExpiry = DateTime.UtcNow.AddMinutes(30);
 
-            if (ShouldRollDrunkenMobHunt())
+            var roll = _rng.Next(100);
+            if (roll < 12)
                 RollNewDrunkenMobHunt(announceToAll);
-            else if (ShouldRollT8LuminanceHunt())
+            else if (roll < 22)
                 RollNewT8LuminanceHunt(announceToAll);
-            else if (ShouldRollItemRace())
+            else if (roll < 35 && HuntCreatureTypes.GlobalItemQuestPool.Length > 0)
                 RollNewItemRace(announceToAll);
+            else if (roll < 52)
+                RollNewMutatorHunt(announceToAll);
+            else if (roll < 69)
+                RollNewDungeonHunt(announceToAll);
+            else if (roll < 84)
+                RollNewHighRiskHunt(announceToAll);
             else
                 RollNewHunt(announceToAll);
+        }
+
+        private static void CleanupDrunkenMobs()
+        {
+            var removed = 0;
+
+            foreach (var landblock in LandblockManager.GetLoadedLandblocks())
+            {
+                var drunkenMobs = landblock.GetAllWorldObjectsForDiagnostics()
+                    .OfType<Creature>()
+                    .Where(creature => creature is not Player
+                        && creature.GetProperty(PropertyBool.IsDrunkenMob) == true
+                        && !creature.IsDestroyed)
+                    .ToList();
+
+                foreach (var creature in drunkenMobs)
+                {
+                    creature.FadeOutAndDestroy();
+                    removed++;
+                }
+            }
+
+            if (removed > 0)
+                log.Info($"[GlobalKillQuest] Removed {removed} expired drunken mob(s); owning generators will refill their spawn slots.");
+        }
+
+        private static void RollNewMutatorHunt(bool announceToAll)
+        {
+            CurrentKind = GlobalQuestKind.MutatorHunt;
+            CurrentCreatureName = "mutated creature";
+            RequiredKills = _rng.Next(2, 6);
+            AnnounceHalfHourKillQuest(announceToAll, "Purge the Unnatural", $"Defeat {RequiredKills} mutated creatures", "4x quest-kill XP");
+        }
+
+        private static void RollNewDungeonHunt(bool announceToAll)
+        {
+            CurrentKind = GlobalQuestKind.DungeonHunt;
+            CurrentCreatureName = "dungeon creature";
+            RequiredKills = _rng.Next(20, 41);
+            AnnounceHalfHourKillQuest(announceToAll, "Into the Dark", $"Defeat {RequiredKills} creatures inside dungeons", "4x quest-kill XP");
+        }
+
+        private static void RollNewHighRiskHunt(bool announceToAll)
+        {
+            CurrentKind = GlobalQuestKind.HighRiskHunt;
+            CurrentCreatureName = "high-risk creature";
+            RequiredKills = _rng.Next(10, 21);
+            AnnounceHalfHourKillQuest(announceToAll, "Punch Above Your Weight", $"Defeat {RequiredKills} creatures at least 25 levels above you", "4x quest-kill XP");
+        }
+
+        private static void AnnounceHalfHourKillQuest(bool announceToAll, string title, string objective, string reward)
+        {
+            if (announceToAll)
+            {
+                var msg = $"[Global Quest] {title}: {objective} within 30 minutes for {reward}. Type /gquest for details.";
+                PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
+            }
+
+            log.Info($"[GlobalKillQuest] New {title} quest: {objective}");
         }
 
         private static void RollNewHunt(bool announceToAll)
@@ -573,7 +778,7 @@ namespace ACE.Server.Managers
         private static void RollNewT8LuminanceHunt(bool announceToAll)
         {
             var kills = _rng.Next(15, 36);
-            var luminance = _rng.Next(5000, 50001);
+            var luminance = kills * 100L;
 
             CurrentKind = GlobalQuestKind.T8LuminanceHunt;
             CurrentCreatureName = "Tier 8 Creature";
@@ -697,6 +902,27 @@ namespace ACE.Server.Managers
         {
             return ((ulong)(uint)epoch << 32) | playerGuid;
         }
+
+        private static bool IsHalfHourCompleted(Player player, int epoch)
+        {
+            return player != null && _completedProgress.ContainsKey(MakeKey(player.Guid.Full, epoch));
+        }
+
+        private static bool TryCompleteHalfHour(Player player, int epoch)
+        {
+            if (player == null)
+                return false;
+
+            var key = MakeKey(player.Guid.Full, epoch);
+            if (!_completedProgress.TryAdd(key, 1))
+                return false;
+
+            if (_progress.TryRemove(key, out _))
+                return true;
+
+            _completedProgress.TryRemove(key, out _);
+            return false;
+        }
     }
 
     public class GlobalQuestStatus
@@ -713,5 +939,7 @@ namespace ACE.Server.Managers
         public int RewardPercent { get; set; }
         public long LuminanceReward { get; set; }
         public bool Completed { get; set; }
+        public int RequiredDistance { get; set; }
+        public double MyDistance { get; set; }
     }
 }

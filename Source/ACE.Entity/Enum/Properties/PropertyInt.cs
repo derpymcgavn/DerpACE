@@ -728,6 +728,8 @@ namespace ACE.Entity.Enum.Properties
         NomadScavengerTrialComplete              = 9056,
         // DerpACE: hidden marker for global quest currency drops already counted for a player.
         GlobalQuestCurrencyCountedEpoch          = 9057,
+        // DerpACE: amount of a global quest currency stack already credited during the counted epoch.
+        GlobalQuestCurrencyCountedAmount         = 9058,
     }
 
     public static class PropertyIntExtensions

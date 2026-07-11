@@ -88,10 +88,9 @@ namespace ACE.Server.WorldObjects
         {
             if (newPlayer == null) return;
 
-            // DerpACE Ironman: ironmen may fellowship with ironmen only.
-            if (IsIronmanFamily != newPlayer.IsIronmanFamily)
+            if (!Fellowship.AreChallengeModesCompatible(this, newPlayer))
             {
-                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
+                Session.Network.EnqueueSend(new GameMessageSystemChat(Fellowship.GetChallengeModeRestrictionMessage(this, newPlayer), ChatMessageType.Broadcast));
                 return;
             }
 

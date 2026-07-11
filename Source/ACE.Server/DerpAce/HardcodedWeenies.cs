@@ -1126,7 +1126,8 @@ namespace ACE.Server.DerpAce
             w.PropertiesBool[PropertyBool.IsSellable] = false;
             w.PropertiesBool[PropertyBool.Inelastic]  = true;
 
-            w.PropertiesFloat[PropertyFloat.DefaultScale] = 0.7;
+            w.PropertiesFloat[PropertyFloat.DefaultScale]     = 0.7;
+            w.PropertiesFloat[PropertyFloat.CooldownDuration] = WorldObjects.FlutterStone.DefaultCooldownSeconds;
 
             w.PropertiesString[PropertyString.Name]     = "Ulgrim's Dubious Beer";
             w.PropertiesString[PropertyString.Use]      = "Bring this to Ulgrim the Unpleasant during the drunken mob hunt.";
@@ -1212,10 +1213,12 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.ItemDifficulty]       = 250;
             w.PropertiesInt[PropertyInt.UiEffects]            = (int)UiEffects.Magical;
             w.PropertiesInt[PropertyInt.PhysicsState]         = 1044;
+            w.PropertiesInt[PropertyInt.SharedCooldown]       = WorldObjects.FlutterStone.FlutterStoneCooldownId;
 
             w.PropertiesBool[PropertyBool.Inelastic] = true;
 
-            w.PropertiesFloat[PropertyFloat.DefaultScale] = 0.7;
+            w.PropertiesFloat[PropertyFloat.DefaultScale]     = 0.7;
+            w.PropertiesFloat[PropertyFloat.CooldownDuration] = WorldObjects.FlutterStone.DefaultCooldownSeconds;
 
             w.PropertiesString[PropertyString.Name]      = "Flutter Stone";
             w.PropertiesString[PropertyString.ShortDesc] = "An arcane stone that carries the bearer a short distance forward.";
@@ -1226,8 +1229,9 @@ namespace ACE.Server.DerpAce
             w.PropertiesDID[PropertyDataId.SoundTable]         = 0x20000014;
             w.PropertiesDID[PropertyDataId.Icon]               = 0x06001036;
             w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 0x3400002B;
-            w.PropertiesDID[PropertyDataId.IconOverlay]        = 0x06002AC5;
             CopySetupAndIcon(w, MajorShiveringStoneWeenieClassId);
+            w.PropertiesDID[PropertyDataId.Icon]               = 0x06002157;
+            w.PropertiesDID[PropertyDataId.IconUnderlay]       = 0x06002191;
 
             return w;
         }

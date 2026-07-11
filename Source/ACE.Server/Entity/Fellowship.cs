@@ -79,9 +79,9 @@ namespace ACE.Server.Entity
             if (inviter == null || newMember == null)
                 return;
 
-            if (IsMixedIronmanFellowship(inviter, newMember))
+            if (!AreChallengeModesCompatible(inviter, newMember))
             {
-                inviter.Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
+                inviter.Session.Network.EnqueueSend(new GameMessageSystemChat(GetChallengeModeRestrictionMessage(inviter, newMember), ChatMessageType.Broadcast));
                 return;
             }
 
@@ -147,9 +147,9 @@ namespace ACE.Server.Entity
         {
             if (inviter == null || inviter.Session == null || inviter.Session.Player == null || player == null) return;
 
-            if (IsMixedIronmanFellowship(inviter, player))
+            if (!AreChallengeModesCompatible(inviter, player))
             {
-                inviter.Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen can only fellowship with other Ironmen.", ChatMessageType.Broadcast));
+                inviter.Session.Network.EnqueueSend(new GameMessageSystemChat(GetChallengeModeRestrictionMessage(inviter, player), ChatMessageType.Broadcast));
                 return;
             }
 
@@ -195,9 +195,25 @@ namespace ACE.Server.Entity
                 inviter.SendMotionAsCommands(MotionCommand.BowDeep, MotionStance.NonCombat);
         }
 
-        private static bool IsMixedIronmanFellowship(Player inviter, Player newMember)
+        public static bool AreChallengeModesCompatible(Player first, Player second)
         {
-            return (inviter.GetProperty(PropertyBool.IsIronman) == true) != (newMember.GetProperty(PropertyBool.IsIronman) == true);
+            if (first == null || second == null)
+                return false;
+
+            if (first.IsIronmanFamily || second.IsIronmanFamily)
+                return first.IsIronmanFamily && second.IsIronmanFamily;
+
+            var firstHardcore = first.GetProperty(PropertyBool.IsHardcore) == true;
+            var secondHardcore = second.GetProperty(PropertyBool.IsHardcore) == true;
+            return firstHardcore == secondHardcore;
+        }
+
+        public static string GetChallengeModeRestrictionMessage(Player first, Player second)
+        {
+            if (first?.IsIronmanFamily == true || second?.IsIronmanFamily == true)
+                return "Ironmen can only fellowship with other Ironmen and Ironman variants.";
+
+            return "Hardcore players can only fellowship with other Hardcore players.";
         }
 
         public void RemoveFellowshipMember(Player player, Player leader)

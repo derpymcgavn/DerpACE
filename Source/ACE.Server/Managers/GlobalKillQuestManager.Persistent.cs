@@ -87,14 +87,14 @@ namespace ACE.Server.Managers
             {
                 foreach (var quest in ActivePersistentQuests(DateTime.UtcNow))
                 {
-                    if (quest.Kind != GlobalQuestKind.T8LuminanceHunt || !IsTier8Creature(creature) || IsNonRepeatPersistentQuestCompleted(player, quest))
+                    if (!IsPersistentKillQuest(quest.Kind) || !MatchesKillQuest(quest.Kind, player, creature) || IsNonRepeatPersistentQuestCompleted(player, quest))
                         continue;
 
                     var progress = AddPersistentProgress(player, quest, 1);
                     if (progress.Count == quest.Required)
                         completions.Add(() => CompletePersistentT8Luminance(player, quest));
                     else if (progress.Count == 1 || progress.Count % 10 == 0)
-                        player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} tier 8 creatures slain.", ChatMessageType.Broadcast);
+                        player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} {quest.TargetName ?? "tier 8 creatures"} defeated.", ChatMessageType.Broadcast);
                 }
 
                 SavePersistentStateIfDueUnsafe(DateTime.UtcNow);
@@ -102,6 +102,13 @@ namespace ACE.Server.Managers
 
             foreach (var complete in completions)
                 complete();
+        }
+
+        private static bool IsPersistentKillQuest(GlobalQuestKind kind)
+        {
+            return kind == GlobalQuestKind.T8LuminanceHunt
+                || kind == GlobalQuestKind.T8MutatorHunt
+                || kind == GlobalQuestKind.T8DungeonHunt;
         }
 
         private static void OnPersistentItemAcquired(Player player, WorldObject item)
@@ -120,11 +127,12 @@ namespace ACE.Server.Managers
                     if (!IsValidPersistentDrop(player, item, quest))
                         continue;
 
-                    if ((item.GetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch) ?? -1) == quest.Epoch)
+                    var amount = GetUncountedCurrencyAmount(item, quest.Epoch);
+                    if (amount <= 0)
                         continue;
 
-                    item.SetProperty(PropertyInt.GlobalQuestCurrencyCountedEpoch, quest.Epoch);
-                    var progress = AddPersistentProgress(player, quest, Math.Max(1, item.StackSize ?? 1));
+                    MarkCurrencyCounted(item, quest.Epoch, amount);
+                    var progress = AddPersistentProgress(player, quest, amount);
                     if (progress.Count >= quest.Required)
                         completions.Add(() => CompletePersistentT8Currency(player, quest));
                     else
@@ -138,6 +146,41 @@ namespace ACE.Server.Managers
                 complete();
         }
 
+        private static void OnPersistentCurrencyStackMerged(Player player, WorldObject sourceStack, WorldObject targetStack, int amount)
+        {
+            if (player == null || sourceStack == null || targetStack == null || amount <= 0)
+                return;
+
+            var completions = new List<Action>();
+            lock (_persistentLock)
+            {
+                foreach (var quest in ActivePersistentQuests(DateTime.UtcNow))
+                {
+                    if (quest.Kind != GlobalQuestKind.T8CurrencyHunt || sourceStack.WeenieClassId != quest.ItemWcid || targetStack.WeenieClassId != quest.ItemWcid || IsNonRepeatPersistentQuestCompleted(player, quest))
+                        continue;
+
+                    if (!IsValidPersistentDrop(player, sourceStack, quest))
+                        continue;
+
+                    var count = GetUncountedCurrencyAmount(sourceStack, quest.Epoch, amount);
+                    if (count <= 0)
+                        continue;
+
+                    CopyGlobalQuestDropStamp(sourceStack, targetStack);
+                    MarkCurrencyCounted(targetStack, quest.Epoch, count);
+                    var progress = AddPersistentProgress(player, quest, count);
+                    if (progress.Count >= quest.Required)
+                        completions.Add(() => CompletePersistentT8Currency(player, quest));
+                    else
+                        player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} forged Derp Coins recovered.", ChatMessageType.Broadcast);
+                }
+
+                SavePersistentStateIfDueUnsafe(DateTime.UtcNow);
+            }
+
+            foreach (var complete in completions)
+                complete();
+        }
         private static WorldObject TryCreatePersistentT8CurrencyDrop(Player player, Creature source)
         {
             if (player == null || !IsTier8Creature(source))
@@ -174,11 +217,15 @@ namespace ACE.Server.Managers
         private static GlobalQuestStatus BuildPersistentStatus(Player player, PersistentGlobalQuest quest)
         {
             var count = 0;
+            var distance = 0.0;
             var completed = false;
             if (player != null)
             {
                 if (_persistentProgress.TryGetValue(MakePersistentKey(player.Guid.Full, quest.Epoch), out var progress))
+                {
                     count = progress.Count;
+                    distance = progress.Distance;
+                }
                 completed = _persistentProgress.ContainsKey(MakePersistentCompleteKey(player.Guid.Full, quest.Epoch));
             }
 
@@ -186,14 +233,17 @@ namespace ACE.Server.Managers
             {
                 Lane = quest.Lane,
                 Kind = quest.Kind,
-                TargetName = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.ItemName : "Tier 8 Creature",
-                RequiredKills = quest.Kind == GlobalQuestKind.T8LuminanceHunt ? quest.Required : 0,
+                TargetName = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.ItemName : quest.TargetName ?? "Tier 8 Creature",
+                RequiredKills = IsPersistentKillQuest(quest.Kind) ? quest.Required : 0,
                 RequiredTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.Required : 0,
-                MyKills = quest.Kind == GlobalQuestKind.T8LuminanceHunt ? count : 0,
+                MyKills = IsPersistentKillQuest(quest.Kind) ? count : 0,
                 MyTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? count : 0,
                 Expiry = quest.Expiry,
                 ItemWcid = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.ItemWcid : 0,
                 LuminanceReward = quest.LuminanceReward,
+                RewardPercent = quest.RewardPercent,
+                RequiredDistance = quest.Kind == GlobalQuestKind.CardinalTrek ? quest.Required : 0,
+                MyDistance = quest.Kind == GlobalQuestKind.CardinalTrek ? distance : 0,
                 Completed = completed,
             };
         }
@@ -204,8 +254,8 @@ namespace ACE.Server.Managers
                 return;
 
             player.EarnLuminance(quest.LuminanceReward, XpType.Quest, ShareType.None);
-            player.SendMessage($"[Global Quest Complete:{GetLaneLabel(quest.Lane)}] You slew {quest.Required} tier 8 creatures and earned {quest.LuminanceReward:N0} luminance!", ChatMessageType.Broadcast);
-            BroadcastPersistentCompletion(player, quest, $"{player.Name} completed the {GetLaneLabel(quest.Lane)} tier 8 luminance hunt!");
+            player.SendMessage($"[Global Quest Complete:{GetLaneLabel(quest.Lane)}] You defeated {quest.Required} {quest.TargetName ?? "tier 8 creatures"} and earned {quest.LuminanceReward:N0} luminance!", ChatMessageType.Broadcast);
+            BroadcastPersistentCompletion(player, quest, $"{player.Name} completed the {GetLaneLabel(quest.Lane)} hunt for {quest.TargetName ?? "tier 8 creatures"}!");
         }
 
         private static void CompletePersistentT8Currency(Player player, PersistentGlobalQuest quest)
@@ -275,7 +325,18 @@ namespace ACE.Server.Managers
 
         private static void RollPersistentQuest(GlobalQuestLane lane, bool announce, DateTime now)
         {
-            var quest = CreatePersistentQuest(lane, now);
+            var excludedKinds = new HashSet<GlobalQuestKind>();
+            if (_persistentQuests.TryGetValue(lane, out var previousQuest) && previousQuest != null)
+                excludedKinds.Add(previousQuest.Kind);
+
+            if (lane == GlobalQuestLane.Daily || lane == GlobalQuestLane.Weekly)
+            {
+                var otherLane = lane == GlobalQuestLane.Daily ? GlobalQuestLane.Weekly : GlobalQuestLane.Daily;
+                if (_persistentQuests.TryGetValue(otherLane, out var otherQuest) && otherQuest != null && otherQuest.Expiry > now)
+                    excludedKinds.Add(otherQuest.Kind);
+            }
+
+            var quest = CreatePersistentQuest(lane, now, excludedKinds);
             _persistentQuests[lane] = quest;
             PrunePersistentProgress();
             MarkPersistentStateDirtyUnsafe(now);
@@ -283,7 +344,7 @@ namespace ACE.Server.Managers
                 BroadcastPersistentStart(quest);
         }
 
-        private static PersistentGlobalQuest CreatePersistentQuest(GlobalQuestLane lane, DateTime now)
+        private static PersistentGlobalQuest CreatePersistentQuest(GlobalQuestLane lane, DateTime now, HashSet<GlobalQuestKind> excludedKinds)
         {
             var quest = new PersistentGlobalQuest
             {
@@ -295,12 +356,42 @@ namespace ACE.Server.Managers
             };
             quest.QuestExpiryTimestamp = quest.QuestStartTimestamp + (int)GetPersistentDuration(lane).TotalSeconds;
 
-            if (lane == GlobalQuestLane.Weekly)
-                ConfigurePersistentCurrencyQuest(quest, 40, 81, 5000, 50001);
-            else if (lane == GlobalQuestLane.Daily)
-                ConfigurePersistentCurrencyQuest(quest, 15, 36, 5000, 50001);
-            else
-                ConfigurePersistentLuminanceQuest(quest, 30, 61, 5000, 50001);
+            var availableKinds = new List<GlobalQuestKind>
+            {
+                GlobalQuestKind.T8CurrencyHunt,
+                GlobalQuestKind.T8LuminanceHunt,
+                GlobalQuestKind.T8MutatorHunt,
+                GlobalQuestKind.T8DungeonHunt,
+                GlobalQuestKind.CardinalTrek,
+            };
+            if (excludedKinds != null)
+                availableKinds.RemoveAll(excludedKinds.Contains);
+            if (availableKinds.Count == 0)
+                availableKinds.Add(GlobalQuestKind.CardinalTrek);
+
+            var selectedKind = availableKinds[_rng.Next(availableKinds.Count)];
+            var minRequired = lane == GlobalQuestLane.Weekly ? 100 : lane == GlobalQuestLane.Daily ? 35 : 20;
+            var maxRequired = lane == GlobalQuestLane.Weekly ? 201 : lane == GlobalQuestLane.Daily ? 81 : 51;
+
+            switch (selectedKind)
+            {
+                case GlobalQuestKind.T8CurrencyHunt:
+                    ConfigurePersistentCurrencyQuest(quest, lane == GlobalQuestLane.Weekly ? 40 : 15, lane == GlobalQuestLane.Weekly ? 81 : 36, 5000, 50001);
+                    break;
+                case GlobalQuestKind.T8MutatorHunt:
+                    ConfigurePersistentKillQuest(quest, selectedKind, "mutated tier 8 creatures", Math.Max(2, minRequired / 5), Math.Max(3, maxRequired / 5));
+                    break;
+                case GlobalQuestKind.T8DungeonHunt:
+                    ConfigurePersistentKillQuest(quest, selectedKind, "tier 8 dungeon creatures", minRequired, maxRequired);
+                    break;
+                case GlobalQuestKind.CardinalTrek:
+                    ConfigurePersistentCardinalTrek(quest);
+                    break;
+                default:
+                    ConfigurePersistentLuminanceQuest(quest, minRequired, maxRequired, 0, 0);
+                    break;
+            }
+
             NormalizePersistentQuestReward(quest);
             return quest;
         }
@@ -309,8 +400,11 @@ namespace ACE.Server.Managers
         {
             if (quest == null)
                 return;
-
-            if (quest.LuminanceReward > 0)
+            if (quest.Kind == GlobalQuestKind.T8LuminanceHunt
+                || quest.Kind == GlobalQuestKind.T8MutatorHunt
+                || quest.Kind == GlobalQuestKind.T8DungeonHunt)
+                quest.LuminanceReward = quest.Required * 100L;
+            else if (quest.LuminanceReward > 0)
                 quest.LuminanceReward = Math.Max(5000, Math.Min(50000, quest.LuminanceReward));
 
             if (quest.Kind == GlobalQuestKind.T8CurrencyHunt)
@@ -318,6 +412,14 @@ namespace ACE.Server.Managers
                 var currency = GetT8CurrencyBankItem();
                 quest.ItemName = currency.name;
                 quest.ItemWcid = currency.wcid;
+            }
+            else if (string.IsNullOrWhiteSpace(quest.TargetName))
+            {
+                quest.TargetName = quest.Kind == GlobalQuestKind.T8MutatorHunt
+                    ? "mutated tier 8 creatures"
+                    : quest.Kind == GlobalQuestKind.T8DungeonHunt
+                        ? "tier 8 dungeon creatures"
+                        : "tier 8 creatures";
             }
         }
 
@@ -328,15 +430,62 @@ namespace ACE.Server.Managers
 
         private static bool IsNonRepeatPersistentQuest(PersistentGlobalQuest quest)
         {
-            return quest.Lane == GlobalQuestLane.Daily || quest.Lane == GlobalQuestLane.Weekly;
+            return quest != null;
         }
         private static void ConfigurePersistentLuminanceQuest(PersistentGlobalQuest quest, int minRequired, int maxRequired, int minLum, int maxLum)
         {
             quest.Kind = GlobalQuestKind.T8LuminanceHunt;
+            quest.TargetName = "tier 8 creatures";
             quest.Required = _rng.Next(minRequired, maxRequired);
-            quest.LuminanceReward = _rng.Next(minLum, maxLum);
+            quest.LuminanceReward = quest.Required * 100L;
         }
 
+        private static void ConfigurePersistentKillQuest(PersistentGlobalQuest quest, GlobalQuestKind kind, string targetName, int minRequired, int maxRequired)
+        {
+            quest.Kind = kind;
+            quest.TargetName = targetName;
+            quest.Required = _rng.Next(minRequired, maxRequired);
+            quest.LuminanceReward = quest.Required * 100L;
+            quest.RewardPercent = 0;
+            quest.Direction = null;
+        }
+
+        private static void ConfigurePersistentCardinalTrek(PersistentGlobalQuest quest)
+        {
+            var directions = new[] { "North", "East", "South", "West" };
+            quest.Kind = GlobalQuestKind.CardinalTrek;
+            quest.Direction = directions[_rng.Next(directions.Length)];
+            quest.Required = _rng.Next(10, 51);
+            quest.RewardPercent = Math.Min(200, quest.Required * 4);
+            quest.TargetName = $"Travel {quest.Required} clicks {quest.Direction} on foot";
+            quest.LuminanceReward = 0;
+            quest.ItemName = null;
+            quest.ItemWcid = 0;
+        }
+        private static void ConfigurePersistentKillVariation(PersistentGlobalQuest quest, int roll, int minRequired, int maxRequired, int minLum, int maxLum)
+        {
+            var variation = roll % 3;
+            if (variation == 0)
+            {
+                quest.Kind = GlobalQuestKind.T8MutatorHunt;
+                quest.TargetName = "mutated tier 8 creatures";
+                minRequired = Math.Max(2, minRequired / 5);
+                maxRequired = Math.Max(minRequired + 1, maxRequired / 5);
+            }
+            else if (variation == 1)
+            {
+                quest.Kind = GlobalQuestKind.T8DungeonHunt;
+                quest.TargetName = "tier 8 dungeon creatures";
+            }
+            else
+            {
+                quest.Kind = GlobalQuestKind.T8LuminanceHunt;
+                quest.TargetName = "tier 8 creatures";
+            }
+
+            quest.Required = _rng.Next(minRequired, maxRequired);
+            quest.LuminanceReward = quest.Required * 100L;
+        }
         private static void ConfigurePersistentCurrencyQuest(PersistentGlobalQuest quest, int minRequired, int maxRequired, int minLum, int maxLum)
         {
             var currency = GetT8CurrencyBankItem();
@@ -430,9 +579,11 @@ namespace ACE.Server.Managers
         private static void BroadcastPersistentStart(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);
-            var msg = quest.Kind == GlobalQuestKind.T8CurrencyHunt
-                ? $"[Global Quest:{lane}] Correct the Corruption: recover {quest.Required} forged Derp Coins from tier 8 creatures for {quest.LuminanceReward:N0} luminance. Type /gquest for details."
-                : $"[Global Quest:{lane}] Slay {quest.Required} tier 8 creatures for {quest.LuminanceReward:N0} luminance. Type /gquest for details.";
+            var msg = quest.Kind == GlobalQuestKind.CardinalTrek
+                ? $"[Global Quest:{lane}] Cardinal Trek: first to travel {quest.Required} clicks {quest.Direction} on foot wins {quest.RewardPercent}% of level XP. Type /gquest for details."
+                : quest.Kind == GlobalQuestKind.T8CurrencyHunt
+                    ? $"[Global Quest:{lane}] Correct the Corruption: recover {quest.Required} forged Derp Coins from tier 8 creatures for {quest.LuminanceReward:N0} luminance. Type /gquest for details."
+                    : $"[Global Quest:{lane}] Defeat {quest.Required} {quest.TargetName ?? "tier 8 creatures"} for {quest.LuminanceReward:N0} luminance. Type /gquest for details.";
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
         }
@@ -440,9 +591,11 @@ namespace ACE.Server.Managers
         private static void BroadcastPersistentWrapUp(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);
-            var msg = quest.Kind == GlobalQuestKind.T8CurrencyHunt
-                ? $"[Global Quest:{lane}] Correct the Corruption has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it."
-                : $"[Global Quest:{lane}] The tier 8 luminance hunt has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it.";
+            var msg = quest.Kind == GlobalQuestKind.CardinalTrek
+                ? $"[Global Quest:{lane}] The cardinal trek {quest.Direction} has ended."
+                : quest.Kind == GlobalQuestKind.T8CurrencyHunt
+                    ? $"[Global Quest:{lane}] Correct the Corruption has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it."
+                    : $"[Global Quest:{lane}] The hunt for {quest.TargetName ?? "tier 8 creatures"} has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it.";
             PlayerManager.BroadcastToAll(new GameMessageSystemChat(msg, ChatMessageType.WorldBroadcast));
             PlayerManager.LogBroadcastChat(Channel.AllBroadcast, null, msg);
         }
@@ -578,15 +731,19 @@ namespace ACE.Server.Managers
         public int QuestStartTimestamp { get; set; }
         public int QuestExpiryTimestamp { get; set; }
         public int Required { get; set; }
+        public string TargetName { get; set; }
         public string ItemName { get; set; }
         public uint ItemWcid { get; set; }
         public long LuminanceReward { get; set; }
         public int CompletionCount { get; set; }
+        public string Direction { get; set; }
+        public int RewardPercent { get; set; }
     }
 
     public class PersistentGlobalQuestProgress
     {
         public int Count { get; set; }
+        public double Distance { get; set; }
         public bool Completed { get; set; }
     }
 

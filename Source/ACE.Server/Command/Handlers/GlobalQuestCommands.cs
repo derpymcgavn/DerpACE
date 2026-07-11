@@ -66,6 +66,16 @@ namespace ACE.Server.Command.Handlers
                     return "T8 lum";
                 case GlobalKillQuestManager.GlobalQuestKind.T8CurrencyHunt:
                     return "Correct corruption";
+                case GlobalKillQuestManager.GlobalQuestKind.MutatorHunt:
+                    return "Mutator purge";
+                case GlobalKillQuestManager.GlobalQuestKind.DungeonHunt:
+                    return "Dungeon delve";
+                case GlobalKillQuestManager.GlobalQuestKind.HighRiskHunt:
+                    return "High-risk hunt";
+                case GlobalKillQuestManager.GlobalQuestKind.T8MutatorHunt:
+                    return "T8 mutator purge";
+                case GlobalKillQuestManager.GlobalQuestKind.T8DungeonHunt:
+                    return "T8 dungeon delve";
                 default:
                     return "Hunt";
             }
@@ -80,8 +90,13 @@ namespace ACE.Server.Command.Handlers
 
         private static string FormatProgress(GlobalQuestStatus status)
         {
+            if (status.Completed)
+                return "Completed";
+            if (status.RequiredDistance > 0)
+                return $"{status.MyDistance:0.0}/{status.RequiredDistance} clicks";
+
             if (status.Kind == GlobalKillQuestManager.GlobalQuestKind.ItemRace)
-                return status.Completed ? "complete" : "first self-found wins";
+                return "first self-found wins";
             if (status.RequiredTurnIns > 0)
                 return $"{status.MyTurnIns}/{status.RequiredTurnIns}";
             if (status.RequiredKills > 0)

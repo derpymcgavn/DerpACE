@@ -402,7 +402,7 @@ namespace ACE.Server.Factories
                 var bonusPct = (int)Math.Round(Math.Clamp(ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus, 0.0f, 1.0f) * 100.0f);
                 var seamPenalty = ACE.Server.Managers.DerpACEConfig.ThievesDaggerSeamPenalty;
                 var seamDuration = Math.Max(1, ACE.Server.Managers.DerpACEConfig.ThievesDaggerSeamDuration);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} was honed in shadow - while equipped, you appear translucent and monsters are less likely to notice you. Sneak attacks have a {procPct}% chance to proc an additional {bonusPct}% bonus damage and open a hidden seam in the target's guard, lowering defense by {seamPenalty} for {seamDuration} seconds.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} was honed in shadow - while equipped, you appear translucent and monsters are less likely to notice you. Successful attacks have a {procPct}% chance to shadowstep behind the target and become a guaranteed critical sneak attack, dealing 1.05x to 2.25x damage and opening a hidden seam in the target's guard. The seam lowers defense by {seamPenalty} for {seamDuration} seconds.";
             }
 
             // Quickening Dagger: dagger hits can grant a short attack-animation haste window.

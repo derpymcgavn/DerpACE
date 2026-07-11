@@ -1300,7 +1300,7 @@ namespace ACE.Server.WorldObjects
                 spell.School != MagicSchool.LifeMagic)
                 return;
 
-            var procChance = Math.Clamp((float)(caster.ProcSpellRate ?? ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance), 0.01f, 0.05f);
+            var procChance = Math.Clamp((float)(caster.ProcSpellRate ?? ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance), 0.04f, 0.08f);
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
                 return;
 
@@ -1330,10 +1330,9 @@ namespace ACE.Server.WorldObjects
                 }
             }
 
-            if (nearbyEnemies.Count == 0)
-                return;
-
-            var bounceTarget = nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count - 1)];
+            var bounceTarget = nearbyEnemies.Count > 0
+                ? nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count)]
+                : targetCreature;
 
             var actionChain = new ActionChain();
             actionChain.AddDelaySeconds(0.15);
@@ -1346,7 +1345,9 @@ namespace ACE.Server.WorldObjects
             });
             actionChain.EnqueueChain();
 
-            var castingMessage = $"{caster.Name}'s spell arcs from you to {bounceTarget.Name}, chaining {spell.Name}!";
+            var castingMessage = bounceTarget == targetCreature
+                ? $"{caster.Name}'s spell echoes into {bounceTarget.Name}, repeating {spell.Name} at reduced power!"
+                : $"{caster.Name}'s spell arcs from you to {bounceTarget.Name}, chaining {spell.Name}!";
             var casterMessage = new GameMessageSystemChat(castingMessage, ChatMessageType.Spellcasting);
             Session?.Network.EnqueueSend(casterMessage);
 

@@ -168,14 +168,14 @@ namespace ACE.Server.Factories
                 wo.LongDesc = $"Life Spells\r\n\r\n{wo.LongDesc}";
 
             // Archmagi: 5% chance on any T6+ magical caster with a bound spell.
-            // Runtime rolls this item's 1-5% ProcSpellRate to chain the same valid
-            // harmful single-target spell from the player to a different nearby target.
+            // Runtime rolls this item's 4-8% ProcSpellRate to echo the same valid
+            // harmful single-target spell onto another nearby target, or the original target.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ArchmagiEnabled
                 && isMagical && wo.SpellDID.HasValue
                 && (IsForcedWeaponModifier(roll, "archmagi")
                     || (!HasForcedWeaponModifier(roll) && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)))
             {
-                var procChance = ThreadSafeRandom.Next(0.01f, 0.05f);
+                var procChance = ThreadSafeRandom.Next(0.04f, 0.08f);
 
                 wo.Name = wo.Name + " of the Archmagi";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster, true);
@@ -183,7 +183,7 @@ namespace ACE.Server.Factories
                 wo.ProcSpellRate = procChance;
                 wo.IconOverlayId = MutatorOverlayArchmagi;
                 ApplyLootUiEffects(wo, wo.W_DamageType, true);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory - when you cast a harmful single-target spell, it has a {procChance:P0} chance to chain the same spell from you to a different monster within {ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastRadius:0.#} yards for {ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier:P0} damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis caster pulses with ancient arcane memory - when you cast a harmful single-target spell, it has a {procChance:P0} chance to echo the spell for {ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastDamageModifier:P0} damage. It chains to another monster within {ACE.Server.Managers.DerpACEConfig.ArchmagiDualCastRadius:0.#} yards when possible, or strikes the original target again.";
 
             }
 

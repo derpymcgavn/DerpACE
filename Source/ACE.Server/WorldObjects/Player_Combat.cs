@@ -249,6 +249,51 @@ namespace ACE.Server.WorldObjects
                 return CombatType.Missile;
         }
 
+        private bool TryResolveShadowstepDestination(Creature target, out ACE.Entity.Position destination)
+        {
+            destination = null;
+            if (target?.Location == null || Location == null || CurrentLandblock == null || PhysicsObj == null)
+                return false;
+
+            if (target.Location.LandblockId.Landblock != Location.LandblockId.Landblock)
+                return false;
+
+            foreach (var distance in new[] { 1.2, 1.6, 0.8 })
+            {
+                var candidate = target.Location.InFrontOf(-distance, true);
+                candidate.InstanceId = Location.InstanceId;
+
+                if (CurrentLandblock.IsDungeon || candidate.Indoors)
+                {
+                    AdjustDungeon(candidate);
+                    if (candidate.LandblockId.Landblock != Location.LandblockId.Landblock)
+                        continue;
+                }
+                else
+                {
+                    candidate.AdjustMapCoords();
+                    if (!candidate.IsWalkable())
+                        continue;
+                }
+
+                if (!ValidateMovement(candidate))
+                    continue;
+
+                destination = candidate;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ApplyShadowstep(ACE.Entity.Position destination)
+        {
+            ApplyVisualEffects(PlayScript.TransDownBlack, 0.7f);
+            Sequences.GetNextSequence(ACE.Server.Network.Sequence.SequenceType.ObjectForcePosition);
+            UpdatePlayerPosition(destination, true);
+            ApplyVisualEffects(PlayScript.TransUpWhite, 0.7f);
+        }
+
         public DamageEvent DamageTarget(Creature target, WorldObject damageSource)
         {
             if (target.Health.Current <= 0)
@@ -267,6 +312,19 @@ namespace ACE.Server.WorldObjects
             }
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
+            var shadowstepProc = false;
+
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(PropertyBool.IsThievesDagger) == true
+                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger)
+                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance
+                && TryResolveShadowstepDestination(target, out var shadowstepDestination)
+                && TryStartMutatorCooldown(damageEvent.Weapon, ThiefDaggerCooldownId, ThiefDaggerCooldownSeconds))
+            {
+                ApplyShadowstep(shadowstepDestination);
+                damageEvent = DamageEvent.CalculateDamage(this, target, damageSource, forceHit: true, forceCritical: true);
+                shadowstepProc = damageEvent.HasDamage;
+            }
 
             // DerpACE: bare hands and gauntlet/shoe surrogates belong to the same
             // weapon-free unarmed family for bonuses, combo tracking, and procs.
@@ -416,18 +474,15 @@ namespace ACE.Server.WorldObjects
                 sneakBonusApplied = (uint)Math.Round(bonus);
             }
 
-            // Thief's Dagger: configurable proc chance / bonus on dagger sneak attacks (see @lootconfig).
+            // Thief's Dagger: a successful proc shadowsteps behind the target and turns
+            // the landed strike into a guaranteed critical sneak attack.
             uint thievesDaggerBonus = 0;
             uint thievesDaggerSeamPenalty = 0;
             int thievesDaggerSeamDuration = 0;
-            if (damageEvent.HasDamage
-                && damageEvent.SneakAttackMod > 1.0f
-                && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsThievesDagger) == true
-                && WeaponIsType(damageEvent.Weapon, WeaponType.Dagger)
-                && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcChance
-                && TryStartMutatorCooldown(damageEvent.Weapon, ThiefDaggerCooldownId, ThiefDaggerCooldownSeconds))
+            if (shadowstepProc && damageEvent.HasDamage)
             {
-                var bonus = damageEvent.Damage * ACE.Server.Managers.DerpACEConfig.ThievesDaggerProcBonus;
+                var shadowstepMultiplier = (float)ThreadSafeRandom.Next(1.05f, 2.25f);
+                var bonus = damageEvent.Damage * (shadowstepMultiplier - 1.0f);
                 damageEvent.Damage += bonus;
                 thievesDaggerBonus = (uint)Math.Round(bonus);
 
@@ -442,7 +497,6 @@ namespace ACE.Server.WorldObjects
                     target.ConcussedUntil = newUntil;
                 }
             }
-
             // Quickening Dagger: successful dagger hits can briefly speed up attack animations.
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsQuickeningDagger) == true
@@ -1758,19 +1812,30 @@ namespace ACE.Server.WorldObjects
 
         private void PlayShieldBashAnimation()
         {
-            var stance = CurrentMotionState?.Stance ?? MotionStance.SwordShieldCombat;
-            if (stance == MotionStance.Invalid)
-                stance = MotionStance.SwordShieldCombat;
+            var originalStance = CurrentMotionState?.Stance ?? MotionStance.SwordShieldCombat;
+            if (originalStance == MotionStance.Invalid)
+                originalStance = MotionStance.SwordShieldCombat;
 
-            var height = AttackHeight ?? ACE.Entity.Enum.AttackHeight.Medium;
-            var motionCommand = MotionCommand.OffhandPunchFastMed;
-            var motions = CombatTable.GetMotion(stance, height, AttackType.OffhandPunch, MotionCommand.Invalid);
-            if (motions != null && motions.Count > 0 && motions[0] != MotionCommand.Invalid)
-                motionCommand = motions[0];
+            const MotionStance bashStance = MotionStance.DualWieldCombat;
+            const MotionCommand motionCommand = MotionCommand.OffhandPunchSlowHigh;
+            const float speed = 1.4f;
+            var bashMotion = new Motion(bashStance, motionCommand, speed);
+            CurrentMotionState = bashMotion;
+            EnqueueBroadcastMotion(bashMotion, applyPhysics: true);
 
-            var motion = new Motion(stance, motionCommand, 1.4f);
-            CurrentMotionState = motion;
-            EnqueueBroadcastMotion(motion, applyPhysics: true);
+            var animationLength = Physics.Animation.MotionTable.GetAnimationLength(MotionTableId, bashStance, motionCommand, speed);
+            var restoreChain = new ActionChain();
+            restoreChain.AddDelaySeconds(Math.Max(0.1f, animationLength));
+            restoreChain.AddAction(this, () =>
+            {
+                if (!ReferenceEquals(CurrentMotionState, bashMotion) || IsDead)
+                    return;
+
+                var readyMotion = new Motion(originalStance, MotionCommand.Ready);
+                CurrentMotionState = readyMotion;
+                EnqueueBroadcastMotion(readyMotion, applyPhysics: true);
+            });
+            restoreChain.EnqueueChain();
         }
 
         private void PlayShieldBashSounds(Creature target)
