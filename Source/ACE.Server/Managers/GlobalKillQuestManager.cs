@@ -35,6 +35,7 @@ namespace ACE.Server.Managers
             T8MutatorHunt,
             T8DungeonHunt,
             CardinalTrek,
+            VendorDeliveryRace,
         }
 
         public const uint DrunkenBeerWcid = HardcodedWeenies.DrunkenEventBeerWeenieClassId;

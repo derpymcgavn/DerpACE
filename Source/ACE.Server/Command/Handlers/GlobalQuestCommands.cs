@@ -43,6 +43,41 @@ namespace ACE.Server.Command.Handlers
             }
         }
 
+        [CommandHandler("gquestreroll", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 1,
+            "Reroll a stale daily or weekly global quest.",
+            "Usage: /gquestreroll <daily|weekly|all>")]
+        public static void HandleGQuestReroll(Session session, params string[] parameters)
+        {
+            var player = session?.Player;
+            if (player == null)
+                return;
+
+            var selection = parameters[0].Trim().ToLowerInvariant();
+            var lanes = selection switch
+            {
+                "daily" => new[] { GlobalKillQuestManager.GlobalQuestLane.Daily },
+                "weekly" => new[] { GlobalKillQuestManager.GlobalQuestLane.Weekly },
+                "all" => new[] { GlobalKillQuestManager.GlobalQuestLane.Daily, GlobalKillQuestManager.GlobalQuestLane.Weekly },
+                _ => null,
+            };
+
+            if (lanes == null)
+            {
+                player.SendMessage("Usage: /gquestreroll <daily|weekly|all>", ChatMessageType.System);
+                return;
+            }
+
+            foreach (var lane in lanes)
+            {
+                if (!GlobalKillQuestManager.TryAdminRerollPersistentQuest(lane, out var status, out var error))
+                {
+                    player.SendMessage($"[Global Quest Admin] {error}", ChatMessageType.System);
+                    continue;
+                }
+
+                player.SendMessage($"[Global Quest Admin] Rerolled {GlobalKillQuestManager.GetLaneLabel(lane)}: {GetQuestTypeLabel(status.Kind)} - {FormatTarget(status)}.", ChatMessageType.Broadcast);
+            }
+        }
         private static void SendQuestLine(ACE.Server.WorldObjects.Player player, GlobalQuestStatus status)
         {
             var line = $"{GlobalKillQuestManager.GetLaneLabel(status.Lane)}: {GetQuestTypeLabel(status.Kind)} | " +
@@ -76,6 +111,10 @@ namespace ACE.Server.Command.Handlers
                     return "T8 mutator purge";
                 case GlobalKillQuestManager.GlobalQuestKind.T8DungeonHunt:
                     return "T8 dungeon delve";
+                case GlobalKillQuestManager.GlobalQuestKind.CardinalTrek:
+                    return "Cardinal trek";
+                case GlobalKillQuestManager.GlobalQuestKind.VendorDeliveryRace:
+                    return "Dereth Express";
                 default:
                     return "Hunt";
             }

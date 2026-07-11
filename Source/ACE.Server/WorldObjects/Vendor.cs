@@ -443,6 +443,7 @@ namespace ACE.Server.WorldObjects
         /// <param name="action">The action performed by the player</param>
         public void ApproachVendor(Player player, VendorType action = VendorType.Undef, uint altCurrencySpent = 0)
         {
+            GlobalKillQuestManager.RegisterGlobalQuestVendor(this);
             RotUniques();
 
             if (AlternateCurrency == null)

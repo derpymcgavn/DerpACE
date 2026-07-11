@@ -24,20 +24,10 @@ namespace ACE.Server.Factories.Tables
     /// POIs that don't appear in <see cref="TownTiers"/> resolve to tier 0 for
     /// vendor stocking.
     ///
-    /// Tier groupings:
-    ///  Tier 1 (Levels  1–15): Holtburg, Arwic, Cragstone, Eastham, Glenden Wood,
-    ///                          Lytelthorpe, Rithwic, Shoushi, Sawato, Mayoi, Yanshi,
-    ///                          Tufa, Lost Wish Beach, Bluespire/Greenspire/Redspire
-    ///  Tier 2 (Levels 20–30): Baishi, Yaraq, Nanto, Hebian-To, Wai Jhou, Tou-Tou
-    ///  Tier 3 (Levels 40–50): Kara, Linvak Tukal, Plateau Village, Xarabydun,
-    ///                          Oolutanga's Refuge, Crater Lake Village
-    ///  Tier 4 (Levels 60–80): Al-Jalima, Qalaba'r, Uziz, Samsur, Danby's Outpost,
-    ///                          Khayyaban, Neftet, MacNiall's Freehold
-    ///  Tier 5 (Levels 100–115): Kryst, Sanamar, Timaru, Silyun, Stonehold
-    ///  Tier 6 (Levels 135–160): Fiun Outpost, Dryreach, Ahurenga, Via Apt,
-    ///                            Neydisa Castle, Zalphos' Retreat
-    ///  Tier 7 (Levels 185+):    Fort Tethana, Zaikhal, Undercity, Candeth Keep
-    ///  Tier 8 (Endgame / 200+): Ayan Baqur
+    /// Tier groupings are DerpACE's seven-step town progression, from starter towns
+    /// and the three isles at tier 1 through Waijhou, Ayan, Candeth, Eastwatch,
+    /// Teth, and Merwart Village at tier 7. Common POI spelling variants resolve
+    /// to the same tier.
     /// </summary>
     public static class VendorTownTier
     {
@@ -82,35 +72,37 @@ namespace ACE.Server.Factories.Tables
                     t[Normalize(n)] = tier;
             }
 
-            // Tier 1 — starter towns
-            Add(1, "Holtburg", "Arwic", "Cragstone", "Eastham", "Glenden Wood",
-                   "Lytelthorpe", "Rithwic", "Shoushi", "Sawato", "Mayoi",
-                   "Yanshi", "Tufa", "Lost Wish Beach",
-                   "Bluespire", "Greenspire", "Redspire");
+            // Tier 1 - starter towns and the three isles
+            Add(1, "Holtburg", "Shoushi", "Yaraq", "Sanamar",
+                   "Redspire", "Greenspire", "Bluespire");
 
-            // Tier 2 — intermediate
-            Add(2, "Baishi", "Yaraq", "Nanto", "Hebian-To", "Tou-Tou", "Wai Jhou");
+            // Tier 2 - nexus towns
+            Add(2, "Lytelthorpe", "Rithwic", "Yanshi", "Nanto", "Samsur",
+                   "Al-Arqas", "Al Arqas", "Xarabydun");
 
-            // Tier 3 — mid-range
-            Add(3, "Kara", "Linvak Tukal", "Plateau Village", "Xarabydun",
-                   "Oolutanga's Refuge", "Crater Lake Village");
+            // Tier 3 - capitals and progression towns
+            Add(3, "Mayoi", "Lin", "Uziz", "Khayyaban", "Arwic", "Dryreach",
+                   "Hebian-To", "Hebian To", "Zaikhal", "Cragstone", "West Watch");
 
-            // Tier 4 — advanced
-            Add(4, "Al-Jalima", "Qalaba'r", "Uziz", "Samsur",
-                   "Danby's Outpost", "Khayyaban", "Neftet", "MacNiall's Freehold");
+            // Tier 4
+            Add(4, "Eastham", "Sawato", "Al-Jalima", "Al Jalima", "Kara",
+                   "Ahuranga", "Ahurenga", "Linvak", "Linvak Tukal",
+                   "Monkey Town", "Oolutanga's Refuge");
 
-            // Tier 5 — high-level
-            Add(5, "Kryst", "Sanamar", "Timaru", "Silyun", "Stonehold");
+            // Tier 5
+            Add(5, "Baishi", "Qalabar", "Qalaba'r", "Glenden Wood",
+                   "Freehold", "MacNiall's Freehold", "Plateau", "Plateau Village",
+                   "Timaru", "Siyun", "Silyun");
 
-            // Tier 6 — veteran
-            Add(6, "Fiun Outpost", "Dryreach", "Ahurenga", "Via Apt",
-                   "Neydisa Castle", "Zalphos' Retreat");
+            // Tier 6
+            Add(6, "Bandit Castle", "Neydisa", "Neydisa Castle",
+                   "Crater Village", "Crater Lake Village", "Danby's", "Danby's Outpost",
+                   "Stonehold", "Fiun Outpost");
 
-            // Tier 7 — endgame
-            Add(7, "Fort Tethana", "Zaikhal", "Undercity", "Candeth Keep");
-
-            // Tier 8 — pinnacle
-            Add(8, "Ayan Baqur");
+            // Tier 7
+            Add(7, "Waijhou", "Wai Jhou", "Ayan", "Ayan Baqur",
+                   "Candeth", "Candeth Keep", "Eastwatch", "Teth", "Fort Tethana",
+                   "Merwart Village");
 
             return t;
         }

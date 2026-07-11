@@ -239,7 +239,7 @@ namespace ACE.Server.Managers
                 MyKills = IsPersistentKillQuest(quest.Kind) ? count : 0,
                 MyTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? count : 0,
                 Expiry = quest.Expiry,
-                ItemWcid = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.ItemWcid : 0,
+                ItemWcid = quest.Kind == GlobalQuestKind.T8CurrencyHunt || quest.Kind == GlobalQuestKind.VendorDeliveryRace ? quest.ItemWcid : 0,
                 LuminanceReward = quest.LuminanceReward,
                 RewardPercent = quest.RewardPercent,
                 RequiredDistance = quest.Kind == GlobalQuestKind.CardinalTrek ? quest.Required : 0,
@@ -344,6 +344,28 @@ namespace ACE.Server.Managers
                 BroadcastPersistentStart(quest);
         }
 
+        public static bool TryAdminRerollPersistentQuest(GlobalQuestLane lane, out GlobalQuestStatus status, out string error)
+        {
+            status = null;
+            error = null;
+
+            if (lane != GlobalQuestLane.Daily && lane != GlobalQuestLane.Weekly)
+            {
+                error = "Only daily and weekly global quests can be rerolled with this command.";
+                return false;
+            }
+
+            lock (_persistentLock)
+            {
+                if (_persistentQuests.TryGetValue(lane, out var current) && current != null)
+                    BroadcastPersistentWrapUp(current);
+
+                RollPersistentQuest(lane, true, DateTime.UtcNow);
+                SavePersistentStateNowUnsafe();
+                status = BuildPersistentStatus(null, _persistentQuests[lane]);
+                return true;
+            }
+        }
         private static PersistentGlobalQuest CreatePersistentQuest(GlobalQuestLane lane, DateTime now, HashSet<GlobalQuestKind> excludedKinds)
         {
             var quest = new PersistentGlobalQuest
@@ -364,6 +386,9 @@ namespace ACE.Server.Managers
                 GlobalQuestKind.T8DungeonHunt,
                 GlobalQuestKind.CardinalTrek,
             };
+            if (CanRollVendorDelivery())
+                availableKinds.Add(GlobalQuestKind.VendorDeliveryRace);
+
             if (excludedKinds != null)
                 availableKinds.RemoveAll(excludedKinds.Contains);
             if (availableKinds.Count == 0)
@@ -386,6 +411,9 @@ namespace ACE.Server.Managers
                     break;
                 case GlobalQuestKind.CardinalTrek:
                     ConfigurePersistentCardinalTrek(quest);
+                    break;
+                case GlobalQuestKind.VendorDeliveryRace:
+                    ConfigurePersistentVendorDelivery(quest);
                     break;
                 default:
                     ConfigurePersistentLuminanceQuest(quest, minRequired, maxRequired, 0, 0);
@@ -579,8 +607,10 @@ namespace ACE.Server.Managers
         private static void BroadcastPersistentStart(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);
-            var msg = quest.Kind == GlobalQuestKind.CardinalTrek
-                ? $"[Global Quest:{lane}] Cardinal Trek: first to travel {quest.Required} clicks {quest.Direction} on foot wins {quest.RewardPercent}% of level XP. Type /gquest for details."
+            var msg = quest.Kind == GlobalQuestKind.VendorDeliveryRace
+                ? $"[Global Quest:{lane}] Dereth Express: buy {quest.ItemName} from {quest.SourceVendorName} in {quest.SourceTown}, then be first to deliver it to an NPC in {quest.DestinationTown} for {quest.RewardPercent}% of level XP. Type /gquest for details."
+                : quest.Kind == GlobalQuestKind.CardinalTrek
+                    ? $"[Global Quest:{lane}] Cardinal Trek: first to travel {quest.Required} clicks {quest.Direction} on foot wins {quest.RewardPercent}% of level XP. Type /gquest for details."
                 : quest.Kind == GlobalQuestKind.T8CurrencyHunt
                     ? $"[Global Quest:{lane}] Correct the Corruption: recover {quest.Required} forged Derp Coins from tier 8 creatures for {quest.LuminanceReward:N0} luminance. Type /gquest for details."
                     : $"[Global Quest:{lane}] Defeat {quest.Required} {quest.TargetName ?? "tier 8 creatures"} for {quest.LuminanceReward:N0} luminance. Type /gquest for details.";
@@ -591,8 +621,10 @@ namespace ACE.Server.Managers
         private static void BroadcastPersistentWrapUp(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);
-            var msg = quest.Kind == GlobalQuestKind.CardinalTrek
-                ? $"[Global Quest:{lane}] The cardinal trek {quest.Direction} has ended."
+            var msg = quest.Kind == GlobalQuestKind.VendorDeliveryRace
+                ? $"[Global Quest:{lane}] Dereth Express from {quest.SourceTown} to {quest.DestinationTown} has ended."
+                : quest.Kind == GlobalQuestKind.CardinalTrek
+                    ? $"[Global Quest:{lane}] The cardinal trek {quest.Direction} has ended."
                 : quest.Kind == GlobalQuestKind.T8CurrencyHunt
                     ? $"[Global Quest:{lane}] Correct the Corruption has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it."
                     : $"[Global Quest:{lane}] The hunt for {quest.TargetName ?? "tier 8 creatures"} has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it.";
@@ -619,6 +651,8 @@ namespace ACE.Server.Managers
                 if (state == null)
                     return;
                 _nextPersistentEpoch = Math.Max(state.NextEpoch, 100000);
+                _globalQuestVendors.Clear();
+                _globalQuestVendors.AddRange(state.Vendors ?? new List<GlobalQuestVendorRecord>());
                 foreach (var quest in state.Quests ?? new List<PersistentGlobalQuest>())
                 {
                     NormalizePersistentQuestReward(quest);
@@ -659,6 +693,7 @@ namespace ACE.Server.Managers
                     NextEpoch = _nextPersistentEpoch,
                     Quests = _persistentQuests.Values.OrderBy(q => q.Lane).ToList(),
                     Progress = _persistentProgress.Select(kvp => new PersistentGlobalQuestProgressEntry { Key = kvp.Key, Progress = kvp.Value }).ToList(),
+                    Vendors = _globalQuestVendors.ToList(),
                 };
                 File.WriteAllText(PersistentStatePath, JsonSerializer.Serialize(state, _persistentJsonOptions));
                 _persistentStateDirty = false;
@@ -738,6 +773,10 @@ namespace ACE.Server.Managers
         public int CompletionCount { get; set; }
         public string Direction { get; set; }
         public int RewardPercent { get; set; }
+        public uint SourceVendorWcid { get; set; }
+        public string SourceVendorName { get; set; }
+        public string SourceTown { get; set; }
+        public string DestinationTown { get; set; }
     }
 
     public class PersistentGlobalQuestProgress
@@ -752,6 +791,7 @@ namespace ACE.Server.Managers
         public int NextEpoch { get; set; }
         public List<PersistentGlobalQuest> Quests { get; set; } = new List<PersistentGlobalQuest>();
         public List<PersistentGlobalQuestProgressEntry> Progress { get; set; } = new List<PersistentGlobalQuestProgressEntry>();
+        public List<GlobalQuestVendorRecord> Vendors { get; set; } = new List<GlobalQuestVendorRecord>();
     }
 
     public class PersistentGlobalQuestProgressEntry

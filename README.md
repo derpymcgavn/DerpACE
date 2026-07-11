@@ -43,8 +43,10 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Current DerpACE Abilities And Commands (July 3, 2026)
+### Current DerpACE Abilities And Commands (July 11, 2026)
 This section is the current operator-facing source of truth for active DerpACE systems. Older patch notes below are historical and may describe earlier balance values.
+
+See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator workflows and command examples.
 
 #### Runtime Config Toggles
 `DerpAce.json` is generated next to the server binary and reloads with `@derpconfig reload`. The reload pushes values into live runtime config; some changes affect only future rolls, spawns, or restocks because existing objects already have their rolled properties.
@@ -83,6 +85,7 @@ This section is the current operator-facing source of truth for active DerpACE s
 | `@cbclear` | Clears ClothingTable cache entries so the next read reloads from DAT/custom merge data. |
 | `@derpconfig reload` | Reloads `DerpAce.json` and restarts runtime services that need it, including the admin map web UI. |
 | `@ironmanmode on|off|toggle|status` | Enables or disables player Ironman opt-in server-wide. |
+| `@gquestreroll daily|weekly|all` | Ends and rerolls stale daily and/or weekly global quests while preserving freshness rules. |
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
 
@@ -98,7 +101,7 @@ This section is the current operator-facing source of truth for active DerpACE s
 | `/hardcore on`, `/hardcore confirm` | Begins and confirms Hardcore challenge mode. Hardcore uses its own gear provenance economy and death rules. |
 | `/hardcoretop` | Shows Hardcore leaderboard. |
 | `/topkillers`, `/hardcoretopkillers` | Shows creature kill/death leaderboards. |
-| `/gquest` | Shows the current global kill quest target, server progress, time remaining, and your personal progress. |
+| `/gquest` | Shows half-hour, hourly, daily, and weekly global quests, rewards, personal progress, completion state, and time remaining. |
 | `/mail help` | Shows player mail commands for text mail, MMD payment, item shipping, COD, claiming, declining, and deleting. |
 | `/bank list`, `/bank store`, `/bank take` | Stores and withdraws bankable items. |
 | `/cash list`, `/cash give`, `/cash take` | Shows, deposits, and withdraws banked currency. |
@@ -201,20 +204,19 @@ Auto-generates tier-appropriate random loot for every vendor based on the town t
 
 #### Town Tier Resolution (`Source/ACE.Server/Factories/Tables/VendorTownTier.cs`)
 * Town anchor coordinates are now sourced **directly from the in-database `PointsOfInterest` table** (the same data that powers `/telepoi`), so every POI the server knows about is automatically a town anchor — no hand-curated landblock table to drift out of sync.
-* `VendorTownTier.GetTierForVendor(Vendor)` — resolves the loot tier (1–8) for a vendor from its landblock coordinates using a per-town radius sweep (default ±3, with overrides up to ±4 for large/spread-out cities like Ayan Baqur, Candeth Keep, Zaikhal, Holtburg, Yaraq, Shoushi, Sanamar, Fort Tethana).
-* `GetTownName(...)` — returns the human-readable town name for diagnostics and the `@vendortier` command.
-* `GetAllTownAnchors()` — used by `LandblockManager.PreloadDerpAceTownLandblocks` to permaload every POI landblock (plus adjacents) on server start.
-* `VendorTownTier.Rebuild()` — forces an anchor refresh from the current POI cache (useful after live POI edits).
-* **Tier classification** lives in a name→tier dictionary inside `BuildTownTierTable()`. POI name matching is case/space/punctuation-insensitive (so DB names like `GlendenWood` / `FortTethana` resolve to `Glenden Wood` / `Fort Tethana`):
-  * **T1** — Holtburg, Arwic, Cragstone, Eastham, Glenden Wood, Lytelthorpe, Rithwic, Shoushi, Sawato, Mayoi, Yanshi, Tufa, Lost Wish Beach, Bluespire/Greenspire/Redspire
-  * **T2** — Baishi, Yaraq, Nanto, Hebian-To, Wai Jhou, Tou-Tou
-  * **T3** — Kara, Linvak Tukal, Plateau Village, Xarabydun, Oolutanga's Refuge, Crater Lake Village
-  * **T4** — Al-Jalima, Qalaba'r, Uziz, Samsur, Danby's Outpost, Khayyaban, Neftet, MacNiall's Freehold
-  * **T5** — Kryst, Sanamar, Timaru, Silyun, Stonehold
-  * **T6** — Fiun Outpost, Dryreach, Ahurenga, Via Apt, Neydisa Castle, Zalphos' Retreat
-  * **T7** — Fort Tethana, Zaikhal, Undercity, Candeth Keep
-  * **T8** — Ayan Baqur
-* POIs not present in the tier table are still valid anchors for permaload, but resolve to tier 0 for vendor stocking (vendors there fall back to the explicit `PropertyInt.VendorLootTier` override if any).
+* `VendorTownTier.GetTierForVendor(Vendor)` resolves loot tier 1-7 from the vendor's town anchor. The default sweep is +/-3 landblocks, with wider overrides for spread-out cities.
+* `GetTownName(...)` returns the human-readable town name for diagnostics, Dereth Express, and `@vendortier`.
+* `GetAllTownAnchors()` is used by town landblock preloading.
+* `VendorTownTier.Rebuild()` refreshes anchors from the current PointsOfInterest cache.
+* POI matching is case/space/punctuation-insensitive. Common database aliases map to the same tier:
+  * **T1** - Holtburg, Shoushi, Yaraq, Sanamar, Redspire, Greenspire, Bluespire
+  * **T2** - Lytelthorpe, Rithwic, Yanshi, Nanto, Samsur, Al-Arqas, Xarabydun
+  * **T3** - Mayoi, Lin, Uziz, Khayyaban, Arwic, Dryreach, Hebian-To, Zaikhal, Cragstone, West Watch
+  * **T4** - Eastham, Sawato, Al-Jalima, Kara, Ahuranga, Linvak, Monkey Town
+  * **T5** - Baishi, Qalabar, Glenden Wood, Freehold, Plateau, Timaru, Siyun
+  * **T6** - Bandit Castle, Neydisa, Crater Village, Danby's, Stonehold, Fiun Outpost
+  * **T7** - Waijhou, Ayan, Candeth, Eastwatch, Teth, Merwart Village
+* POIs absent from the tier table remain valid anchors but resolve to tier 0 unless the vendor has an explicit override.
 
 #### Vendor auto-stocking (`Source/ACE.Server/WorldObjects/Vendor.cs`)
 * `LoadInventory()` calls `LoadRandomLootInventory()` after the static shop items load.
@@ -785,13 +787,16 @@ Server-wide rotating kill quest that gives all online players the same timed obj
 | `/gquest` | Player | Shows current global quest target, required kills, your progress, and time remaining. |
 
 #### Behavior
-* A new quest rolls every 30 minutes and is announced globally.
-* Quest objective is randomized from a curated creature pool with per-creature kill ranges.
-* Progress is tracked per-player for the active quest epoch.
-* Kills grant normal XP as usual; quest progress accumulates the XP earned on matching kills.
-* On completion, player receives bonus XP equal to `4x` accumulated matching-kill XP (`XpType.Quest`).
-* Expiry enforcement: once quest timer ends, additional kills do not count even before next tick roll.
-* At rollover, previous quest wraps up with a global completion-count message, then the next quest is announced.
+* Four lanes run concurrently: half-hour, hourly, daily, and weekly.
+* Per-character progress and completion state persist through logout; persistent lanes are saved across server restarts.
+* A character may complete each quest epoch once. `/gquest` displays `Completed` until that lane refreshes.
+* Daily and weekly quests cannot repeat their outgoing type or match each other's active type.
+* Objectives include creature hunts, tier-8 luminance hunts, mutator and dungeon hunts, Correct the Corruption, drunken mobs, first-found item races, Cardinal Trek, and Dereth Express.
+* Tier-8 kill quests award 100 luminance per required kill. Correct the Corruption retains its separate currency reward logic.
+* Cardinal Trek asks for 10-50 clicks in one random cardinal direction. Grounded overworld travel counts; portals, recalls, instances, forced movement, and implausible position jumps do not. Reward is 4% of level XP per click, capped at 200%.
+* Dereth Express selects a proven reachable vendor item and another town. The purchased parcel is owner/source/epoch stamped, and the first valid destination delivery wins and rerolls that lane.
+* Item races immediately reroll the half-hour lane after the first valid winner.
+* Admins can replace stale long-duration objectives with `@gquestreroll daily|weekly|all`.
 * Leaderboard data:
   * Player leaderboard (`/ironman top`) — live query over all online + offline players via `PlayerManager.GetAllPlayers()`, sorted by `CreatureKills` descending
   * Killer leaderboard (`/ironmantopkillers`) — persisted to `ironmanKillers.json` in the server exe directory; loaded at startup by `IronmanKillerTracker.Initialize()`, incremented on every Ironman player death caused by a non-player creature
@@ -1116,6 +1121,7 @@ For deeper documentation of DerpACE-specific systems (Defender's Shield, Ravager
 | `@highres-export` | Export contents of client_highres.dat file. |
 | `@image-export` | Export Texture/Image Files |
 | `@ironmanmode` | Enable or disable Ironman opt-in server-wide. |
+| `@gquestreroll` | Reroll daily, weekly, or both persistent global quest lanes. |
 | `@lootconfig` | Runtime-tune loot/proc/vendor knobs (e.g. `@lootconfig set vendor.loot true`). |
 | `@vendortier` | Show or pin the random-loot tier for the last appraised vendor. |
 | `@language-export` | Export contents of client_local_English.dat file. |

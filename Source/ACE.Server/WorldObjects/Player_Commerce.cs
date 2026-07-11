@@ -70,6 +70,7 @@ namespace ACE.Server.WorldObjects
 
                 if (!service)
                 {
+                    GlobalKillQuestManager.OnGlobalQuestVendorPurchase(this, vendor, item);
                     // errors shouldn't be possible here, since the items were pre-validated, but just in case...
                     if (!TryCreateInInventoryWithNetworking(item))
                     {
@@ -88,6 +89,7 @@ namespace ACE.Server.WorldObjects
 
             foreach (var item in uniqueItems)
             {
+                GlobalKillQuestManager.OnGlobalQuestVendorPurchase(this, vendor, item);
                 if (TryCreateInInventoryWithNetworking(item))
                 {
                     vendor.UniqueItemsForSale.Remove(item.Guid);
