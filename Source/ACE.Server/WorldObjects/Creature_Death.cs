@@ -248,6 +248,7 @@ namespace ACE.Server.WorldObjects
             if (dieEntered) return;
 
             dieEntered = true;
+            BossMechanicManager.Reset(this);
 
             UpdateVital(Health, 0);
 
@@ -1016,28 +1017,15 @@ namespace ACE.Server.WorldObjects
 
         private static TreasureDeath GetPlayerBiasedDeathTreasure(TreasureDeath source, Player player)
         {
-            if (player == null || !PropertyManager.GetBool("wi_name_loot_bias").Item)
+            if (!TryGetWiNameLootBias(player, out _, out _, out var bias, out _, out _))
                 return source;
-
-            var maxBias = Math.Clamp(PropertyManager.GetDouble("wi_name_loot_bias_max").Item, 0.0, 0.25);
-            if (maxBias <= 0.0)
-                return source;
-
-            var windowHours = Math.Max(0.25, PropertyManager.GetDouble("wi_name_loot_bias_hours").Item);
-            var window = (long)Math.Floor(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / (windowHours * 3600.0));
-            var normalizedName = (player.Name ?? string.Empty).Trim().ToUpperInvariant();
-
-            // The name supplies a persistent tendency; the time bucket lets every name run hot or cold.
-            var nameRoll = HashToSignedUnit(normalizedName);
-            var windowRoll = HashToSignedUnit($"{normalizedName}|{window}");
-            var bias = (float)(Math.Clamp(nameRoll * 0.55 + windowRoll * 0.45, -1.0, 1.0) * maxBias);
 
             return new TreasureDeath
             {
                 Id = source.Id,
                 TreasureType = source.TreasureType,
                 Tier = source.Tier,
-                LootQualityMod = Math.Clamp(source.LootQualityMod + bias, -0.25f, 0.50f),
+                LootQualityMod = Math.Clamp(source.LootQualityMod + (float)bias, -0.25f, 0.50f),
                 UnknownChances = source.UnknownChances,
                 ItemChance = source.ItemChance,
                 ItemMinAmount = source.ItemMinAmount,
@@ -1055,6 +1043,29 @@ namespace ACE.Server.WorldObjects
             };
         }
 
+        public static bool TryGetWiNameLootBias(Player player, out double nameRoll, out double windowRoll, out double bias, out double maxBias, out TimeSpan remaining)
+        {
+            nameRoll = 0.0;
+            windowRoll = 0.0;
+            bias = 0.0;
+            maxBias = Math.Clamp(PropertyManager.GetDouble("wi_name_loot_bias_max").Item, 0.0, 0.25);
+            remaining = TimeSpan.Zero;
+
+            if (player == null || !PropertyManager.GetBool("wi_name_loot_bias").Item || maxBias <= 0.0)
+                return false;
+
+            var windowHours = Math.Max(0.25, PropertyManager.GetDouble("wi_name_loot_bias_hours").Item);
+            var windowSeconds = windowHours * 3600.0;
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var window = (long)Math.Floor(now / windowSeconds);
+            var normalizedName = (player.Name ?? string.Empty).Trim().ToUpperInvariant();
+
+            nameRoll = HashToSignedUnit(normalizedName);
+            windowRoll = HashToSignedUnit($"{normalizedName}|{window}");
+            bias = Math.Clamp(nameRoll * 0.55 + windowRoll * 0.45, -1.0, 1.0) * maxBias;
+            remaining = TimeSpan.FromSeconds(Math.Max(0.0, ((window + 1) * windowSeconds) - now));
+            return true;
+        }
         private static double HashToSignedUnit(string value)
         {
             const ulong offset = 14695981039346656037UL;

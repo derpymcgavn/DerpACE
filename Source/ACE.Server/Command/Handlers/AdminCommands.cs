@@ -14,6 +14,7 @@ using log4net;
 using ACE.Common;
 using ACE.Common.Extensions;
 using ACE.Database;
+using ACE.DatLoader;
 using ACE.Database.Models.Auth;
 using ACE.Entity;
 using ACE.Entity.Enum;
@@ -3175,7 +3176,7 @@ namespace ACE.Server.Command.Handlers
 
         // tester (DerpACE) — admin-only "290 stats / max skills" testing form. Reuses GodState save/restore.
         [CommandHandler("tester", AccessLevel.Admin, CommandHandlerFlag.RequiresWorld, 0,
-            "Toggles tester mode: 290 in all attributes, every skill specialized at max ranks.",
+            "Toggles tester mode: 100 starting attributes with natural max ranks, every skill specialized and naturally maxed.",
             "Usage: /tester        — enter tester mode\n"
           + "       /tester off    — return to your saved pre-tester state\n"
           + "Stores prior state in PropertyString.GodState (same as /god); /ungod also reverts it.")]
@@ -3251,7 +3252,7 @@ namespace ACE.Server.Command.Handlers
             session.Player.SetProperty(PropertyString.GodState, returnState);
             session.Player.SaveBiotaToDatabase();
 
-            // Apply tester stats: level boost so skills aren't capped, attributes high, every valid skill specialized at base 500.
+            // Apply a legal natural-cap profile: 100 starting attributes, max advancement ranks, and every valid skill specialized.
             var currentPlayer = session.Player;
             currentPlayer.Level = 275;
             currentPlayer.AvailableExperience = 0;
@@ -3264,45 +3265,51 @@ namespace ACE.Server.Command.Handlers
                 new GameMessagePrivateUpdatePropertyInt(currentPlayer, PropertyInt.AvailableSkillCredits, (int)currentPlayer.AvailableSkillCredits),
                 new GameMessagePrivateUpdatePropertyInt64(currentPlayer, PropertyInt64.TotalExperience, (long)currentPlayer.TotalExperience));
 
+            var specializedSkillXp = Player.GetSkillXPTable(SkillAdvancementClass.Specialized);
+            var maxSkillRank = (ushort)(specializedSkillXp.Count - 1);
+            var maxSkillXp = specializedSkillXp[specializedSkillXp.Count - 1];
+
             foreach (var s in currentPlayer.Skills)
             {
                 if (!SkillHelper.ValidSkills.Contains(s.Key))
                     continue;
 
-                currentPlayer.TrainSkill(s.Key, 0);
-                currentPlayer.SpecializeSkill(s.Key, 0);
-
                 var playerSkill = currentPlayer.Skills[s.Key];
-                playerSkill.Ranks = 226;
-                playerSkill.ExperienceSpent = 0u;
+                playerSkill.AdvancementClass = SkillAdvancementClass.Specialized;
+                playerSkill.Ranks = maxSkillRank;
+                playerSkill.ExperienceSpent = maxSkillXp;
                 playerSkill.InitLevel = 0;
                 currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateSkill(currentPlayer, playerSkill));
             }
 
+            var attributeXp = DatManager.PortalDat.XpTable.AttributeXpList;
+            var maxAttributeRank = (uint)(attributeXp.Count - 1);
+            var maxAttributeXp = attributeXp[attributeXp.Count - 1];
             foreach (var a in currentPlayer.Attributes)
             {
                 var playerAttr = currentPlayer.Attributes[a.Key];
-                playerAttr.StartingValue = 290u;
-                playerAttr.Ranks = 0u;
-                playerAttr.ExperienceSpent = 0u;
+                playerAttr.StartingValue = 100u;
+                playerAttr.Ranks = maxAttributeRank;
+                playerAttr.ExperienceSpent = maxAttributeXp;
                 currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateAttribute(currentPlayer, playerAttr));
             }
 
-            currentPlayer.SetMaxVitals();
-
+            var vitalXp = DatManager.PortalDat.XpTable.VitalXpList;
+            var maxVitalRank = (uint)(vitalXp.Count - 1);
+            var maxVitalXp = vitalXp[vitalXp.Count - 1];
             foreach (var v in currentPlayer.Vitals)
             {
                 var playerVital = currentPlayer.Vitals[v.Key];
-                playerVital.Ranks = 0u;
-                playerVital.ExperienceSpent = 0u;
-                playerVital.StartingValue = 1000u;
+                playerVital.StartingValue = 100u;
+                playerVital.Ranks = maxVitalRank;
+                playerVital.ExperienceSpent = maxVitalXp;
                 currentPlayer.Session.Network.EnqueueSend(new GameMessagePrivateUpdateVital(currentPlayer, playerVital));
             }
 
             currentPlayer.PlayParticleEffect(PlayScript.LevelUp, currentPlayer.Guid);
             currentPlayer.SetMaxVitals();
 
-            ChatPacket.SendServerMessage(session, "Tester mode engaged: 290 in all attributes, all skills specialized at max ranks. Use /tester off (or /ungod) to revert.", ChatMessageType.Broadcast);
+            ChatPacket.SendServerMessage(session, "Tester mode engaged: all attributes began at 100 and were naturally maxed; all skills are specialized at their natural limits. Use /tester off (or /ungod) to revert.", ChatMessageType.Broadcast);
         }
 
         // magic god

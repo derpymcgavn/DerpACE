@@ -21,6 +21,8 @@ namespace ACE.Server.Factories
         private const uint MutatorOverlayReaper = 0x0600267Au;         // dark missile/crossbow
         private const uint MutatorOverlayDartflinger = 0x0600267Cu;    // white missile/crossbow
         private const uint MutatorOverlayShadow = 0x060026A6u;         // dark Virindi mask
+        private const uint MutatorOverlayOpportunist = 0x0600267Eu;    // green missile/weapon mark
+        private const uint MutatorOverlayExecutioner = 0x060026A3u;    // red Virindi mask
 
         private const uint MutatorOverlayArchmagi = 0x06002684u;       // blue crystal shard
         private const uint MutatorOverlayHierophant = 0x06002687u;     // white crystal shard

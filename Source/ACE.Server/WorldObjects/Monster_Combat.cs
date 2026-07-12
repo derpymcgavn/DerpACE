@@ -415,8 +415,10 @@ namespace ACE.Server.WorldObjects
         public virtual uint TakeDamage(WorldObject source, DamageType damageType, float amount, bool crit = false)
         {
             var tryDamage = (int)Math.Round(amount);
+            var previousHealth = Health.Current;
 
             var damage = -UpdateVitalDelta(Health, -tryDamage);
+            BossMechanicManager.OnHealthChanged(this, previousHealth);
 
             // TODO: update monster stamina?
 

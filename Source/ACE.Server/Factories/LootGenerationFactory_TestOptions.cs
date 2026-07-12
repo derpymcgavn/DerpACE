@@ -114,6 +114,11 @@ namespace ACE.Server.Factories
             ["spiral"] = "orbitweaver",
             ["orbit"] = "orbitweaver",
 
+            ["opportunist"] = "opportunist",
+            ["opportunity"] = "opportunist",
+            ["executioner"] = "executioner",
+            ["execute"] = "executioner",
+
             ["confusion"] = "confusion",
             ["voidconfusion"] = "confusion",
             ["bedlam"] = "confusion",
@@ -147,6 +152,8 @@ namespace ACE.Server.Factories
             ["skybreaker"] = TreasureWeaponType.Caster,
             ["stormcaller"] = TreasureWeaponType.Caster,
             ["orbitweaver"] = TreasureWeaponType.Caster,
+            ["opportunist"] = TreasureWeaponType.Sword,
+            ["executioner"] = TreasureWeaponType.Axe,
             ["confusion"] = TreasureWeaponType.Caster,
         };
 
@@ -268,7 +275,9 @@ namespace ACE.Server.Factories
                 "skybreaker/meteor",
                 "stormcaller/chainlightning",
                 "orbitweaver/spiralstar",
-                "confusion/bedlam"
+                "confusion/bedlam",
+                "opportunist",
+                "executioner"
             });
         }
 
@@ -357,8 +366,13 @@ namespace ACE.Server.Factories
                 "archmagi"    => wo.GetProperty(PropertyBool.IsArchmagiCaster) == true,
                 "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true
                                  || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
-                "shadowshot"  => wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
-                "secondshadow"=> wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
+                "shadowshot"  => wo.GetProperty(PropertyBool.IsShadowVolleyWeapon) == true
+                                 || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true
+                                    && wo.GetProperty(PropertyBool.IsSecondShadowWeapon) != true,
+                "secondshadow"=> wo.GetProperty(PropertyBool.IsSecondShadowWeapon) == true
+                                 || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
+                "opportunist" => wo.GetProperty(PropertyBool.IsOpportunistWeapon) == true,
+                "executioner" => wo.GetProperty(PropertyBool.IsExecutionerWeapon) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
                 "skybreaker"  => wo.GetProperty(PropertyBool.IsSkybreakerCaster) == true,
                 "stormcaller" => wo.GetProperty(PropertyBool.IsStormcallerCaster) == true,

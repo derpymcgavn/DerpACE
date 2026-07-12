@@ -260,6 +260,7 @@ namespace ACE.Server.Factories
 
                 wo.Name = wo.Name + " of the Shadow Volley";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowVolleyWeapon, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneProcChance, procChance);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneCooldownSeconds, cooldownSeconds);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDurationSeconds, durationSeconds);

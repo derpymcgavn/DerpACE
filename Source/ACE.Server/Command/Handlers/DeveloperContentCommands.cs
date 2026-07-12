@@ -2170,6 +2170,12 @@ namespace ACE.Server.Command.Handlers.Processors
         [CommandHandler("export-sql", AccessLevel.Developer, CommandHandlerFlag.None, 1, "Exports content from database to SQL file", "<optional type> <id>\n<optional type> - landblock, encounter, event, quest, recipe, spell, weenie (default if not specified)\n<id> - wcid or content id to export")]
         public static void HandleExportSql(Session session, params string[] parameters)
         {
+            if (parameters.Length == 2 && parameters.Any(x => x.Equals("boss", StringComparison.OrdinalIgnoreCase)))
+            {
+                var bossId = parameters.First(x => !x.Equals("boss", StringComparison.OrdinalIgnoreCase));
+                ExportSQLBoss(session, bossId);
+                return;
+            }
             var param = parameters[0];
             var contentType = FileType.Weenie;
 
@@ -2303,6 +2309,48 @@ namespace ACE.Server.Command.Handlers.Processors
             CommandHandlerHelper.WriteOutputInfo(session, $"Exported {sql_folder}{sql_filename}");
         }
 
+        public static void ExportSQLBoss(Session session, string param)
+        {
+            if (!uint.TryParse(param, out var wcid))
+            {
+                CommandHandlerHelper.WriteOutputInfo(session, "Boss export requires a numeric WCID.");
+                return;
+            }
+
+            var weenie = DatabaseManager.World.GetWeenie(wcid);
+            if (weenie == null)
+            {
+                CommandHandlerHelper.WriteOutputInfo(session, $"Couldn't find boss weenie {wcid}.");
+                return;
+            }
+
+            using var db = new ACE.Database.Models.Shard.ShardDbContext();
+            var profile = db.BossMechanicProfile.FirstOrDefault(x => x.WeenieClassId == wcid);
+            if (profile == null)
+            {
+                CommandHandlerHelper.WriteOutputInfo(session, $"WCID {wcid} has no boss mechanic profile.");
+                return;
+            }
+
+            ExportSQLWeenie(session, param);
+
+            var root = VerifyContentFolder(session, false);
+            var folder = Path.Combine(root.FullName, "sql", "weenies");
+            var filename = WeenieSQLWriter.GetDefaultFileName(weenie);
+            var path = Path.Combine(folder, filename);
+            var Hex = new Func<string, string>(value => "0x" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(value ?? "")));
+
+            using var writer = File.AppendText(path);
+            writer.WriteLine();
+            writer.WriteLine("-- DerpACE Boss Mechanic Profile");
+            writer.WriteLine($"-- BossProfile: {profile.ProfileName}");
+            writer.WriteLine($"-- BossWeenieClassId: {profile.WeenieClassId}");
+            writer.WriteLine($"-- BossMechanicsVersion: 1");
+            writer.WriteLine("INSERT INTO `boss_mechanic_profile` (`profile_Name`,`weenie_Class_Id`,`draft_Revision`,`draft_Json`,`published_Revision`,`published_Json`,`previous_Revision`,`previous_Json`,`enabled`,`modified_By`,`modified_At`) VALUES");
+            writer.WriteLine($"({Hex(profile.ProfileName)},{profile.WeenieClassId},{profile.DraftRevision},{Hex(profile.DraftJson)},{profile.PublishedRevision},{Hex(profile.PublishedJson)},{profile.PreviousRevision},{Hex(profile.PreviousJson)},{(profile.Enabled ? 1 : 0)},{Hex(profile.ModifiedBy)},UTC_TIMESTAMP())");
+            writer.WriteLine("ON DUPLICATE KEY UPDATE `weenie_Class_Id`=VALUES(`weenie_Class_Id`),`draft_Revision`=VALUES(`draft_Revision`),`draft_Json`=VALUES(`draft_Json`),`published_Revision`=VALUES(`published_Revision`),`published_Json`=VALUES(`published_Json`),`previous_Revision`=VALUES(`previous_Revision`),`previous_Json`=VALUES(`previous_Json`),`enabled`=VALUES(`enabled`),`modified_By`=VALUES(`modified_By`),`modified_At`=VALUES(`modified_At`);");
+            CommandHandlerHelper.WriteOutputInfo(session, $"Appended boss profile '{profile.ProfileName}' to {path}");
+        }
         public static void ExportSQLRecipe(Session session, string param)
         {
             DirectoryInfo di = VerifyContentFolder(session, false);

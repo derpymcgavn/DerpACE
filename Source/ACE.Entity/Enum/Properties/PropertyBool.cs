@@ -282,5 +282,9 @@ namespace ACE.Entity.Enum.Properties
         IsRejuvenatingDanceBoots         = 9065,
         IsReplenishingDanceBoots         = 9066,
         IsShadowCloneWeapon              = 9067,
+        IsShadowVolleyWeapon             = 9079,
+        IsSecondShadowWeapon             = 9080,
+        IsOpportunistWeapon              = 9081,
+        IsExecutionerWeapon              = 9082,
     }
 }

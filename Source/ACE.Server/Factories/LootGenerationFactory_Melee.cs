@@ -829,6 +829,27 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} rewards proper form - attacks made at {powerPct}% power or higher build Goldleaf Poise on consecutive hits against the same target. At {maxStacks} stacks, it drains {drainPct}% of the target's current stamina, restores {returnPct}% of the drained stamina to the wielder, grants {poiseDuration} seconds of {reductionPct}% damage reduction, then starts a {cooldown} second cooldown.";
             }
 
+            // Opportunist: an evade exposes the target to an empowered follow-up.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(profile, roll, ref specialModifierApplied, 0.01f, 6, true, "opportunist"))
+            {
+                wo.Name += " of Opportunity";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOpportunistWeapon, true);
+                wo.IconOverlayId = MutatorOverlayOpportunist;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOpportunist: when this weapon is evaded, its next successful strike against that target within 8 seconds deals 25% additional damage.";
+            }
+
+            // Executioner: rewards committing to wounded targets.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(profile, roll, ref specialModifierApplied, 0.0075f, 7, true, "executioner"))
+            {
+                wo.Name += " of the Executioner";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsExecutionerWeapon, true);
+                wo.IconOverlayId = MutatorOverlayExecutioner;
+                ApplyLootUiEffect(wo, UiEffects.Slashing);
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nExecutioner: strikes against creatures at or below 25% health deal 20% additional damage.";
+            }
             // Second Shadow: rare melee-weapon shadow clone affix.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
                 && TryRollWeaponModifier(
@@ -847,6 +868,7 @@ namespace ACE.Server.Factories
 
                 wo.Name = wo.Name + " of the Second Shadow";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneWeapon, true);
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSecondShadowWeapon, true);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneProcChance, procChance);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneCooldownSeconds, cooldownSeconds);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ShadowCloneDurationSeconds, durationSeconds);

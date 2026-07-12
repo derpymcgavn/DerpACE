@@ -49,6 +49,8 @@ namespace ACE.Server.WorldObjects
         private DateTime _unarmedAttackSpeedBoostUntil = DateTime.MinValue;
         private DateTime _quickeningDaggerBoostUntil = DateTime.MinValue;
         private float _quickeningDaggerSpeedMultiplier = 1.0f;
+        private uint _opportunistTargetGuid;
+        private DateTime _opportunistReadyUntil = DateTime.MinValue;
         private readonly Dictionary<string, DateTime> _mutatorCooldowns = new Dictionary<string, DateTime>();
 
         private const double UnarmedAttackSpeedBoostSeconds = 6.0;
@@ -122,6 +124,17 @@ namespace ACE.Server.WorldObjects
 
         public DateTime NextRefillTime;
 
+        private static double NormalizeMutatorProcChance(WorldObject weapon, double configuredChance)
+        {
+            var chance = Math.Clamp(configuredChance, 0.0, 1.0);
+            if (weapon == null || chance <= 0.0 || chance >= 1.0)
+                return chance;
+
+            // WeaponTime 50 is the balance baseline. Faster weapons get fewer procs per hit;
+            // slower weapons get more, keeping expected procs per minute roughly comparable.
+            var weaponTime = Math.Clamp(weapon.WeaponTime ?? 50, 20, 120);
+            return 1.0 - Math.Pow(1.0 - chance, weaponTime / 50.0);
+        }
         public bool TryStartMutatorCooldown(WorldObject source, int cooldownId, double cooldownSeconds)
         {
             if (source == null || cooldownId <= 0 || cooldownSeconds <= 0)
@@ -312,6 +325,29 @@ namespace ACE.Server.WorldObjects
             }
 
             var damageEvent = DamageEvent.CalculateDamage(this, target, damageSource);
+            if (damageEvent.Evaded && damageEvent.Weapon?.GetProperty(PropertyBool.IsOpportunistWeapon) == true)
+            {
+                _opportunistTargetGuid = target.Guid.Full;
+                _opportunistReadyUntil = DateTime.UtcNow.AddSeconds(8.0);
+            }
+
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(PropertyBool.IsOpportunistWeapon) == true
+                && _opportunistTargetGuid == target.Guid.Full
+                && _opportunistReadyUntil >= DateTime.UtcNow)
+            {
+                damageEvent.Damage *= 1.25f;
+                _opportunistTargetGuid = 0;
+                _opportunistReadyUntil = DateTime.MinValue;
+            }
+
+            if (damageEvent.HasDamage
+                && damageEvent.Weapon?.GetProperty(PropertyBool.IsExecutionerWeapon) == true
+                && target.Health.MaxValue > 0
+                && target.Health.Current <= target.Health.MaxValue * 0.25f)
+            {
+                damageEvent.Damage *= 1.20f;
+            }
             var shadowstepProc = false;
 
             if (damageEvent.HasDamage
@@ -504,7 +540,7 @@ namespace ACE.Server.WorldObjects
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerProcChance) ?? 0.0;
                 if (procChance > 0.0
-                    && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, QuickeningDaggerCooldownId, QuickeningDaggerCooldownSeconds))
                 {
                     var speedMultiplier = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerSpeedMultiplier) ?? 1.0);
@@ -610,7 +646,7 @@ namespace ACE.Server.WorldObjects
                 && (WeaponIsType(damageEvent.Weapon, WeaponType.Axe, WeaponType.TwoHanded) || (WeaponIsType(damageEvent.Weapon, WeaponType.Mace) && WeaponNameContains(damageEvent.Weapon, "hammer"))))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, RavagerCooldownId, RavagerCooldownSeconds))
                 {
                     var bleedPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.RavagerBleedPct) ?? 0.0;
@@ -729,7 +765,7 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Mace, WeaponType.TwoHanded))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, WardenCooldownId, WardenCooldownSeconds))
                 {
                     var penalty = (uint)Math.Max(0, (int)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.WardenConcussPenalty) ?? 0.0));
@@ -761,7 +797,7 @@ namespace ACE.Server.WorldObjects
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistProcChance) ?? 0.0;
                 if (procChance > 0.0
-                    && ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                    && ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, PugilistCooldownId, PugilistCooldownSeconds))
                 {
                     var style = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyInt.PugilistStyle) ?? 1;
@@ -819,7 +855,7 @@ namespace ACE.Server.WorldObjects
                 && WeaponIsType(damageEvent.Weapon, WeaponType.Sword, WeaponType.TwoHanded))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, ResoluteHealCooldownId, ResoluteHealCooldownSeconds))
                 {
                     var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ResoluteHealPct) ?? 0.0;
@@ -860,7 +896,7 @@ namespace ACE.Server.WorldObjects
                 && !target.DamageHistory.TotalDamage.ContainsKey(this.Guid))
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeProc) ?? 0.0;
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, StalkerCooldownId, StalkerCooldownSeconds))
                 {
                     var bonusPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.StalkerFirstStrikeBonus) ?? 0.0;
@@ -1327,7 +1363,7 @@ namespace ACE.Server.WorldObjects
                         procChance = legacyProcChance;
                 }
 
-                if (ThreadSafeRandom.Next(0.0f, 1.0f) < procChance
+                if (ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
                     && TryStartMutatorCooldown(damageEvent.Weapon, ReaperCooldownId, ReaperCooldownSeconds))
                 {
                     var healPct = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.ReaperKillHealPct) ?? 0.0;

@@ -1647,8 +1647,22 @@ namespace ACE.Server.WorldObjects
 
             if (containerRootOwner == this)
             {
+                var acquiredFromExternalContainer = itemRootOwner != this;
+                var previousProvenance = GetGearProvenance(item);
+                var previousName = item.Name;
+
                 StampGearProvenance(item);
                 GlobalKillQuestManager.OnItemAcquired(this, item);
+
+                if (acquiredFromExternalContainer && previousProvenance == null && GetGearProvenance(item) != null)
+                {
+                    if (!string.Equals(previousName, item.Name, StringComparison.Ordinal))
+                        Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyString(item, PropertyString.Name, item.Name));
+
+                    // Stuck/generated chests do not use the loose-container save path below.
+                    // Persist first-acquisition provenance before a disconnect can lose it.
+                    item.SaveBiotaToDatabase();
+                }
             }
 
             // when moving from a non-stuck container to a different container,

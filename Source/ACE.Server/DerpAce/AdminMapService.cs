@@ -197,6 +197,18 @@ namespace ACE.Server.DerpAce
                     return;
                 }
 
+                if (path.Equals("/boss-mechanics", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteText(context, "Admin map login required.", "text/plain; charset=utf-8");
+                        return;
+                    }
+
+                    WriteText(context, BuildBossMechanicsHelpHtml(), "text/html; charset=utf-8");
+                    return;
+                }
                 if (path.Equals("/api/session", StringComparison.OrdinalIgnoreCase))
                 {
                     var session = GetValidSession(context);
@@ -1731,6 +1743,50 @@ namespace ACE.Server.DerpAce
             }
         }
 
+        private static string BuildBossMechanicsHelpHtml()
+        {
+            return @"<!doctype html>
+<html lang=""en""><head><meta charset=""utf-8""><meta name=""viewport"" content=""width=device-width,initial-scale=1"">
+<title>DerpACE Boss Mechanics</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1011;--panel:#141a1c;--line:#344146;--text:#edf2f3;--muted:#a8b4b8;--green:#66d39a;--amber:#f0c36a;--red:#ef7777;--blue:#72b7e8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Segoe UI,Arial,sans-serif}header{position:sticky;top:0;background:#101618;border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;gap:16px}header h1{font-size:18px;margin:0}a{color:var(--blue)}main{max-width:1100px;margin:auto;padding:20px}.band{border-top:1px solid var(--line);padding:20px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}.card h3{margin:0 0 8px;font-size:15px}.ok{color:var(--green)}.planned{color:var(--amber)}.danger{color:var(--red)}code,pre{font-family:Consolas,monospace}pre{background:#090c0d;border:1px solid #293438;padding:12px;overflow:auto;white-space:pre-wrap}.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.step{border-left:3px solid var(--green);padding:8px 10px;background:var(--panel)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}@media(max-width:760px){.grid,.steps{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>Boss Mechanics</h1><a href=""/"">Back to Admin Map</a></header><main>
+<section><p>Boss SQL defines the creature. A boss profile defines encounter behavior. Admins edit a draft, validate it, then publish an atomic live revision. Broken drafts never affect spawned bosses.</p><div class=""steps""><div class=""step"">1. Create draft</div><div class=""step"">2. Add rules</div><div class=""step"">3. Validate</div><div class=""step"">4. Publish</div></div></section>
+<section class=""band""><h2>Available Now</h2><div class=""grid""><div class=""card""><h3 class=""ok"">One-time health threshold</h3><pre>@boss create hollow_king 9000001
+@boss add-say hollow_king 75 You have disturbed what sleeps below.
+@boss add-effect hollow_king 75 EnchantUpRed
+@boss validate hollow_king
+@boss publish hollow_king</pre></div><div class=""card""><h3>Recovery and export</h3><pre>@boss show hollow_king
+@boss rollback hollow_king
+/export-sql boss 9000001</pre><p>Rollback restores the previous published revision. Export writes the weenie and profile into one portable SQL artifact.</p></div></div></section>
+<section class=""band""><h2>Advanced Encounter Blueprints</h2><p class=""planned"">These templates define the next guarded action types. The current schema validator intentionally blocks them until their runtime safety checks are installed.</p>
+<div class=""card""><h3>Resisted Spell: Sky Stomp</h3><pre>WHEN boss resists a player spell
+CHANCE 20%
+ANNOUNCE ""The Colossus drives the spell back into the earth!""
+PLAY stomp animation and impact effect
+FOR EACH player within 25 yards:
+  move upward up to 500 feet
+  clamp to playable cells and legal Z
+  abort movement if no safe destination exists
+COOLDOWN 20 seconds</pre><p><strong>Required guardrails:</strong> one roll per resisted cast, safe-position trace, indoor ceiling clamp, portal-space rejection, fall-damage policy, and a visible boss cooldown.</p></div>
+<div class=""grid"" style=""margin-top:12px""><div class=""card""><h3>Health Threshold: Reinforcements</h3><pre>WHEN health crosses below 60%
+ANNOUNCE ""Attend me!""
+SPAWN WCID 9000010
+COUNT 4
+RADIUS 6-10 yards
+OWNED BY encounter
+FIRE once
+DESPAWN on reset or boss death</pre><p>Spawn count must be 1-12. The boss cannot spawn itself. Every candidate position must pass collision and playable-cell validation.</p></div><div class=""card""><h3>Spell Reflection</h3><pre>WHEN receiving a harmful player spell
+CHANCE 15%
+TARGET random: original caster or another local player
+ANNOUNCE ""The mirror turns toward {target}!""
+REFLECT original spell at 60% power
+NO recursive reflection
+COOLDOWN 12 seconds</pre><p>Reflection must preserve PK rules, reject invalid/dead targets, exclude reflected casts from triggering another reflection, and announce the selected target locally.</p></div></div></section>
+<section class=""band""><h2>Publishing Rules</h2><table><tr><th>Rule</th><th>Limit</th></tr><tr><td>Rules per profile</td><td>32</td></tr><tr><td>Actions per rule</td><td>8</td></tr><tr><td>Health threshold</td><td>1-99%</td></tr><tr><td>Speech</td><td>240 characters</td></tr><tr><td>Runtime failure</td><td>Skip action; never stop world tick</td></tr><tr><td>Missing database table</td><td>Mechanics disabled; combat continues</td></tr></table></section>
+</main></body></html>";
+        }
         private static string BuildIndexHtml()
         {
             var refresh = Math.Max(1, DerpAceConfigManager.Config.AdminMapRefreshSeconds);
@@ -1908,7 +1964,7 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
     <input id=""loginPassword"" type=""password"" autocomplete=""current-password"" placeholder=""password"">
     <button id=""loginButton"">Log In</button>
   </div>
-  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><button id=""logoutButton"">Log Out</button></div>
+  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><button id=""logoutButton"">Log Out</button></div>
   <div class=""controls""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div>
   <div id=""status"">Loading...</div>
   <section id=""adminPanel"" class=""adminPanel"">
