@@ -93,7 +93,7 @@ namespace ACE.Server.Managers
             var item = source.Items[_rng.Next(source.Items.Count)];
             var dx = destination.WorldX - source.WorldX;
             var dy = destination.WorldY - source.WorldY;
-            var distanceClicks = Math.Sqrt(dx * dx + dy * dy) / 24.0;
+            var distanceClicks = Math.Sqrt(dx * dx + dy * dy) / 240.0;
 
             quest.Kind = GlobalQuestKind.VendorDeliveryRace;
             quest.SourceVendorWcid = source.VendorWcid;

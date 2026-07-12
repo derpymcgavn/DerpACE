@@ -42,6 +42,7 @@ namespace ACE.Server.WorldObjects
             "Drego suth var.",
             "Kesh voh duma.",
             "Nethra zal ven.",
+            "Kael mor nethra.",
         };
 
         public static bool TryUse(Player player, WorldObject source, WorldObject target)
@@ -196,7 +197,7 @@ namespace ACE.Server.WorldObjects
 
             dust.SetStackSize(amount);
             dust.SetProperty(PropertyBool.IsIronmanItem, true);
-            ApplyHexdustSpellcraft(player, dust);
+            PrepareHexdustStack(player, dust);
 
             if (!player.TryCreateInInventoryWithNetworking(dust))
             {
@@ -226,7 +227,7 @@ namespace ACE.Server.WorldObjects
                 return true;
             }
 
-            var tier = GetImperilTier(player);
+            var tier = GetHexdustTier(dust, player);
             var customSpellId = CustomSpellManager.HexdustSpellIdFirst + (uint)(tier - 1);
             var spell = new Spell(customSpellId);
             if (spell.NotFound)
@@ -237,8 +238,6 @@ namespace ACE.Server.WorldObjects
                 player.SendUseDoneEvent();
                 return true;
             }
-
-            ApplyHexdustSpellcraft(player, dust);
 
             var throwChain = new ActionChain();
             var prevStance = player.CurrentMotionState?.Stance ?? MotionStance.NonCombat;
@@ -260,7 +259,7 @@ namespace ACE.Server.WorldObjects
                     return;
                 }
 
-                SayHexWords(player);
+                SayHexWords(player, tier);
                 player.ApplyVisualEffects(PlayScript.EnchantUpGreen, 0.8f);
                 creature.ApplyVisualEffects(PlayScript.RestrictionEffectGreen, 1.0f);
                 creature.ApplyVisualEffects(PlayScript.SkillDownGreen, 0.85f);
@@ -405,12 +404,49 @@ namespace ACE.Server.WorldObjects
             return creatureType == CreatureType.Invalid ? "monster" : creatureType.ToString();
         }
 
-        private static void SayHexWords(Player player)
+        private static void SayHexWords(Player player, int tier)
         {
-            var phrase = HexWords[ThreadSafeRandom.Next(0, HexWords.Length - 1)];
+            var phrase = HexWords[Math.Clamp(tier, 1, HexWords.Length) - 1];
             player.EnqueueBroadcast(new GameMessageHearSpeech(phrase, player.GetNameWithSuffix(), player.Guid.Full, ChatMessageType.Spellcasting), WorldObject.LocalBroadcastRange, ChatMessageType.Spellcasting);
         }
 
+        public static bool IsHexdust(WorldObject item)
+        {
+            return item?.WeenieClassId == ScavengersHexdustWeenieClassId;
+        }
+
+        private static void PrepareHexdustStack(Player player, WorldObject dust)
+        {
+            var tier = Math.Clamp(GetImperilTier(player), 1, 7);
+            var spellId = CustomSpellManager.HexdustSpellIdFirst + (uint)(tier - 1);
+            dust.SpellDID = spellId;
+            dust.Name = $"Scavenger's Hexdust {ToRomanTier(tier)}";
+            dust.LongDesc = $"Scavenger fieldcraft powder carrying Scavenger's Hex {ToRomanTier(tier)}, equivalent to Imperil {ToRomanTier(tier)}. It only stacks with Hexdust of this tier.";
+            ApplyHexdustSpellcraft(player, dust);
+        }
+
+        private static int GetHexdustTier(WorldObject dust, Player player)
+        {
+            var spellId = dust?.SpellDID ?? 0;
+            if (spellId >= CustomSpellManager.HexdustSpellIdFirst && spellId <= CustomSpellManager.HexdustSpellIdLast)
+                return (int)(spellId - CustomSpellManager.HexdustSpellIdFirst) + 1;
+
+            return Math.Clamp(GetImperilTier(player), 1, 7);
+        }
+
+        private static string ToRomanTier(int tier)
+        {
+            return tier switch
+            {
+                1 => "I",
+                2 => "II",
+                3 => "III",
+                4 => "IV",
+                5 => "V",
+                6 => "VI",
+                _ => "VII",
+            };
+        }
         private static void ApplyHexdustSpellcraft(Player player, WorldObject dust)
         {
             var spellcraft = GetHexdustSpellcraft(player);
@@ -444,8 +480,6 @@ namespace ACE.Server.WorldObjects
         private static int GetImperilTier(Player player)
         {
             var assess = player.GetCreatureSkill(Skill.AssessCreature).Current;
-
-            if (assess >= 550) return 8;
             if (assess >= 450) return 7;
             if (assess >= 350) return 6;
             if (assess >= 250) return 5;

@@ -3311,6 +3311,12 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (ScavengersHexdust.IsHexdust(sourceStack) && ScavengersHexdust.IsHexdust(targetStack) && sourceStack.SpellDID != targetStack.SpellDID)
+            {
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Hexdust can only be merged with powder carrying the same hex tier."));
+                Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, mergeFromGuid, WeenieError.YouCannotMergeDifferentStacks));
+                return;
+            }
             if (NomadRune.IsNomadRune(sourceStack) && NomadRune.IsNomadRune(targetStack) && sourceStack.SpellDID != targetStack.SpellDID)
             {
                 Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Nomad Runes can only be merged with runes of the same spell."));

@@ -140,7 +140,7 @@ namespace ACE.Server.Factories
                 if (candidates.Count == 0)
                     continue;
 
-                var mutator = candidates[ThreadSafeRandom.Next(0, candidates.Count)];
+                var mutator = candidates[ThreadSafeRandom.Next(0, candidates.Count - 1)];
                 roll.ForcedWeaponMutator = mutator;
                 var weapon = CreateAndMutateWcid(profile, roll, true);
                 if (weapon != null && HasWeaponMutator(weapon, mutator))

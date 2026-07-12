@@ -704,7 +704,7 @@ namespace ACE.Server.DerpAce
                 PropertiesFloat        = new Dictionary<PropertyFloat, double>(),
                 PropertiesString       = new Dictionary<PropertyString, string>(),
                 PropertiesDID          = new Dictionary<PropertyDataId, uint>(),
-                PropertiesBook         = new PropertiesBook { MaxNumPages = 8, MaxNumCharsPerPage = 1800 },
+                PropertiesBook         = new PropertiesBook { MaxNumPages = 11, MaxNumCharsPerPage = 1800 },
                 PropertiesBookPageData = new List<PropertiesBookPageData>(),
             };
 
@@ -717,6 +717,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.MaxStackSize]    = 1;
             w.PropertiesInt[PropertyInt.StackSize]       = 1;
             w.PropertiesInt[PropertyInt.PhysicsState]    = 1044;
+            w.PropertiesInt[PropertyInt.UiEffects]       = (int)UiEffects.Frost;
 
             w.PropertiesBool[PropertyBool.Inscribable] = false;
             w.PropertiesBool[PropertyBool.IsSellable]  = false;
@@ -741,6 +742,46 @@ namespace ACE.Server.DerpAce
             AddBookPage(w, "VI. The Rule of Three Pockets\n\nOne pocket is for escape: recall, stamina, anything that buys distance.\n\nOne pocket is for the next fight: runes, hexdust, food, and whatever keeps your hands moving.\n\nOne pocket is for shame: trophies you swear will matter later, strange rocks, lucky bones, and the spoon you will not explain.\n\nWhen all three pockets are full, go home. The road kills most often when it convinces you to take one more room.");
             AddBookPage(w, "VII. How to Lose Correctly\n\nYou will miss. You will be evaded. You will meet things that make your best plan look like a wet napkin.\n\nWhen that happens, stop proving bravery to nobody. Back up. Dust the target. Change element. Use a shield. Break line of sight. Drag one enemy instead of three. A living coward learns more than a heroic corpse.\n\nThe Nomad's pride is not in never needing help. It is in needing very little, very well.");
             AddBookPage(w, "VIII. Last Advice by Firelight\n\nBuff before danger. Carry Hexdust. Keep spare shoes. Respect evades. Never trust a room with too much floor.\n\nIf a stranger offers you a perfect weapon, ask what it eats. If a chest looks generous, ask who taught it manners. If the road gets quiet, sit down and listen until it confesses.\n\nAnd when you have nothing left, check again. Most people overlook the thing that saves them because it is dirty, small, and already in their hand.");
+
+            AddBookPage(w, @"IX. The Words Beneath the Dust
+
+The old ditch-walkers say these words came from no kingdom. They were collected from road shrines, grave songs, and the last breaths of people too stubborn to die politely. The cant is not a full language. It is a set of instructions taught to bone, dust, and fear.
+
+Vosh du kael - Armor, remember the grave.
+Mordo vek nesh - Bone reveals the weakness.
+Zuthra kai mal - Dust, drink their strength.
+Drego suth var - Let the hidden wound open.
+Kesh voh duma - Their protection becomes ash.
+Nethra zal ven - Road, take what shields them.
+Kael mor nethra - The grave walks beside you.");
+            AddBookPage(w, @"X. The Sevenfold Ritual
+
+Each grade of Hexdust carries one phrase. Do not shout all seven. Powder remembers the lesson ground into it, and a mismatched word only tells the road you were not listening.
+
+Hex I: Vosh du kael.
+Hex II: Mordo vek nesh.
+Hex III: Zuthra kai mal.
+Hex IV: Drego suth var.
+Hex V: Kesh voh duma.
+Hex VI: Nethra zal ven.
+Hex VII: Kael mor nethra.
+
+The seventh is spoken softly. It does not threaten the target. It informs the grave that company is coming.");
+            AddBookPage(w, @"XI. Sayings of the Open Road
+
+The cant also lives outside ritual. Nomads use it when plain speech feels too expensive.
+
+Nethra mor ven. - The road keeps those who move.
+Kael ven; mor drego. - The grave waits; keep walking.
+Zuthra vek. - The dust knows.
+Vosh nesh. - Every armor has a weakness.
+Kesh duma. - Let it become ash.
+Du nethra. - To the road. A farewell between Nomads.
+Mor kael, mor ven. - Walk beside death, but keep walking.
+Nethra zal duma. - Let the road take the ashes.
+Vek nesh, drego var. - Know the weakness; open the way.
+
+Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something important or wants everyone to believe they have. Both uses are traditional.");
 
             return w;
         }

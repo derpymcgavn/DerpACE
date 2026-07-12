@@ -419,11 +419,22 @@ namespace ACE.Server.Network.Structure
             var attackName = (validLocs & EquipMask.HandWear) != 0 ? "punches" : "kicks";
 
             var active = IsUnarmedDamageArmorActive(wo);
-            var details = active
-                ? $"\n\nUnarmed Damage: {baseDamage} {damageTypeName} ({variance:P0} variance) for {attackName} while no weapon is equipped."
-                : $"\n\nUnarmed Damage: 0 (dormant while a weapon or caster is equipped).\nPotential: {baseDamage} {damageTypeName} ({variance:P0} variance) for {attackName} when no weapon is equipped.";
+            var effectiveDamage = WeaponProfile != null && WeaponProfile.Damage > 0 ? WeaponProfile.Damage : (uint)baseDamage;
+            var effectiveVariance = WeaponProfile != null && WeaponProfile.DamageVariance > 0.0
+                ? WeaponProfile.DamageVariance
+                : variance;
+            var offense = WeaponProfile?.WeaponOffense ?? wo.WeaponOffense ?? 1.0;
+            var defense = WeaponProfile?.WeaponDefense ?? wo.WeaponDefense ?? 1.0;
+            var speed = WeaponProfile != null && WeaponProfile.WeaponTime > 0
+                ? WeaponProfile.WeaponTime
+                : (uint)Math.Max(0, wo.WeaponTime ?? 0);
 
-            details += $"\nThese {slotType} are compatible with the nomad unarmed system.";
+            var details = active
+                ? $"\n\nDamage: {effectiveDamage} {damageTypeName} ({effectiveVariance:P0} variance)"
+                : $"\n\nDamage: 0 (dormant)\nPotential Damage: {effectiveDamage} {damageTypeName} ({effectiveVariance:P0} variance)";
+
+            details += $"\nAttack: {offense:P1}   Defense: {defense:P1}   Speed: {speed}";
+            details += $"\nApplies to {attackName} while no weapon or caster is equipped.";
 
             if (PropertiesString.TryGetValue(PropertyString.LongDesc, out var longDesc) && !string.IsNullOrWhiteSpace(longDesc))
             {

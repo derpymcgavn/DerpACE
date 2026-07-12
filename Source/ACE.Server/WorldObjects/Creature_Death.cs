@@ -855,7 +855,8 @@ namespace ACE.Server.WorldObjects
             // create death treasure from loot generation factory
             if (DeathTreasure != null)
             {
-                List<WorldObject> items = LootGenerationFactory.CreateRandomLootObjects(DeathTreasure);
+                var lootProfile = GetPlayerBiasedDeathTreasure(DeathTreasure, killerPlayer);
+                List<WorldObject> items = LootGenerationFactory.CreateRandomLootObjects(lootProfile);
                 foreach (WorldObject wo in items)
                 {
                     NomadQuestTrophy.StampIfEligible(killerPlayer, this, wo);
@@ -868,7 +869,7 @@ namespace ACE.Server.WorldObjects
                     DoCantripLogging(killer, wo);
                 }
                 var lootMutatorCount = GetProperty(PropertyInt.MutatorCount) ?? 0;
-                var mutatedWeapon = LootGenerationFactory.TryCreateMutatedMobWeaponDrop(DeathTreasure, lootMutatorCount);
+                var mutatedWeapon = LootGenerationFactory.TryCreateMutatedMobWeaponDrop(lootProfile, lootMutatorCount);
                 if (mutatedWeapon != null)
                 {
                     NomadQuestTrophy.StampIfEligible(killerPlayer, this, mutatedWeapon);
@@ -1013,6 +1014,61 @@ namespace ACE.Server.WorldObjects
             return droppedItems;
         }
 
+        private static TreasureDeath GetPlayerBiasedDeathTreasure(TreasureDeath source, Player player)
+        {
+            if (player == null || !PropertyManager.GetBool("wi_name_loot_bias").Item)
+                return source;
+
+            var maxBias = Math.Clamp(PropertyManager.GetDouble("wi_name_loot_bias_max").Item, 0.0, 0.25);
+            if (maxBias <= 0.0)
+                return source;
+
+            var windowHours = Math.Max(0.25, PropertyManager.GetDouble("wi_name_loot_bias_hours").Item);
+            var window = (long)Math.Floor(DateTimeOffset.UtcNow.ToUnixTimeSeconds() / (windowHours * 3600.0));
+            var normalizedName = (player.Name ?? string.Empty).Trim().ToUpperInvariant();
+
+            // The name supplies a persistent tendency; the time bucket lets every name run hot or cold.
+            var nameRoll = HashToSignedUnit(normalizedName);
+            var windowRoll = HashToSignedUnit($"{normalizedName}|{window}");
+            var bias = (float)(Math.Clamp(nameRoll * 0.55 + windowRoll * 0.45, -1.0, 1.0) * maxBias);
+
+            return new TreasureDeath
+            {
+                Id = source.Id,
+                TreasureType = source.TreasureType,
+                Tier = source.Tier,
+                LootQualityMod = Math.Clamp(source.LootQualityMod + bias, -0.25f, 0.50f),
+                UnknownChances = source.UnknownChances,
+                ItemChance = source.ItemChance,
+                ItemMinAmount = source.ItemMinAmount,
+                ItemMaxAmount = source.ItemMaxAmount,
+                ItemTreasureTypeSelectionChances = source.ItemTreasureTypeSelectionChances,
+                MagicItemChance = source.MagicItemChance,
+                MagicItemMinAmount = source.MagicItemMinAmount,
+                MagicItemMaxAmount = source.MagicItemMaxAmount,
+                MagicItemTreasureTypeSelectionChances = source.MagicItemTreasureTypeSelectionChances,
+                MundaneItemChance = source.MundaneItemChance,
+                MundaneItemMinAmount = source.MundaneItemMinAmount,
+                MundaneItemMaxAmount = source.MundaneItemMaxAmount,
+                MundaneItemTypeSelectionChances = source.MundaneItemTypeSelectionChances,
+                LastModified = source.LastModified,
+            };
+        }
+
+        private static double HashToSignedUnit(string value)
+        {
+            const ulong offset = 14695981039346656037UL;
+            const ulong prime = 1099511628211UL;
+            var hash = offset;
+
+            foreach (var character in value)
+            {
+                hash ^= character;
+                hash *= prime;
+            }
+
+            return (hash / (double)ulong.MaxValue) * 2.0 - 1.0;
+        }
         /// <summary>
         /// Generates random amounts of slag on a corpse
         /// when an OlthoiPlayer is the killer

@@ -73,7 +73,7 @@ namespace ACE.Server.WorldObjects
                 return;
 
             var spellLevel = Math.Clamp(((player.Level ?? 1) + 24) / 25, 1, 8);
-            var family = spellPool[ThreadSafeRandom.Next(0, spellPool.Count)];
+            var family = spellPool[ThreadSafeRandom.Next(0, spellPool.Count - 1)];
             var spellId = family[spellLevel - 1];
 
             var rune = WorldObjectFactory.CreateNewWorldObject(NomadRuneWeenieClassId);

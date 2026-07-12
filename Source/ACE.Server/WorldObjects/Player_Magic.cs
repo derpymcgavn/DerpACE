@@ -1331,7 +1331,7 @@ namespace ACE.Server.WorldObjects
             }
 
             var bounceTarget = nearbyEnemies.Count > 0
-                ? nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count)]
+                ? nearbyEnemies[ThreadSafeRandom.Next(0, nearbyEnemies.Count - 1)]
                 : targetCreature;
 
             var actionChain = new ActionChain();
