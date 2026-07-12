@@ -788,6 +788,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesDID[PropertyDataId.Setup] = 0x0200018B;
             w.PropertiesDID[PropertyDataId.Icon]  = 0x06001036;
             CopySetupAndIcon(w, TomeWeenieClassId);
+            w.PropertiesDID[PropertyDataId.IconOverlay] = 0x06002AC4;
 
             AddIronmanGuidePage(w, "I. The First Promise\n\nYou have chosen Ironman. The server heard you. The road heard you. Your pack, spellbook, and old certainties have been taken apart and replaced with a new bargain.\n\nYou are self-found now. What you wear should come from your own challenge family: your kills, your quests, your vendors, your fellow Ironmen.\n\nNormal players may wear anything. You may not. That is not punishment. That is the shape of the game you asked to play.");
             AddIronmanGuidePage(w, "II. Lives and Panic\n\nIronman carries Hardcore blood. Lives matter. Death is not just a repair bill with dramatic music.\n\nSome life milestones may return a life as you climb, but do not spend lives as if the road owes you more. It does not.\n\nWhen danger turns strange, leave. Recall. Break line of sight. Drink too early instead of too late. Cowardice is what fools call survival before they understand it.");

@@ -418,6 +418,8 @@ namespace ACE.Server.Managers
 
             GlobalKillQuestManager.Tick();
 
+            LeaderboardCache.Tick();
+
             ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.UpdateGameWorld_Entire);
             ServerPerformanceMonitor.RegisterCumulativeEvents();
 

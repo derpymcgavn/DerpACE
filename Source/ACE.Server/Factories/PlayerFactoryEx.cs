@@ -19,7 +19,7 @@ namespace ACE.Server.Factories
 {
     public static class PlayerFactoryEx
     {
-        private static readonly Random rand = new Random();
+        private static readonly Random rand = Random.Shared;
 
         /// <summary>
         /// Heritage: Gear Knight

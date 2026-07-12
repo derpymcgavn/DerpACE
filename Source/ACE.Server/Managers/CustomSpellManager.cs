@@ -41,6 +41,8 @@ namespace ACE.Server.Managers
         public const uint SpiralStarLashSpellId = 65007;
         public const uint ChainLightningArcSpellId = 65008;
         public const uint FrostWaveShieldSpellId = 65009;
+        public const uint HexdustSpellIdFirst = 65010;
+        public const uint HexdustSpellIdLast = 65016;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
@@ -76,11 +78,13 @@ namespace ACE.Server.Managers
             EnsureDefaultWarMageSpells();
             EnsureDefaultVoidConfusionSpell();
             EnsureDefaultFrostWaveShieldSpell();
+            EnsureDefaultHexdustSpells();
 
             var loaded = LoadAll();
             ForceLoadDefaultWellFedSpell();
             ForceLoadDefaultWarMageVisualSpells();
             ForceLoadDefaultFrostWaveShieldSpell();
+            ForceLoadDefaultHexdustSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -93,6 +97,7 @@ namespace ACE.Server.Managers
             ForceLoadDefaultWellFedSpell();
             ForceLoadDefaultWarMageVisualSpells();
             ForceLoadDefaultFrostWaveShieldSpell();
+            ForceLoadDefaultHexdustSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -150,6 +155,15 @@ namespace ACE.Server.Managers
             }
         }
 
+        private static void ForceLoadDefaultHexdustSpells()
+        {
+            using var doc = JsonDocument.Parse(DefaultHexdustSpellsJson, JsonOptions);
+            if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in customSpells.EnumerateArray())
+                    TryApply(entry, "built-in ScavengersHexdust.json");
+            }
+        }
         public static bool TryExportSql(uint spellId, bool asCopy, out string path, out uint exportedId, out string error)
         {
             path = null;
@@ -1147,6 +1161,13 @@ namespace ACE.Server.Managers
             File.WriteAllText(fallbackPath, DefaultVoidConfusionJson);
         }
 
+        private static void EnsureDefaultHexdustSpells()
+        {
+            EnsureContentDirectory();
+            var path = Path.Combine(ContentDir, "ScavengersHexdust.json");
+            if (!File.Exists(path))
+                File.WriteAllText(path, DefaultHexdustSpellsJson);
+        }
         private static void EnsureDefaultFrostWaveShieldSpell()
         {
             var path = Path.Combine(ContentDir, "FrostWaveShield.json");
@@ -1572,6 +1593,75 @@ namespace ACE.Server.Managers
   ]
 }
 ";
+
+        private const string DefaultHexdustSpellsJson =
+@"{
+    ""CustomSpells"":  [
+                         {
+                             ""Template"":  ""ImperilOther1"",
+                             ""Id"":  65010,
+                             ""Name"":  ""Scavenger\u0027s Hex 1"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 1"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 1."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         },
+                         {
+                             ""Template"":  ""ImperilOther2"",
+                             ""Id"":  65011,
+                             ""Name"":  ""Scavenger\u0027s Hex 2"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 2"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 2."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         },
+                         {
+                             ""Template"":  ""ImperilOther3"",
+                             ""Id"":  65012,
+                             ""Name"":  ""Scavenger\u0027s Hex 3"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 3"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 3."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         },
+                         {
+                             ""Template"":  ""ImperilOther4"",
+                             ""Id"":  65013,
+                             ""Name"":  ""Scavenger\u0027s Hex 4"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 4"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 4."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         },
+                         {
+                             ""Template"":  ""ImperilOther5"",
+                             ""Id"":  65014,
+                             ""Name"":  ""Scavenger\u0027s Hex 5"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 5"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 5."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         },
+                         {
+                             ""Template"":  ""ImperilOther6"",
+                             ""Id"":  65015,
+                             ""Name"":  ""Scavenger\u0027s Hex 6"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 6"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 6."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         },
+                         {
+                             ""Template"":  ""ImperilOther7"",
+                             ""Id"":  65016,
+                             ""Name"":  ""Scavenger\u0027s Hex 7"",
+                             ""SpellWords"":  ""Scavenger\u0027s Hex 7"",
+                             ""Desc"":  ""Scavenger fieldcraft that weakens a creature\u0027s armor. Equivalent to Imperil 7."",
+                             ""CasterEffect"":  ""EnchantUpGreen"",
+                             ""TargetEffect"":  ""RestrictionEffectGreen""
+                         }
+                     ]
+}";
 
         private const string DefaultFrostWaveShieldJson =
 @"{

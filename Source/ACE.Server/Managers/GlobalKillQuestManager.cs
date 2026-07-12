@@ -86,7 +86,7 @@ namespace ACE.Server.Managers
         private static ConcurrentDictionary<ulong, byte> _completedProgress = new ConcurrentDictionary<ulong, byte>();
         private static ConcurrentDictionary<int, byte> _itemRaceCompletedEpochs = new ConcurrentDictionary<int, byte>();
 
-        private static readonly Random _rng = new Random();
+        private static readonly Random _rng = Random.Shared;
 
         public static void Initialize()
         {
@@ -107,6 +107,9 @@ namespace ACE.Server.Managers
 
         public static void OnCreatureKilled(Player player, Creature creature, long xpEarned)
         {
+            if (player == null || creature == null || xpEarned <= 0)
+                return;
+
             OnPersistentCreatureKilled(player, creature);
             var kind = CurrentKind;
             var target = RequiredKills;

@@ -348,7 +348,7 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            var entries = IronmanKillerTracker.GetTopKillers(10);
+            var entries = LeaderboardCache.GetDeadliest(PlayerKillerTracker.Category.Ironman).Take(10).ToList();
 
             var sb = new StringBuilder();
             sb.AppendLine("=== Top 10 Ironman Killers (Creatures) ===");

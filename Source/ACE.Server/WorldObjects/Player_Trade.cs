@@ -378,12 +378,12 @@ namespace ACE.Server.WorldObjects
 
         private bool VerifyTrade_Ironman(Player partner)
         {
-            if (!IsMixedIronmanTrade(partner))
+            if (!IsMixedChallengeTrade(partner))
                 return true;
 
-            Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only trade with other Ironmen."));
+            Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Challenge characters can only trade within their own challenge economy."));
             if (partner.Session != null)
-                partner.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, "Ironmen can only trade with other Ironmen."));
+                partner.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, "Challenge characters can only trade within their own challenge economy."));
 
             ClearTradeAcceptance();
             partner.ClearTradeAcceptance();
@@ -393,18 +393,18 @@ namespace ACE.Server.WorldObjects
 
         private bool IsIronmanTradeBlocked(Player partner)
         {
-            if (!IsMixedIronmanTrade(partner))
+            if (!IsMixedChallengeTrade(partner))
                 return false;
 
-            Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only trade with other Ironmen."));
+            Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Challenge characters can only trade within their own challenge economy."));
             if (partner.Session != null)
-                partner.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, "Ironmen can only trade with other Ironmen."));
+                partner.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(partner.Session, "Challenge characters can only trade within their own challenge economy."));
             return true;
         }
 
-        private bool IsMixedIronmanTrade(Player partner)
+        private bool IsMixedChallengeTrade(Player partner)
         {
-            return IsIronmanFamily ^ partner.IsIronmanFamily;
+            return partner == null || ((IsRestrictedGearMode || partner.IsRestrictedGearMode) && CurrentGearProvenance != partner.CurrentGearProvenance);
         }
 
         private bool CanTransferIronmanRestrictedItemTo(Player target, WorldObject item, out string message)

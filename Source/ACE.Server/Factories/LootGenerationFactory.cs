@@ -114,6 +114,43 @@ namespace ACE.Server.Factories
             return wo;
         }
 
+        public static WorldObject TryCreateMutatedMobWeaponDrop(TreasureDeath profile, int mutatorCount)
+        {
+            if (profile == null || mutatorCount <= 0)
+                return null;
+
+            var tier = Math.Clamp(profile.Tier, 1, 8);
+            var dropChance = Math.Clamp(0.05f + tier * 0.02f + mutatorCount * 0.08f, 0.10f, 0.65f);
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) >= dropChance)
+                return null;
+
+            // Forced compatible rolls avoid expensive unbounded retries while still
+            // using normal tier-based mutation for all item statistics.
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                var roll = RollWcid(profile, TreasureItemCategory.MagicItem, TreasureItemType.Weapon);
+                if (roll == null)
+                    return null;
+
+                var candidates = WeaponMutatorTestTypes
+                    .Where(entry => entry.Value == roll.WeaponType)
+                    .Select(entry => entry.Key)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                if (candidates.Count == 0)
+                    continue;
+
+                var mutator = candidates[ThreadSafeRandom.Next(0, candidates.Count)];
+                roll.ForcedWeaponMutator = mutator;
+                var weapon = CreateAndMutateWcid(profile, roll, true);
+                if (weapon != null && HasWeaponMutator(weapon, mutator))
+                    return weapon;
+
+                weapon?.Destroy();
+            }
+
+            return null;
+        }
         private static TreasureRoll RollWcid(TreasureDeath treasureDeath, TreasureItemCategory category, TreasureItemType treasureItemType = TreasureItemType.Undef)
         {
             if (treasureItemType == TreasureItemType.Undef)

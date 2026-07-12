@@ -200,7 +200,11 @@ namespace ACE.Server.WorldObjects
             {
                 var victimLevel = DeathLevel ?? Level ?? 1;
                 var killerName = lastDamager?.Name ?? "Unknown";
-                var hardcoreDeathMsg = $"[HARDCORE FALLEN] {Name} (Level {victimLevel}) was slain by {killerName} and loses their one and only life.";
+                var remainingLives = Math.Max(0, GetProperty(PropertyInt.HardcoreLives) ?? 0);
+                var hardcoreDeathMsg = $"[HARDCORE FALLEN] {Name} (Level {victimLevel}) was slain by {killerName}.";
+                hardcoreDeathMsg += remainingLives > 0
+                    ? $" {remainingLives} life/lives remain."
+                    : " Their final life is lost.";
                 
                 var hardcoreDeathBroadcast = new GameMessageSystemChat(hardcoreDeathMsg, ChatMessageType.WorldBroadcast);
                 PlayerManager.BroadcastToAll(hardcoreDeathBroadcast);

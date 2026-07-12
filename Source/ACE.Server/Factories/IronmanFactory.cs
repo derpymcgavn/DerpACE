@@ -1362,6 +1362,9 @@ namespace ACE.Server.Factories
                 && dwSkill.AdvancementClass > SkillAdvancementClass.Untrained;
 
             var grantedWeenies = new HashSet<uint>();
+            var preservedWeenies = player.GetAllPossessions()
+                .Select(item => item.WeenieClassId)
+                .ToHashSet();
 
             foreach (var skillGear in starterGearConfig.Skills)
             {
@@ -1371,6 +1374,9 @@ namespace ACE.Server.Factories
                 // Grant universal skill-based gear (not heritage-specific)
                 foreach (var item in skillGear.Gear)
                 {
+                    if (preservedWeenies.Contains(item.WeenieId))
+                        continue;
+
                     if (grantedWeenies.Contains(item.WeenieId))
                     {
                         // Stack onto existing item if stackable
@@ -1408,6 +1414,9 @@ namespace ACE.Server.Factories
                 {
                     foreach (var item in heritageLoot.Gear)
                     {
+                        if (preservedWeenies.Contains(item.WeenieId))
+                            continue;
+
                         if (grantedWeenies.Contains(item.WeenieId))
                         {
                             var existing = player.Inventory.Values.FirstOrDefault(i => i.WeenieClassId == item.WeenieId);

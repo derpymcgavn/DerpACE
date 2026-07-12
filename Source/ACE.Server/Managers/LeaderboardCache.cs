@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
@@ -15,6 +16,13 @@ namespace ACE.Server.Managers
         private static readonly TimeSpan KillerLeaderboardTtl = TimeSpan.FromSeconds(30);
 
         private static readonly object CacheLock = new object();
+        private const int PlayerBatchSize = 50;
+        private static readonly TimeSpan PlayerBatchInterval = TimeSpan.FromMilliseconds(250);
+        private static List<IPlayer> playerScan;
+        private static int playerScanIndex;
+        private static DateTime nextPlayerBatchUtc = DateTime.MinValue;
+        private static readonly List<PlayerLeaderboardEntry> pendingHardcore = new List<PlayerLeaderboardEntry>();
+        private static readonly List<PlayerLeaderboardEntry> pendingIronman = new List<PlayerLeaderboardEntry>();
         private static DateTime playerSnapshotUtc = DateTime.MinValue;
         private static DateTime killerSnapshotUtc = DateTime.MinValue;
         private static IReadOnlyList<PlayerLeaderboardEntry> hardcore = Array.Empty<PlayerLeaderboardEntry>();
@@ -25,19 +33,16 @@ namespace ACE.Server.Managers
 
         public static IReadOnlyList<PlayerLeaderboardEntry> GetHardcore()
         {
-            EnsurePlayerSnapshot();
             return hardcore;
         }
 
         public static IReadOnlyList<PlayerLeaderboardEntry> GetIronman()
         {
-            EnsurePlayerSnapshot();
             return ironman;
         }
 
         public static IReadOnlyList<KillerLeaderboardEntry> GetDeadliest(PlayerKillerTracker.Category category)
         {
-            EnsureKillerSnapshot();
 
             switch (category)
             {
@@ -62,23 +67,102 @@ namespace ACE.Server.Managers
                 killerSnapshotUtc = DateTime.MinValue;
         }
 
-        private static void EnsurePlayerSnapshot()
+        public static void Tick()
         {
-            if (DateTime.UtcNow - playerSnapshotUtc < PlayerLeaderboardTtl)
+            var now = DateTime.UtcNow;
+
+            if (now - killerSnapshotUtc >= KillerLeaderboardTtl)
+                RefreshKillerSnapshots(now);
+
+            if (playerScan == null && now - playerSnapshotUtc >= PlayerLeaderboardTtl)
+                StartPlayerScan(now);
+
+            if (playerScan != null && now >= nextPlayerBatchUtc)
+                ProcessPlayerBatch(now);
+        }
+
+        private static void StartPlayerScan(DateTime now)
+        {
+            // PlayerManager already holds lightweight offline summaries in memory. Copying
+            // this list does not query the shard database; the expensive filtering and
+            // ranking work is intentionally spread across subsequent batches.
+            playerScan = PlayerManager.GetAllPlayers();
+            playerScanIndex = 0;
+            pendingHardcore.Clear();
+            pendingIronman.Clear();
+            nextPlayerBatchUtc = now;
+        }
+
+        private static void ProcessPlayerBatch(DateTime now)
+        {
+            var end = Math.Min(playerScanIndex + PlayerBatchSize, playerScan.Count);
+            for (; playerScanIndex < end; playerScanIndex++)
+            {
+                var player = playerScan[playerScanIndex];
+                if (player == null || player.IsDeleted)
+                    continue;
+
+                var isIronman = Player.IsIronmanFamilyPlayer(player);
+                if (!isIronman && player.GetProperty(PropertyBool.IsHardcore) != true)
+                    continue;
+
+                var entry = new PlayerLeaderboardEntry
+                {
+                    Name = player.Name,
+                    Level = player.Level ?? 0,
+                    Kills = player.GetProperty(PropertyInt.CreatureKills) ?? 0,
+                    Lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0,
+                    IsNomad = player.GetProperty(PropertyBool.IsIronmanNomad) == true
+                };
+
+                AddTopCandidate(isIronman ? pendingIronman : pendingHardcore, entry);
+            }
+
+            if (playerScanIndex < playerScan.Count)
+            {
+                nextPlayerBatchUtc = now + PlayerBatchInterval;
                 return;
+            }
 
             lock (CacheLock)
             {
-                if (DateTime.UtcNow - playerSnapshotUtc < PlayerLeaderboardTtl)
-                    return;
-
-                var players = PlayerManager.GetAllPlayers();
-                hardcore = BuildPlayerLeaderboard(players, ironmanOnly: false);
-                ironman = BuildPlayerLeaderboard(players, ironmanOnly: true);
-                playerSnapshotUtc = DateTime.UtcNow;
+                hardcore = pendingHardcore.ToList();
+                ironman = pendingIronman.ToList();
+                playerSnapshotUtc = now;
             }
+
+            playerScan = null;
+            pendingHardcore.Clear();
+            pendingIronman.Clear();
         }
 
+        private static void AddTopCandidate(List<PlayerLeaderboardEntry> candidates, PlayerLeaderboardEntry entry)
+        {
+            candidates.Add(entry);
+            candidates.Sort((a, b) =>
+            {
+                var kills = b.Kills.CompareTo(a.Kills);
+                return kills != 0 ? kills : b.Level.CompareTo(a.Level);
+            });
+
+            if (candidates.Count > LeaderboardSize)
+                candidates.RemoveAt(candidates.Count - 1);
+        }
+
+        private static void RefreshKillerSnapshots(DateTime now)
+        {
+            var normal = BuildKillerLeaderboard(PlayerKillerTracker.Category.Normal);
+            var hardcoreKillers = BuildKillerLeaderboard(PlayerKillerTracker.Category.Hardcore);
+            var ironmanKillers = BuildKillerLeaderboard(PlayerKillerTracker.Category.Ironman);
+
+            lock (CacheLock)
+            {
+                deadliestNormal = normal;
+                deadliestHardcore = hardcoreKillers;
+                deadliestIronman = ironmanKillers;
+                killerSnapshotUtc = now;
+            }
+        }
         private static IReadOnlyList<PlayerLeaderboardEntry> BuildPlayerLeaderboard(IEnumerable<IPlayer> players, bool ironmanOnly)
         {
             return players
@@ -98,23 +182,6 @@ namespace ACE.Server.Managers
                 .ThenByDescending(e => e.Level)
                 .Take(LeaderboardSize)
                 .ToList();
-        }
-
-        private static void EnsureKillerSnapshot()
-        {
-            if (DateTime.UtcNow - killerSnapshotUtc < KillerLeaderboardTtl)
-                return;
-
-            lock (CacheLock)
-            {
-                if (DateTime.UtcNow - killerSnapshotUtc < KillerLeaderboardTtl)
-                    return;
-
-                deadliestNormal = BuildKillerLeaderboard(PlayerKillerTracker.Category.Normal);
-                deadliestHardcore = BuildKillerLeaderboard(PlayerKillerTracker.Category.Hardcore);
-                deadliestIronman = BuildKillerLeaderboard(PlayerKillerTracker.Category.Ironman);
-                killerSnapshotUtc = DateTime.UtcNow;
-            }
         }
 
         private static IReadOnlyList<KillerLeaderboardEntry> BuildKillerLeaderboard(PlayerKillerTracker.Category category)

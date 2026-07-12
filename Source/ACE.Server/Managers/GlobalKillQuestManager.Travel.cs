@@ -12,7 +12,7 @@ namespace ACE.Server.Managers
 {
     public static partial class GlobalKillQuestManager
     {
-        private const double WorldUnitsPerClick = 24.0;
+        private const double WorldUnitsPerClick = 240.0;
         private const double MaximumFootSampleWorldUnits = 30.0;
         private static readonly ConcurrentDictionary<string, TrekMovementSample> _trekSamples = new ConcurrentDictionary<string, TrekMovementSample>();
 

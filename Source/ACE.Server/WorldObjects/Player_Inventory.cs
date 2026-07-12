@@ -3674,11 +3674,11 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            if (IsIronmanFamily ^ target.IsIronmanFamily)
+            if ((IsRestrictedGearMode || target.IsRestrictedGearMode) && CurrentGearProvenance != target.CurrentGearProvenance)
             {
-                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Ironmen can only give items to other Ironmen."));
+                Session.Network.EnqueueSend(new GameEventCommunicationTransientString(Session, "Challenge characters can only give items within their own challenge economy."));
                 Session.Network.EnqueueSend(new GameEventInventoryServerSaveFailed(Session, item.Guid.Full));
-                target.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(target.Session, "Ironmen can only receive items from other Ironmen."));
+                target.Session?.Network.EnqueueSend(new GameEventCommunicationTransientString(target.Session, "Challenge characters can only receive items within their own challenge economy."));
                 return;
             }
 

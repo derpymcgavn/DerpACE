@@ -76,7 +76,7 @@ namespace ACE.Server.Command.Handlers
 
         private static void RenderKillerLeaderboard(Session session, PlayerKillerTracker.Category category, string title)
         {
-            var entries = PlayerKillerTracker.GetTopKillers(category, LeaderboardSize);
+            var entries = LeaderboardCache.GetDeadliest(category).Take(LeaderboardSize).ToList();
 
             var sb = new StringBuilder();
             sb.AppendLine($"=== {title} ===");

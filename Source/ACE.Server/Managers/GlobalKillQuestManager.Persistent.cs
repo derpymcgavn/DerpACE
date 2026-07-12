@@ -46,6 +46,7 @@ namespace ACE.Server.Managers
             {
                 LoadPersistentState();
                 EnsurePersistentLanes(DateTime.UtcNow, false);
+                EnsureUniquePersistentQuestKinds(DateTime.UtcNow, false);
                 SavePersistentStateNowUnsafe();
             }
         }
@@ -73,6 +74,7 @@ namespace ACE.Server.Managers
                 }
 
                 rolledQuest |= EnsurePersistentLanes(now, true);
+                rolledQuest |= EnsureUniquePersistentQuestKinds(now, true);
                 SavePersistentStateIfDueUnsafe(now, rolledQuest);
             }
         }
@@ -329,11 +331,10 @@ namespace ACE.Server.Managers
             if (_persistentQuests.TryGetValue(lane, out var previousQuest) && previousQuest != null)
                 excludedKinds.Add(previousQuest.Kind);
 
-            if (lane == GlobalQuestLane.Daily || lane == GlobalQuestLane.Weekly)
+            foreach (var entry in _persistentQuests)
             {
-                var otherLane = lane == GlobalQuestLane.Daily ? GlobalQuestLane.Weekly : GlobalQuestLane.Daily;
-                if (_persistentQuests.TryGetValue(otherLane, out var otherQuest) && otherQuest != null && otherQuest.Expiry > now)
-                    excludedKinds.Add(otherQuest.Kind);
+                if (entry.Key != lane && entry.Value != null && entry.Value.Expiry > now)
+                    excludedKinds.Add(entry.Value.Kind);
             }
 
             var quest = CreatePersistentQuest(lane, now, excludedKinds);
@@ -424,6 +425,25 @@ namespace ACE.Server.Managers
             return quest;
         }
 
+        private static bool EnsureUniquePersistentQuestKinds(DateTime now, bool announce)
+        {
+            var changed = false;
+            var seenKinds = new HashSet<GlobalQuestKind>();
+            foreach (var lane in new[] { GlobalQuestLane.Hourly, GlobalQuestLane.Daily, GlobalQuestLane.Weekly })
+            {
+                if (!_persistentQuests.TryGetValue(lane, out var quest) || quest == null || quest.Expiry <= now)
+                    continue;
+
+                if (seenKinds.Add(quest.Kind))
+                    continue;
+
+                RollPersistentQuest(lane, announce, now);
+                seenKinds.Add(_persistentQuests[lane].Kind);
+                changed = true;
+            }
+
+            return changed;
+        }
         private static void NormalizePersistentQuestReward(PersistentGlobalQuest quest)
         {
             if (quest == null)

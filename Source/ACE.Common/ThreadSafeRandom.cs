@@ -7,7 +7,12 @@ namespace ACE.Common
     // todo: implement exactly the way AC handles it.. which we'll never know unless we get original source code
     public static class ThreadSafeRandom
     {
-        static readonly ThreadLocal<Random> random = new ThreadLocal<Random>(() => new Random());
+        private static int seed = Environment.TickCount;
+
+        // Each worker receives a distinct seed even when several threads initialize
+        // during the same system clock tick.
+        private static readonly ThreadLocal<Random> random =
+            new ThreadLocal<Random>(() => new Random(Interlocked.Increment(ref seed)));
 
         /// <summary>
         /// Returns a random floating-point number that is greater than or equal to 'min', and less than 'max'.

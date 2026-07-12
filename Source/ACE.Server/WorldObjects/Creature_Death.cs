@@ -673,6 +673,13 @@ namespace ACE.Server.WorldObjects
             corpse.VictimId = Guid.Full;
             corpse.Name = $"{prefix} of {Name}";
 
+            // Preserve trial metadata that the generic corpse template does not carry.
+            if (this is not Player)
+            {
+                corpse.CreatureType = CreatureType;
+                corpse.Level = Level;
+            }
+
             // set 'killed by' for looting rights
             var killerName = "misadventure";
             if (killer != null)
@@ -859,6 +866,19 @@ namespace ACE.Server.WorldObjects
                         droppedItems.Add(wo);
 
                     DoCantripLogging(killer, wo);
+                }
+                var lootMutatorCount = GetProperty(PropertyInt.MutatorCount) ?? 0;
+                var mutatedWeapon = LootGenerationFactory.TryCreateMutatedMobWeaponDrop(DeathTreasure, lootMutatorCount);
+                if (mutatedWeapon != null)
+                {
+                    NomadQuestTrophy.StampIfEligible(killerPlayer, this, mutatedWeapon);
+
+                    if (corpse != null)
+                        corpse.TryAddToInventory(mutatedWeapon);
+                    else
+                        droppedItems.Add(mutatedWeapon);
+
+                    DoCantripLogging(killer, mutatedWeapon);
                 }
             }
 

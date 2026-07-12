@@ -28,6 +28,8 @@ namespace ACE.Server.Network.GameAction.Actions
             if (session.Player.LastContact)
                 session.Player.LastGroundPos = position;
 
+            GlobalKillQuestManager.OnPlayerOverworldMoved(session.Player, position, session.Player.LastContact);
+
             if (!session.Player.Teleporting)
                 session.Player.SetRequestedLocation(position);
 

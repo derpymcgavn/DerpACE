@@ -10,6 +10,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.DerpAce;
+using ACE.Server.Command.Handlers;
 using ACE.Server.Entity;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
@@ -348,13 +349,39 @@ namespace ACE.Server.WorldObjects
             log.Info($"[LOOT][RARE] {Name} ({Guid}) generated rare {wo.Name} ({wo.Guid}) for {killer.Name} ({killer.Guid})");
             log.Info($"[LOOT][RARE] Tier {tier} -- 1 / {chance:N0} chance -- {luck:N0} luck");
 
-            if (TryAddToInventory(wo))
+            var deliveredToPlayer = false;
+            if (SlayerGem.IsSlayerGem(wo) && killerPlayer != null)
             {
-                rareGenerated = wo;
+                if (killerPlayer.TryCreateInInventoryWithNetworking(wo))
+                {
+                    deliveredToPlayer = true;
+                    killerPlayer.SendMessage($"Postmaster Derpy slips {wo.Name} directly into your pack.", ChatMessageType.Broadcast);
+                }
+                else if (MailCommands.TryDeliverSystemItem(
+                    killerPlayer,
+                    wo,
+                    "Postmaster Derpy",
+                    $"Rare delivery: {wo.Name}",
+                    "Your pack was full when this Slayer Gem was found. I kept every strange detail intact. - Postmaster Derpy"))
+                {
+                    deliveredToPlayer = true;
+                    wo.Destroy();
+                    killerPlayer.SendMessage("Your pack was full, so Postmaster Derpy mailed your Slayer Gem.", ChatMessageType.Broadcast);
+                }
+            }
+
+            var addedToCorpse = !deliveredToPlayer && TryAddToInventory(wo);
+            if (deliveredToPlayer || addedToCorpse)
+            {
                 killerName = killer.Name.TrimStart('+');
-                CorpseGeneratedRare = true;
-                LongDesc += " This corpse generated a rare item!";
-                TimeToRot = 900;  // guesstimated 15 mins from hells
+                if (addedToCorpse)
+                {
+                    rareGenerated = wo;
+                    CorpseGeneratedRare = true;
+                    LongDesc += " This corpse generated a rare item!";
+                    TimeToRot = 900;
+                }
+
                 AdminMapService.RecordRareFind(killerName, wo.Name, wo.WeenieClassId, tier, chance, luck, Name, Location?.ToLOCString(), Location != null ? $"0x{Location.Cell & 0xFFFF0000:X8}" : null);
 
                 if (killerPlayer != null)

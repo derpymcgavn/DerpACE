@@ -6,6 +6,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 
@@ -226,7 +227,11 @@ namespace ACE.Server.WorldObjects
             }
 
             var tier = GetImperilTier(player);
-            var spell = new Spell((uint)ImperilByTier[tier - 1]);
+            var customSpellId = CustomSpellManager.HexdustSpellIdFirst + (uint)(tier - 1);
+            var spell = new Spell(customSpellId);
+            if (spell.NotFound)
+                spell = new Spell((uint)ImperilByTier[tier - 1]);
+
             if (spell.NotFound)
             {
                 player.SendUseDoneEvent();

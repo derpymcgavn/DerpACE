@@ -306,9 +306,9 @@ namespace ACE.Server.Command.Handlers
             if (msg.Claimed)    { player.SendMessage("[MAIL] Attachments already claimed."); return; }
             if (!msg.HasUnclaimed) { player.SendMessage("[MAIL] No attachments to claim."); return; }
             var sender = msg.SenderId != 0 ? PlayerManager.FindByGuid(msg.SenderId) : null;
-            if (IsMixedIronmanAssetTransfer(player, sender))
+            if (IsMixedChallengeAssetTransfer(player, sender))
             {
-                player.SendMessage("[MAIL] Ironmen can only exchange mailed currency or item attachments with other Ironmen.");
+                player.SendMessage("[MAIL] Challenge characters can only exchange mailed assets within their own challenge economy.");
                 return;
             }
 
@@ -530,9 +530,9 @@ namespace ACE.Server.Command.Handlers
             }
 
             var containsAssets = pyreals > 0 || codMmd > 0 || (attachments != null && attachments.Count > 0);
-            if (containsAssets && IsMixedIronmanAssetTransfer(sender, target))
+            if (containsAssets && IsMixedChallengeAssetTransfer(sender, target))
             {
-                sender.SendMessage("[MAIL] Ironmen can only exchange mailed currency or item attachments with other Ironmen.");
+                sender.SendMessage("[MAIL] Challenge characters can only exchange mailed assets within their own challenge economy.");
                 if (refundOnFailure)
                     RefundAttachments(sender, pyreals, attachments);
                 return false;
@@ -608,12 +608,17 @@ namespace ACE.Server.Command.Handlers
             return true;
         }
 
-        private static bool IsMixedIronmanAssetTransfer(ACE.Server.Entity.IPlayer first, ACE.Server.Entity.IPlayer second)
+        private static bool IsMixedChallengeAssetTransfer(ACE.Server.Entity.IPlayer first, ACE.Server.Entity.IPlayer second)
         {
             if (first == null || second == null)
-                return Player.IsIronmanFamilyPlayer(first) || Player.IsIronmanFamilyPlayer(second);
+                return Player.IsIronmanFamilyPlayer(first) || Player.IsIronmanFamilyPlayer(second)
+                    || first?.GetProperty(PropertyBool.IsHardcore) == true || second?.GetProperty(PropertyBool.IsHardcore) == true;
 
-            return Player.IsIronmanFamilyPlayer(first) ^ Player.IsIronmanFamilyPlayer(second);
+                        var firstProvenance = Player.GetGearProvenanceForPlayer(first);
+            var secondProvenance = Player.GetGearProvenanceForPlayer(second);
+            var eitherRestricted = Player.IsIronmanFamilyPlayer(first) || Player.IsIronmanFamilyPlayer(second)
+                || first.GetProperty(PropertyBool.IsHardcore) == true || second.GetProperty(PropertyBool.IsHardcore) == true;
+            return eitherRestricted && firstProvenance != secondProvenance;
         }
 
         private static int? AttachmentGearProvenance(MailAttachment attachment)
@@ -630,6 +635,30 @@ namespace ACE.Server.Command.Handlers
             return null;
         }
 
+        public static bool TryDeliverSystemItem(Player recipient, WorldObject item, string senderName, string subject, string body)
+        {
+            if (recipient == null || item == null)
+                return false;
+
+            var attachment = new MailAttachment
+            {
+                Wcid = item.WeenieClassId,
+                Name = item.Name,
+                StackSize = Math.Max(1, item.StackSize ?? 1),
+                Snapshot = CaptureSnapshot(item)
+            };
+
+            var message = new MailMessage
+            {
+                SenderName = senderName,
+                SenderId = 0,
+                Subject = subject,
+                Body = body,
+                Attachments = new List<MailAttachment> { attachment }
+            };
+
+            return MailboxManager.Deliver(recipient, message);
+        }
         // -- item-shipping helpers --------------------------------------------
 
         /// <summary>
@@ -757,7 +786,7 @@ namespace ACE.Server.Command.Handlers
         /// Captures the mutable parts of an item's biota into a JSON-friendly snapshot
         /// that can survive serialization in the mailbox blob.
         /// </summary>
-        private static ItemSnapshot CaptureSnapshot(WorldObject wo)
+        public static ItemSnapshot CaptureSnapshot(WorldObject wo)
         {
             if (wo?.Biota == null) return null;
             var b = wo.Biota;

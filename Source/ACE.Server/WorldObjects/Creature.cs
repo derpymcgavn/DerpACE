@@ -331,6 +331,19 @@ namespace ACE.Server.WorldObjects
         /// Note - we may need to make an NPC class vs monster as using a monster does not make them turn towrad you as I recall. Og II
         ///  Also, once we are reading in the emotes table by weenie - this will automatically customize the behavior for creatures.
         /// </summary>
+        public override ActivationResult CheckUseRequirements(WorldObject activator)
+        {
+            const uint DwennonWeenieClassId = 33970;
+            if (WeenieClassId == DwennonWeenieClassId
+                && activator is Player player
+                && (player.IsIronmanFamily || player.GetProperty(PropertyBool.IsHardcore) == true))
+            {
+                player.SendMessage("Dwennon tells you: I still don't trust the cows, but I trust your kind even less. Find your own work.", ChatMessageType.Tell);
+                return new ActivationResult(false);
+            }
+
+            return base.CheckUseRequirements(activator);
+        }
         public override void ActOnUse(WorldObject worldObject)
         {
             // DerpACE: Mysterious Stranger NPC -- vitae-for-chests gambling encounter
