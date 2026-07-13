@@ -1744,6 +1744,10 @@ namespace ACE.Server.DerpAce
             if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return uint.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out did);
 
+            // Exported DAT filenames and some API clients use bare 8-digit hexadecimal DIDs.
+            if (value.Length == 8 && value.Any(c => char.IsLetter(c)))
+                return uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out did);
+
             return uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out did);
         }
 
@@ -1765,14 +1769,20 @@ namespace ACE.Server.DerpAce
 
             try
             {
-                var root = DerpAceConfigManager.Config.AdminMapIconPath;
-                if (string.IsNullOrWhiteSpace(root))
-                    return false;
-
-                root = root.Trim();
-                var resolvedRoot = Path.IsPathRooted(root) ? root : Path.Combine(AppContext.BaseDirectory, root);
-                var path = Path.Combine(Path.GetFullPath(resolvedRoot), $"{did:X8}.png");
-                if (!File.Exists(path))
+                var configuredRoot = DerpAceConfigManager.Config.AdminMapIconPath?.Trim();
+                var roots = new[]
+                {
+                    configuredRoot,
+                    Path.Combine(AppContext.BaseDirectory, "Data", "AdminMap", "icons"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "Data", "AdminMap", "icons"),
+                    Path.Combine(Directory.GetCurrentDirectory(), "Source", "ACE.Server", "Data", "AdminMap", "icons")
+                };
+                var path = roots
+                    .Where(root => !string.IsNullOrWhiteSpace(root))
+                    .Select(root => Path.IsPathRooted(root) ? root : Path.Combine(AppContext.BaseDirectory, root))
+                    .Select(root => Path.Combine(Path.GetFullPath(root), $"{did:X8}.png"))
+                    .FirstOrDefault(File.Exists);
+                if (path == null)
                     return false;
 
                 WriteBytes(context, File.ReadAllBytes(path), "image/png");
@@ -2099,6 +2109,32 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
 @media (max-width: 860px) {{ body {{ grid-template-columns: 1fr; }} #map {{ min-height: 64vh; }} aside {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} .bottomDock {{ position: static; margin: 8px 12px 12px; }} .inventoryPanel {{ inset: 10px; grid-template-columns: 1fr; }} .inventoryEditPane {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} }}
 /* Modern Admin Map shell */
 body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overflow:hidden;background:#0b0f11}}#map{{height:100vh;min-height:0;background-color:#11181a}}.mapToolbar{{position:absolute;z-index:8;left:14px;right:14px;top:14px;display:flex;align-items:center;gap:8px;min-height:48px;padding:7px 8px 7px 14px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(11,16,18,.9);box-shadow:0 12px 34px rgba(0,0,0,.32);backdrop-filter:blur(12px)}}.mapToolbar h1{{margin:0;font-size:15px;white-space:nowrap}}.toolbarStatus{{min-width:0;flex:1;color:#aebbb6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.toolbarActions{{display:flex;gap:5px}}.toolbarActions button{{width:34px;height:32px;padding:0;display:grid;place-items:center;background:#202b2e;font-size:16px}}aside{{height:100vh;min-height:0;padding:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:#121719;box-shadow:-14px 0 36px rgba(0,0,0,.2)}}.sidebarHeader{{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.1);background:#151c1e}}.loginPanel,.sessionBar,.controls{{margin-bottom:0}}.sessionBar{{grid-template-columns:minmax(0,1fr) auto auto}}.sidebarTabs{{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#101517}}.sidebarTab{{padding:7px 5px;background:transparent;color:#98a7a2;border-color:transparent;font-size:12px}}.sidebarTab.active{{color:#fff;background:#263538;border-color:#46585c}}.sidebarContent{{min-height:0;overflow:auto;padding:12px 14px 20px;scrollbar-gutter:stable}}.sidebarSearch{{position:sticky;top:-12px;z-index:3;display:grid;grid-template-columns:1fr auto;gap:6px;margin:-12px -2px 8px;padding:12px 2px 8px;background:#121719}}.rosterCount{{min-width:38px;display:grid;place-items:center;color:#9fb0aa;font-size:11px}}body[data-side-view=""players""] .sideInspect,body[data-side-view=""players""] .sideLegend,body[data-side-view=""inspect""] .sidePlayers,body[data-side-view=""inspect""] .sideLegend,body[data-side-view=""legend""] .sidePlayers,body[data-side-view=""legend""] .sideInspect{{display:none!important}}.player{{margin:0 -6px;padding:10px 8px;border-top:0;border-bottom:1px solid rgba(255,255,255,.08);border-radius:3px}}.player:hover{{background:rgba(255,255,255,.045)}}.player.selected{{margin:0 -6px;padding:10px 8px;background:#23363a;box-shadow:inset 3px 0 #71b7e8}}.player .inventoryActions{{opacity:.62}}.player:hover .inventoryActions,.player.selected .inventoryActions{{opacity:1}}.adminPanel,.watchPanel,.legend{{border-radius:5px;background:#171e20}}.bottomDock{{left:14px;right:14px;bottom:14px;gap:10px}}.dockPanel{{border-radius:6px;background:rgba(10,15,17,.9);backdrop-filter:blur(10px)}}.zoomControls{{left:14px;bottom:150px;grid-template-columns:repeat(4,34px)}}.zoomControls button{{width:34px;height:34px;background:rgba(15,22,24,.92)}}.inventoryPanel{{inset:18px;grid-template-columns:minmax(430px,1fr) minmax(340px,420px);border-radius:7px}}.inventoryListPane,.inventoryEditPane{{padding:16px}}.inventorySlot{{width:42px;height:42px}}.inventoryGrid{{grid-template-columns:repeat(auto-fill,42px);gap:5px}}body.sidebarCollapsed{{grid-template-columns:minmax(0,1fr) 0}}body.sidebarCollapsed aside{{visibility:hidden}}.emptyRoster{{padding:24px 8px;text-align:center;color:#7f8d88;font-size:12px}}@media(max-width:860px){{body{{height:auto;overflow:auto;grid-template-columns:1fr}}#map{{height:65vh;min-height:480px}}aside{{height:auto;min-height:520px}}body.sidebarCollapsed{{grid-template-columns:1fr}}body.sidebarCollapsed aside{{display:none}}.mapToolbar{{left:8px;right:8px;top:8px}}.toolbarStatus{{display:none}}.bottomDock{{left:8px;right:8px;bottom:8px}}}}
+/* Inventory workspace refinement */
+.inventoryPanel {{ inset:24px; grid-template-columns:minmax(520px,1.35fr) minmax(380px,.85fr); max-width:1500px; margin:auto; border-color:rgba(155,214,255,.25); background:#0d1214; }}
+.inventoryListPane {{ grid-template-rows:auto auto minmax(0,1fr); gap:12px; padding:18px; background:#0d1214; }}
+.inventoryTop {{ min-height:38px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,.1); }}
+.inventoryTop h2 {{ font-size:17px; color:#f2f5f3; }}
+.inventorySearch input {{ height:36px; }}
+.inventoryTable {{ padding:12px; border-color:rgba(255,255,255,.12); background:#080c0d; }}
+.inventoryGrid {{ grid-template-columns:repeat(auto-fill,48px); gap:6px; }}
+.inventorySlot {{ width:48px; height:48px; border-color:#334145; background:#111719; }}
+.inventorySlot:hover {{ border-color:#71b7e8; outline:1px solid #71b7e8; }}
+.inventorySlot.selected {{ border-color:#efc36b; outline:2px solid #efc36b; }}
+.inventoryIconLayer {{ inset:3px; }}
+.inventoryFallback {{ color:#81908b; font-size:11px; }}
+.inventoryQty {{ right:3px; bottom:2px; font-size:11px; }}
+.inventorySectionTitle {{ margin:12px 0 5px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.08); color:#aebbb6; text-transform:uppercase; font-size:10px; }}
+.inventoryEditPane {{ padding:18px; background:#151c1e; }}
+.inventoryDetails {{ position:sticky; top:-18px; z-index:3; margin:-18px -18px 14px; padding:16px 18px 12px; border-bottom:1px solid rgba(255,255,255,.12); background:#151c1e; }}
+.inventoryForm {{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }}
+.inventoryForm>label:nth-of-type(5),.inventoryForm>label:nth-of-type(6),.inventoryForm>.formGrid,.inventoryForm>#inventorySave,.inventoryForm>.propertyEditor,.inventoryForm>#inventoryDelete {{ grid-column:1/-1; }}
+.inventoryForm label {{ gap:5px; color:#94a39e; font-size:10px; }}
+.inventoryForm input,.inventoryForm textarea {{ background:#0c1113; border-color:#344145; }}
+.formGrid {{ padding:10px; border:1px solid rgba(255,255,255,.09); border-radius:5px; background:#111719; }}
+.propertyGroup {{ background:#111719; }}
+#inventorySave {{ background:#2d6650; }}
+@media(min-width:641px) {{ .inventoryPanel.open {{ display:grid; grid-template-columns:minmax(500px,1.35fr) minmax(360px,.85fr); overflow:hidden; }} .inventoryListPane,.inventoryEditPane {{ min-height:0; overflow:auto; }} .inventoryEditPane {{ border-left:1px solid rgba(255,255,255,.12); border-top:0; }} }}
+@media(max-width:640px) {{ .inventoryPanel {{ inset:8px; grid-template-columns:1fr; overflow:auto; }} .inventoryListPane {{ min-height:55vh; }} .inventoryEditPane {{ border-left:0; border-top:1px solid rgba(255,255,255,.12); }} .inventoryForm {{ grid-template-columns:1fr; }} .inventoryForm>* {{ grid-column:1!important; }} }}
 </style>
 </head>
 <body>
@@ -2457,7 +2493,7 @@ async function copyMapLocAt(event) {{
     status.textContent = e.message || 'Could not copy cursor landloc.';
   }}
 }}
-function iconUrl(did) {{ return did ? `/assets/icon?did=${{encodeURIComponent(did)}}&v=2${{token.value ? '&token=' + encodeURIComponent(token.value) : ''}}` : ''; }}
+function iconUrl(did) {{ return did ? `/assets/icon?did=${{encodeURIComponent(did)}}&v=3${{token.value ? '&token=' + encodeURIComponent(token.value) : ''}}` : ''; }}
 function iconLayer(did, cls) {{ return did ? `<span class=""inventoryIconLayer ${{cls || ''}}"" style=""background-image:url('${{iconUrl(did)}}')""></span>` : ''; }}
 function itemFallback(item) {{
   const name = String(item?.name || item?.weenieClassName || '?').trim();
