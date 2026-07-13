@@ -1,3 +1,4 @@
+using System;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -121,6 +122,34 @@ namespace ACE.Server.WorldObjects
             return false;
         }
 
+        public static bool TryResolveSafeDestination(Player player, Position desired, out Position destination)
+        {
+            destination = null;
+            if (player?.Location == null || player.CurrentLandblock == null || desired == null)
+                return false;
+
+            var dx = desired.PositionX - player.Location.PositionX;
+            var dy = desired.PositionY - player.Location.PositionY;
+            var dz = desired.PositionZ - player.Location.PositionZ;
+            if (Math.Sqrt(dx * dx + dy * dy + dz * dz) < 0.01)
+                return false;
+
+            foreach (var scale in new[] { 1.0, 0.8, 0.6, 0.4, 0.2 })
+            {
+                var candidate = new Position(player.Location);
+                candidate.PositionX += (float)(dx * scale);
+                candidate.PositionY += (float)(dy * scale);
+                candidate.PositionZ += (float)(dz * scale);
+                candidate.InstanceId = player.Location.InstanceId;
+                candidate.LandblockId = new LandblockId(candidate.GetCell());
+                if (!TryPrepareCandidate(player, candidate)) continue;
+                if (candidate.LandblockId.Landblock != player.Location.LandblockId.Landblock) continue;
+                if (!player.ValidateMovement(candidate)) continue;
+                destination = candidate;
+                return true;
+            }
+            return false;
+        }
         private static bool TryPrepareCandidate(Player player, Position candidate)
         {
             if (player.CurrentLandblock.IsDungeon || candidate.Indoors)

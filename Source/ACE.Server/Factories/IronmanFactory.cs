@@ -202,6 +202,16 @@ namespace ACE.Server.Factories
         // StarterGearFactory and the starterGear.json configuration to properly map
         // racial weapons (e.g., Aluvian Light → Training Dagger, Sho Light → Training Knuckles).
 
+        private static void GrantSpecializedLifeStarterSpells(Player player)
+        {
+            var lifeMagic = player?.GetCreatureSkill(Skill.LifeMagic);
+            if (lifeMagic?.AdvancementClass != SkillAdvancementClass.Specialized)
+                return;
+
+            player.LearnSpellWithNetworking((uint)SpellId.HarmOther1, false);
+            player.LearnSpellWithNetworking((uint)SpellId.DrainHealth1, false);
+            player.SendMessage("Your specialized Life Magic roll includes Harm I and Drain Life I, giving you the means to fight from the road's beginning.");
+        }
         // ---------- Public entry point ----------
 
         public static void InitializeIronman(Player player, bool noNonHuman = false, bool blind = false)
@@ -260,6 +270,7 @@ namespace ACE.Server.Factories
                 foreach (var spellId in DefaultSpells)
                     player.LearnSpellWithNetworking((uint)spellId, false);
 
+                GrantSpecializedLifeStarterSpells(player);
                 player.SendMessage("You have been taught the basic spells available to all Ironmen.");
             });
 
@@ -361,6 +372,7 @@ namespace ACE.Server.Factories
                 player.SendMessage("Nomad step 5/6: teaching starter spells...");
                 foreach (var spellId in DefaultSpells)
                     player.LearnSpellWithNetworking((uint)spellId, false);
+                GrantSpecializedLifeStarterSpells(player);
                 player.SendMessage("You have been taught the basic spells available to all Ironmen.");
             });
 
@@ -370,8 +382,10 @@ namespace ACE.Server.Factories
             chain.AddAction(player, () =>
             {
                 player.SendMessage("Nomad step 6/6: granting starter gear...");
-                GiveNomadStarterGear(player);
+                GiveNomadStarterRunes(player);
                 GiveNomadGauntletsAndShoes(player);
+                EnsureNomadElementsForLevel(player, player.Level ?? 1);
+                EnsureNomadLivingGear(player);
                 GrantChallengeBook(player, HardcodedWeenies.NomadSurvivalTomeWeenieClassId, "Nomad");
                 TagAllPossessions(player);
                 AutoSpendBlindIronmanXp(player);
@@ -502,6 +516,118 @@ namespace ACE.Server.Factories
                 player.SendMessage($"[Nomad] You have unlocked a new element: {pick.Name}!", ChatMessageType.Broadcast);
         }
 
+        private static void EnsureNomadElementsForLevel(Player player, int level)
+        {
+            var expectedElements = Math.Clamp(1 + Math.Max(0, level) / 2, 1, NomadElements.Length);
+            for (var guard = 0; guard < NomadElements.Length; guard++)
+            {
+                var owned = player.GetAllPossessions()
+                    .Where(IsNomadCombatClothing)
+                    .Select(x => (DamageType)(x.UnarmedDamageType ?? 0))
+                    .Where(x => NomadElements.Any(e => e.Type == x))
+                    .Distinct()
+                    .Count();
+                if (owned >= expectedElements)
+                    break;
+                GrantNextNomadElement(player);
+            }
+        }
+
+        internal static bool IsNomadCombatClothing(WorldObject item)
+        {
+            if (item == null || item.WeenieClassId != NomadGauntletWcid && item.WeenieClassId != NomadBootWcid)
+                return false;
+            return (item.UnarmedBaseDamage ?? 0) > 0 && (item.Name?.Contains("Nomad", StringComparison.OrdinalIgnoreCase) ?? false);
+        }
+
+        private const int NomadLivingGearMaxLevel = 275;
+        private const long NomadLivingGearBaseXp = 1_000_000;
+
+        private static void EnsureNomadLivingGear(Player player)
+        {
+            foreach (var item in player.GetAllPossessions().Where(IsNomadCombatClothing))
+            {
+                PrepareNomadLivingItem(item);
+                ApplyNomadItemGrowth(player, item, item.ItemLevel ?? 0, announceRend: false);
+            }
+        }
+
+        private static void PrepareNomadLivingItem(WorldObject item)
+        {
+            item.SetProperty(PropertyInt.Attuned, (int)AttunedStatus.Attuned);
+            item.SetProperty(PropertyInt.Bonded, (int)BondedStatus.Bonded);
+            item.SetProperty(PropertyBool.Dyable, true);
+            item.SetProperty(PropertyInt.ItemMaxLevel, NomadLivingGearMaxLevel);
+            item.SetProperty(PropertyInt.ItemXpStyle, (int)ItemXpStyle.Fixed);
+            item.SetProperty(PropertyInt64.ItemBaseXp, NomadLivingGearBaseXp);
+            if (item.ItemTotalXp == null)
+                item.SetProperty(PropertyInt64.ItemTotalXp, 0);
+        }
+
+        public static void HandleNomadItemLevelUp(Player player, WorldObject item, int previousItemLevel)
+        {
+            if (player?.GetProperty(PropertyBool.IsIronmanNomad) != true || !IsNomadCombatClothing(item))
+                return;
+            ApplyNomadItemGrowth(player, item, item.ItemLevel ?? 0, announceRend: previousItemLevel < 10 && (item.ItemLevel ?? 0) >= 10);
+        }
+
+        private static void ApplyNomadItemGrowth(Player player, WorldObject item, int itemLevel, bool announceRend)
+        {
+            var clampedLevel = Math.Clamp(itemLevel, 0, NomadLivingGearMaxLevel);
+            var damageBonus = Math.Min(27, clampedLevel / 10);
+            var damageMod = 1.0 + Math.Min(0.25, clampedLevel / 50 * 0.05);
+            var offense = PropertyManager.GetDouble("unarmed_nomad_item_attack_mod").Item + Math.Min(0.15, clampedLevel / 50 * 0.025);
+            var defense = 1.08 + Math.Min(0.10, clampedLevel / 75 * 0.02);
+            var baseDamage = item.WeenieClassId == NomadGauntletWcid ? 12 : 10;
+            var damage = baseDamage + damageBonus;
+
+            item.SetProperty(PropertyInt.UnarmedBaseDamage, damage);
+            item.SetProperty(PropertyInt.Damage, damage);
+            item.SetProperty(PropertyFloat.DamageMod, damageMod);
+            item.SetProperty(PropertyFloat.WeaponOffense, offense);
+            item.SetProperty(PropertyFloat.WeaponDefense, defense);
+
+            var damageType = (DamageType)(item.UnarmedDamageType ?? 0);
+            var rend = GetNomadRend(damageType);
+            if (clampedLevel >= 10 && rend != ImbuedEffectType.Undef)
+                item.SetProperty(PropertyInt.ImbuedEffect, (int)rend);
+
+            var inscription = item.Inscription ?? "";
+            var marker = "\nGrowth:";
+            var markerIndex = inscription.IndexOf(marker, StringComparison.Ordinal);
+            if (markerIndex >= 0)
+                inscription = inscription.Substring(0, markerIndex);
+            var growth = clampedLevel >= 10 ? $"Item Level {clampedLevel}; {damageType} Rend awakened" : $"Item Level {clampedLevel}; Rend awakens at item level 10";
+            item.SetProperty(PropertyString.Inscription, $"{inscription}{marker}\n{growth}. Damage {damage}, modifier {damageMod:0.00}, offense {offense:0.000}, defense {defense:0.000}.");
+
+            item.SaveBiotaToDatabase();
+            if (player.Session != null)
+            {
+                player.Session.Network.EnqueueSend(
+                    new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.UnarmedBaseDamage, damage),
+                    new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.Damage, damage),
+                    new GameMessagePrivateUpdatePropertyFloat(item, PropertyFloat.DamageMod, damageMod),
+                    new GameMessagePrivateUpdatePropertyFloat(item, PropertyFloat.WeaponOffense, offense),
+                    new GameMessagePrivateUpdatePropertyFloat(item, PropertyFloat.WeaponDefense, defense),
+                    new GameMessagePrivateUpdatePropertyString(item, PropertyString.Inscription, item.Inscription));
+                if (clampedLevel >= 10 && rend != ImbuedEffectType.Undef)
+                    player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.ImbuedEffect, (int)rend));
+            }
+
+            if (announceRend)
+                player.SendMessage($"[Nomad] Your {item.Name} awakens its {damageType} Rend.", ChatMessageType.Advancement);
+        }
+        private static ImbuedEffectType GetNomadRend(DamageType damageType) => damageType switch
+        {
+            DamageType.Slash => ImbuedEffectType.SlashRending,
+            DamageType.Pierce => ImbuedEffectType.PierceRending,
+            DamageType.Bludgeon => ImbuedEffectType.BludgeonRending,
+            DamageType.Fire => ImbuedEffectType.FireRending,
+            DamageType.Cold => ImbuedEffectType.ColdRending,
+            DamageType.Acid => ImbuedEffectType.AcidRending,
+            DamageType.Electric => ImbuedEffectType.ElectricRending,
+            _ => ImbuedEffectType.Undef,
+        };
         private static void CreateAndGrantNomadUnarmedItem(Player player, uint wcid, string slotLabel,
             DamageType damageType, string elementName, int baseDamage, float variance)
         {
@@ -558,6 +684,8 @@ namespace ACE.Server.Factories
                 wo.SetProperty(PropertyFloat.NomadProcMagnitude, magnitude);
                 procDescription = $"Healing Strike: {chance * 100:0.#}% chance on hit to heal {magnitude * 100:0.#}% of damage dealt back to the wielder.";
             }
+
+            PrepareNomadLivingItem(wo);
 
             // Rename so the element is visible at a glance.
             wo.SetProperty(PropertyString.Name, $"{elementName} Nomad {slotLabel}");
@@ -1217,9 +1345,11 @@ namespace ACE.Server.Factories
             ApplyIronmanPlanForLevel(player, level, announceGrants: true);
             ApplyIronmanLifeMilestones(player, level);
 
-            // Nomads collect one new element every other level (2,4,6,...,14 => all 7 elements).
-            if (player.GetProperty(PropertyBool.IsIronmanNomad) == true && level >= 2 && level <= 14 && level % 2 == 0)
-                GrantNextNomadElement(player);
+            if (player.GetProperty(PropertyBool.IsIronmanNomad) == true)
+            {
+                EnsureNomadElementsForLevel(player, level);
+                EnsureNomadLivingGear(player);
+            }
 
             AutoSpendBlindIronmanXp(player);
         }
@@ -1304,33 +1434,8 @@ namespace ACE.Server.Factories
 
         private const uint NomadStarterRobeWcid = 40439;
 
-        private static void GiveNomadStarterGear(Player player)
-        {
-            NomadRunePouch.EnsureFor(player, notify: false);
-
-            var boneGrinder = WorldObjectFactory.CreateNewWorldObject(ScavengersHexdust.BoneGrinderWeenieClassId);
-            if (boneGrinder != null)
-            {
-                boneGrinder.SetProperty(PropertyBool.IsIronmanItem, true);
-                boneGrinder.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
-                if (!player.TryCreateInInventoryWithNetworking(boneGrinder))
-                    player.SendMessage("[Nomad] Failed to place your Bone Grinder in your pack.");
-            }
-
-            var robe = WorldObjectFactory.CreateNewWorldObject(NomadStarterRobeWcid);
-            if (robe != null)
-            {
-                robe.SetProperty(PropertyBool.IsIronmanItem, true);
-                robe.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceIronman);
-                robe.SetProperty(PropertyInt.PaletteTemplate, 39);
-                robe.SetProperty(PropertyFloat.Shade, 0.8583308693778472);
-                if (!player.TryCreateInInventoryWithNetworking(robe))
-                    player.SendMessage("[Nomad] Failed to place your Pathwarden robe in your pack.");
-            }
-            else
-                player.SendMessage($"[Nomad] Failed to create starter robe (wcid {NomadStarterRobeWcid}).");
-
-            var starterSpells = NomadRune.GetStarterSpells(player);
+        private static void GiveNomadStarterRunes(Player player)
+        {            var starterSpells = NomadRune.GetStarterSpells(player);
             foreach (var spellId in starterSpells)
             {
                 var rune = WorldObjectFactory.CreateNewWorldObject(NomadRune.NomadRuneWeenieClassId);

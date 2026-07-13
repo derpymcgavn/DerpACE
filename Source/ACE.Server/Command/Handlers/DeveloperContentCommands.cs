@@ -2309,6 +2309,72 @@ namespace ACE.Server.Command.Handlers.Processors
             CommandHandlerHelper.WriteOutputInfo(session, $"Exported {sql_folder}{sql_filename}");
         }
 
+        public static bool ExportClonedBossSQL(Session session, uint sourceWcid, uint bossWcid, ACE.Database.Models.Shard.BossMechanicProfile profile, out string path, out string error)
+        {
+            path = null;
+            error = null;
+            try
+            {
+                var source = DatabaseManager.World.GetWeenie(sourceWcid);
+                if (source == null)
+                    throw new InvalidOperationException($"Source WCID {sourceWcid} was not found.");
+                if (DatabaseManager.World.GetWeenie(bossWcid) != null)
+                    throw new InvalidOperationException($"Destination WCID {bossWcid} already exists.");
+
+                if (WeenieSQLWriter == null)
+                {
+                    WeenieSQLWriter = new WeenieSQLWriter
+                    {
+                        WeenieNames = DatabaseManager.World.GetAllWeenieNames(),
+                        SpellNames = DatabaseManager.World.GetAllSpellNames(),
+                        TreasureDeath = DatabaseManager.World.GetAllTreasureDeath(),
+                        TreasureWielded = DatabaseManager.World.GetAllTreasureWielded(),
+                        PacketOpCodes = PacketOpCodeNames.Values
+                    };
+                }
+
+                string sql;
+                using (var memory = new MemoryStream())
+                {
+                    using (var writer = new StreamWriter(memory, new System.Text.UTF8Encoding(false), 4096, true))
+                    {
+                        WeenieSQLWriter.CreateSQLDELETEStatement(source, writer);
+                        writer.WriteLine();
+                        WeenieSQLWriter.CreateSQLINSERTStatement(source, writer);
+                    }
+                    sql = System.Text.Encoding.UTF8.GetString(memory.ToArray());
+                }
+
+                // Every parent key in a weenie export uses the source WCID. Self-references should follow the clone too.
+                sql = Regex.Replace(sql, $@"\b{sourceWcid}\b", bossWcid.ToString(CultureInfo.InvariantCulture));
+                var clonedClassName = $"{source.ClassName}-boss-{bossWcid}";
+                sql = sql.Replace($"'{source.ClassName}'", $"'{clonedClassName}'");
+
+                var root = VerifyContentFolder(session, false);
+                var folder = Path.Combine(root.FullName, "sql", "weenies");
+                Directory.CreateDirectory(folder);
+                var safeProfile = Regex.Replace(profile.ProfileName, @"[^A-Za-z0-9_-]", "_");
+                path = Path.Combine(folder, $"{bossWcid} {safeProfile}.sql");
+
+                var Hex = new Func<string, string>(value => "0x" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(value ?? "")));
+                using var output = new StreamWriter(path, false, new System.Text.UTF8Encoding(false));
+                output.Write(sql);
+                output.WriteLine();
+                output.WriteLine("-- DerpACE Boss Mechanic Profile");
+                output.WriteLine($"-- ClonedFromWeenieClassId: {sourceWcid}");
+                output.WriteLine($"-- BossProfile: {profile.ProfileName}");
+                output.WriteLine($"-- BossWeenieClassId: {bossWcid}");
+                output.WriteLine("INSERT INTO `boss_mechanic_profile` (`profile_Name`,`weenie_Class_Id`,`draft_Revision`,`draft_Json`,`published_Revision`,`published_Json`,`previous_Revision`,`previous_Json`,`enabled`,`modified_By`,`modified_At`) VALUES");
+                output.WriteLine($"({Hex(profile.ProfileName)},{bossWcid},{profile.DraftRevision},{Hex(profile.DraftJson)},{profile.PublishedRevision},{Hex(profile.PublishedJson)},{profile.PreviousRevision},{Hex(profile.PreviousJson)},{(profile.Enabled ? 1 : 0)},{Hex(profile.ModifiedBy)},UTC_TIMESTAMP())");
+                output.WriteLine("ON DUPLICATE KEY UPDATE `weenie_Class_Id`=VALUES(`weenie_Class_Id`),`draft_Revision`=VALUES(`draft_Revision`),`draft_Json`=VALUES(`draft_Json`),`published_Revision`=VALUES(`published_Revision`),`published_Json`=VALUES(`published_Json`),`previous_Revision`=VALUES(`previous_Revision`),`previous_Json`=VALUES(`previous_Json`),`enabled`=VALUES(`enabled`),`modified_By`=VALUES(`modified_By`),`modified_At`=VALUES(`modified_At`);");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
         public static void ExportSQLBoss(Session session, string param)
         {
             if (!uint.TryParse(param, out var wcid))

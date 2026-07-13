@@ -248,6 +248,7 @@ namespace ACE.Server.WorldObjects
             if (dieEntered) return;
 
             dieEntered = true;
+            BossMechanicManager.OnCreatureDeath(this);
             BossMechanicManager.Reset(this);
 
             UpdateVital(Health, 0);

@@ -47,6 +47,8 @@ namespace ACE.Server.DerpAce
         public int AdminMapRefreshSeconds { get; set; } = 5;
         [JsonPropertyName("admin_map_image_path")]
         public string AdminMapImagePath { get; set; } = "Data/AdminMap/dereth-map.png";
+        [JsonPropertyName("admin_map_icon_path")]
+        public string AdminMapIconPath { get; set; } = "Data/AdminMap/icons";
         [JsonPropertyName("admin_map_bounds_left_pct")]
         public float AdminMapBoundsLeftPct { get; set; } = 0.45f;
         [JsonPropertyName("admin_map_bounds_top_pct")]

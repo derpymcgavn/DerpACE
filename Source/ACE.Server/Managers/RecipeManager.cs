@@ -73,6 +73,12 @@ namespace ACE.Server.Managers
                 return;
             }
 
+            if (recipe.IsTinkering() && IronmanFactory.IsNomadCombatClothing(target))
+            {
+                player.Session.Network.EnqueueSend(new GameMessageSystemChat($"The {target.NameWithMaterial} is living Nomad gear. It grows through use and cannot be tinkered or imbued.", ChatMessageType.Craft));
+                player.SendUseDoneEvent();
+                return;
+            }
             // verify requirements
             if (!VerifyRequirements(recipe, player, source, target))
             {

@@ -444,8 +444,11 @@ namespace ACE.Server.WorldObjects
 
             var resisted = source.TryResistSpell(target, Spell, resistSource, true);
             if (resisted && !overpower)
+            {
+                if (target is Creature resistedBoss)
+                    BossMechanicManager.OnSpellResisted(resistedBoss);
                 return null;
-
+            }
             CreatureSkill attackSkill = null;
             if (sourceCreature != null)
                 attackSkill = sourceCreature.GetCreatureSkill(Spell.School);

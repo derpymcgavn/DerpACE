@@ -277,7 +277,8 @@ namespace ACE.Server.Entity
                 // DerpACE: Apply event and creature mutators (drunken global quest, Vampiric, Thief, Scout, Simulacrum, and future expansions)
                 if (wo is Creature creature)
                 {
-                    if (!GlobalKillQuestManager.TryApplyDrunkenMob(creature))
+                    if (!GlobalKillQuestManager.TryApplyDrunkenMob(creature)
+                        && !BossMechanicManager.TryApplyBossMutators(creature))
                         ACE.Server.Factories.CreatureMutatorManager.TryApplyMutators(creature);
                 }
 

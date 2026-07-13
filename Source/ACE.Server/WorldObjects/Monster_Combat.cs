@@ -418,7 +418,7 @@ namespace ACE.Server.WorldObjects
             var previousHealth = Health.Current;
 
             var damage = -UpdateVitalDelta(Health, -tryDamage);
-            BossMechanicManager.OnHealthChanged(this, previousHealth);
+            BossMechanicManager.OnHealthChanged(this, previousHealth, crit, damageType, (uint)Math.Max(0, damage), source as Player);
 
             // TODO: update monster stamina?
 

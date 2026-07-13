@@ -19,6 +19,7 @@ using ACE.DatLoader;
 using ACE.DatLoader.FileTypes;
 using ACE.Database;
 using ACE.Database.Models.Auth;
+using ACE.Database.Models.Shard;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -209,6 +210,23 @@ namespace ACE.Server.DerpAce
                     WriteText(context, BuildBossMechanicsHelpHtml(), "text/html; charset=utf-8");
                     return;
                 }
+                if (path.Equals("/api/boss/draft", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { ok = false, error = "Use POST to save a boss draft." });
+                        return;
+                    }
+                    WriteJson(context, SaveBossDraft(ReadJsonBody<AdminBossDraftRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    return;
+                }
                 if (path.Equals("/api/session", StringComparison.OrdinalIgnoreCase))
                 {
                     var session = GetValidSession(context);
@@ -216,7 +234,8 @@ namespace ACE.Server.DerpAce
                     {
                         authenticated = session != null,
                         accountName = session?.AccountName,
-                        accessLevel = session?.AccessLevel.ToString()
+                        accessLevel = session?.AccessLevel.ToString(),
+                        isAdmin = session?.AccessLevel >= AccessLevel.Admin
                     });
                     return;
                 }
@@ -243,17 +262,18 @@ namespace ACE.Server.DerpAce
 
                 if (path.Equals("/api/players", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!IsAuthorized(context))
+                    var session = GetValidSession(context);
+                    var isAdmin = IsAuthorized(context);
+                    if (session == null && !isAdmin)
                     {
                         context.Response.StatusCode = 401;
-                        WriteJson(context, new { error = "Admin map login required." });
+                        WriteJson(context, new { error = "Map login required." });
                         return;
                     }
 
-                    WriteJson(context, BuildPlayerSnapshot());
+                    WriteJson(context, BuildPlayerSnapshot(session, isAdmin));
                     return;
                 }
-
                 if (path.Equals("/api/dungeon", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -276,10 +296,12 @@ namespace ACE.Server.DerpAce
 
                 if (path.Equals("/api/inventory", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!IsAuthorized(context))
+                    var session = GetValidSession(context);
+                    var isAdmin = IsAuthorized(context);
+                    if (session == null && !isAdmin)
                     {
                         context.Response.StatusCode = 401;
-                        WriteJson(context, new { error = "Admin map login required." });
+                        WriteJson(context, new { error = "Map login required." });
                         return;
                     }
 
@@ -290,10 +312,17 @@ namespace ACE.Server.DerpAce
                         return;
                     }
 
-                    WriteJson(context, BuildInventorySnapshot(playerGuid));
+                    var player = PlayerManager.GetOnlinePlayer(playerGuid);
+                    if (!isAdmin && player?.Account?.AccountId != session.AccountId)
+                    {
+                        context.Response.StatusCode = 403;
+                        WriteJson(context, new { error = "Players may only view inventory belonging to their own account." });
+                        return;
+                    }
+
+                    WriteJson(context, BuildInventorySnapshot(playerGuid, isAdmin));
                     return;
                 }
-
                 if (path.Equals("/api/inventory/item", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -314,6 +343,23 @@ namespace ACE.Server.DerpAce
                     return;
                 }
 
+                if (path.Equals("/api/inventory/property", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { error = "Admin map login required." });
+                        return;
+                    }
+                    if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { error = "Use POST for property edits." });
+                        return;
+                    }
+                    WriteJson(context, HandleInventoryPropertyEdit(ReadJsonBody<AdminInventoryPropertyEditRequest>(context)));
+                    return;
+                }
                 if (path.Equals("/api/inventory/delete", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -382,10 +428,10 @@ namespace ACE.Server.DerpAce
 
                 if (path.Equals("/assets/dereth-map", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!IsAuthorized(context))
+                    if (GetValidSession(context) == null && !IsAuthorized(context))
                     {
                         context.Response.StatusCode = 401;
-                        WriteText(context, "Admin map login required.", "text/plain; charset=utf-8");
+                        WriteText(context, "Map login required.", "text/plain; charset=utf-8");
                         return;
                     }
 
@@ -399,10 +445,10 @@ namespace ACE.Server.DerpAce
 
                 if (path.Equals("/assets/icon", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!IsAuthorized(context))
+                    if (GetValidSession(context) == null && !IsAuthorized(context))
                     {
                         context.Response.StatusCode = 401;
-                        WriteText(context, "Admin map login required.", "text/plain; charset=utf-8");
+                        WriteText(context, "Map login required.", "text/plain; charset=utf-8");
                         return;
                     }
 
@@ -428,9 +474,32 @@ namespace ACE.Server.DerpAce
             }
         }
 
+        private static object SaveBossDraft(AdminBossDraftRequest request, string modifiedBy)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(request.Profile) || string.IsNullOrWhiteSpace(request.Json))
+                return new { ok = false, error = "Profile and generated JSON are required." };
+            var profileName = request.Profile.Trim().ToLowerInvariant();
+            var document = BossMechanicManager.Deserialize(request.Json);
+            var errors = BossMechanicManager.Validate(document);
+            if (errors.Count > 0)
+                return new { ok = false, error = string.Join(" ", errors), errors };
+            using var db = new ShardDbContext();
+            var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
+            if (row == null)
+                return new { ok = false, error = "Create the boss profile first, then save its rules." };
+            if (row.WeenieClassId != document.WeenieClassId)
+                return new { ok = false, error = $"Profile WCID is {row.WeenieClassId}, but the builder JSON uses {document.WeenieClassId}." };
+            row.DraftJson = BossMechanicManager.Serialize(document);
+            row.DraftRevision++;
+            row.ModifiedBy = modifiedBy;
+            row.ModifiedAt = DateTime.UtcNow;
+            db.SaveChanges();
+            return new { ok = true, message = $"Saved draft '{profileName}' revision {row.DraftRevision}.", revision = row.DraftRevision };
+        }
         private static bool IsAuthorized(HttpListenerContext context)
         {
-            if (GetValidSession(context) != null)
+            var session = GetValidSession(context);
+            if (session?.AccessLevel >= AccessLevel.Admin)
                 return true;
 
             var token = DerpAceConfigManager.Config.AdminMapToken;
@@ -462,19 +531,13 @@ namespace ACE.Server.DerpAce
             }
 
             var accessLevel = (AccessLevel)account.AccessLevel;
-            if (accessLevel < AccessLevel.Admin)
-            {
-                context.Response.StatusCode = 403;
-                return new { ok = false, error = "Admin access is required." };
-            }
-
             if (account.BanExpireTime.HasValue && DateTime.UtcNow < account.BanExpireTime.Value)
             {
                 context.Response.StatusCode = 403;
                 return new { ok = false, error = "That account is banned." };
             }
 
-            if (NetworkManager.Find(account.AccountName) != null || NetworkManager.Find(account.AccountId) != null)
+            if (accessLevel >= AccessLevel.Admin && (NetworkManager.Find(account.AccountName) != null || NetworkManager.Find(account.AccountId) != null))
             {
                 context.Response.StatusCode = 409;
                 return new { ok = false, error = "Log out of the game client before using that account for the admin map." };
@@ -499,6 +562,7 @@ namespace ACE.Server.DerpAce
                 ok = true,
                 accountName = account.AccountName,
                 accessLevel = accessLevel.ToString(),
+                isAdmin = accessLevel >= AccessLevel.Admin,
                 expiresUtc = session.ExpiresUtc
             };
         }
@@ -527,7 +591,7 @@ namespace ACE.Server.DerpAce
                 return null;
             }
 
-            if (NetworkManager.Find(session.AccountName) != null || NetworkManager.Find(session.AccountId) != null)
+            if (session.AccessLevel >= AccessLevel.Admin && (NetworkManager.Find(session.AccountName) != null || NetworkManager.Find(session.AccountId) != null))
             {
                 Sessions.TryRemove(token, out _);
                 return null;
@@ -573,22 +637,44 @@ namespace ACE.Server.DerpAce
             });
         }
 
-        private static AdminMapSnapshot BuildPlayerSnapshot()
+        private static AdminMapSnapshot BuildPlayerSnapshot(AdminMapSession session, bool isAdmin)
         {
             var config = DerpAceConfigManager.Config;
             var visiblePlayers = new List<Player>();
             var players = new List<AdminMapPlayer>();
+            var allOnline = PlayerManager.GetAllOnline();
+            HashSet<uint> playerVisibleGuids = null;
 
-            foreach (var player in PlayerManager.GetAllOnline())
+            if (!isAdmin)
+            {
+                playerVisibleGuids = new HashSet<uint>();
+                foreach (var accountPlayer in allOnline.Where(p => p?.Account?.AccountId == session.AccountId))
+                {
+                    playerVisibleGuids.Add(accountPlayer.Guid.Full);
+                    if (accountPlayer.Fellowship?.FellowshipMembers == null)
+                        continue;
+
+                    foreach (var member in accountPlayer.Fellowship.FellowshipMembers.Values)
+                        if (member.TryGetTarget(out var fellow) && fellow != null)
+                            playerVisibleGuids.Add(fellow.Guid.Full);
+                }
+            }
+
+            foreach (var player in allOnline)
             {
                 if (player?.Location == null)
                     continue;
 
-                if (!config.AdminMapShowAdmins && (player.IsAdmin || player.IsSentinel || player.IsEnvoy || player.IsArch || player.IsPsr))
+                if (!isAdmin && !playerVisibleGuids.Contains(player.Guid.Full))
+                    continue;
+
+                if (isAdmin && !config.AdminMapShowAdmins && (player.IsAdmin || player.IsSentinel || player.IsEnvoy || player.IsArch || player.IsPsr))
                     continue;
 
                 visiblePlayers.Add(player);
-                players.Add(BuildPlayer(player));
+                var mapPlayer = BuildPlayer(player);
+                mapPlayer.IsOwnedBySession = !isAdmin && player.Account?.AccountId == session.AccountId;
+                players.Add(mapPlayer);
             }
 
             return new AdminMapSnapshot
@@ -605,12 +691,11 @@ namespace ACE.Server.DerpAce
                     Bottom = ClampPercent(config.AdminMapBoundsBottomPct)
                 },
                 Players = players,
-                Blips = BuildNearbyMapBlips(visiblePlayers, false, 0),
-                Stats = BuildMapStats(visiblePlayers),
-                Feeds = BuildFeeds()
+                Blips = isAdmin ? BuildNearbyMapBlips(visiblePlayers, false, 0) : new List<AdminMapBlip>(),
+                Stats = isAdmin ? BuildMapStats(visiblePlayers) : null,
+                Feeds = isAdmin ? BuildFeeds() : null
             };
         }
-
         private static AdminMapFeeds BuildFeeds()
         {
             lock (FeedLock)
@@ -744,7 +829,7 @@ namespace ACE.Server.DerpAce
             };
         }
 
-        private static AdminInventorySnapshot BuildInventorySnapshot(uint playerGuid)
+        private static AdminInventorySnapshot BuildInventorySnapshot(uint playerGuid, bool editable = true)
         {
             var player = PlayerManager.GetOnlinePlayer(playerGuid);
             if (player == null)
@@ -763,6 +848,7 @@ namespace ACE.Server.DerpAce
                 PlayerGuid = $"0x{player.Guid.Full:X8}",
                 Encumbrance = player.EncumbranceVal ?? 0,
                 CoinValue = player.CoinValue ?? 0,
+                Editable = editable,
                 Items = items
             };
         }
@@ -828,10 +914,36 @@ namespace ACE.Server.DerpAce
                 WieldedLocation = item.CurrentWieldedLocation?.ToString(),
                 IsContainer = item is Container,
                 IsAttuned = item.IsAttunedOrContainsAttuned,
-                IsBonded = item.Bonded != null
+                IsBonded = item.Bonded != null,
+                Properties = BuildItemProperties(item)
             };
         }
 
+        private static Dictionary<string, List<AdminItemProperty>> BuildItemProperties(WorldObject item)
+        {
+            var result = new Dictionary<string, List<AdminItemProperty>>(StringComparer.OrdinalIgnoreCase);
+            AddItemProperties(result, "bool", item.GetAllPropertyBools());
+            AddItemProperties(result, "did", item.GetAllPropertyDataId());
+            AddItemProperties(result, "float", item.GetAllPropertyFloat());
+            AddItemProperties(result, "iid", item.GetAllPropertyInstanceId());
+            AddItemProperties(result, "int", item.GetAllPropertyInt());
+            AddItemProperties(result, "int64", item.GetAllPropertyInt64());
+            AddItemProperties(result, "string", item.GetAllPropertyString());
+            return result;
+        }
+
+        private static void AddItemProperties<TKey, TValue>(Dictionary<string, List<AdminItemProperty>> result, string family, Dictionary<TKey, TValue> values) where TKey : Enum
+        {
+            result[family] = values
+                .OrderBy(x => Convert.ToUInt32(x.Key, CultureInfo.InvariantCulture))
+                .Select(x => new AdminItemProperty
+                {
+                    Key = Convert.ToUInt32(x.Key, CultureInfo.InvariantCulture),
+                    Name = x.Key.ToString(),
+                    Value = Convert.ToString(x.Value, CultureInfo.InvariantCulture)
+                })
+                .ToList();
+        }
         private static object HandleInventoryItemEdit(AdminInventoryItemEditRequest request)
         {
             if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out var foundInContainer, out var rootOwner, out _, out var error))
@@ -925,6 +1037,83 @@ namespace ACE.Server.DerpAce
             return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
         }
 
+        private static object HandleInventoryPropertyEdit(AdminInventoryPropertyEditRequest request)
+        {
+            if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out _, out _, out _, out var error))
+                return new { ok = false, error };
+            if (string.IsNullOrWhiteSpace(request.Family) || request.Value == null)
+                return new { ok = false, error = "Property family and value are required." };
+
+            try
+            {
+                switch (request.Family.Trim().ToLowerInvariant())
+                {
+                    case "bool":
+                        if (!Enum.IsDefined(typeof(PropertyBool), (ushort)request.Key) || !bool.TryParse(request.Value, out var boolValue))
+                            throw new ArgumentException("Invalid bool property or value.");
+                        var boolProperty = (PropertyBool)(ushort)request.Key;
+                        item.SetProperty(boolProperty, boolValue);
+                        player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyBool(item, boolProperty, boolValue));
+                        break;
+                    case "did":
+                        if (!Enum.IsDefined(typeof(PropertyDataId), (ushort)request.Key) || !TryParseUIntValue(request.Value, out var didValue))
+                            throw new ArgumentException("Invalid DID property or value.");
+                        item.SetProperty((PropertyDataId)(ushort)request.Key, didValue);
+                        break;
+                    case "float":
+                        if (!Enum.IsDefined(typeof(PropertyFloat), (ushort)request.Key) || !double.TryParse(request.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var floatValue))
+                            throw new ArgumentException("Invalid float property or value.");
+                        var floatProperty = (PropertyFloat)(ushort)request.Key;
+                        item.SetProperty(floatProperty, floatValue);
+                        player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyFloat(item, floatProperty, floatValue));
+                        break;
+                    case "iid":
+                        if (!Enum.IsDefined(typeof(PropertyInstanceId), (ushort)request.Key) || !TryParseUIntValue(request.Value, out var iidValue))
+                            throw new ArgumentException("Invalid IID property or value.");
+                        item.SetProperty((PropertyInstanceId)(ushort)request.Key, iidValue);
+                        break;
+                    case "int":
+                        if (!Enum.IsDefined(typeof(PropertyInt), (ushort)request.Key) || !int.TryParse(request.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intValue))
+                            throw new ArgumentException("Invalid int property or value.");
+                        var intProperty = (PropertyInt)(ushort)request.Key;
+                        item.SetProperty(intProperty, intValue);
+                        player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, intProperty, intValue));
+                        break;
+                    case "int64":
+                        if (!Enum.IsDefined(typeof(PropertyInt64), (ushort)request.Key) || !long.TryParse(request.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var int64Value))
+                            throw new ArgumentException("Invalid int64 property or value.");
+                        var int64Property = (PropertyInt64)(ushort)request.Key;
+                        item.SetProperty(int64Property, int64Value);
+                        player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt64(item, int64Property, int64Value));
+                        break;
+                    case "string":
+                        if (!Enum.IsDefined(typeof(PropertyString), (ushort)request.Key))
+                            throw new ArgumentException("Invalid string property.");
+                        var stringProperty = (PropertyString)(ushort)request.Key;
+                        item.SetProperty(stringProperty, request.Value);
+                        player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyString(item, stringProperty, request.Value));
+                        break;
+                    default:
+                        throw new ArgumentException("Supported families: bool, did, float, iid, int, int64, string.");
+                }
+
+                item.SaveBiotaToDatabase();
+                log.Warn($"[DerpACE AdminMap] {player.Name}'s item {item.Guid} property {request.Family}:{request.Key} was changed by an admin map session.");
+                return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
+            }
+            catch (Exception ex)
+            {
+                return new { ok = false, error = ex.Message };
+            }
+        }
+
+        private static bool TryParseUIntValue(string value, out uint result)
+        {
+            var text = value?.Trim() ?? "";
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return uint.TryParse(text.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out result);
+            return uint.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
+        }
         private static bool ApplyIntEdit(Player player, WorldObject item, int? requestValue, PropertyInt property, Action<int> setter)
         {
             if (!requestValue.HasValue)
@@ -1571,49 +1760,30 @@ namespace ACE.Server.DerpAce
 
         private static bool TryWriteIcon(HttpListenerContext context, uint did)
         {
-            if (did == 0 || DatManager.PortalDat == null)
-                return false;
-
-            if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1))
+            if (did == 0)
                 return false;
 
             try
             {
-                if (!IconPngCache.TryGetValue(did, out var bytes))
-                {
-                    var texture = TryReadTexture(DatManager.PortalDat, did) ?? TryReadTexture(DatManager.HighResDat, did);
-                    if (texture == null || texture.Length <= 0 || texture.Width <= 0 || texture.Height <= 0)
-                    {
-                        log.Debug($"[DerpACE AdminMap] Icon texture 0x{did:X8} was not found in loaded DATs.");
-                        return false;
-                    }
-
-                    using (var bitmap = texture.GetBitmap())
-                    using (var stream = new MemoryStream())
-                    {
-                        bitmap.Save(stream, ImageFormat.Png);
-                        bytes = stream.ToArray();
-                    }
-
-                    if (bytes == null || bytes.Length == 0)
-                        return false;
-
-                    IconPngCache[did] = bytes;
-                }
-
-                if (bytes == null || bytes.Length == 0)
+                var root = DerpAceConfigManager.Config.AdminMapIconPath;
+                if (string.IsNullOrWhiteSpace(root))
                     return false;
 
-                WriteBytes(context, bytes, "image/png");
+                root = root.Trim();
+                var resolvedRoot = Path.IsPathRooted(root) ? root : Path.Combine(AppContext.BaseDirectory, root);
+                var path = Path.Combine(Path.GetFullPath(resolvedRoot), $"{did:X8}.png");
+                if (!File.Exists(path))
+                    return false;
+
+                WriteBytes(context, File.ReadAllBytes(path), "image/png");
                 return true;
             }
             catch (Exception ex)
             {
-                log.Warn($"[DerpACE AdminMap] Failed to load icon 0x{did:X8}: {ex.Message}");
+                log.Warn($"[DerpACE AdminMap] Failed to load static icon 0x{did:X8}: {ex.Message}");
                 return false;
             }
         }
-
         private static Texture TryReadTexture(DatDatabase database, uint did)
         {
             if (database == null)
@@ -1745,48 +1915,18 @@ namespace ACE.Server.DerpAce
 
         private static string BuildBossMechanicsHelpHtml()
         {
-            return @"<!doctype html>
-<html lang=""en""><head><meta charset=""utf-8""><meta name=""viewport"" content=""width=device-width,initial-scale=1"">
-<title>DerpACE Boss Mechanics</title>
-<style>
-:root{color-scheme:dark;--bg:#0c1011;--panel:#141a1c;--line:#344146;--text:#edf2f3;--muted:#a8b4b8;--green:#66d39a;--amber:#f0c36a;--red:#ef7777;--blue:#72b7e8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Segoe UI,Arial,sans-serif}header{position:sticky;top:0;background:#101618;border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;gap:16px}header h1{font-size:18px;margin:0}a{color:var(--blue)}main{max-width:1100px;margin:auto;padding:20px}.band{border-top:1px solid var(--line);padding:20px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}.card h3{margin:0 0 8px;font-size:15px}.ok{color:var(--green)}.planned{color:var(--amber)}.danger{color:var(--red)}code,pre{font-family:Consolas,monospace}pre{background:#090c0d;border:1px solid #293438;padding:12px;overflow:auto;white-space:pre-wrap}.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.step{border-left:3px solid var(--green);padding:8px 10px;background:var(--panel)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}@media(max-width:760px){.grid,.steps{grid-template-columns:1fr}}
-</style></head><body>
-<header><h1>Boss Mechanics</h1><a href=""/"">Back to Admin Map</a></header><main>
-<section><p>Boss SQL defines the creature. A boss profile defines encounter behavior. Admins edit a draft, validate it, then publish an atomic live revision. Broken drafts never affect spawned bosses.</p><div class=""steps""><div class=""step"">1. Create draft</div><div class=""step"">2. Add rules</div><div class=""step"">3. Validate</div><div class=""step"">4. Publish</div></div></section>
-<section class=""band""><h2>Available Now</h2><div class=""grid""><div class=""card""><h3 class=""ok"">One-time health threshold</h3><pre>@boss create hollow_king 9000001
-@boss add-say hollow_king 75 You have disturbed what sleeps below.
-@boss add-effect hollow_king 75 EnchantUpRed
-@boss validate hollow_king
-@boss publish hollow_king</pre></div><div class=""card""><h3>Recovery and export</h3><pre>@boss show hollow_king
-@boss rollback hollow_king
-/export-sql boss 9000001</pre><p>Rollback restores the previous published revision. Export writes the weenie and profile into one portable SQL artifact.</p></div></div></section>
-<section class=""band""><h2>Advanced Encounter Blueprints</h2><p class=""planned"">These templates define the next guarded action types. The current schema validator intentionally blocks them until their runtime safety checks are installed.</p>
-<div class=""card""><h3>Resisted Spell: Sky Stomp</h3><pre>WHEN boss resists a player spell
-CHANCE 20%
-ANNOUNCE ""The Colossus drives the spell back into the earth!""
-PLAY stomp animation and impact effect
-FOR EACH player within 25 yards:
-  move upward up to 500 feet
-  clamp to playable cells and legal Z
-  abort movement if no safe destination exists
-COOLDOWN 20 seconds</pre><p><strong>Required guardrails:</strong> one roll per resisted cast, safe-position trace, indoor ceiling clamp, portal-space rejection, fall-damage policy, and a visible boss cooldown.</p></div>
-<div class=""grid"" style=""margin-top:12px""><div class=""card""><h3>Health Threshold: Reinforcements</h3><pre>WHEN health crosses below 60%
-ANNOUNCE ""Attend me!""
-SPAWN WCID 9000010
-COUNT 4
-RADIUS 6-10 yards
-OWNED BY encounter
-FIRE once
-DESPAWN on reset or boss death</pre><p>Spawn count must be 1-12. The boss cannot spawn itself. Every candidate position must pass collision and playable-cell validation.</p></div><div class=""card""><h3>Spell Reflection</h3><pre>WHEN receiving a harmful player spell
-CHANCE 15%
-TARGET random: original caster or another local player
-ANNOUNCE ""The mirror turns toward {target}!""
-REFLECT original spell at 60% power
-NO recursive reflection
-COOLDOWN 12 seconds</pre><p>Reflection must preserve PK rules, reject invalid/dead targets, exclude reflected casts from triggering another reflection, and announce the selected target locally.</p></div></div></section>
-<section class=""band""><h2>Publishing Rules</h2><table><tr><th>Rule</th><th>Limit</th></tr><tr><td>Rules per profile</td><td>32</td></tr><tr><td>Actions per rule</td><td>8</td></tr><tr><td>Health threshold</td><td>1-99%</td></tr><tr><td>Speech</td><td>240 characters</td></tr><tr><td>Runtime failure</td><td>Skip action; never stop world tick</td></tr><tr><td>Missing database table</td><td>Mechanics disabled; combat continues</td></tr></table></section>
-</main></body></html>";
+            var playScriptOptions = string.Join(string.Empty, Enum.GetNames(typeof(ACE.Entity.Enum.PlayScript))
+                .Where(name => name != nameof(ACE.Entity.Enum.PlayScript.Invalid))
+                .Select(name => $"<option value=\"{name}\"></option>"));
+            var html = @"<!doctype html><html lang=""en""><head><meta charset=""utf-8""><meta name=""viewport"" content=""width=device-width,initial-scale=1""><title>DerpACE Boss Builder</title>
+<style>:root{color-scheme:dark;--bg:#0c1011;--panel:#151b1d;--line:#344146;--text:#edf2f3;--muted:#a8b4b8;--green:#65d299;--amber:#efc36b;--blue:#71b7e8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Segoe UI,Arial,sans-serif}header{position:sticky;top:0;z-index:2;display:flex;gap:16px;align-items:center;padding:12px 20px;background:#101618;border-bottom:1px solid var(--line)}header h1{margin:0;font-size:18px}a{color:var(--blue)}main{max-width:1200px;margin:auto;padding:18px}.grid{display:grid;grid-template-columns:minmax(300px,.8fr) minmax(400px,1.2fr);gap:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}.panel h2{font-size:15px;margin:0 0 10px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.wide{grid-column:1/-1}label{display:grid;gap:4px;color:var(--muted);font-size:11px;text-transform:uppercase}input,select,textarea,button{font:inherit;color:var(--text);background:#0b0f10;border:1px solid #46555a;border-radius:4px;padding:8px}textarea{min-height:70px;resize:vertical}button{cursor:pointer;background:#26373d}button:hover{border-color:var(--green)}.primary{background:#24543d}.rule{display:grid;grid-template-columns:1fr auto;gap:8px;border-top:1px solid var(--line);padding:8px 0}.muted{color:var(--muted)}.ideaBar{display:flex;flex-wrap:wrap;gap:6px}.ideaBar button{font-size:11px;padding:5px 7px}pre{white-space:pre-wrap;overflow:auto;background:#080b0c;border:1px solid #293438;padding:12px;min-height:130px}.actions{display:flex;gap:8px;margin-top:8px}.note{color:var(--amber)}table{width:100%;border-collapse:collapse}td,th{padding:7px;border-bottom:1px solid var(--line);text-align:left}@media(max-width:850px){.grid,.fields{grid-template-columns:1fr}}</style></head>
+<body><header><h1>Boss Builder</h1><a href=""/"">Admin Map</a></header><main><div class=""grid""><section class=""panel""><h2>Boss Identity</h2><div class=""fields""><label>Profile<input id=""profile"" value=""hollow_king""></label><label>Source WCID<input id=""source"" type=""number"" value=""9000001""></label><label class=""wide"">New boss WCID (optional)<input id=""boss"" type=""number"" placeholder=""990000011""></label><label class=""wide"">Mutator perks (up to 3, comma separated)<input id=""mutators"" placeholder=""vampiric, shaman, tank""><small>Boss-safe: vampiric, nocturnal, exploding, healer, enchanter, shaman, tank, reaper, necromancer, warder.</small></label></div><h2 style=""margin-top:16px"">Add Rule</h2><div class=""fields""><label>When<select id=""trigger""><option value=""health_below"">Health falls below...</option><option value=""combat_start"">Combat starts</option><option value=""timer"">Every few seconds</option><option value=""spell_resisted"">Boss resists a spell</option><option value=""death"">Boss dies</option></select></label><label id=""thresholdWrap"">Health threshold %<input id=""threshold"" type=""number"" min=""1"" max=""99"" value=""75""></label><label id=""intervalWrap"" style=""display:none"">Seconds<input id=""interval"" type=""number"" min=""1"" max=""3600"" value=""20""></label><label>Chance %<input id=""chance"" type=""number"" min=""1"" max=""100"" value=""100""></label><label>Minimum nearby players<input id=""minPlayers"" type=""number"" min=""1"" max=""40"" value=""1""></label><label>Required phase (optional)<input id=""rulePhase"" placeholder=""default""></label><label id=""repeatWrap"" style=""display:none"">Repeat<select id=""repeat""><option value=""yes"">Keep repeating</option><option value=""no"">Only once</option></select></label><label>Action<select id=""action""><option value=""taunt"">Taunt</option><option value=""say"">Simple local speech</option><option value=""effect"">Visual effect</option><option value=""maintain_minions"">Maintained minions</option><option value=""push"">Push players</option><option value=""pull"">Pull players</option><option value=""blink"">Blink players toward boss</option><option value=""scatter"">Scatter players</option><option value=""knock_up"">Knock players upward</option><option value=""apply_spell"">Temporary spell effect</option><option value=""set_phase"">Set encounter phase</option></select></label><label id=""channelWrap"">Channel<select id=""channel""><option value=""local"">Local</option><option value=""fellowship"">Fellowship</option></select></label><label id=""phaseWrap"" style=""display:none"">New phase<input id=""newPhase"" value=""phase_2""></label><label id=""spellWrap"" style=""display:none"">Spell ID<input id=""spellId"" type=""number"" min=""1""><small>Uses the spell's native duration and stacking.</small></label><label id=""targetWrap"" style=""display:none"">Targets<select id=""target""><option value=""trigger"">Triggering player</option><option value=""nearest"">Nearest player</option><option value=""farthest"">Farthest player</option><option value=""random"">Random player</option><option value=""all"">All nearby players</option></select></label><label id=""distanceWrap"" style=""display:none"">Distance (feet)<input id=""distance"" type=""number"" min=""1"" max=""40"" value=""15""></label><label id=""effectWrap"" style=""display:none"">PlayScript<input id=""effect"" list=""playScripts"" value=""EnchantUpRed"" autocomplete=""off""><datalist id=""playScripts"">{{PLAY_SCRIPT_OPTIONS}}</datalist><small>Type to search all valid server effects.</small></label><label id=""minionWcidWrap"" style=""display:none"">Minion WCID<input id=""minionWcid"" type=""number""></label><label id=""countWrap"" style=""display:none"">Count 1-12<input id=""count"" type=""number"" min=""1"" max=""12"" value=""4""></label><label id=""textWrap"" class=""wide"">Text<textarea id=""text"">%t, you have disturbed what sleeps below.</textarea><small>Wildcards: %t target player, %b boss name, %h boss health %, %n nearby players.</small></label></div><div class=""actions""><button id=""add"" class=""primary"">Add Rule</button><button id=""clear"">Clear Rules</button></div><h2 style=""margin-top:16px"">Taunt Ideas</h2><div id=""ideas"" class=""ideaBar""></div><div id=""rules""></div></section>
+<section class=""panel""><h2>Generated Commands</h2><pre id=""commands""></pre><div class=""actions""><button data-copy=""commands"">Copy Commands</button></div><h2 style=""margin-top:16px"">Equivalent Profile JSON</h2><pre id=""json""></pre><div class=""actions""><button data-copy=""json"">Copy JSON</button><button id=""saveDraft"" class=""primary"">Save Draft</button></div><div id=""saveStatus"" class=""muted""></div><p class=""note"">Commands edit a draft. Always validate, then publish. Import cloned-boss SQL and reload world content before spawning a new WCID.</p></section></div>
+<section class=""panel"" style=""margin-top:14px""><h2>Built-in Runtime Actions</h2><table><tr><th>Action</th><th>Behavior</th></tr><tr><td>say</td><td>Local speech from the boss.</td></tr><tr><td>taunt / local</td><td>Local encounter speech.</td></tr><tr><td>taunt / fellowship</td><td>Sends the line to fellowships represented near the boss.</td></tr><tr><td>effect</td><td>Runs a validated PlayScript.</td></tr><tr><td>maintain_minions</td><td>Maintains 1-12 copies of one WCID at 100 health; zero XP/no corpse; cleans up with boss.</td></tr></table></section></main>
+<script>const rules=[];const $=id=>document.getElementById(id);const ideas=['Your courage smells borrowed.','Stand together. It makes the breaking easier.','I have ended better fellowships than yours.','Another falls, and still you pretend this is victory.','Run. I enjoy the second chase.','The chamber remembers every name it buries.','Your healer cannot mend what I am about to remove.','You brought friends. Good. I brought hunger.'];ideas.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{$('text').value=t;$('action').value='taunt';sync()};$('ideas').appendChild(b)});function sync(){const a=$('action').value;const t=$('trigger').value;$('thresholdWrap').style.display=t==='health_below'?'grid':'none';$('intervalWrap').style.display=t==='timer'?'grid':'none';$('repeatWrap').style.display=t==='timer'?'grid':'none';$('channelWrap').style.display=a==='taunt'?'grid':'none';$('effectWrap').style.display=a==='effect'?'grid':'none';const movement=['push','pull','blink','scatter','knock_up'].includes(a);$('targetWrap').style.display=(movement||a==='apply_spell')?'grid':'none';$('distanceWrap').style.display=movement?'grid':'none';$('spellWrap').style.display=a==='apply_spell'?'grid':'none';$('phaseWrap').style.display=a==='set_phase'?'grid':'none';$('minionWcidWrap').style.display=a==='maintain_minions'?'grid':'none';$('countWrap').style.display=a==='maintain_minions'?'grid':'none';$('textWrap').style.display=(a==='taunt'||a==='say')?'grid':'none'}$('action').onchange=sync;$('trigger').onchange=sync;function render(){const p=$('profile').value.trim()||'boss';const src=$('source').value;const dst=$('boss').value;const mutators=$('mutators').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,3);let c=['@boss create '+p+' '+src+(dst?' '+dst:'')];const jsonRules=rules.map((r,i)=>{let action;if(r.action==='maintain_minions'){if(r.trigger==='health_below')c.push('@boss add-minions '+p+' '+r.threshold+' '+r.minionWcid+' '+r.count);action={type:'maintain_minions',weenieClassId:+r.minionWcid,count:+r.count,health:100}}else if(r.action==='effect'){if(r.trigger==='health_below')c.push('@boss add-effect '+p+' '+r.threshold+' '+r.effect);action={type:'effect',effect:r.effect}}else if(['push','pull','blink','scatter','knock_up'].includes(r.action)){action={type:r.action,target:r.target,distance:+r.distance}}else if(r.action==='apply_spell'){action={type:'apply_spell',target:r.target,spellId:+r.spellId}}else if(r.action==='set_phase'){action={type:'set_phase',phase:r.newPhase}}else if(r.action==='taunt'){if(r.trigger==='health_below')c.push('@boss add-taunt '+p+' '+r.threshold+' '+r.channel+' '+r.text);action={type:'taunt',channel:r.channel,text:r.text}}else{if(r.trigger==='health_below')c.push('@boss add-say '+p+' '+r.threshold+' '+r.text);action={type:'say',text:r.text}}return{id:r.trigger+'_'+(i+1),trigger:r.trigger,thresholdPercent:r.trigger==='health_below'?+r.threshold:0,intervalSeconds:r.trigger==='timer'?+r.interval:0,chancePercent:+r.chance,minPlayers:+r.minPlayers,once:r.trigger==='timer'?r.repeat!=='yes':true,phase:r.rulePhase||null,actions:[action]}});c.push('@boss validate '+p,'@boss publish '+p);$('commands').textContent=c.join('\n');$('json').textContent=JSON.stringify({schemaVersion:1,weenieClassId:+(dst||src),mutators:mutators,rules:jsonRules},null,2);$('rules').innerHTML=rules.map((r,i)=>'<div class=""rule""><span><strong>'+triggerLabel(r)+'</strong> '+r.action+(r.channel?' / '+r.channel:'')+' · '+r.chance+'% · '+r.minPlayers+'+ players</span><span><button data-op=""up"" data-i=""'+i+'"">↑</button><button data-op=""copy"" data-i=""'+i+'"">Duplicate</button><button data-op=""remove"" data-i=""'+i+'"">Remove</button></span></div>').join('');$('rules').querySelectorAll('button').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(b.dataset.op==='remove')rules.splice(i,1);else if(b.dataset.op==='copy')rules.splice(i+1,0,{...rules[i]});else if(b.dataset.op==='up'&&i>0)[rules[i-1],rules[i]]=[rules[i],rules[i-1]];render()})}function triggerLabel(r){return r.trigger==='health_below'?r.threshold+'% health':r.trigger==='timer'?'every '+r.interval+'s':r.trigger.replaceAll('_',' ')}$('add').onclick=()=>{const a=$('action').value;rules.push({trigger:$('trigger').value,threshold:$('threshold').value,interval:$('interval').value,chance:$('chance').value,minPlayers:$('minPlayers').value,rulePhase:$('rulePhase').value.trim(),repeat:$('repeat').value,action:a,channel:a==='taunt'?$('channel').value:null,text:$('text').value,effect:$('effect').value,target:$('target').value,distance:$('distance').value,spellId:$('spellId').value,newPhase:$('newPhase').value.trim(),minionWcid:$('minionWcid').value,count:$('count').value});render()};$('clear').onclick=()=>{rules.length=0;render()};['profile','source','boss','mutators'].forEach(id=>$(id).oninput=render);document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText($(b.dataset.copy).textContent));$('saveDraft').onclick=async()=>{const out=$('saveStatus');out.textContent='Validating and saving...';const res=await fetch('/api/boss/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:$('profile').value,json:$('json').textContent})});const data=await res.json();out.textContent=data.message||data.error||res.statusText};sync();render();</script></body></html>";
+            return html.Replace("{{PLAY_SCRIPT_OPTIONS}}", playScriptOptions, StringComparison.Ordinal);
         }
+
         private static string BuildIndexHtml()
         {
             var refresh = Math.Max(1, DerpAceConfigManager.Config.AdminMapRefreshSeconds);
@@ -1945,29 +2085,37 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
 .formGrid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
 .inventoryDetails {{ display: grid; gap: 5px; margin-bottom: 12px; color: #c8d1cc; font-size: 12px; }}
 .inventoryDetails strong {{ color: #fff; overflow-wrap: anywhere; }}
+.propertyEditor {{ display:grid; gap:6px; margin-top:10px; }}
+.propertyGroup {{ border:1px solid rgba(255,255,255,.12); border-radius:4px; }}
+.propertyGroup summary {{ cursor:pointer; padding:7px; color:#d8e2dd; text-transform:uppercase; font-size:11px; }}
+.propertyRows {{ display:grid; gap:4px; padding:6px; }}
+.propertyRow {{ display:grid; grid-template-columns:minmax(110px,1fr) minmax(90px,1fr) auto; gap:5px; align-items:center; }}
+.propertyRow label {{ overflow-wrap:anywhere; color:#aeb9b4; font-size:11px; }}
+.propertyRow input {{ min-width:0; }}
 .dangerButton {{ background: #763330; }}
 .smallButton {{ padding: 5px 8px; font-size: 11px; }}
+.playerView .adminOnly {{ display: none !important; }} .playerView .watchRowButton {{ display: none !important; }}
 @media (max-width: 980px) {{ .bottomDock {{ left: 12px; grid-template-columns: 1fr; }} .statGrid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 @media (max-width: 860px) {{ body {{ grid-template-columns: 1fr; }} #map {{ min-height: 64vh; }} aside {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} .bottomDock {{ position: static; margin: 8px 12px 12px; }} .inventoryPanel {{ inset: 10px; grid-template-columns: 1fr; }} .inventoryEditPane {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} }}
+/* Modern Admin Map shell */
+body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overflow:hidden;background:#0b0f11}}#map{{height:100vh;min-height:0;background-color:#11181a}}.mapToolbar{{position:absolute;z-index:8;left:14px;right:14px;top:14px;display:flex;align-items:center;gap:8px;min-height:48px;padding:7px 8px 7px 14px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(11,16,18,.9);box-shadow:0 12px 34px rgba(0,0,0,.32);backdrop-filter:blur(12px)}}.mapToolbar h1{{margin:0;font-size:15px;white-space:nowrap}}.toolbarStatus{{min-width:0;flex:1;color:#aebbb6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.toolbarActions{{display:flex;gap:5px}}.toolbarActions button{{width:34px;height:32px;padding:0;display:grid;place-items:center;background:#202b2e;font-size:16px}}aside{{height:100vh;min-height:0;padding:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:#121719;box-shadow:-14px 0 36px rgba(0,0,0,.2)}}.sidebarHeader{{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.1);background:#151c1e}}.loginPanel,.sessionBar,.controls{{margin-bottom:0}}.sessionBar{{grid-template-columns:minmax(0,1fr) auto auto}}.sidebarTabs{{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#101517}}.sidebarTab{{padding:7px 5px;background:transparent;color:#98a7a2;border-color:transparent;font-size:12px}}.sidebarTab.active{{color:#fff;background:#263538;border-color:#46585c}}.sidebarContent{{min-height:0;overflow:auto;padding:12px 14px 20px;scrollbar-gutter:stable}}.sidebarSearch{{position:sticky;top:-12px;z-index:3;display:grid;grid-template-columns:1fr auto;gap:6px;margin:-12px -2px 8px;padding:12px 2px 8px;background:#121719}}.rosterCount{{min-width:38px;display:grid;place-items:center;color:#9fb0aa;font-size:11px}}body[data-side-view=""players""] .sideInspect,body[data-side-view=""players""] .sideLegend,body[data-side-view=""inspect""] .sidePlayers,body[data-side-view=""inspect""] .sideLegend,body[data-side-view=""legend""] .sidePlayers,body[data-side-view=""legend""] .sideInspect{{display:none!important}}.player{{margin:0 -6px;padding:10px 8px;border-top:0;border-bottom:1px solid rgba(255,255,255,.08);border-radius:3px}}.player:hover{{background:rgba(255,255,255,.045)}}.player.selected{{margin:0 -6px;padding:10px 8px;background:#23363a;box-shadow:inset 3px 0 #71b7e8}}.player .inventoryActions{{opacity:.62}}.player:hover .inventoryActions,.player.selected .inventoryActions{{opacity:1}}.adminPanel,.watchPanel,.legend{{border-radius:5px;background:#171e20}}.bottomDock{{left:14px;right:14px;bottom:14px;gap:10px}}.dockPanel{{border-radius:6px;background:rgba(10,15,17,.9);backdrop-filter:blur(10px)}}.zoomControls{{left:14px;bottom:150px;grid-template-columns:repeat(4,34px)}}.zoomControls button{{width:34px;height:34px;background:rgba(15,22,24,.92)}}.inventoryPanel{{inset:18px;grid-template-columns:minmax(430px,1fr) minmax(340px,420px);border-radius:7px}}.inventoryListPane,.inventoryEditPane{{padding:16px}}.inventorySlot{{width:42px;height:42px}}.inventoryGrid{{grid-template-columns:repeat(auto-fill,42px);gap:5px}}body.sidebarCollapsed{{grid-template-columns:minmax(0,1fr) 0}}body.sidebarCollapsed aside{{visibility:hidden}}.emptyRoster{{padding:24px 8px;text-align:center;color:#7f8d88;font-size:12px}}@media(max-width:860px){{body{{height:auto;overflow:auto;grid-template-columns:1fr}}#map{{height:65vh;min-height:480px}}aside{{height:auto;min-height:520px}}body.sidebarCollapsed{{grid-template-columns:1fr}}body.sidebarCollapsed aside{{display:none}}.mapToolbar{{left:8px;right:8px;top:8px}}.toolbarStatus{{display:none}}.bottomDock{{left:8px;right:8px;bottom:8px}}}}
 </style>
 </head>
 <body>
-<main id=""map"">
+<main id=""map""><div class=""mapToolbar""><h1 id=""mapTitle"">DerpACE Map</h1><div id=""status"" class=""toolbarStatus"">Loading...</div><div class=""toolbarActions""><button id=""worldButton"" title=""Return to overworld"">&#8962;</button><button id=""refreshButton"" title=""Refresh now"">&#8635;</button><button id=""sidebarButton"" title=""Toggle sidebar"">&#9776;</button></div></div>
   <div class=""axis north"">102N</div><div class=""axis south"">102S</div><div class=""axis west"">102W</div><div class=""axis east"">102E</div>
   <div class=""zoomControls""><button id=""zoomIn"" title=""Zoom in"">+</button><button id=""zoomOut"" title=""Zoom out"">-</button><button id=""zoomReset"" title=""Reset view"">1</button><button id=""zoomFit"" title=""Fit"">□</button></div>
   <div id=""bottomDock"" class=""bottomDock""></div>
 </main>
-<aside>
-  <h1>Admin Map</h1>
-  <div id=""loginPanel"" class=""loginPanel"">
-    <input id=""loginAccount"" autocomplete=""username"" placeholder=""admin account"">
+<aside><div class=""sidebarHeader"">
+<div id=""loginPanel"" class=""loginPanel"">
+    <input id=""loginAccount"" autocomplete=""username"" placeholder=""account"">
     <input id=""loginPassword"" type=""password"" autocomplete=""current-password"" placeholder=""password"">
     <button id=""loginButton"">Log In</button>
   </div>
-  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><button id=""logoutButton"">Log Out</button></div>
-  <div class=""controls""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div>
-  <div id=""status"">Loading...</div>
-  <section id=""adminPanel"" class=""adminPanel"">
+  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><button id=""logoutButton"">Log Out</button></div>
+  <div class=""controls adminOnly""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div></div><nav class=""sidebarTabs""><button class=""sidebarTab active"" data-side-tab=""players"">Players</button><button class=""sidebarTab adminOnly"" data-side-tab=""inspect"">Inspect</button><button class=""sidebarTab adminOnly"" data-side-tab=""legend"">Legend</button></nav><div class=""sidebarContent""><div class=""sidebarSearch sidePlayers""><input id=""playerSearch"" placeholder=""Search players or locations""><span id=""rosterCount"" class=""rosterCount"">0</span></div>
+  <section id=""adminPanel"" class=""adminPanel adminOnly sideInspect"">
     <h2 id=""adminPlayerName"">Player</h2>
     <div class=""muted"" id=""adminPlayerLoc""></div>
     <div class=""adminGrid wide""><label>Paste LOC<input id=""teleLoc"" placeholder=""0x7F0401AD [x y z] qw qx qy qz""></label></div>
@@ -1977,12 +2125,12 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
     <button id=""bootButton"" class=""dangerButton"">Boot Player</button>
     <button id=""watchButton"">Watch Player</button>
   </section>
-  <section id=""watchPanel"" class=""watchPanel"">
+  <section id=""watchPanel"" class=""watchPanel adminOnly sideInspect"">
     <div class=""watchHeader""><div id=""watchTitle"" class=""watchTitle"">Watching</div><button id=""watchStop"" class=""smallButton"">Stop</button></div>
     <div id=""watchView"" class=""watchView""><span class=""watchAxis""></span><span class=""watchAxis vertical""></span></div>
     <div id=""watchMeta"" class=""watchMeta""></div>
   </section>
-  <div class=""legend"">
+  <div class=""legend adminOnly sideLegend"">
     <div class=""legendItem""><span class=""legendDot player""></span><span>Player</span></div>
     <div class=""legendItem""><span class=""legendDot creature""></span><span>Creature</span></div>
     <div class=""legendItem""><span class=""legendDot npc""></span><span>NPC/vendor</span></div>
@@ -1991,7 +2139,7 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
     <div class=""legendItem""><span class=""legendDot door""></span><span>Door</span></div>
     <div class=""legendItem depthKey""><span>Low</span><span class=""depthRamp""></span><span>High</span></div>
   </div>
-  <div id=""players""></div>
+  <div id=""players"" class=""sidePlayers""></div></div>
 </aside>
 <section id=""inventoryPanel"" class=""inventoryPanel"" aria-live=""polite"">
   <div class=""inventoryListPane"">
@@ -1999,7 +2147,7 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
     <div class=""inventorySearch""><input id=""inventoryFilter"" placeholder=""search name, type, wcid, container""><button id=""inventoryClear"" class=""smallButton"">Clear</button></div>
     <div id=""inventoryRows"" class=""inventoryTable""></div>
   </div>
-  <div class=""inventoryEditPane"">
+  <div class=""inventoryEditPane adminOnly"">
     <div id=""inventoryDetails"" class=""inventoryDetails""><span class=""muted"">Select an item</span></div>
     <div class=""inventoryForm"">
       <label>Stack<input id=""editStack"" type=""number"" min=""1""></label>
@@ -2031,7 +2179,8 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
         <label>Gear Crit<input id=""editGearCritDamage"" type=""number""></label>
         <label>Gear Crit Resist<input id=""editGearCritDamageResist"" type=""number""></label>
       </div>
-      <button id=""inventorySave"">Save Item</button>
+      <button id=""inventorySave"">Save Common Fields</button>
+      <div id=""propertyEditor"" class=""propertyEditor""></div>
       <button id=""inventoryDelete"" class=""dangerButton"">Delete Item</button>
     </div>
   </div>
@@ -2059,6 +2208,9 @@ const inventoryRows = document.getElementById('inventoryRows');
 const inventoryTitle = document.getElementById('inventoryTitle');
 const inventoryFilter = document.getElementById('inventoryFilter');
 const inventoryDetails = document.getElementById('inventoryDetails');
+const propertyEditor = document.getElementById('propertyEditor');
+const playerSearch = document.getElementById('playerSearch');
+const rosterCount = document.getElementById('rosterCount');
 let currentDungeon = null;
 let currentMode = null;
 let mapLayer = null;
@@ -2072,17 +2224,29 @@ let collapsedDock = {{}};
 let currentMapBounds = null;
 let watchPlayerGuid = null;
 let authenticated = false;
+let isAdminSession = false;
 let refreshTimer = null;
 try {{ collapsedDock = JSON.parse(localStorage.getItem('derpace-admin-map-collapsed') || '{{}}') || {{}}; }} catch {{ collapsedDock = {{}}; }}
 window.addEventListener('error', e => {{ status.textContent = e.message || 'Admin map script error'; }});
 token.value = localStorage.getItem('derpace-admin-map-token') || '';
-document.getElementById('save').onclick = () => {{ localStorage.setItem('derpace-admin-map-token', token.value); setAuthenticated(!!token.value, null); refresh(); }};
+document.getElementById('save').onclick = () => {{ localStorage.setItem('derpace-admin-map-token', token.value); setAuthenticated(!!token.value, null, !!token.value); refresh(); }};
 document.getElementById('loginButton').onclick = login;
 document.getElementById('logoutButton').onclick = logout;
 loginPassword.addEventListener('keydown', e => {{ if (e.key === 'Enter') login(); }});
 function pctX(x) {{ return ((x + 102) / 204) * 100; }}
 function pctY(y) {{ return ((102 - y) / 204) * 100; }}
-function mapPctX(x, b) {{ return b.left + ((x + 102) / 204) * (b.right - b.left); }}
+function setSideView(view) {{
+  document.body.dataset.sideView = view;
+  document.querySelectorAll('[data-side-tab]').forEach(button => button.classList.toggle('active', button.dataset.sideTab === view));
+}}
+function applyPlayerFilter() {{
+  const q = (playerSearch?.value || '').trim().toLowerCase();
+  let shown = 0;
+  list.querySelectorAll('.player').forEach(row => {{ const visible = !q || (row.dataset.search || '').includes(q); row.hidden = !visible; if (visible) shown++; }});
+  if (rosterCount) rosterCount.textContent = String(shown);
+  let empty = list.querySelector('.emptyRoster');
+  if (!shown && list.children.length) {{ if (!empty) {{ empty = document.createElement('div'); empty.className = 'emptyRoster'; empty.textContent = 'No players match this search.'; list.appendChild(empty); }} }} else if (empty) empty.remove();
+}}function mapPctX(x, b) {{ return b.left + ((x + 102) / 204) * (b.right - b.left); }}
 function mapPctY(y, b) {{ return b.top + ((102 - y) / 204) * (b.bottom - b.top); }}
 function pctToMapX(xPct, b) {{ return ((xPct - b.left) / Math.max(0.0001, b.right - b.left)) * 204 - 102; }}
 function pctToMapY(yPct, b) {{ return 102 - ((yPct - b.top) / Math.max(0.0001, b.bottom - b.top)) * 204; }}
@@ -2101,8 +2265,11 @@ function renderRareFeed(rares) {{
   const rows = (rares || []).map(e => `<div class=""feedRow"" title=""${{esc((e.location || e.landblock || '') + ' ' + (e.corpse || ''))}}""><span class=""feedTime"">${{feedTime(e.utc)}}</span><span class=""feedText""><span class=""feedName"">${{esc(e.player)}}</span> found <span class=""rareItem"">${{esc(e.item)}}</span> <span class=""rareTier"">T${{fmtNum(e.tier)}}</span></span></div>`).join('');
   return rows || '<div class=""muted"">No rare finds yet</div>';
 }}
-function setAuthenticated(value, accountName) {{
+function setAuthenticated(value, accountName, isAdmin) {{
   authenticated = !!value || !!token.value;
+  isAdminSession = !!isAdmin || (!!token.value && !value);
+  document.body.classList.toggle('playerView', authenticated && !isAdminSession);
+  document.getElementById('mapTitle').textContent = isAdminSession ? 'Admin Map' : 'My Characters';
   document.body.classList.toggle('authLocked', !authenticated);
   loginPanel.classList.toggle('hidden', !!value);
   sessionBar.classList.toggle('active', !!value);
@@ -2119,12 +2286,12 @@ async function checkSession() {{
   try {{
     const res = await fetch('/api/session', {{ cache: 'no-store' }});
     const data = await res.json();
-    setAuthenticated(!!data.authenticated, data.accountName);
+    setAuthenticated(!!data.authenticated, data.accountName, !!data.isAdmin);
     if (authenticated) {{
       load();
       if (!refreshTimer) refreshTimer = setInterval(refresh, {refresh * 1000});
     }} else {{
-      status.textContent = 'Log in with an admin account.';
+      status.textContent = 'Log in with your game account.';
       loginAccount.focus();
     }}
   }} catch (e) {{
@@ -2146,7 +2313,7 @@ async function login() {{
     return;
   }}
   loginPassword.value = '';
-  setAuthenticated(true, data.accountName);
+  setAuthenticated(true, data.accountName, !!data.isAdmin);
   load();
   if (!refreshTimer) refreshTimer = setInterval(refresh, {refresh * 1000});
 }}
@@ -2189,6 +2356,12 @@ function addBlip(layer, blip, left, top) {{
   layer.appendChild(marker);
 }}
 function renderDock(data) {{
+  if (!isAdminSession) {{
+    const players = data.players || [];
+    const chips = players.map(p => `<span class=""onlineChip"" title=""${{esc(p.loc || p.landblock)}}""><span class=""onlineDot""></span><span class=""onlineName"">${{esc(p.name)}}</span></span>`).join('');
+    bottomDock.innerHTML = `<section class=""dockPanel""><div class=""dockTitle"">Your online characters and fellowship</div><div class=""dockBody""><div class=""onlineChips"">${{chips || '<span class=""muted"">No account characters are currently online</span>'}}</div></div></section>`;
+    return;
+  }}
   const stats = data.stats || {{}};
   const feeds = data.feeds || {{}};
   const players = data.players || [];
@@ -2294,7 +2467,8 @@ function itemFallback(item) {{
 }}
 function selectPlayer(playerGuid) {{
   selectedPlayer = playerIndex[playerGuid] || null;
-  if (!selectedPlayer) return;
+  if (!selectedPlayer || !isAdminSession) return;
+  setSideView('inspect');
   adminPanel.classList.add('open');
   adminPlayerName.textContent = selectedPlayer.name;
   adminPlayerLoc.textContent = selectedPlayer.loc || selectedPlayer.landblock || '';
@@ -2444,6 +2618,7 @@ function renderInventoryDetails(item) {{
     ids.forEach(id => {{ const el = document.getElementById(id); el.value = ''; el.disabled = true; }});
     document.getElementById('inventorySave').disabled = true;
     document.getElementById('inventoryDelete').disabled = true;
+    propertyEditor.innerHTML = '';
     return;
   }}
   inventoryDetails.innerHTML = `
@@ -2484,6 +2659,24 @@ function renderInventoryDetails(item) {{
   ids.forEach(id => document.getElementById(id).disabled = false);
   document.getElementById('inventorySave').disabled = false;
   document.getElementById('inventoryDelete').disabled = false;
+  renderPropertyEditor(item);
+}}
+function renderPropertyEditor(item) {{
+  const groups = item.properties || {{}};
+  propertyEditor.innerHTML = Object.entries(groups).map(([family, rows]) => `<details class=""propertyGroup""><summary>${{esc(family)}} (${{rows.length}})</summary><div class=""propertyRows"">${{rows.map(p => `<div class=""propertyRow""><label title=""Property ${{p.key}}"">${{esc(p.name)}} (${{p.key}})</label><input data-family=""${{esc(family)}}"" data-key=""${{p.key}}"" value=""${{esc(p.value)}}""><button class=""smallButton propertySave"">Save</button></div>`).join('')}}</div></details>`).join('');
+  propertyEditor.querySelectorAll('.propertySave').forEach(button => button.onclick = () => saveItemProperty(button.previousElementSibling));
+}}
+async function saveItemProperty(input) {{
+  const item = inventoryState.selected;
+  if (!item || !isAdminSession) return;
+  const payload = {{ playerGuid: inventoryState.playerGuid, itemGuid: item.guid, family: input.dataset.family, key: Number(input.dataset.key), value: input.value }};
+  const res = await fetch('/api/inventory/property', {{ method:'POST', headers:authHeaders({{ 'Content-Type':'application/json' }}), body:JSON.stringify(payload) }});
+  const data = await readJsonResponse(res);
+  if (!res.ok || data.ok === false) {{ status.textContent = data.error || res.statusText; return; }}
+  inventoryState.data = data.inventory;
+  inventoryState.selected = (data.inventory.items || []).find(i => i.guid === item.guid) || null;
+  status.textContent = `Saved ${{input.dataset.family}} property ${{input.dataset.key}}.`;
+  renderInventoryDetails(inventoryState.selected);
 }}
 async function saveInventoryItem() {{
   const item = inventoryState.selected;
@@ -2629,13 +2822,17 @@ async function load() {{
       const item = document.createElement('div');
       item.className = 'player';
       item.dataset.guid = p.guid;
+      item.dataset.search = `${{p.name}} ${{p.loc || ''}} ${{p.landblock || ''}}`.toLowerCase();
       item.innerHTML = `<strong>${{esc(p.name)}}</strong><div class=""muted"">${{esc(p.loc || 'Indoor/dungeon')}} | ${{esc(p.landblock)}}</div><div class=""inventoryActions""><button class=""smallButton watchRowButton"" data-guid=""${{esc(p.guid)}}"">Watch</button><button class=""smallButton invButton"" data-guid=""${{esc(p.guid)}}"">Inventory</button></div><div class=""bars"">${{bar(p.health,p.maxHealth,'health')}}${{bar(p.stamina,p.maxStamina,'stamina')}}${{bar(p.mana,p.maxMana,'mana')}}</div>`;
       item.onclick = () => selectPlayer(p.guid);
       item.ondblclick = () => {{ if (p.isIndoors) loadDungeon(p.landblock); }};
       item.querySelector('.watchRowButton').onclick = e => {{ e.stopPropagation(); selectPlayer(p.guid); setWatchPlayer(p.guid); }};
-      item.querySelector('.invButton').onclick = e => {{ e.stopPropagation(); openInventory(p.guid); }};
+      const invButton = item.querySelector('.invButton');
+      if (invButton && (isAdminSession || p.isOwnedBySession)) invButton.onclick = e => {{ e.stopPropagation(); openInventory(p.guid); }};
+      else if (invButton) invButton.remove();
       list.appendChild(item);
     }}
+      applyPlayerFilter();
   }} catch (e) {{
     status.textContent = e.message;
     if (/login|required|unauthorized|invalid/i.test(e.message || '')) setAuthenticated(false);
@@ -2686,6 +2883,12 @@ async function loadDungeon(landblock) {{
   }}
 }}
 function refresh() {{ currentDungeon ? loadDungeon(currentDungeon) : load(); refreshWatch(); }}
+setSideView('players');
+document.querySelectorAll('[data-side-tab]').forEach(button => button.onclick = () => setSideView(button.dataset.sideTab));
+playerSearch?.addEventListener('input', applyPlayerFilter);
+document.getElementById('refreshButton').onclick = refresh;
+document.getElementById('worldButton').onclick = () => load();
+document.getElementById('sidebarButton').onclick = () => document.body.classList.toggle('sidebarCollapsed');
 checkSession();
 </script>
 </body>
@@ -2705,6 +2908,11 @@ checkSession();
             public AdminMapFeeds Feeds { get; set; }
         }
 
+        private sealed class AdminBossDraftRequest
+        {
+            public string Profile { get; set; }
+            public string Json { get; set; }
+        }
         private sealed class AdminMapLoginRequest
         {
             public string Account { get; set; }
@@ -2730,6 +2938,7 @@ checkSession();
         private sealed class AdminMapPlayer
         {
             public string Name { get; set; }
+            public bool IsOwnedBySession { get; set; }
             public string Guid { get; set; }
             public string Landblock { get; set; }
             public string Loc { get; set; }
@@ -2848,6 +3057,7 @@ checkSession();
             public string PlayerGuid { get; set; }
             public int Encumbrance { get; set; }
             public int CoinValue { get; set; }
+            public bool Editable { get; set; }
             public List<AdminInventoryItem> Items { get; set; }
 
             public static AdminInventorySnapshot Fail(string error)
@@ -2905,8 +3115,24 @@ checkSession();
             public bool IsContainer { get; set; }
             public bool IsAttuned { get; set; }
             public bool IsBonded { get; set; }
+            public Dictionary<string, List<AdminItemProperty>> Properties { get; set; }
         }
 
+        private sealed class AdminItemProperty
+        {
+            public uint Key { get; set; }
+            public string Name { get; set; }
+            public string Value { get; set; }
+        }
+
+        private sealed class AdminInventoryPropertyEditRequest
+        {
+            public string PlayerGuid { get; set; }
+            public string ItemGuid { get; set; }
+            public string Family { get; set; }
+            public uint Key { get; set; }
+            public string Value { get; set; }
+        }
         private sealed class AdminInventoryItemEditRequest
         {
             public string PlayerGuid { get; set; }

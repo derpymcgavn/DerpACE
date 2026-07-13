@@ -6,6 +6,7 @@ using ACE.DatLoader;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Factories;
 using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
 
@@ -508,6 +509,7 @@ namespace ACE.Server.WorldObjects
             if (newItemLevel > prevItemLevel)
             {
                 OnItemLevelUp(item, prevItemLevel);
+                IronmanFactory.HandleNomadItemLevelUp(this, item, prevItemLevel);
 
                 var actionChain = new ActionChain();
                 actionChain.AddAction(this, () =>

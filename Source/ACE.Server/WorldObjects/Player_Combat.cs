@@ -1745,12 +1745,13 @@ namespace ACE.Server.WorldObjects
                 || CurrentLandblock == null
                 || primaryTarget.Location == null)
                 return;
-
-            if (!WeaponIsType(damageEvent.Weapon, WeaponType.Mace) || damageEvent.Weapon.WeaponSkill != Skill.HeavyWeapons)
+            // Some retail Lugian Hammer templates are internally classified as axes. The mutator
+            // flag is authoritative after loot generation has validated the WCID and weapon name.
+            if (damageEvent.Weapon.WeaponSkill != Skill.HeavyWeapons)
                 return;
 
             var procChance = damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowProcChance) ?? 0.0;
-            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
+            if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= NormalizeMutatorProcChance(damageEvent.Weapon, procChance))
                 return;
 
             var radius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowRadius) ?? 10.0));

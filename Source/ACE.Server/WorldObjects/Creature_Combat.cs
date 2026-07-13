@@ -601,9 +601,8 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public virtual void OnEvade(WorldObject attacker, CombatType attackType)
         {
-            // empty base for non-player creatures?
+            BossMechanicManager.OnEvade(this, attacker as Player);
         }
-
         /// <summary>
         /// Called when a creature hits a target
         /// </summary>

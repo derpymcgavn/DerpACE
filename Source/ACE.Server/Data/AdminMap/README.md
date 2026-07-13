@@ -24,3 +24,21 @@ The player pins are mapped to Dereth's `-102..102` coordinate square. Tune these
 "admin_map_bounds_right_pct": 99.55,
 "admin_map_bounds_bottom_pct": 99.55
 ```
+
+## Inventory icons
+
+Place Admin Map inventory icon PNGs in `Data/AdminMap/icons` using the full eight-digit hexadecimal Data ID as the filename:
+
+```text
+06002191.png
+06002AC1.png
+06005B29.png
+```
+
+The default configuration is:
+
+```json
+"admin_map_icon_path": "Data/AdminMap/icons"
+```
+
+The directory is copied to the server output by `ACE.Server.csproj`. An absolute path may still be configured when desired.

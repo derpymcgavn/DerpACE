@@ -1048,7 +1048,7 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
             return w;
         }
 
-        private static void AddChestGenerator(Weenie chest, uint wcid, int slot)
+        private static void AddChestGenerator(Weenie chest, uint wcid, int slot, int paletteId = 0, double shade = 0)
         {
             chest.PropertiesGenerator.Add(new PropertiesGenerator
             {
@@ -1130,7 +1130,7 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
             w.PropertiesString[PropertyString.Use]             = "Use this item to open it and see its contents.";
             w.PropertiesString[PropertyString.LongDesc]        = "A locked Pathwarden gear chest holding the first tools of the Nomad road.";
 
-            AddChestGenerator(w, 40439, 0);
+            AddChestGenerator(w, 40439, 0, paletteId: 39, shade: 0.8583308693778472);
             AddChestGenerator(w, WorldObjects.NomadRunePouch.NomadRunePouchWeenieClassId, 1);
             AddChestGenerator(w, WorldObjects.ScavengersHexdust.BoneGrinderWeenieClassId, 2);
 

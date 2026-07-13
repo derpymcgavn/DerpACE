@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using ACE.Entity.Enum;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.WorldObjects
@@ -35,6 +36,7 @@ namespace ACE.Server.WorldObjects
             EmoteManager.HeartBeat();
 
             DamageHistory.TryPrune();
+            BossMechanicManager.OnHeartbeat(this, currentUnixTime);
 
             // DerpACE: support / caster mutator heartbeats
             if (IsHealerMob)
