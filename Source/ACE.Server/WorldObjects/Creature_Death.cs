@@ -646,6 +646,9 @@ namespace ACE.Server.WorldObjects
                 corpse.PaletteBaseDID = PaletteBaseDID;
                 corpse.ClothingBase = ClothingBase;
                 corpse.PhysicsTableId = PhysicsTableId;
+                corpse.SetProperty(PropertyDataId.GravecallerCorpseSoundTable, SoundTableId);
+                if (CombatTableDID.HasValue)
+                    corpse.SetProperty(PropertyDataId.GravecallerCorpseCombatTable, CombatTableDID.Value);
 
                 if (ObjScale.HasValue)
                     corpse.ObjScale = ObjScale;

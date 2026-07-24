@@ -111,6 +111,8 @@ namespace ACE.Entity.Enum.Properties
         MorphicOriginalHairPalette       = 9008,
         MorphicOriginalEyesPalette       = 9009,
         MorphicOriginalSkinPalette       = 9010,
+        GravecallerCorpseSoundTable       = 9011,
+        GravecallerCorpseCombatTable      = 9012,
     }
 
     public static class PropertyDataIdExtensions

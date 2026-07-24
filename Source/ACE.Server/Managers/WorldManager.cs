@@ -417,6 +417,7 @@ namespace ACE.Server.Managers
             HouseManager.Tick();
 
             GlobalKillQuestManager.Tick();
+            NpcPersonaManager.Tick();
 
             LeaderboardCache.Tick();
 

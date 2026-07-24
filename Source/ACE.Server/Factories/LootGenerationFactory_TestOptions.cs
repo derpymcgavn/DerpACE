@@ -83,6 +83,8 @@ namespace ACE.Server.Factories
             ["reaperatlatl"] = "reaper",
             ["reapersatlatl"] = "reaper",
 
+            ["gravecaller"] = "gravecaller",
+            ["necromancer"] = "gravecaller",
             ["archmagi"] = "archmagi",
             ["archmage"] = "archmagi",
 
@@ -144,6 +146,7 @@ namespace ACE.Server.Factories
             ["platter"] = TreasureWeaponType.Platter,
             ["dartflinger"] = TreasureWeaponType.Atlatl,
             ["reaper"] = TreasureWeaponType.Atlatl,
+            ["gravecaller"] = TreasureWeaponType.Caster,
             ["archmagi"] = TreasureWeaponType.Caster,
             ["shadowclone"] = TreasureWeaponType.Caster,
             ["shadowshot"] = TreasureWeaponType.Bow,
@@ -267,6 +270,7 @@ namespace ACE.Server.Factories
                 "platter/flyingbuffet",
                 "dartflinger/ricochet",
                 "reaper",
+                "gravecaller/necromancer",
                 "archmagi",
                 "shadowclone/voidshadow",
                 "shadowshot/shadowvolley",
@@ -363,6 +367,7 @@ namespace ACE.Server.Factories
                 "ricochet"    => wo.GetProperty(PropertyBool.IsRicochetAtlatl) == true
                                  || wo.GetProperty(PropertyBool.IsDartflingerAtlatl) == true,
                 "reaper"      => wo.GetProperty(PropertyBool.IsReapersAtlatl) == true,
+                "gravecaller" => wo.GetProperty(PropertyBool.IsGravecallerCaster) == true,
                 "archmagi"    => wo.GetProperty(PropertyBool.IsArchmagiCaster) == true,
                 "shadowclone" => wo.GetProperty(PropertyBool.IsShadowCloneCaster) == true
                                  || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,

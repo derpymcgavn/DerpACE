@@ -43,6 +43,7 @@ namespace ACE.Server.Managers
         public const uint FrostWaveShieldSpellId = 65009;
         public const uint HexdustSpellIdFirst = 65010;
         public const uint HexdustSpellIdLast = 65016;
+        public const uint RoadrunnerSpellId = 65017;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
@@ -79,12 +80,14 @@ namespace ACE.Server.Managers
             EnsureDefaultVoidConfusionSpell();
             EnsureDefaultFrostWaveShieldSpell();
             EnsureDefaultHexdustSpells();
+            EnsureDefaultRoadrunnerSpell();
 
             var loaded = LoadAll();
             ForceLoadDefaultWellFedSpell();
             ForceLoadDefaultWarMageVisualSpells();
             ForceLoadDefaultFrostWaveShieldSpell();
             ForceLoadDefaultHexdustSpells();
+            ForceLoadDefaultRoadrunnerSpell();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -98,6 +101,7 @@ namespace ACE.Server.Managers
             ForceLoadDefaultWarMageVisualSpells();
             ForceLoadDefaultFrostWaveShieldSpell();
             ForceLoadDefaultHexdustSpells();
+            ForceLoadDefaultRoadrunnerSpell();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -164,6 +168,24 @@ namespace ACE.Server.Managers
                     TryApply(entry, "built-in ScavengersHexdust.json");
             }
         }
+        public static bool EnsureRoadrunnerSpellLoaded()
+        {
+            if (!new Spell(RoadrunnerSpellId).NotFound)
+                return true;
+
+            ForceLoadDefaultRoadrunnerSpell();
+            return !new Spell(RoadrunnerSpellId).NotFound;
+        }
+        private static void ForceLoadDefaultRoadrunnerSpell()
+        {
+            using var doc = JsonDocument.Parse(DefaultRoadrunnerJson, JsonOptions);
+            if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in customSpells.EnumerateArray())
+                    TryApply(entry, "built-in Roadrunner.json");
+            }
+        }
+
         public static bool TryExportSql(uint spellId, bool asCopy, out string path, out uint exportedId, out string error)
         {
             path = null;
@@ -1168,6 +1190,13 @@ namespace ACE.Server.Managers
             if (!File.Exists(path))
                 File.WriteAllText(path, DefaultHexdustSpellsJson);
         }
+        private static void EnsureDefaultRoadrunnerSpell()
+        {
+            var path = Path.Combine(ContentDir, "Roadrunner.json");
+            if (!File.Exists(path))
+                File.WriteAllText(path, DefaultRoadrunnerJson);
+        }
+
         private static void EnsureDefaultFrostWaveShieldSpell()
         {
             var path = Path.Combine(ContentDir, "FrostWaveShield.json");
@@ -1662,6 +1691,26 @@ namespace ACE.Server.Managers
                          }
                      ]
 }";
+
+        private const string DefaultRoadrunnerJson =
+@"{
+  ""CustomSpells"": [
+    {
+      ""Template"": 4616,
+      ""Id"": 65017,
+      ""Name"": ""Roadrunner"",
+      ""SpellWords"": ""Roadrunner"",
+      ""Desc"": ""The open road lends impossible speed, increasing Run by 600 while its traveler remains on the road."",
+      ""Category"": 65017,
+      ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
+      ""Duration"": 30,
+      ""StatModType"": ""Skill, Additive"",
+      ""StatModKey"": 24,
+      ""StatModVal"": 600
+    }
+  ]
+}
+";
 
         private const string DefaultFrostWaveShieldJson =
 @"{

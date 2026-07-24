@@ -14,6 +14,10 @@ namespace ACE.Server.Managers
         public static bool EnableTeleport          { get; set; } = true;
         public static bool EnableMysteriousStranger { get; set; } = true;
         public static bool EnableMobModifiers      { get; set; } = true;
+        public static bool ModernMobAiEnabled      { get; set; } = true;
+        public static float ModernMobAiSwitchThreshold { get; set; } = 1.20f;
+        public static float MobMovementSyncIntervalSeconds { get; set; } = 0.20f;
+        public static float MobOutdoorChaseRange { get; set; } = 576.0f;
         public static bool EnableDerpcoin          { get; set; } = true;
         public static bool EnableCustomWeapons     { get; set; } = true;
         public static bool EnableArmorEnchants     { get; set; } = true;
@@ -570,6 +574,7 @@ namespace ACE.Server.Managers
         public static bool MobModifierEnabled { get; set; } = true;
 
         /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 2 (starts at tier 2).</summary>
+        public static int MobModifierMinLevel { get; set; } = 101;
         public static int MobModifierMinTier { get; set; } = 2;
 
         /// <summary>Effective melee/missile/magic defense cap for mobs with DerpACE mutators. 0 disables. Default 600.</summary>

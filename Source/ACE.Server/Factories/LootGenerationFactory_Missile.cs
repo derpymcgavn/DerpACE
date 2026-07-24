@@ -273,6 +273,46 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nShadow Volley: successful shots have a {procChance:P0} chance to summon a shadow archer for {durationSeconds:0}s. The shadow locks to missile combat, copies your equipped missile weapon, fights alongside your normal pet, and deals {damageScale:P0} damage. Cooldown: {cooldownSeconds:0}s.";
             }
 
+            // Opportunist: a missed shot teaches the next one where to land.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.008f,
+                6,
+                roll.WeaponType == TreasureWeaponType.Bow
+                    || roll.WeaponType == TreasureWeaponType.Crossbow
+                    || roll.WeaponType == TreasureWeaponType.Atlatl,
+                "opportunist"))
+            {
+                wo.Name += " of Opportunity";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOpportunistWeapon, true);
+                wo.IconOverlayId = MutatorOverlayOpportunist;
+                ApplyLootUiEffect(wo, UiEffects.Piercing);
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOpportunist: when this {GetWeaponNoun(roll.WeaponType)} is evaded, its next successful shot against that target within 8 seconds deals 25% additional damage.";
+            }
+
+            // Executioner: low-risk finisher pressure for committed missile builds.
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && TryRollWeaponModifier(
+                profile,
+                roll,
+                ref specialModifierApplied,
+                0.006f,
+                7,
+                roll.WeaponType == TreasureWeaponType.Bow
+                    || roll.WeaponType == TreasureWeaponType.Crossbow
+                    || roll.WeaponType == TreasureWeaponType.Atlatl,
+                "executioner"))
+            {
+                wo.Name += " of the Executioner";
+                wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsExecutionerWeapon, true);
+                wo.IconOverlayId = MutatorOverlayExecutioner;
+                ApplyLootUiEffect(wo, UiEffects.Slashing);
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nExecutioner: shots from this {GetWeaponNoun(roll.WeaponType)} against creatures at or below 25% health deal 20% additional damage.";
+            }
+
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.
             TryRollWeaponBlastProc(wo, profile);
         }

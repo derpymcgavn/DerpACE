@@ -262,12 +262,12 @@ namespace ACE.Server.Pathfinding
                 return null;
 
             var rc = new RcTestNavMeshTool();
-            var halfExtents = new RcVec3f(1.25f, 1.25f, 1.25f);
+            var halfExtents = GetNearestPolyExtents(start);
             var query = new DtNavMeshQuery(mesh);
             var m_filter = new DtQueryDefaultFilter();
 
             query.FindNearestPoly(new RcVec3f(start.PositionX, start.PositionZ, start.PositionY), halfExtents, m_filter, out long startRef, out var startPt, out _);
-            query.FindNearestPoly(new RcVec3f(end.PositionX, end.PositionZ, end.PositionY), halfExtents, m_filter, out long endRef, out var endPt, out _);
+            query.FindNearestPoly(new RcVec3f(end.PositionX, end.PositionZ, end.PositionY), GetNearestPolyExtents(end), m_filter, out long endRef, out var endPt, out _);
 
             if (startRef == 0 || endRef == 0)
                 return null;
@@ -295,6 +295,13 @@ namespace ACE.Server.Pathfinding
                 DrawRoute(positionList);
 
             return positionList;
+        }
+
+        private static RcVec3f GetNearestPolyExtents(Position position)
+        {
+            return position?.Indoors == true
+                ? new RcVec3f(1.25f, 1.25f, 1.25f)
+                : new RcVec3f(4.0f, 8.0f, 4.0f);
         }
 
         private static bool IsValidRoutePosition(Position position)

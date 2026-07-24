@@ -497,40 +497,54 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public void TryRoute(List<Position> route = null)
         {
-            if (!PathfindingEnabled) return;
-            if (IsRouting || IsRouteStartPending) return;
-            if (Time.GetUnixTime() - LastRouteTime < GetMaxRouteFrequency()) return;
-            if (Location == null) return;
-
             if (route != null)
             {
-                LastRouteStartAttemptWasNullRoute = false;
-                CurrentRoute = route;
-                CurrentRouteIndex = 0;
-                IsRouteStartPending = true;
+                TryStartRoute(route, AttackTarget, AttackTarget?.Location);
                 return;
             }
 
-            if (AttackTarget?.Location == null) return;
-
-            // Allow cross-landblock routes outdoors only.
-            var sameLandblock = (Location.Cell & 0xFFFF0000) == (AttackTarget.Location.Cell & 0xFFFF0000);
-            if (!sameLandblock && (Location.Indoors || AttackTarget.Location.Indoors))
+            if (AttackTarget?.Location == null)
                 return;
 
+            TryRouteToPosition(AttackTarget.Location, AttackTarget);
+        }
+
+        public bool TryRouteToPosition(Position target, WorldObject routeTarget = null)
+        {
+            if (!PathfindingEnabled) return false;
+            if (IsRouting || IsRouteStartPending) return false;
+            if (Time.GetUnixTime() - LastRouteTime < GetMaxRouteFrequency()) return false;
+            if (Location == null || target == null) return false;
+
+            // Allow cross-landblock routes outdoors only.
+            var sameLandblock = (Location.Cell & 0xFFFF0000) == (target.Cell & 0xFFFF0000);
+            if (!sameLandblock && (Location.Indoors || target.Indoors))
+                return false;
+
             var agentWidth = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
-            var newRoute = Pathfinder.FindRoute(Location, AttackTarget.Location, agentWidth);
+            var newRoute = Pathfinder.FindRoute(Location, target, agentWidth);
             if (newRoute == null || newRoute.Count == 0)
             {
                 LastRouteStartAttemptWasNullRoute = true;
                 LastRouteTime = Time.GetUnixTime();
-                return;
+                return false;
             }
 
+            TryStartRoute(newRoute, routeTarget, target);
+            return true;
+        }
+
+        private void TryStartRoute(List<Position> route, WorldObject routeTarget, Position finalTarget)
+        {
+            if (!PathfindingEnabled) return;
+            if (IsRouting || IsRouteStartPending) return;
+            if (Time.GetUnixTime() - LastRouteTime < GetMaxRouteFrequency()) return;
+            if (Location == null || route == null || route.Count == 0) return;
+
             LastRouteStartAttemptWasNullRoute = false;
-            RouteAttackTarget = AttackTarget;
-            RoutePositionTarget = AttackTarget.Location;
-            CurrentRoute = newRoute;
+            RouteAttackTarget = routeTarget;
+            RoutePositionTarget = finalTarget ?? route[route.Count - 1];
+            CurrentRoute = route;
             CurrentRouteIndex = 0;
             IsRouteStartPending = true;
         }
@@ -602,9 +616,14 @@ namespace ACE.Server.WorldObjects
 
             if (Location != null && (RoutePositionTarget.Cell & 0xFFFF0000) != (Location.Cell & 0xFFFF0000))
             {
-                log.Warn($"{Name} ({Guid}) ended route before unsafe cross-landblock MoveTo: here={Location.Cell:X8}, waypoint={RoutePositionTarget.Cell:X8}");
-                EndRoute();
-                return;
+                var blockDeltaX = Math.Abs((int)RoutePositionTarget.LandblockX - (int)Location.LandblockX);
+                var blockDeltaY = Math.Abs((int)RoutePositionTarget.LandblockY - (int)Location.LandblockY);
+                if (Location.Indoors || RoutePositionTarget.Indoors || blockDeltaX > 1 || blockDeltaY > 1)
+                {
+                    log.Warn($"{Name} ({Guid}) rejected nonadjacent route handoff: here={Location.Cell:X8}, waypoint={RoutePositionTarget.Cell:X8}");
+                    EndRoute();
+                    return;
+                }
             }
 
             LastPathMoveTarget = RoutePositionTarget;
@@ -873,7 +892,7 @@ namespace ACE.Server.WorldObjects
             if (IsGrantingPassage && !IsGrantPassagePending && !HasPendingMovement && !IsMoving && !IsTurning)
                 PendingEndGrantPassage = true;
 
-            if (IsMovingToHome && !IsMoveToHomePending && !HasPendingMovement && !IsMoving && !IsTurning)
+            if (IsMovingToHome && !IsMoveToHomePending && !IsRouting && !IsRouteStartPending && !HasPendingMovement && !IsMoving && !IsTurning)
                 PendingEndMoveToHome = true;
 
             // Detect emote completion

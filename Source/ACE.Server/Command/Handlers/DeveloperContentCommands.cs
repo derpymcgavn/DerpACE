@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text.Json;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
@@ -225,9 +226,19 @@ namespace ACE.Server.Command.Handlers.Processors
             ImportSQLWeenie(session, param, true);
         }
 
-        [CommandHandler("import-sql", AccessLevel.Developer, CommandHandlerFlag.None, 1, "Imports sql data from the Content folder", "<type> <wcid>\n<type> - landblock, encounter, quest, recipe, spell, weenie (default if not specified)\n<wcid> - filename prefix to search for. can be 'all' to import all files for this content type")]
+        [CommandHandler("import-sql", AccessLevel.Developer, CommandHandlerFlag.None, 1, "Imports sql data from the Content folder", "[changed] <type> <wcid>\nchanged - only imports SQL files whose size/time/hash changed since their last successful changed import\n<type> - landblock, encounter, quest, recipe, spell, weenie (default if not specified)\n<wcid> - filename prefix to search for. can be 'all' to import all files for this content type")]
         public static void HandleImportSQL(Session session, params string[] parameters)
         {
+            var changedOnly = parameters.Length > 0 && parameters[0].Equals("changed", StringComparison.OrdinalIgnoreCase);
+            if (changedOnly)
+                parameters = parameters.Skip(1).ToArray();
+
+            if (parameters.Length == 0)
+            {
+                CommandHandlerHelper.WriteOutputInfo(session, "Usage: /import-sql [changed] <type> <wcid>");
+                return;
+            }
+
             var param = parameters[0];
             var contentType = FileType.Weenie;
 
@@ -246,31 +257,31 @@ namespace ACE.Server.Command.Handlers.Processors
                 switch (contentType)
                 {
                     case FileType.LandblockInstance:
-                        ImportSQLLandblock(session, param);
+                        ImportSQLLandblock(session, param, changedOnly);
                         break;
 
                     case FileType.Encounter:
-                        ImportSQLEncounter(session, param);
+                        ImportSQLEncounter(session, param, changedOnly);
                         break;
 
                     case FileType.Event:
-                        ImportSQLEvent(session, param);
+                        ImportSQLEvent(session, param, changedOnly);
                         break;
 
                     case FileType.Quest:
-                        ImportSQLQuest(session, param);
+                        ImportSQLQuest(session, param, changedOnly);
                         break;
 
                     case FileType.Recipe:
-                        ImportSQLRecipe(session, param);
+                        ImportSQLRecipe(session, param, changedOnly);
                         break;
 
                     case FileType.Spell:
-                        ImportSQLSpell(session, param);
+                        ImportSQLSpell(session, param, changedOnly);
                         break;
 
                     case FileType.Weenie:
-                        ImportSQLWeenie(session, param);
+                        ImportSQLWeenie(session, param, changedOnly: changedOnly);
                         break;
                 }
             }
@@ -280,7 +291,7 @@ namespace ACE.Server.Command.Handlers.Processors
             }
         }
 
-        public static void ImportSQLWeenie(Session session, string wcid, bool withFolders = false)
+        public static void ImportSQLWeenie(Session session, string wcid, bool withFolders = false, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -307,11 +318,11 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLWeenie(session, file.DirectoryName + sep, file.Name);
+                ImportSQLWeenie(session, file.DirectoryName + sep, file.Name, changedOnly);
                 
         }
 
-        public static void ImportSQLRecipe(Session session, string recipeId)
+        public static void ImportSQLRecipe(Session session, string recipeId, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -336,10 +347,10 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLRecipe(session, sql_folder, file.Name);
+                ImportSQLRecipe(session, sql_folder, file.Name, changedOnly);
         }
 
-        public static void ImportSQLLandblock(Session session, string landblockId)
+        public static void ImportSQLLandblock(Session session, string landblockId, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -364,10 +375,10 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLLandblock(session, sql_folder, file.Name);
+                ImportSQLLandblock(session, sql_folder, file.Name, changedOnly);
         }
 
-        public static void ImportSQLEncounter(Session session, string landblockId)
+        public static void ImportSQLEncounter(Session session, string landblockId, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -392,10 +403,10 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLEncounter(session, sql_folder, file.Name);
+                ImportSQLEncounter(session, sql_folder, file.Name, changedOnly);
         }
 
-        public static void ImportSQLEvent(Session session, string eventName)
+        public static void ImportSQLEvent(Session session, string eventName, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -420,10 +431,10 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLEvent(session, sql_folder, file.Name);
+                ImportSQLEvent(session, sql_folder, file.Name, changedOnly);
         }
 
-        public static void ImportSQLQuest(Session session, string questName)
+        public static void ImportSQLQuest(Session session, string questName, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -448,10 +459,10 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLQuest(session, sql_folder, file.Name);
+                ImportSQLQuest(session, sql_folder, file.Name, changedOnly);
         }
 
-        public static void ImportSQLSpell(Session session, string spellId)
+        public static void ImportSQLSpell(Session session, string spellId, bool changedOnly = false)
         {
             DirectoryInfo di = VerifyContentFolder(session);
             if (!di.Exists) return;
@@ -476,7 +487,7 @@ namespace ACE.Server.Command.Handlers.Processors
             }
 
             foreach (var file in files)
-                ImportSQLSpell(session, sql_folder, file.Name);
+                ImportSQLSpell(session, sql_folder, file.Name, changedOnly);
         }
 
         /// <summary>
@@ -909,10 +920,111 @@ namespace ACE.Server.Command.Handlers.Processors
             return sqlFilename;
         }
 
+        private static readonly object SqlImportManifestLock = new object();
+        private static Dictionary<string, SqlImportManifestEntry> SqlImportManifest;
+        private static bool SqlImportManifestDirty;
+
+        private static string SqlImportManifestPath => Path.Combine(AppContext.BaseDirectory, "Data", "DerpACE", "import-sql-manifest.json");
+
+        private static bool ShouldImportSqlFile(Session session, string sqlPath, bool changedOnly)
+        {
+            if (!changedOnly)
+                return true;
+
+            var signature = BuildSqlImportSignature(sqlPath);
+            lock (SqlImportManifestLock)
+            {
+                var manifest = GetSqlImportManifest();
+                if (manifest.TryGetValue(signature.Path, out var previous) && previous.Matches(signature))
+                {
+                    CommandHandlerHelper.WriteOutputInfo(session, $"Skipped unchanged {Path.GetFileName(sqlPath)}");
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static void MarkSqlFileImported(string sqlPath, bool changedOnly)
+        {
+            if (!changedOnly)
+                return;
+
+            var signature = BuildSqlImportSignature(sqlPath);
+            lock (SqlImportManifestLock)
+            {
+                GetSqlImportManifest()[signature.Path] = signature;
+                SqlImportManifestDirty = true;
+                SaveSqlImportManifestIfDirty();
+            }
+        }
+
+        private static Dictionary<string, SqlImportManifestEntry> GetSqlImportManifest()
+        {
+            if (SqlImportManifest != null)
+                return SqlImportManifest;
+
+            try
+            {
+                var path = SqlImportManifestPath;
+                if (File.Exists(path))
+                    SqlImportManifest = JsonSerializer.Deserialize<Dictionary<string, SqlImportManifestEntry>>(File.ReadAllText(path)) ?? new Dictionary<string, SqlImportManifestEntry>(StringComparer.OrdinalIgnoreCase);
+                else
+                    SqlImportManifest = new Dictionary<string, SqlImportManifestEntry>(StringComparer.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                SqlImportManifest = new Dictionary<string, SqlImportManifestEntry>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return SqlImportManifest;
+        }
+
+        private static void SaveSqlImportManifestIfDirty()
+        {
+            if (!SqlImportManifestDirty)
+                return;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(SqlImportManifestPath));
+            File.WriteAllText(SqlImportManifestPath, JsonSerializer.Serialize(SqlImportManifest, new JsonSerializerOptions { WriteIndented = true }));
+            SqlImportManifestDirty = false;
+        }
+
+        private static SqlImportManifestEntry BuildSqlImportSignature(string sqlPath)
+        {
+            var info = new FileInfo(sqlPath);
+            using var stream = File.OpenRead(sqlPath);
+            var hash = Convert.ToHexString(SHA256.HashData(stream));
+            return new SqlImportManifestEntry
+            {
+                Path = info.FullName.ToUpperInvariant(),
+                Length = info.Length,
+                LastWriteUtcTicks = info.LastWriteTimeUtc.Ticks,
+                Sha256 = hash,
+                ImportedUtc = DateTime.UtcNow
+            };
+        }
+
+        private sealed class SqlImportManifestEntry
+        {
+            public string Path { get; set; }
+            public long Length { get; set; }
+            public long LastWriteUtcTicks { get; set; }
+            public string Sha256 { get; set; }
+            public DateTime ImportedUtc { get; set; }
+
+            public bool Matches(SqlImportManifestEntry other)
+            {
+                return other != null
+                    && Length == other.Length
+                    && LastWriteUtcTicks == other.LastWriteUtcTicks
+                    && string.Equals(Sha256, other.Sha256, StringComparison.OrdinalIgnoreCase);
+            }
+        }
         /// <summary>
         /// Converts SQL to JSON, imports to database, clears the weenie cache
         /// </summary>
-        private static void ImportSQLWeenie(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLWeenie(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
             if (!uint.TryParse(Regex.Match(sql_file, @"\d+").Value, out var wcid))
             {
@@ -920,8 +1032,13 @@ namespace ACE.Server.Command.Handlers.Processors
                 return;
             }
 
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear this weenie out of the cache
@@ -939,7 +1056,7 @@ namespace ACE.Server.Command.Handlers.Processors
             sql2json_weenie(session, weenie, sql_folder, sql_file);
         }
 
-        private static void ImportSQLRecipe(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLRecipe(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
             if (!uint.TryParse(Regex.Match(sql_file, @"\d+").Value, out var recipeId))
             {
@@ -947,8 +1064,13 @@ namespace ACE.Server.Command.Handlers.Processors
                 return;
             }
 
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear this recipe out of the cache
@@ -966,7 +1088,7 @@ namespace ACE.Server.Command.Handlers.Processors
             sql2json_recipe(session, cookbooks, sql_folder, sql_file);
         }
 
-        private static void ImportSQLLandblock(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLLandblock(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
             if (!ushort.TryParse(Regex.Match(sql_file, @"[0-9A-F]{4}", RegexOptions.IgnoreCase).Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var landblockId))
             {
@@ -974,8 +1096,13 @@ namespace ACE.Server.Command.Handlers.Processors
                 return;
             }
 
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear any cached instances for this landblock
@@ -988,7 +1115,7 @@ namespace ACE.Server.Command.Handlers.Processors
             sql2json_landblock(session, instances, sql_folder, sql_file);
         }
 
-        private static void ImportSQLEncounter(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLEncounter(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
             if (!ushort.TryParse(Regex.Match(sql_file, @"[0-9A-F]{4}", RegexOptions.IgnoreCase).Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var landblockId))
             {
@@ -996,18 +1123,28 @@ namespace ACE.Server.Command.Handlers.Processors
                 return;
             }
 
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear any cached encounters for this landblock
             DatabaseManager.World.ClearCachedEncountersByLandblock(landblockId);
         }
 
-        private static void ImportSQLEvent(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLEvent(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear cached event
@@ -1045,10 +1182,15 @@ namespace ACE.Server.Command.Handlers.Processors
             }
         }
 
-        private static void ImportSQLQuest(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLQuest(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear cached quest
@@ -1062,7 +1204,7 @@ namespace ACE.Server.Command.Handlers.Processors
             sql2json_quest(session, quest, sql_folder, sql_file);
         }
 
-        private static void ImportSQLSpell(Session session, string sql_folder, string sql_file)
+        private static void ImportSQLSpell(Session session, string sql_folder, string sql_file, bool changedOnly = false)
         {
             if (!uint.TryParse(Regex.Match(sql_file, @"\d+").Value, out var spellId))
             {
@@ -1070,8 +1212,13 @@ namespace ACE.Server.Command.Handlers.Processors
                 return;
             }
 
+            var sqlPath = sql_folder + sql_file;
+            if (!ShouldImportSqlFile(session, sqlPath, changedOnly))
+                return;
+
             // import sql to db
-            ImportSQL(sql_folder + sql_file);
+            ImportSQL(sqlPath);
+            MarkSqlFileImported(sqlPath, changedOnly);
             CommandHandlerHelper.WriteOutputInfo(session, $"Imported {sql_file}");
 
             // clear this spell out of the cache (and everything else)
@@ -2354,19 +2501,10 @@ namespace ACE.Server.Command.Handlers.Processors
                 var folder = Path.Combine(root.FullName, "sql", "weenies");
                 Directory.CreateDirectory(folder);
                 var safeProfile = Regex.Replace(profile.ProfileName, @"[^A-Za-z0-9_-]", "_");
-                path = Path.Combine(folder, $"{bossWcid} {safeProfile}.sql");
+                path = Path.Combine(folder, $"{bossWcid} {safeProfile}.sql");                using (var output = new StreamWriter(path, false, new System.Text.UTF8Encoding(false)))
+                    output.Write(sql);
 
-                var Hex = new Func<string, string>(value => "0x" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(value ?? "")));
-                using var output = new StreamWriter(path, false, new System.Text.UTF8Encoding(false));
-                output.Write(sql);
-                output.WriteLine();
-                output.WriteLine("-- DerpACE Boss Mechanic Profile");
-                output.WriteLine($"-- ClonedFromWeenieClassId: {sourceWcid}");
-                output.WriteLine($"-- BossProfile: {profile.ProfileName}");
-                output.WriteLine($"-- BossWeenieClassId: {bossWcid}");
-                output.WriteLine("INSERT INTO `boss_mechanic_profile` (`profile_Name`,`weenie_Class_Id`,`draft_Revision`,`draft_Json`,`published_Revision`,`published_Json`,`previous_Revision`,`previous_Json`,`enabled`,`modified_By`,`modified_At`) VALUES");
-                output.WriteLine($"({Hex(profile.ProfileName)},{bossWcid},{profile.DraftRevision},{Hex(profile.DraftJson)},{profile.PublishedRevision},{Hex(profile.PublishedJson)},{profile.PreviousRevision},{Hex(profile.PreviousJson)},{(profile.Enabled ? 1 : 0)},{Hex(profile.ModifiedBy)},UTC_TIMESTAMP())");
-                output.WriteLine("ON DUPLICATE KEY UPDATE `weenie_Class_Id`=VALUES(`weenie_Class_Id`),`draft_Revision`=VALUES(`draft_Revision`),`draft_Json`=VALUES(`draft_Json`),`published_Revision`=VALUES(`published_Revision`),`published_Json`=VALUES(`published_Json`),`previous_Revision`=VALUES(`previous_Revision`),`previous_Json`=VALUES(`previous_Json`),`enabled`=VALUES(`enabled`),`modified_By`=VALUES(`modified_By`),`modified_At`=VALUES(`modified_At`);");
+                ExportBossMechanicProfileJson(profile, out _);
                 return true;
             }
             catch (Exception ex)
@@ -2403,19 +2541,34 @@ namespace ACE.Server.Command.Handlers.Processors
             var root = VerifyContentFolder(session, false);
             var folder = Path.Combine(root.FullName, "sql", "weenies");
             var filename = WeenieSQLWriter.GetDefaultFileName(weenie);
-            var path = Path.Combine(folder, filename);
-            var Hex = new Func<string, string>(value => "0x" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(value ?? "")));
+            var path = Path.Combine(folder, filename);            var profilePath = ExportBossMechanicProfileJson(profile, out var profileError);
+            if (profilePath == null)
+                CommandHandlerHelper.WriteOutputInfo(session, $"Exported boss weenie SQL to {path}, but boss profile JSON failed: {profileError}");
+            else
+                CommandHandlerHelper.WriteOutputInfo(session, $"Exported boss weenie SQL to {path} and boss profile JSON to {profilePath}");
+        }
 
-            using var writer = File.AppendText(path);
-            writer.WriteLine();
-            writer.WriteLine("-- DerpACE Boss Mechanic Profile");
-            writer.WriteLine($"-- BossProfile: {profile.ProfileName}");
-            writer.WriteLine($"-- BossWeenieClassId: {profile.WeenieClassId}");
-            writer.WriteLine($"-- BossMechanicsVersion: 1");
-            writer.WriteLine("INSERT INTO `boss_mechanic_profile` (`profile_Name`,`weenie_Class_Id`,`draft_Revision`,`draft_Json`,`published_Revision`,`published_Json`,`previous_Revision`,`previous_Json`,`enabled`,`modified_By`,`modified_At`) VALUES");
-            writer.WriteLine($"({Hex(profile.ProfileName)},{profile.WeenieClassId},{profile.DraftRevision},{Hex(profile.DraftJson)},{profile.PublishedRevision},{Hex(profile.PublishedJson)},{profile.PreviousRevision},{Hex(profile.PreviousJson)},{(profile.Enabled ? 1 : 0)},{Hex(profile.ModifiedBy)},UTC_TIMESTAMP())");
-            writer.WriteLine("ON DUPLICATE KEY UPDATE `weenie_Class_Id`=VALUES(`weenie_Class_Id`),`draft_Revision`=VALUES(`draft_Revision`),`draft_Json`=VALUES(`draft_Json`),`published_Revision`=VALUES(`published_Revision`),`published_Json`=VALUES(`published_Json`),`previous_Revision`=VALUES(`previous_Revision`),`previous_Json`=VALUES(`previous_Json`),`enabled`=VALUES(`enabled`),`modified_By`=VALUES(`modified_By`),`modified_At`=VALUES(`modified_At`);");
-            CommandHandlerHelper.WriteOutputInfo(session, $"Appended boss profile '{profile.ProfileName}' to {path}");
+        private static string ExportBossMechanicProfileJson(ACE.Database.Models.Shard.BossMechanicProfile profile, out string error)
+        {
+            error = null;
+            try
+            {
+                if (profile == null)
+                    throw new ArgumentNullException(nameof(profile));
+
+                var folder = Path.Combine(AppContext.BaseDirectory, "Data", "DerpACE", "BossMechanics");
+                Directory.CreateDirectory(folder);
+                var safeProfile = Regex.Replace(profile.ProfileName ?? "boss", @"[^A-Za-z0-9_-]", "_");
+                var path = Path.Combine(folder, $"{profile.WeenieClassId} {safeProfile}.json");
+                var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(path, json, new System.Text.UTF8Encoding(false));
+                return path;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return null;
+            }
         }
         public static void ExportSQLRecipe(Session session, string param)
         {
@@ -3469,3 +3622,4 @@ namespace ACE.Server.Command.Handlers.Processors
         }
     }
 }
+

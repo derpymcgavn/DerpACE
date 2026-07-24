@@ -14,7 +14,7 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public override void Heartbeat(double currentUnixTime)
         {
-            var expireItems = new List<WorldObject>();
+            List<WorldObject> expireItems = null;
 
             // added where clause
             foreach (var wo in EquippedObjects.Values.Where(i => i.EnchantmentManager.HasEnchantments || i.Lifespan.HasValue))
@@ -28,12 +28,14 @@ namespace ACE.Server.WorldObjects
                 wo.EnchantmentManager.HeartBeat(CachedHeartbeatInterval);
 
                 if (wo.IsLifespanSpent)
-                    expireItems.Add(wo);
+                    (expireItems ??= new List<WorldObject>()).Add(wo);
             }
 
             VitalHeartBeat();
 
             EmoteManager.HeartBeat();
+
+            TownAmbientTick(currentUnixTime);
 
             DamageHistory.TryPrune();
             BossMechanicManager.OnHeartbeat(this, currentUnixTime);
@@ -47,12 +49,15 @@ namespace ACE.Server.WorldObjects
                 TryShamanHeartbeat(currentUnixTime);
 
             // delete items when RemainingLifespan <= 0
-            foreach (var expireItem in expireItems)
+            if (expireItems != null)
             {
-                expireItem.DeleteObject(this);
+                foreach (var expireItem in expireItems)
+                {
+                    expireItem.DeleteObject(this);
 
-                if (this is Player player)
-                    player.Session.Network.EnqueueSend(new GameMessageSystemChat($"Its lifespan finished, your {expireItem.Name} crumbles to dust.", ChatMessageType.Broadcast));
+                    if (this is Player player)
+                        player.Session.Network.EnqueueSend(new GameMessageSystemChat($"Its lifespan finished, your {expireItem.Name} crumbles to dust.", ChatMessageType.Broadcast));
+                }
             }
 
             base.Heartbeat(currentUnixTime);

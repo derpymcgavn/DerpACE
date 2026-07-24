@@ -102,11 +102,13 @@ namespace ACE.Server.WorldObjects
                 CastSpell(player);
             }
 
-            var soundEvent = new GameMessageSound(player.Guid, GetUseSound(), 1.0f);
+            var useSound = GetUseSound();
+            var consumedMotion = useSound == Sound.Eat1 ? MotionCommand.Eat : MotionCommand.Drink;
+            var soundEvent = new GameMessageSound(player.Guid, useSound, 1.0f);
             player.EnqueueBroadcast(soundEvent);
 
-            if (!UnlimitedUse)
-                player.TryConsumeFromInventoryWithNetworking(this, 1);
+            if (!UnlimitedUse && player.TryConsumeFromInventoryWithNetworking(this, 1))
+                GlobalKillQuestManager.OnFoodConsumed(player, this, consumedMotion);
 
             // Easter egg: eat 3 cheese wheels → involuntary consequences.
             TryCheeseWheelEasterEgg(player);

@@ -1,18 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 using ACE.Common;
 using ACE.DatLoader.Entity;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Managers;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Network.Enum;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
+using ACE.Server.Physics.Extensions;
 
 namespace ACE.Server.WorldObjects
 {
@@ -1782,14 +1785,63 @@ namespace ACE.Server.WorldObjects
 
             var stance = CurrentMotionState?.Stance ?? MotionStance.NonCombat;
             EnqueueBroadcastMotion(new Motion(stance, MotionCommand.HeadThrow));
-            secondaryTarget.TakeDamage(this, DamageType.Bludgeon, throwDamage, false);
-            secondaryTarget.ApplyVisualEffects(PlayScript.Explode);
             primaryTarget.ApplyVisualEffects(PlayScript.SparkMidRightFront);
 
-            if (!SquelchManager.Squelches.Contains(secondaryTarget, ChatMessageType.CombatSelf))
-                Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    $"Your {damageEvent.Weapon.NameWithMaterial} hurls a spectral hammer into {secondaryTarget.Name} for {(uint)Math.Round(throwDamage)} bludgeoning damage. [Stonehand Throw]",
-                    ChatMessageType.CombatSelf));
+            var origin = primaryTarget.Location.Pos;
+            origin.Z += Math.Max(0.5f, primaryTarget.Height * 0.55f);
+            var destination = secondaryTarget.Location.Pos;
+            destination.Z += Math.Max(0.5f, secondaryTarget.Height * 0.55f);
+            var direction = Vector3.Normalize(destination - origin);
+            WorldObject spectralHammer = null;
+            var flightTime = 0.0f;
+
+            if (direction.IsValid())
+            {
+                origin += direction * Math.Max(0.5f, primaryTarget.PhysicsObj?.GetRadius() ?? 0.5f);
+                var angle = Math.Atan2(-direction.X, direction.Y);
+                var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, (float)angle);
+                var velocity = GetProjectileVelocity(secondaryTarget, origin, direction, destination, 18.0f, out flightTime, false);
+                if (velocity.IsValid() && velocity != Vector3.Zero)
+                {
+                    spectralHammer = LaunchProjectile(damageEvent.Weapon, damageEvent.Weapon, secondaryTarget, origin, rotation, velocity, projectile =>
+                    {
+                        projectile.SetupTableId = damageEvent.Weapon.SetupTableId;
+                        projectile.MotionTableId = damageEvent.Weapon.MotionTableId;
+                        projectile.PhysicsTableId = damageEvent.Weapon.PhysicsTableId;
+                        projectile.Translucency = 0.2f;
+                        projectile.Biota.PropertiesAnimPart = damageEvent.Weapon.Biota.PropertiesAnimPart.Clone(projectile.BiotaDatabaseLock);
+                        projectile.Biota.PropertiesPalette = damageEvent.Weapon.Biota.PropertiesPalette.Clone(projectile.BiotaDatabaseLock);
+                        projectile.Biota.PropertiesTextureMap = damageEvent.Weapon.Biota.PropertiesTextureMap.Clone(projectile.BiotaDatabaseLock);
+                        projectile.ReportCollisions = false;
+                        projectile.IgnoreCollisions = true;
+                        projectile.Ethereal = true;
+                    });
+                }
+            }
+
+            void ApplyHammerImpact()
+            {
+                spectralHammer?.Destroy();
+                if (secondaryTarget.IsDead || secondaryTarget.Teleporting || secondaryTarget.Location == null || !CanDamage(secondaryTarget))
+                    return;
+
+                secondaryTarget.TakeDamage(this, DamageType.Bludgeon, throwDamage, false);
+                secondaryTarget.ApplyVisualEffects(PlayScript.Explode);
+                if (!SquelchManager.Squelches.Contains(secondaryTarget, ChatMessageType.CombatSelf))
+                    Session.Network.EnqueueSend(new GameMessageSystemChat(
+                        $"Your {damageEvent.Weapon.NameWithMaterial} hurls a spectral hammer into {secondaryTarget.Name} for {(uint)Math.Round(throwDamage)} bludgeoning damage. [Stonehand Throw]",
+                        ChatMessageType.CombatSelf));
+            }
+
+            if (spectralHammer == null || !float.IsFinite(flightTime) || flightTime <= 0.0f)
+                ApplyHammerImpact();
+            else
+            {
+                var impact = new ActionChain();
+                impact.AddDelaySeconds(Math.Clamp(flightTime, 0.05f, 2.0f));
+                impact.AddAction(this, ApplyHammerImpact);
+                impact.EnqueueChain();
+            }
         }
 
         private float GetUnarmedComboAttackSpeedMultiplier()

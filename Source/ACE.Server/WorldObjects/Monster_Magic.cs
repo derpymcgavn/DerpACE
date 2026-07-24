@@ -60,6 +60,9 @@ namespace ACE.Server.WorldObjects
 
         private double MagicWindupUntil { get; set; }
 
+        private int _lastAiSpellId;
+        private int _consecutiveAiSpellUses;
+
         private bool TryRollSpell()
         {
             CurrentSpell = null;
@@ -83,11 +86,23 @@ namespace ACE.Server.WorldObjects
             {
                 var probability = spell.Value > 2.0f ? spell.Value - 2.0f : spell.Value / 100.0f;
 
+                // Prefer a rotation when the creature knows alternatives. Repeated casts remain
+                // possible, but become increasingly unlikely instead of being hard-disabled.
+                if (Biota.PropertiesSpellBook.Count > 1 && spell.Key == _lastAiSpellId)
+                    probability *= _consecutiveAiSpellUses >= 2 ? 0.10f : 0.25f;
+
                 var rng = ThreadSafeRandom.Next(0.0f, 1.0f);
 
                 if (rng < probability)
                 {
                     CurrentSpell = new Spell(spell.Key);
+                    if (_lastAiSpellId == spell.Key)
+                        _consecutiveAiSpellUses++;
+                    else
+                    {
+                        _lastAiSpellId = spell.Key;
+                        _consecutiveAiSpellUses = 1;
+                    }
                     return true;
                 }
             }

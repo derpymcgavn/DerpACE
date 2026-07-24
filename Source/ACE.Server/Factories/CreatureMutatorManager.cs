@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using ACE.Common;
 using ACE.Server.WorldObjects;
+using ACE.Server.Managers;
 using log4net;
 
 namespace ACE.Server.Factories
@@ -121,6 +122,7 @@ namespace ACE.Server.Factories
         public static void TryApplyMutators(Creature creature)
         {
             if (creature == null) return;
+            if ((creature.Level ?? 0) < DerpACEConfig.MobModifierMinLevel) return;
 
             // Compute tier from DeathTreasure when available, otherwise approximate from level
             int tier = 1;
@@ -239,6 +241,7 @@ namespace ACE.Server.Factories
         public static bool TryForceApplyMutator(Creature creature, string name)
         {
             if (creature == null || string.IsNullOrWhiteSpace(name)) return false;
+            if ((creature.Level ?? 0) < DerpACEConfig.MobModifierMinLevel) return false;
 
             var mutator = GetMutator(ResolveAlias(name));
             if (mutator == null) return false;

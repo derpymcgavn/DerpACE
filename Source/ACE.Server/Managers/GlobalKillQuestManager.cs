@@ -36,6 +36,7 @@ namespace ACE.Server.Managers
             T8DungeonHunt,
             CardinalTrek,
             VendorDeliveryRace,
+            ChugRace,
         }
 
         public const uint DrunkenBeerWcid = HardcodedWeenies.DrunkenEventBeerWeenieClassId;
@@ -238,8 +239,12 @@ namespace ACE.Server.Managers
             if (creature.GetProperty(PropertyBool.IsDrunkenMob) == true)
                 return false;
 
-            var isMonster = creature.Attackable || creature.TargetingTactic != TargetingTactic.None;
-            if (!isMonster)
+            // Drunken hunts may affect hostile creatures at any level, but never NPCs,
+            // vendors, pets, or creatures carrying a non-hostile/special radar blip.
+            if (!creature.IsMonster)
+                return false;
+
+            if (creature.RadarColor.HasValue && creature.RadarColor.Value != RadarColor.Creature)
                 return false;
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.06f)
@@ -947,3 +952,5 @@ namespace ACE.Server.Managers
         public double MyDistance { get; set; }
     }
 }
+
+

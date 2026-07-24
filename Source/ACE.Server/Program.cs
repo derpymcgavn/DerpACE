@@ -333,6 +333,9 @@ namespace ACE.Server
             log.Info("Initializing GlobalKillQuestManager...");
             GlobalKillQuestManager.Initialize();
 
+            log.Info("Initializing NpcPersonaManager..." );
+            NpcPersonaManager.Initialize();
+
             log.Info("Initializing HouseManager...");
             HouseManager.Initialize();
 

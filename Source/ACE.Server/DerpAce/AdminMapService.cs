@@ -50,7 +50,7 @@ namespace ACE.Server.DerpAce
         private static readonly List<AdminChatFeedEntry> ChatFeed = new List<AdminChatFeedEntry>();
         private static readonly List<AdminRareFeedEntry> RareFeed = new List<AdminRareFeedEntry>();
         private static readonly ConcurrentDictionary<string, AdminMapSession> Sessions = new ConcurrentDictionary<string, AdminMapSession>();
-        private static readonly ConcurrentDictionary<uint, byte[]> IconPngCache = new ConcurrentDictionary<uint, byte[]>();
+        private static readonly ConcurrentDictionary<string, AdminIconCacheEntry> IconPngCache = new ConcurrentDictionary<string, AdminIconCacheEntry>(StringComparer.OrdinalIgnoreCase);
         private const float CreatureBlipRadius = 80.0f;
         private const int MaxCreatureBlips = 200;
         private const int MaxFeedEntries = 80;
@@ -235,7 +235,8 @@ namespace ACE.Server.DerpAce
                         authenticated = session != null,
                         accountName = session?.AccountName,
                         accessLevel = session?.AccessLevel.ToString(),
-                        isAdmin = session?.AccessLevel >= AccessLevel.Admin
+                        isAdmin = session?.AccessLevel >= AccessLevel.Admin,
+                        sessionToken = GetSessionToken(context)
                     });
                     return;
                 }
@@ -445,13 +446,7 @@ namespace ACE.Server.DerpAce
 
                 if (path.Equals("/assets/icon", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (GetValidSession(context) == null && !IsAuthorized(context))
-                    {
-                        context.Response.StatusCode = 401;
-                        WriteText(context, "Map login required.", "text/plain; charset=utf-8");
-                        return;
-                    }
-
+                    // Icons are static game assets; native image requests do not need map authorization.
                     if (!TryParseDataId(context.Request.QueryString["did"], out var did) || !TryWriteIcon(context, did))
                     {
                         context.Response.StatusCode = 404;
@@ -563,7 +558,8 @@ namespace ACE.Server.DerpAce
                 accountName = account.AccountName,
                 accessLevel = accessLevel.ToString(),
                 isAdmin = accessLevel >= AccessLevel.Admin,
-                expiresUtc = session.ExpiresUtc
+                expiresUtc = session.ExpiresUtc,
+                sessionToken = token
             };
         }
 
@@ -603,9 +599,17 @@ namespace ACE.Server.DerpAce
 
         private static string GetSessionToken(HttpListenerContext context)
         {
+            // Explicit session tokens from links/fetch calls should win over stale browser cookies.
+            var token = context?.Request?.Headers["X-DerpACE-Map-Session"];
+            if (!string.IsNullOrWhiteSpace(token))
+                return token;
+
+            token = context?.Request?.QueryString["session"];
+            if (!string.IsNullOrWhiteSpace(token))
+                return token;
+
             return context?.Request?.Cookies?[SessionCookieName]?.Value;
         }
-
         private static string CreateSessionToken()
         {
             var bytes = new byte[32];
@@ -1785,7 +1789,18 @@ namespace ACE.Server.DerpAce
                 if (path == null)
                     return false;
 
-                WriteBytes(context, File.ReadAllBytes(path), "image/png");
+                var info = new FileInfo(path);
+                var cacheKey = $"{did:X8}:{info.FullName.ToUpperInvariant()}";
+                var cached = IconPngCache.GetOrAdd(cacheKey, _ => LoadIconCacheEntry(info));
+                if (cached.LastWriteUtcTicks != info.LastWriteTimeUtc.Ticks || cached.Length != info.Length)
+                {
+                    cached = LoadIconCacheEntry(info);
+                    IconPngCache[cacheKey] = cached;
+                }
+
+                context.Response.Headers["Cache-Control"] = "public, max-age=86400, immutable";
+                context.Response.Headers["ETag"] = $"\"{did:X8}-{cached.LastWriteUtcTicks:X}-{cached.Length:X}\"";
+                WriteBytes(context, cached.Bytes, "image/png");
                 return true;
             }
             catch (Exception ex)
@@ -1793,6 +1808,15 @@ namespace ACE.Server.DerpAce
                 log.Warn($"[DerpACE AdminMap] Failed to load static icon 0x{did:X8}: {ex.Message}");
                 return false;
             }
+        }
+        private static AdminIconCacheEntry LoadIconCacheEntry(FileInfo info)
+        {
+            return new AdminIconCacheEntry
+            {
+                Bytes = File.ReadAllBytes(info.FullName),
+                LastWriteUtcTicks = info.LastWriteTimeUtc.Ticks,
+                Length = info.Length
+            };
         }
         private static Texture TryReadTexture(DatDatabase database, uint did)
         {
@@ -1933,7 +1957,7 @@ namespace ACE.Server.DerpAce
 <body><header><h1>Boss Builder</h1><a href=""/"">Admin Map</a></header><main><div class=""grid""><section class=""panel""><h2>Boss Identity</h2><div class=""fields""><label>Profile<input id=""profile"" value=""hollow_king""></label><label>Source WCID<input id=""source"" type=""number"" value=""9000001""></label><label class=""wide"">New boss WCID (optional)<input id=""boss"" type=""number"" placeholder=""990000011""></label><label class=""wide"">Mutator perks (up to 3, comma separated)<input id=""mutators"" placeholder=""vampiric, shaman, tank""><small>Boss-safe: vampiric, nocturnal, exploding, healer, enchanter, shaman, tank, reaper, necromancer, warder.</small></label></div><h2 style=""margin-top:16px"">Add Rule</h2><div class=""fields""><label>When<select id=""trigger""><option value=""health_below"">Health falls below...</option><option value=""combat_start"">Combat starts</option><option value=""timer"">Every few seconds</option><option value=""spell_resisted"">Boss resists a spell</option><option value=""death"">Boss dies</option></select></label><label id=""thresholdWrap"">Health threshold %<input id=""threshold"" type=""number"" min=""1"" max=""99"" value=""75""></label><label id=""intervalWrap"" style=""display:none"">Seconds<input id=""interval"" type=""number"" min=""1"" max=""3600"" value=""20""></label><label>Chance %<input id=""chance"" type=""number"" min=""1"" max=""100"" value=""100""></label><label>Minimum nearby players<input id=""minPlayers"" type=""number"" min=""1"" max=""40"" value=""1""></label><label>Required phase (optional)<input id=""rulePhase"" placeholder=""default""></label><label id=""repeatWrap"" style=""display:none"">Repeat<select id=""repeat""><option value=""yes"">Keep repeating</option><option value=""no"">Only once</option></select></label><label>Action<select id=""action""><option value=""taunt"">Taunt</option><option value=""say"">Simple local speech</option><option value=""effect"">Visual effect</option><option value=""maintain_minions"">Maintained minions</option><option value=""push"">Push players</option><option value=""pull"">Pull players</option><option value=""blink"">Blink players toward boss</option><option value=""scatter"">Scatter players</option><option value=""knock_up"">Knock players upward</option><option value=""apply_spell"">Temporary spell effect</option><option value=""set_phase"">Set encounter phase</option></select></label><label id=""channelWrap"">Channel<select id=""channel""><option value=""local"">Local</option><option value=""fellowship"">Fellowship</option></select></label><label id=""phaseWrap"" style=""display:none"">New phase<input id=""newPhase"" value=""phase_2""></label><label id=""spellWrap"" style=""display:none"">Spell ID<input id=""spellId"" type=""number"" min=""1""><small>Uses the spell's native duration and stacking.</small></label><label id=""targetWrap"" style=""display:none"">Targets<select id=""target""><option value=""trigger"">Triggering player</option><option value=""nearest"">Nearest player</option><option value=""farthest"">Farthest player</option><option value=""random"">Random player</option><option value=""all"">All nearby players</option></select></label><label id=""distanceWrap"" style=""display:none"">Distance (feet)<input id=""distance"" type=""number"" min=""1"" max=""40"" value=""15""></label><label id=""effectWrap"" style=""display:none"">PlayScript<input id=""effect"" list=""playScripts"" value=""EnchantUpRed"" autocomplete=""off""><datalist id=""playScripts"">{{PLAY_SCRIPT_OPTIONS}}</datalist><small>Type to search all valid server effects.</small></label><label id=""minionWcidWrap"" style=""display:none"">Minion WCID<input id=""minionWcid"" type=""number""></label><label id=""countWrap"" style=""display:none"">Count 1-12<input id=""count"" type=""number"" min=""1"" max=""12"" value=""4""></label><label id=""textWrap"" class=""wide"">Text<textarea id=""text"">%t, you have disturbed what sleeps below.</textarea><small>Wildcards: %t target player, %b boss name, %h boss health %, %n nearby players.</small></label></div><div class=""actions""><button id=""add"" class=""primary"">Add Rule</button><button id=""clear"">Clear Rules</button></div><h2 style=""margin-top:16px"">Taunt Ideas</h2><div id=""ideas"" class=""ideaBar""></div><div id=""rules""></div></section>
 <section class=""panel""><h2>Generated Commands</h2><pre id=""commands""></pre><div class=""actions""><button data-copy=""commands"">Copy Commands</button></div><h2 style=""margin-top:16px"">Equivalent Profile JSON</h2><pre id=""json""></pre><div class=""actions""><button data-copy=""json"">Copy JSON</button><button id=""saveDraft"" class=""primary"">Save Draft</button></div><div id=""saveStatus"" class=""muted""></div><p class=""note"">Commands edit a draft. Always validate, then publish. Import cloned-boss SQL and reload world content before spawning a new WCID.</p></section></div>
 <section class=""panel"" style=""margin-top:14px""><h2>Built-in Runtime Actions</h2><table><tr><th>Action</th><th>Behavior</th></tr><tr><td>say</td><td>Local speech from the boss.</td></tr><tr><td>taunt / local</td><td>Local encounter speech.</td></tr><tr><td>taunt / fellowship</td><td>Sends the line to fellowships represented near the boss.</td></tr><tr><td>effect</td><td>Runs a validated PlayScript.</td></tr><tr><td>maintain_minions</td><td>Maintains 1-12 copies of one WCID at 100 health; zero XP/no corpse; cleans up with boss.</td></tr></table></section></main>
-<script>const rules=[];const $=id=>document.getElementById(id);const ideas=['Your courage smells borrowed.','Stand together. It makes the breaking easier.','I have ended better fellowships than yours.','Another falls, and still you pretend this is victory.','Run. I enjoy the second chase.','The chamber remembers every name it buries.','Your healer cannot mend what I am about to remove.','You brought friends. Good. I brought hunger.'];ideas.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{$('text').value=t;$('action').value='taunt';sync()};$('ideas').appendChild(b)});function sync(){const a=$('action').value;const t=$('trigger').value;$('thresholdWrap').style.display=t==='health_below'?'grid':'none';$('intervalWrap').style.display=t==='timer'?'grid':'none';$('repeatWrap').style.display=t==='timer'?'grid':'none';$('channelWrap').style.display=a==='taunt'?'grid':'none';$('effectWrap').style.display=a==='effect'?'grid':'none';const movement=['push','pull','blink','scatter','knock_up'].includes(a);$('targetWrap').style.display=(movement||a==='apply_spell')?'grid':'none';$('distanceWrap').style.display=movement?'grid':'none';$('spellWrap').style.display=a==='apply_spell'?'grid':'none';$('phaseWrap').style.display=a==='set_phase'?'grid':'none';$('minionWcidWrap').style.display=a==='maintain_minions'?'grid':'none';$('countWrap').style.display=a==='maintain_minions'?'grid':'none';$('textWrap').style.display=(a==='taunt'||a==='say')?'grid':'none'}$('action').onchange=sync;$('trigger').onchange=sync;function render(){const p=$('profile').value.trim()||'boss';const src=$('source').value;const dst=$('boss').value;const mutators=$('mutators').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,3);let c=['@boss create '+p+' '+src+(dst?' '+dst:'')];const jsonRules=rules.map((r,i)=>{let action;if(r.action==='maintain_minions'){if(r.trigger==='health_below')c.push('@boss add-minions '+p+' '+r.threshold+' '+r.minionWcid+' '+r.count);action={type:'maintain_minions',weenieClassId:+r.minionWcid,count:+r.count,health:100}}else if(r.action==='effect'){if(r.trigger==='health_below')c.push('@boss add-effect '+p+' '+r.threshold+' '+r.effect);action={type:'effect',effect:r.effect}}else if(['push','pull','blink','scatter','knock_up'].includes(r.action)){action={type:r.action,target:r.target,distance:+r.distance}}else if(r.action==='apply_spell'){action={type:'apply_spell',target:r.target,spellId:+r.spellId}}else if(r.action==='set_phase'){action={type:'set_phase',phase:r.newPhase}}else if(r.action==='taunt'){if(r.trigger==='health_below')c.push('@boss add-taunt '+p+' '+r.threshold+' '+r.channel+' '+r.text);action={type:'taunt',channel:r.channel,text:r.text}}else{if(r.trigger==='health_below')c.push('@boss add-say '+p+' '+r.threshold+' '+r.text);action={type:'say',text:r.text}}return{id:r.trigger+'_'+(i+1),trigger:r.trigger,thresholdPercent:r.trigger==='health_below'?+r.threshold:0,intervalSeconds:r.trigger==='timer'?+r.interval:0,chancePercent:+r.chance,minPlayers:+r.minPlayers,once:r.trigger==='timer'?r.repeat!=='yes':true,phase:r.rulePhase||null,actions:[action]}});c.push('@boss validate '+p,'@boss publish '+p);$('commands').textContent=c.join('\n');$('json').textContent=JSON.stringify({schemaVersion:1,weenieClassId:+(dst||src),mutators:mutators,rules:jsonRules},null,2);$('rules').innerHTML=rules.map((r,i)=>'<div class=""rule""><span><strong>'+triggerLabel(r)+'</strong> '+r.action+(r.channel?' / '+r.channel:'')+' · '+r.chance+'% · '+r.minPlayers+'+ players</span><span><button data-op=""up"" data-i=""'+i+'"">↑</button><button data-op=""copy"" data-i=""'+i+'"">Duplicate</button><button data-op=""remove"" data-i=""'+i+'"">Remove</button></span></div>').join('');$('rules').querySelectorAll('button').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(b.dataset.op==='remove')rules.splice(i,1);else if(b.dataset.op==='copy')rules.splice(i+1,0,{...rules[i]});else if(b.dataset.op==='up'&&i>0)[rules[i-1],rules[i]]=[rules[i],rules[i-1]];render()})}function triggerLabel(r){return r.trigger==='health_below'?r.threshold+'% health':r.trigger==='timer'?'every '+r.interval+'s':r.trigger.replaceAll('_',' ')}$('add').onclick=()=>{const a=$('action').value;rules.push({trigger:$('trigger').value,threshold:$('threshold').value,interval:$('interval').value,chance:$('chance').value,minPlayers:$('minPlayers').value,rulePhase:$('rulePhase').value.trim(),repeat:$('repeat').value,action:a,channel:a==='taunt'?$('channel').value:null,text:$('text').value,effect:$('effect').value,target:$('target').value,distance:$('distance').value,spellId:$('spellId').value,newPhase:$('newPhase').value.trim(),minionWcid:$('minionWcid').value,count:$('count').value});render()};$('clear').onclick=()=>{rules.length=0;render()};['profile','source','boss','mutators'].forEach(id=>$(id).oninput=render);document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText($(b.dataset.copy).textContent));$('saveDraft').onclick=async()=>{const out=$('saveStatus');out.textContent='Validating and saving...';const res=await fetch('/api/boss/draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:$('profile').value,json:$('json').textContent})});const data=await res.json();out.textContent=data.message||data.error||res.statusText};sync();render();</script></body></html>";
+<script>const rules=[];const $=id=>document.getElementById(id);const ideas=['Your courage smells borrowed.','Stand together. It makes the breaking easier.','I have ended better fellowships than yours.','Another falls, and still you pretend this is victory.','Run. I enjoy the second chase.','The chamber remembers every name it buries.','Your healer cannot mend what I am about to remove.','You brought friends. Good. I brought hunger.'];ideas.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{$('text').value=t;$('action').value='taunt';sync()};$('ideas').appendChild(b)});function sync(){const a=$('action').value;const t=$('trigger').value;$('thresholdWrap').style.display=t==='health_below'?'grid':'none';$('intervalWrap').style.display=t==='timer'?'grid':'none';$('repeatWrap').style.display=t==='timer'?'grid':'none';$('channelWrap').style.display=a==='taunt'?'grid':'none';$('effectWrap').style.display=a==='effect'?'grid':'none';const movement=['push','pull','blink','scatter','knock_up'].includes(a);$('targetWrap').style.display=(movement||a==='apply_spell')?'grid':'none';$('distanceWrap').style.display=movement?'grid':'none';$('spellWrap').style.display=a==='apply_spell'?'grid':'none';$('phaseWrap').style.display=a==='set_phase'?'grid':'none';$('minionWcidWrap').style.display=a==='maintain_minions'?'grid':'none';$('countWrap').style.display=a==='maintain_minions'?'grid':'none';$('textWrap').style.display=(a==='taunt'||a==='say')?'grid':'none'}$('action').onchange=sync;$('trigger').onchange=sync;function render(){const p=$('profile').value.trim()||'boss';const src=$('source').value;const dst=$('boss').value;const mutators=$('mutators').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,3);let c=['@boss create '+p+' '+src+(dst?' '+dst:'')];const jsonRules=rules.map((r,i)=>{let action;if(r.action==='maintain_minions'){if(r.trigger==='health_below')c.push('@boss add-minions '+p+' '+r.threshold+' '+r.minionWcid+' '+r.count);action={type:'maintain_minions',weenieClassId:+r.minionWcid,count:+r.count,health:100}}else if(r.action==='effect'){if(r.trigger==='health_below')c.push('@boss add-effect '+p+' '+r.threshold+' '+r.effect);action={type:'effect',effect:r.effect}}else if(['push','pull','blink','scatter','knock_up'].includes(r.action)){action={type:r.action,target:r.target,distance:+r.distance}}else if(r.action==='apply_spell'){action={type:'apply_spell',target:r.target,spellId:+r.spellId}}else if(r.action==='set_phase'){action={type:'set_phase',phase:r.newPhase}}else if(r.action==='taunt'){if(r.trigger==='health_below')c.push('@boss add-taunt '+p+' '+r.threshold+' '+r.channel+' '+r.text);action={type:'taunt',channel:r.channel,text:r.text}}else{if(r.trigger==='health_below')c.push('@boss add-say '+p+' '+r.threshold+' '+r.text);action={type:'say',text:r.text}}return{id:r.trigger+'_'+(i+1),trigger:r.trigger,thresholdPercent:r.trigger==='health_below'?+r.threshold:0,intervalSeconds:r.trigger==='timer'?+r.interval:0,chancePercent:+r.chance,minPlayers:+r.minPlayers,once:r.trigger==='timer'?r.repeat!=='yes':true,phase:r.rulePhase||null,actions:[action]}});c.push('@boss validate '+p,'@boss publish '+p);$('commands').textContent=c.join('\n');$('json').textContent=JSON.stringify({schemaVersion:1,weenieClassId:+(dst||src),mutators:mutators,rules:jsonRules},null,2);$('rules').innerHTML=rules.map((r,i)=>'<div class=""rule""><span><strong>'+triggerLabel(r)+'</strong> '+r.action+(r.channel?' / '+r.channel:'')+' &middot; '+r.chance+'% &middot; '+r.minPlayers+'+ players</span><span><button data-op=""up"" data-i=""'+i+'"">Up</button><button data-op=""copy"" data-i=""'+i+'"">Duplicate</button><button data-op=""remove"" data-i=""'+i+'"">Remove</button></span></div>').join('');$('rules').querySelectorAll('button').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(b.dataset.op==='remove')rules.splice(i,1);else if(b.dataset.op==='copy')rules.splice(i+1,0,{...rules[i]});else if(b.dataset.op==='up'&&i>0)[rules[i-1],rules[i]]=[rules[i],rules[i-1]];render()})}function triggerLabel(r){return r.trigger==='health_below'?r.threshold+'% health':r.trigger==='timer'?'every '+r.interval+'s':r.trigger.replaceAll('_',' ')}$('add').onclick=()=>{const a=$('action').value;rules.push({trigger:$('trigger').value,threshold:$('threshold').value,interval:$('interval').value,chance:$('chance').value,minPlayers:$('minPlayers').value,rulePhase:$('rulePhase').value.trim(),repeat:$('repeat').value,action:a,channel:a==='taunt'?$('channel').value:null,text:$('text').value,effect:$('effect').value,target:$('target').value,distance:$('distance').value,spellId:$('spellId').value,newPhase:$('newPhase').value.trim(),minionWcid:$('minionWcid').value,count:$('count').value});render()};$('clear').onclick=()=>{rules.length=0;render()};['profile','source','boss','mutators'].forEach(id=>$(id).oninput=render);document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText($(b.dataset.copy).textContent));$('saveDraft').onclick=async()=>{const out=$('saveStatus');out.textContent='Validating and saving...';const headers={'Content-Type':'application/json'};const params=new URLSearchParams(location.search);const session=params.get('session');if(session)headers['X-DerpACE-Map-Session']=session;const res=await fetch('/api/boss/draft',{method:'POST',headers:headers,body:JSON.stringify({profile:$('profile').value,json:$('json').textContent})});const data=await res.json();out.textContent=data.message||data.error||res.statusText};sync();render();</script></body></html>";
             return html.Replace("{{PLAY_SCRIPT_OPTIONS}}", playScriptOptions, StringComparison.Ordinal);
         }
 
@@ -2081,7 +2105,7 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
 .inventorySlot {{ position: relative; width: 38px; height: 38px; padding: 0; border: 1px solid rgba(255,255,255,.16); background: linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.015)); cursor: pointer; overflow: hidden; }}
 .inventorySlot:hover, .inventorySlot.selected {{ outline: 2px solid #fff3bf; z-index: 1; }}
 .inventoryFallback {{ position: absolute; inset: 0; z-index: 0; display: grid; place-items: center; color: rgba(226,238,232,.46); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; overflow: hidden; }}
-.inventoryIconLayer {{ position: absolute; inset: 2px; z-index: 1; background-position: center; background-repeat: no-repeat; background-size: contain; image-rendering: pixelated; }}
+.inventoryIconLayer {{ position:absolute; inset:2px; z-index:1; width:calc(100% - 4px); height:calc(100% - 4px); object-fit:contain; image-rendering:pixelated; pointer-events:none; }}
 .inventoryIconLayer.underlay {{ z-index: 1; }}
 .inventoryIconLayer.icon {{ z-index: 2; }}
 .inventoryIconLayer.overlay {{ z-index: 3; }}
@@ -2109,7 +2133,11 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
 @media (max-width: 860px) {{ body {{ grid-template-columns: 1fr; }} #map {{ min-height: 64vh; }} aside {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} .bottomDock {{ position: static; margin: 8px 12px 12px; }} .inventoryPanel {{ inset: 10px; grid-template-columns: 1fr; }} .inventoryEditPane {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} }}
 /* Modern Admin Map shell */
 body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overflow:hidden;background:#0b0f11}}#map{{height:100vh;min-height:0;background-color:#11181a}}.mapToolbar{{position:absolute;z-index:8;left:14px;right:14px;top:14px;display:flex;align-items:center;gap:8px;min-height:48px;padding:7px 8px 7px 14px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(11,16,18,.9);box-shadow:0 12px 34px rgba(0,0,0,.32);backdrop-filter:blur(12px)}}.mapToolbar h1{{margin:0;font-size:15px;white-space:nowrap}}.toolbarStatus{{min-width:0;flex:1;color:#aebbb6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.toolbarActions{{display:flex;gap:5px}}.toolbarActions button{{width:34px;height:32px;padding:0;display:grid;place-items:center;background:#202b2e;font-size:16px}}aside{{height:100vh;min-height:0;padding:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:#121719;box-shadow:-14px 0 36px rgba(0,0,0,.2)}}.sidebarHeader{{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.1);background:#151c1e}}.loginPanel,.sessionBar,.controls{{margin-bottom:0}}.sessionBar{{grid-template-columns:minmax(0,1fr) auto auto}}.sidebarTabs{{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#101517}}.sidebarTab{{padding:7px 5px;background:transparent;color:#98a7a2;border-color:transparent;font-size:12px}}.sidebarTab.active{{color:#fff;background:#263538;border-color:#46585c}}.sidebarContent{{min-height:0;overflow:auto;padding:12px 14px 20px;scrollbar-gutter:stable}}.sidebarSearch{{position:sticky;top:-12px;z-index:3;display:grid;grid-template-columns:1fr auto;gap:6px;margin:-12px -2px 8px;padding:12px 2px 8px;background:#121719}}.rosterCount{{min-width:38px;display:grid;place-items:center;color:#9fb0aa;font-size:11px}}body[data-side-view=""players""] .sideInspect,body[data-side-view=""players""] .sideLegend,body[data-side-view=""inspect""] .sidePlayers,body[data-side-view=""inspect""] .sideLegend,body[data-side-view=""legend""] .sidePlayers,body[data-side-view=""legend""] .sideInspect{{display:none!important}}.player{{margin:0 -6px;padding:10px 8px;border-top:0;border-bottom:1px solid rgba(255,255,255,.08);border-radius:3px}}.player:hover{{background:rgba(255,255,255,.045)}}.player.selected{{margin:0 -6px;padding:10px 8px;background:#23363a;box-shadow:inset 3px 0 #71b7e8}}.player .inventoryActions{{opacity:.62}}.player:hover .inventoryActions,.player.selected .inventoryActions{{opacity:1}}.adminPanel,.watchPanel,.legend{{border-radius:5px;background:#171e20}}.bottomDock{{left:14px;right:14px;bottom:14px;gap:10px}}.dockPanel{{border-radius:6px;background:rgba(10,15,17,.9);backdrop-filter:blur(10px)}}.zoomControls{{left:14px;bottom:150px;grid-template-columns:repeat(4,34px)}}.zoomControls button{{width:34px;height:34px;background:rgba(15,22,24,.92)}}.inventoryPanel{{inset:18px;grid-template-columns:minmax(430px,1fr) minmax(340px,420px);border-radius:7px}}.inventoryListPane,.inventoryEditPane{{padding:16px}}.inventorySlot{{width:42px;height:42px}}.inventoryGrid{{grid-template-columns:repeat(auto-fill,42px);gap:5px}}body.sidebarCollapsed{{grid-template-columns:minmax(0,1fr) 0}}body.sidebarCollapsed aside{{visibility:hidden}}.emptyRoster{{padding:24px 8px;text-align:center;color:#7f8d88;font-size:12px}}@media(max-width:860px){{body{{height:auto;overflow:auto;grid-template-columns:1fr}}#map{{height:65vh;min-height:480px}}aside{{height:auto;min-height:520px}}body.sidebarCollapsed{{grid-template-columns:1fr}}body.sidebarCollapsed aside{{display:none}}.mapToolbar{{left:8px;right:8px;top:8px}}.toolbarStatus{{display:none}}.bottomDock{{left:8px;right:8px;bottom:8px}}}}
-/* Inventory workspace refinement */
+/* Login/sidebar click safety */
+aside {{ position:relative; z-index:30; pointer-events:auto; }}
+.sidebarHeader {{ position:relative; z-index:40; pointer-events:auto; }}
+.loginPanel, .loginPanel * {{ pointer-events:auto; }}
+#loginButton {{ position:relative; z-index:41; }}/* Inventory workspace refinement */
 .inventoryPanel {{ inset:24px; grid-template-columns:minmax(520px,1.35fr) minmax(380px,.85fr); max-width:1500px; margin:auto; border-color:rgba(155,214,255,.25); background:#0d1214; }}
 .inventoryListPane {{ grid-template-rows:auto auto minmax(0,1fr); gap:12px; padding:18px; background:#0d1214; }}
 .inventoryTop {{ min-height:38px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,.1); }}
@@ -2126,6 +2154,9 @@ body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overfl
 .inventorySectionTitle {{ margin:12px 0 5px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.08); color:#aebbb6; text-transform:uppercase; font-size:10px; }}
 .inventoryEditPane {{ padding:18px; background:#151c1e; }}
 .inventoryDetails {{ position:sticky; top:-18px; z-index:3; margin:-18px -18px 14px; padding:16px 18px 12px; border-bottom:1px solid rgba(255,255,255,.12); background:#151c1e; }}
+.inventoryDetailsHead {{ display:grid; grid-template-columns:46px minmax(0,1fr); gap:10px; align-items:center; }}
+.inventoryDetailsHead div {{ display:grid; gap:4px; min-width:0; }}
+.inventoryDetailsHead span {{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
 .inventoryForm {{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }}
 .inventoryForm>label:nth-of-type(5),.inventoryForm>label:nth-of-type(6),.inventoryForm>.formGrid,.inventoryForm>#inventorySave,.inventoryForm>.propertyEditor,.inventoryForm>#inventoryDelete {{ grid-column:1/-1; }}
 .inventoryForm label {{ gap:5px; color:#94a39e; font-size:10px; }}
@@ -2133,6 +2164,36 @@ body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overfl
 .formGrid {{ padding:10px; border:1px solid rgba(255,255,255,.09); border-radius:5px; background:#111719; }}
 .propertyGroup {{ background:#111719; }}
 #inventorySave {{ background:#2d6650; }}
+/* Inventory bag layout */
+.inventoryPanel {{ inset:22px; grid-template-columns:minmax(420px,.95fr) minmax(430px,.75fr); max-width:1420px; }}
+.inventoryTable {{ display:grid; gap:10px; align-content:start; }}
+.inventoryBag {{ border:1px solid rgba(255,255,255,.11); border-radius:6px; background:#090d0f; overflow:hidden; }}
+.inventoryBagHeader {{ display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:30px; padding:6px 9px; border-bottom:1px solid rgba(255,255,255,.08); background:#121a1d; color:#f1e3aa; font-size:12px; font-weight:650; }}
+.inventoryBagMeta {{ color:#8fa09a; font-size:10px; font-weight:500; }}
+.inventoryGrid {{ padding:8px; grid-template-columns:repeat(auto-fill,44px); gap:5px; align-content:start; }}
+.inventorySlot {{ width:44px; height:44px; display:grid; place-items:center; padding:0; border-radius:4px; border-color:#26363a; background:linear-gradient(180deg,#11191b,#0a0f11); }}
+.inventorySlot:hover {{ background:#172428; transform:translateY(-1px); border-color:#71b7e8; }}
+.inventorySlot.selected {{ border-color:#efc36b; outline:2px solid #efc36b; }}
+.inventoryIconStack {{ position:relative; width:38px; height:38px; display:block; }}
+.inventoryIconLayer {{ inset:0; width:100%; height:100%; }}
+.inventoryIconLayer.underlay {{ z-index:1; opacity:1; }}
+.inventoryIconLayer.icon {{ z-index:2; }}
+.inventoryIconLayer.overlay {{ z-index:3; }}
+.inventoryFallback {{ inset:0; z-index:0; font-size:10px; }}
+.inventoryItemName {{ display:none; }}
+.inventoryQty {{ right:-3px; bottom:-2px; min-width:15px; padding:0 3px; border-radius:7px; background:rgba(2,5,6,.82); color:#b7ff8a; font-size:10px; line-height:14px; }}
+.inventorySectionTitle {{ display:none; }}
+.editGroup {{ border:1px solid rgba(255,255,255,.11); border-radius:6px; background:#101719; overflow:hidden; }}
+.editGroup + .editGroup, .editGroup + button, button + .editGroup {{ margin-top:8px; }}
+.editGroup summary {{ cursor:pointer; padding:8px 10px; color:#f1e3aa; background:#141d20; border-bottom:1px solid rgba(255,255,255,.08); font-size:11px; font-weight:650; text-transform:uppercase; }}
+.editGroup:not([open]) summary {{ border-bottom:0; }}
+.editGrid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:10px; }}
+.editGrid label:has(textarea) {{ grid-column:1/-1; }}
+.inventoryForm {{ display:block; }}
+.inventoryForm label {{ gap:5px; color:#94a39e; font-size:10px; }}
+.inventoryForm input,.inventoryForm textarea {{ background:#0c1113; border-color:#344145; }}
+.propertyEditGroup .propertyEditor {{ padding:8px; }}
+.propertyGroup {{ background:#0d1315; }}
 @media(min-width:641px) {{ .inventoryPanel.open {{ display:grid; grid-template-columns:minmax(500px,1.35fr) minmax(360px,.85fr); overflow:hidden; }} .inventoryListPane,.inventoryEditPane {{ min-height:0; overflow:auto; }} .inventoryEditPane {{ border-left:1px solid rgba(255,255,255,.12); border-top:0; }} }}
 @media(max-width:640px) {{ .inventoryPanel {{ inset:8px; grid-template-columns:1fr; overflow:auto; }} .inventoryListPane {{ min-height:55vh; }} .inventoryEditPane {{ border-left:0; border-top:1px solid rgba(255,255,255,.12); }} .inventoryForm {{ grid-template-columns:1fr; }} .inventoryForm>* {{ grid-column:1!important; }} }}
 </style>
@@ -2140,7 +2201,7 @@ body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overfl
 <body>
 <main id=""map""><div class=""mapToolbar""><h1 id=""mapTitle"">DerpACE Map</h1><div id=""status"" class=""toolbarStatus"">Loading...</div><div class=""toolbarActions""><button id=""worldButton"" title=""Return to overworld"">&#8962;</button><button id=""refreshButton"" title=""Refresh now"">&#8635;</button><button id=""sidebarButton"" title=""Toggle sidebar"">&#9776;</button></div></div>
   <div class=""axis north"">102N</div><div class=""axis south"">102S</div><div class=""axis west"">102W</div><div class=""axis east"">102E</div>
-  <div class=""zoomControls""><button id=""zoomIn"" title=""Zoom in"">+</button><button id=""zoomOut"" title=""Zoom out"">-</button><button id=""zoomReset"" title=""Reset view"">1</button><button id=""zoomFit"" title=""Fit"">□</button></div>
+  <div class=""zoomControls""><button id=""zoomIn"" title=""Zoom in"">+</button><button id=""zoomOut"" title=""Zoom out"">-</button><button id=""zoomReset"" title=""Reset view"">1</button><button id=""zoomFit"" title=""Fit"">&#9633;</button></div>
   <div id=""bottomDock"" class=""bottomDock""></div>
 </main>
 <aside><div class=""sidebarHeader"">
@@ -2149,7 +2210,7 @@ body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overfl
     <input id=""loginPassword"" type=""password"" autocomplete=""current-password"" placeholder=""password"">
     <button id=""loginButton"">Log In</button>
   </div>
-  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><button id=""logoutButton"">Log Out</button></div>
+  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><button id=""logoutButton"">Log Out</button></div>
   <div class=""controls adminOnly""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div></div><nav class=""sidebarTabs""><button class=""sidebarTab active"" data-side-tab=""players"">Players</button><button class=""sidebarTab adminOnly"" data-side-tab=""inspect"">Inspect</button><button class=""sidebarTab adminOnly"" data-side-tab=""legend"">Legend</button></nav><div class=""sidebarContent""><div class=""sidebarSearch sidePlayers""><input id=""playerSearch"" placeholder=""Search players or locations""><span id=""rosterCount"" class=""rosterCount"">0</span></div>
   <section id=""adminPanel"" class=""adminPanel adminOnly sideInspect"">
     <h2 id=""adminPlayerName"">Player</h2>
@@ -2179,33 +2240,43 @@ body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overfl
 </aside>
 <section id=""inventoryPanel"" class=""inventoryPanel"" aria-live=""polite"">
   <div class=""inventoryListPane"">
-    <div class=""inventoryTop""><h2 id=""inventoryTitle"">Inventory</h2><div class=""inventoryActions""><button id=""inventoryRefresh"" class=""iconButton"" title=""Refresh"">↻</button><button id=""inventoryClose"" class=""iconButton"" title=""Close"">×</button></div></div>
+    <div class=""inventoryTop""><h2 id=""inventoryTitle"">Inventory</h2><div class=""inventoryActions""><button id=""inventoryRefresh"" class=""iconButton"" title=""Refresh"">&#8635;</button><button id=""inventoryClose"" class=""iconButton"" title=""Close"">&times;</button></div></div>
     <div class=""inventorySearch""><input id=""inventoryFilter"" placeholder=""search name, type, wcid, container""><button id=""inventoryClear"" class=""smallButton"">Clear</button></div>
     <div id=""inventoryRows"" class=""inventoryTable""></div>
   </div>
   <div class=""inventoryEditPane adminOnly"">
     <div id=""inventoryDetails"" class=""inventoryDetails""><span class=""muted"">Select an item</span></div>
     <div class=""inventoryForm"">
-      <label>Stack<input id=""editStack"" type=""number"" min=""1""></label>
-      <label>Value<input id=""editValue"" type=""number"" min=""0""></label>
-      <label>Burden<input id=""editBurden"" type=""number"" min=""0""></label>
-      <label>Workmanship<input id=""editWorkmanship"" type=""number"" min=""0""></label>
-      <label>Name<input id=""editName""></label>
-      <label>Description<textarea id=""editLongDesc""></textarea></label>
-      <div class=""formGrid"">
+      <details class=""editGroup"" open><summary>Identity</summary><div class=""editGrid"">
+        <label>Name<input id=""editName""></label>
+        <label>Description<textarea id=""editLongDesc""></textarea></label>
+      </div></details>
+      <details class=""editGroup"" open><summary>Stack, Value, Craft</summary><div class=""editGrid"">
+        <label>Stack<input id=""editStack"" type=""number"" min=""1""></label>
+        <label>Value<input id=""editValue"" type=""number"" min=""0""></label>
+        <label>Burden<input id=""editBurden"" type=""number"" min=""0""></label>
+        <label>Workmanship<input id=""editWorkmanship"" type=""number"" min=""0""></label>
+      </div></details>
+      <details class=""editGroup""><summary>Combat</summary><div class=""editGrid"">
         <label>Damage<input id=""editDamage"" type=""number""></label>
         <label>Damage Mod<input id=""editDamageMod"" type=""number"" step=""0.001""></label>
         <label>Variance<input id=""editDamageVariance"" type=""number"" step=""0.001""></label>
         <label>Elem Bonus<input id=""editElementalDamageBonus"" type=""number""></label>
         <label>Elem Mod<input id=""editElementalDamageMod"" type=""number"" step=""0.001""></label>
         <label>Armor<input id=""editArmorLevel"" type=""number""></label>
+      </div></details>
+      <details class=""editGroup""><summary>Durability and Mana</summary><div class=""editGrid"">
         <label>Structure<input id=""editStructure"" type=""number""></label>
         <label>Max Structure<input id=""editMaxStructure"" type=""number""></label>
         <label>Mana<input id=""editItemCurMana"" type=""number""></label>
         <label>Max Mana<input id=""editItemMaxMana"" type=""number""></label>
+      </div></details>
+      <details class=""editGroup""><summary>Appearance</summary><div class=""editGrid"">
         <label>Material<input id=""editMaterialType"" type=""number""></label>
         <label>Palette<input id=""editPaletteTemplate"" type=""number""></label>
         <label>Shade<input id=""editShade"" type=""number"" step=""0.001""></label>
+      </div></details>
+      <details class=""editGroup""><summary>Ratings</summary><div class=""editGrid"">
         <label>DR<input id=""editDamageRating"" type=""number""></label>
         <label>CDR<input id=""editCritDamageRating"" type=""number""></label>
         <label>Resist<input id=""editDamageResistRating"" type=""number""></label>
@@ -2214,9 +2285,9 @@ body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overfl
         <label>Gear Resist<input id=""editGearDamageResist"" type=""number""></label>
         <label>Gear Crit<input id=""editGearCritDamage"" type=""number""></label>
         <label>Gear Crit Resist<input id=""editGearCritDamageResist"" type=""number""></label>
-      </div>
+      </div></details>
       <button id=""inventorySave"">Save Common Fields</button>
-      <div id=""propertyEditor"" class=""propertyEditor""></div>
+      <details class=""editGroup propertyEditGroup""><summary>Raw Properties</summary><div id=""propertyEditor"" class=""propertyEditor""></div></details>
       <button id=""inventoryDelete"" class=""dangerButton"">Delete Item</button>
     </div>
   </div>
@@ -2231,6 +2302,7 @@ const loginAccount = document.getElementById('loginAccount');
 const loginPassword = document.getElementById('loginPassword');
 const sessionBar = document.getElementById('sessionBar');
 const sessionText = document.getElementById('sessionText');
+const bossMechanicsLink = document.getElementById('bossMechanicsLink');
 const bottomDock = document.getElementById('bottomDock');
 const adminPanel = document.getElementById('adminPanel');
 const adminPlayerName = document.getElementById('adminPlayerName');
@@ -2262,13 +2334,17 @@ let watchPlayerGuid = null;
 let authenticated = false;
 let isAdminSession = false;
 let refreshTimer = null;
+let loginInProgress = false;
+let mapSessionToken = null;
 try {{ collapsedDock = JSON.parse(localStorage.getItem('derpace-admin-map-collapsed') || '{{}}') || {{}}; }} catch {{ collapsedDock = {{}}; }}
 window.addEventListener('error', e => {{ status.textContent = e.message || 'Admin map script error'; }});
 token.value = localStorage.getItem('derpace-admin-map-token') || '';
 document.getElementById('save').onclick = () => {{ localStorage.setItem('derpace-admin-map-token', token.value); setAuthenticated(!!token.value, null, !!token.value); refresh(); }};
-document.getElementById('loginButton').onclick = login;
+const loginButton = document.getElementById('loginButton');
+loginButton.addEventListener('click', e => {{ e.preventDefault(); login(); }});
 document.getElementById('logoutButton').onclick = logout;
-loginPassword.addEventListener('keydown', e => {{ if (e.key === 'Enter') login(); }});
+loginPassword.addEventListener('keydown', e => {{ if (e.key === 'Enter') {{ e.preventDefault(); login(); }} }});
+loginAccount.addEventListener('keydown', e => {{ if (e.key === 'Enter') {{ e.preventDefault(); login(); }} }});
 function pctX(x) {{ return ((x + 102) / 204) * 100; }}
 function pctY(y) {{ return ((102 - y) / 204) * 100; }}
 function setSideView(view) {{
@@ -2301,6 +2377,10 @@ function renderRareFeed(rares) {{
   const rows = (rares || []).map(e => `<div class=""feedRow"" title=""${{esc((e.location || e.landblock || '') + ' ' + (e.corpse || ''))}}""><span class=""feedTime"">${{feedTime(e.utc)}}</span><span class=""feedText""><span class=""feedName"">${{esc(e.player)}}</span> found <span class=""rareItem"">${{esc(e.item)}}</span> <span class=""rareTier"">T${{fmtNum(e.tier)}}</span></span></div>`).join('');
   return rows || '<div class=""muted"">No rare finds yet</div>';
 }}
+function setBossMechanicsLink() {{
+  if (!bossMechanicsLink) return;
+  bossMechanicsLink.href = mapSessionToken ? `/boss-mechanics?session=${{encodeURIComponent(mapSessionToken)}}` : '/boss-mechanics';
+}}
 function setAuthenticated(value, accountName, isAdmin) {{
   authenticated = !!value || !!token.value;
   isAdminSession = !!isAdmin || (!!token.value && !value);
@@ -2310,6 +2390,7 @@ function setAuthenticated(value, accountName, isAdmin) {{
   loginPanel.classList.toggle('hidden', !!value);
   sessionBar.classList.toggle('active', !!value);
   sessionText.textContent = value ? `Logged in as ${{accountName || 'admin'}}` : '';
+  setBossMechanicsLink();
   if (!authenticated) {{
     clearMap();
     list.innerHTML = '';
@@ -2322,6 +2403,7 @@ async function checkSession() {{
   try {{
     const res = await fetch('/api/session', {{ cache: 'no-store' }});
     const data = await res.json();
+    mapSessionToken = data.sessionToken || mapSessionToken;
     setAuthenticated(!!data.authenticated, data.accountName, !!data.isAdmin);
     if (authenticated) {{
       load();
@@ -2336,22 +2418,34 @@ async function checkSession() {{
   }}
 }}
 async function login() {{
+  if (loginInProgress) return;
+  loginInProgress = true;
+  loginButton.disabled = true;
   status.textContent = 'Logging in...';
-  const res = await fetch('/api/login', {{
-    method: 'POST',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{ account: loginAccount.value, password: loginPassword.value }})
-  }});
-  const data = await res.json();
-  if (!res.ok || data.ok === false) {{
+  try {{
+    const res = await fetch('/api/login', {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{ account: loginAccount.value, password: loginPassword.value }})
+    }});
+    const data = await res.json();
+    if (!res.ok || data.ok === false) {{
+      setAuthenticated(false);
+      status.textContent = data.error || res.statusText;
+      return;
+    }}
+    loginPassword.value = '';
+    mapSessionToken = data.sessionToken || mapSessionToken;
+    setAuthenticated(true, data.accountName, !!data.isAdmin);
+    load();
+    if (!refreshTimer) refreshTimer = setInterval(refresh, {refresh * 1000});
+  }} catch (e) {{
     setAuthenticated(false);
-    status.textContent = data.error || res.statusText;
-    return;
+    status.textContent = e.message || 'Login failed.';
+  }} finally {{
+    loginInProgress = false;
+    loginButton.disabled = false;
   }}
-  loginPassword.value = '';
-  setAuthenticated(true, data.accountName, !!data.isAdmin);
-  load();
-  if (!refreshTimer) refreshTimer = setInterval(refresh, {refresh * 1000});
 }}
 async function logout() {{
   await fetch('/api/logout', {{ method: 'POST' }});
@@ -2493,8 +2587,8 @@ async function copyMapLocAt(event) {{
     status.textContent = e.message || 'Could not copy cursor landloc.';
   }}
 }}
-function iconUrl(did) {{ return did ? `/assets/icon?did=${{encodeURIComponent(did)}}&v=3${{token.value ? '&token=' + encodeURIComponent(token.value) : ''}}` : ''; }}
-function iconLayer(did, cls) {{ return did ? `<span class=""inventoryIconLayer ${{cls || ''}}"" style=""background-image:url('${{iconUrl(did)}}')""></span>` : ''; }}
+function iconUrl(did) {{ return did ? `/assets/icon?did=${{encodeURIComponent(did)}}&v=6` : ''; }}
+function iconLayer(did, cls) {{ return did ? `<img class=""inventoryIconLayer ${{cls || ''}}"" src=""${{iconUrl(did)}}"" alt="""" loading=""lazy"" decoding=""async"">` : ''; }}
 function itemFallback(item) {{
   const name = String(item?.name || item?.weenieClassName || '?').trim();
   const words = name.split(/\s+/).filter(Boolean);
@@ -2612,6 +2706,8 @@ async function loadInventory() {{
   if (!inventoryState.playerGuid) return;
   const res = await fetch('/api/inventory?player=' + encodeURIComponent(inventoryState.playerGuid), {{ headers: authHeaders(), cache: 'no-store' }});
   const data = await res.json();
+  loginInProgress = false;
+  loginButton.disabled = false;
   if (!res.ok || data.ok === false) {{
     inventoryRows.innerHTML = `<div class=""muted"" style=""padding:10px"">${{esc(data.error || res.statusText)}}</div>`;
     return;
@@ -2621,25 +2717,61 @@ async function loadInventory() {{
   renderInventoryRows();
   renderInventoryDetails(null);
 }}
+function inventoryGroupKey(item) {{
+  if (item.equipped) return 'Equipped';
+  const depth = Number(item.depth || 0);
+  const container = String(item.container || 'Main Pack').trim() || 'Main Pack';
+  return depth > 0 ? '  '.repeat(Math.min(depth, 4)) + container : container;
+}}
+function inventorySortValue(item) {{
+  return (Number(item.depth || 0) * 1000000) + Number(item.placement || 0);
+}}
+function renderIconStack(i) {{
+  return `<span class=""inventoryIconStack"">
+    <span class=""inventoryFallback"">${{itemFallback(i)}}</span>
+    ${{iconLayer(i.iconUnderlayId, 'underlay')}}${{iconLayer(i.iconId, 'icon')}}${{iconLayer(i.iconOverlayId, 'overlay')}}
+    ${{i.stackSize ? `<span class=""inventoryQty"">${{fmtNum(i.stackSize)}}</span>` : ''}}
+  </span>`;
+}}
 function renderInventoryRows() {{
   const q = inventoryFilter.value.trim().toLowerCase();
-  const items = (inventoryState.data?.items || []).filter(i => {{
+  const allItems = inventoryState.data?.items || [];
+  const items = allItems.filter(i => {{
     if (!q) return true;
     return [i.name, i.guid, i.weenieClassId, i.weenieClassName, i.weenieType, i.itemType, i.container].some(v => String(v ?? '').toLowerCase().includes(q));
   }});
-  const groups = [
-    ['Equipped', items.filter(i => i.equipped)],
-    ['Backpack', items.filter(i => !i.equipped)]
-  ];
-  inventoryRows.innerHTML = groups.map(([title, group]) => `
-    <div class=""inventorySectionTitle"">${{title}}</div>
-    <div class=""inventoryGrid"">${{group.map(i => `
-      <button class=""inventorySlot${{inventoryState.selected?.guid === i.guid ? ' selected' : ''}}"" data-guid=""${{esc(i.guid)}}"" title=""${{esc(i.name)}}\n${{esc(i.guid)}}\nWCID ${{esc(i.weenieClassId)}}\n${{esc(i.container || i.wieldedLocation || '')}}"">
-        <span class=""inventoryFallback"">${{itemFallback(i)}}</span>
-        ${{iconLayer(i.iconUnderlayId, 'underlay')}}${{iconLayer(i.iconId, 'icon')}}${{iconLayer(i.iconOverlayId, 'overlay')}}
-        ${{i.stackSize ? `<span class=""inventoryQty"">${{fmtNum(i.stackSize)}}</span>` : ''}}
-      </button>`).join('') || '<div class=""inventoryEmpty"">None</div>'}}</div>`).join('');
-  if (!items.length) inventoryRows.innerHTML = '<div class=""inventoryEmpty"">No matching items</div>';
+  if (!items.length) {{
+    inventoryRows.innerHTML = '<div class=""inventoryEmpty"">No matching items</div>';
+    return;
+  }}
+
+  const groupMap = new Map();
+  for (const item of items) {{
+    const key = inventoryGroupKey(item);
+    if (!groupMap.has(key)) groupMap.set(key, []);
+    groupMap.get(key).push(item);
+  }}
+
+  const orderedGroups = [...groupMap.entries()].sort((a, b) => {{
+    if (a[0] === 'Equipped') return -1;
+    if (b[0] === 'Equipped') return 1;
+    if (a[0].trim() === 'Main Pack') return -1;
+    if (b[0].trim() === 'Main Pack') return 1;
+    return a[0].localeCompare(b[0]);
+  }});
+
+  inventoryRows.innerHTML = orderedGroups.map(([title, group]) => {{
+    const sorted = group.slice().sort((a, b) => inventorySortValue(a) - inventorySortValue(b) || String(a.name || '').localeCompare(String(b.name || '')));
+    const cleanTitle = title.trim();
+    return `<section class=""inventoryBag"">
+      <div class=""inventoryBagHeader""><span>${{esc(cleanTitle)}}</span><span class=""inventoryBagMeta"">${{fmtNum(sorted.length)}} item${{sorted.length === 1 ? '' : 's'}}</span></div>
+      <div class=""inventoryGrid"">${{sorted.map(i => `
+        <button class=""inventorySlot${{inventoryState.selected?.guid === i.guid ? ' selected' : ''}}"" data-guid=""${{esc(i.guid)}}"" title=""${{esc(i.name)}}\n${{esc(i.guid)}}\nWCID ${{esc(i.weenieClassId)}}\n${{esc(i.container || i.wieldedLocation || '')}}"">
+          ${{renderIconStack(i)}}
+        </button>`).join('')}}</div>
+    </section>`;
+  }}).join('');
+
   inventoryRows.querySelectorAll('.inventorySlot').forEach(row => row.onclick = () => {{
     const item = (inventoryState.data?.items || []).find(i => i.guid === row.dataset.guid);
     inventoryState.selected = item;
@@ -2658,10 +2790,7 @@ function renderInventoryDetails(item) {{
     return;
   }}
   inventoryDetails.innerHTML = `
-    <strong>${{esc(item.name)}}</strong>
-    <span>${{esc(item.guid)}} | WCID ${{esc(item.weenieClassId)}} | ${{esc(item.weenieType)}} / ${{esc(item.itemType)}}</span>
-    <span>${{item.equipped ? 'Equipped: ' + esc(item.wieldedLocation || '') : 'Container: ' + esc(item.container || 'Main Pack')}}</span>
-    <span>Value ${{fmtNum(item.value)}} | Burden ${{fmtNum(item.encumbrance)}}${{item.material ? ' | ' + esc(item.material) : ''}}</span>`;
+    <div class=""inventoryDetailsHead"">${{renderIconStack(item)}}<div><strong>${{esc(item.name)}}</strong><span>${{esc(item.guid)}} | WCID ${{esc(item.weenieClassId)}} | ${{esc(item.weenieType)}} / ${{esc(item.itemType)}}</span><span>${{item.equipped ? 'Equipped: ' + esc(item.wieldedLocation || '') : 'Container: ' + esc(item.container || 'Main Pack')}}</span><span>Value ${{fmtNum(item.value)}} | Burden ${{fmtNum(item.encumbrance)}}${{item.material ? ' | ' + esc(item.material) : ''}}</span></div></div>`;
   const stack = document.getElementById('editStack');
   stack.value = item.stackSize ?? '';
   stack.max = item.maxStackSize ?? '';
@@ -2767,6 +2896,8 @@ async function deleteInventoryItem() {{
   if (!item || !confirm(`Delete ${{item.name}} from ${{inventoryState.data?.playerName || 'player'}}?`)) return;
   const res = await fetch('/api/inventory/delete', {{ method: 'POST', headers: authHeaders({{ 'Content-Type': 'application/json' }}), body: JSON.stringify({{ playerGuid: inventoryState.playerGuid, itemGuid: item.guid }}) }});
   const data = await res.json();
+  loginInProgress = false;
+  loginButton.disabled = false;
   if (!res.ok || data.ok === false) {{ status.textContent = data.error || res.statusText; return; }}
   inventoryState.data = data.inventory;
   inventoryState.selected = null;
@@ -3085,6 +3216,12 @@ checkSession();
             public string Landblock { get; set; }
         }
 
+        private sealed class AdminIconCacheEntry
+        {
+            public byte[] Bytes { get; set; }
+            public long LastWriteUtcTicks { get; set; }
+            public long Length { get; set; }
+        }
         private sealed class AdminInventorySnapshot
         {
             public bool Ok { get; set; } = true;

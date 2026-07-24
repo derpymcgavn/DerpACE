@@ -77,7 +77,7 @@ namespace ACE.Server.WorldObjects
         /// <summary>
         /// Launches a projectile from player to target
         /// </summary>
-        public WorldObject LaunchProjectile(WorldObject weapon, WorldObject ammo, WorldObject target, Vector3 origin, Quaternion orientation, Vector3 velocity)
+        public WorldObject LaunchProjectile(WorldObject weapon, WorldObject ammo, WorldObject target, Vector3 origin, Quaternion orientation, Vector3 velocity, Action<WorldObject> configure = null)
         {
             var player = this as Player;
 
@@ -104,6 +104,7 @@ namespace ACE.Server.WorldObjects
             proj.Location.Rotation = orientation;
 
             SetProjectilePhysicsState(proj, target, velocity);
+            configure?.Invoke(proj);
 
             var success = LandblockManager.AddObject(proj);
 

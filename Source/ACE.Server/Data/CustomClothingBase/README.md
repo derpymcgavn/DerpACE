@@ -39,8 +39,9 @@ You can also add that field manually to an existing JSON file. Without it, exist
 
 The JSON format is compatible with OptimShi/CustomClothingBase style exports:
 
-- New ClothingBase IDs in the `0x10000000` through `0x10FFFFFF` range are served from JSON even when no portal.dat file exists.
-- Existing portal.dat ClothingBase IDs require `AllowBaseOverride: true` before they are merged.
+- Files named with a numeric ClothingBase prefix patch that ClothingBase, including existing portal.dat ClothingBase IDs.
+- Filename prefixes may be decimal, `0x` hex, bare 8-digit hex, or an 8-hex-digit prefix followed by labels/suffixes.
+- Files without a parseable filename ID fall back to JSON `Id`; existing portal.dat IDs still require `AllowBaseOverride: true` in that case.
 - `ClothingBaseEffects` and `ClothingSubPalEffects` entries replace matching existing keys and preserve unrelated original keys.
 - `PaletteSet` may point to either a normal palette-set file (`0x0F...`) or directly to a raw palette file (`0x04...`). Raw palettes are treated as one-entry palette sets.
 
@@ -53,7 +54,7 @@ Use one of these forms:
 - `268440116.json`
 - `10001234_some_label.json`
 
-If the JSON contains an `Id`, that value wins. If not, the loader uses the ID from the filename.
+If the filename begins with a numeric ClothingBase ID, that filename ID wins. If the filename has no parseable ID, the loader falls back to the JSON `Id`.
 
 ## Commands
 

@@ -141,6 +141,10 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            var gravecaller = casterItem ?? GetEquippedWand();
+            if (target is Corpse corpse && TryRaiseGravecallerCorpse(gravecaller, corpse))
+                return;
+
             MagicState.OnCastStart();
             MagicState.SetWindupParams(targetGuid, spellId, casterItem);
 

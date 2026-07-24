@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 using ACE.Common;
 using ACE.Database.Models.World;
@@ -63,35 +63,57 @@ namespace ACE.Server.Factories
             if (profile.Tier < 3)
                 return;
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
-            {
-                ApplyThornsShield(wo);
-                rolledAffixes.Add("of Thorns");
-            }
+            var reactiveAffixes = new System.Collections.Generic.List<string>();
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
-            {
-                ApplyBashingShield(wo);
-                rolledAffixes.Add("of Bashing");
-            }
+                reactiveAffixes.Add("thorns");
+
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+                reactiveAffixes.Add("bashing");
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.06f)
-            {
-                ApplyProjectileReflectShield(wo);
-                rolledAffixes.Add("of Reflection");
-            }
+                reactiveAffixes.Add("reflection");
 
             if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.04f)
+                reactiveAffixes.Add("spellmirror");
+
+            if (reactiveAffixes.Count == 0)
+                return;
+
+            var maxReactiveAffixes = profile.Tier >= 6 ? 2 : 1;
+            if (profile.Tier >= 8 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.15f)
+                maxReactiveAffixes = 3;
+
+            while (reactiveAffixes.Count > maxReactiveAffixes)
+                reactiveAffixes.RemoveAt(ThreadSafeRandom.Next(0, reactiveAffixes.Count - 1));
+
+            foreach (var affix in reactiveAffixes)
             {
-                ApplySpellMirrorShield(wo);
-                rolledAffixes.Add("of Spell Mirroring");
+                switch (affix)
+                {
+                    case "thorns":
+                        ApplyThornsShield(wo);
+                        rolledAffixes.Add("of Thorns");
+                        break;
+                    case "bashing":
+                        ApplyBashingShield(wo);
+                        rolledAffixes.Add("of Bashing");
+                        break;
+                    case "reflection":
+                        ApplyProjectileReflectShield(wo);
+                        rolledAffixes.Add("of Reflection");
+                        break;
+                    case "spellmirror":
+                        ApplySpellMirrorShield(wo);
+                        rolledAffixes.Add("of Spell Mirroring");
+                        break;
+                }
             }
 
             if (rolledAffixes.Count == 0)
                 return;
 
-            var suffix = rolledAffixes[ThreadSafeRandom.Next(0, rolledAffixes.Count - 1)];
-            AddShieldSuffix(wo, suffix);
+            AddShieldSuffix(wo, rolledAffixes.Count > 1 ? "of Layered Wards" : rolledAffixes[0]);
         }
 
         private static void ApplyDefenderShield(WorldObject wo)
@@ -1206,3 +1228,4 @@ namespace ACE.Server.Factories
         }
     }
 }
+

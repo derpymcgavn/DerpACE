@@ -36,6 +36,16 @@ namespace ACE.Server.Managers
         private static readonly TimeSpan PersistentSaveDebounce = TimeSpan.FromSeconds(15);
         private static bool _persistentStateDirty;
         private static DateTime _nextPersistentSave = DateTime.MinValue;
+        private static readonly string[] ChugQuestBoozeTerms =
+        {
+            "ale", "beer", "lager", "stout", "porter", "mead", "wine", "brandy", "whiskey", "whisky", "rum", "sake", "cider", "booze", "liquor", "brew", "spirits"
+        };
+
+        private static readonly string[] ChugQuestTargets =
+        {
+            "anything stronger than water", "booze", "beer", "ale", "stout", "wine", "mead", "spirits"
+        };
+
 
         private static string PersistentStateDirectory => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "GlobalQuests");
         private static string PersistentStatePath => Path.Combine(PersistentStateDirectory, "global_quests.json");
@@ -183,6 +193,64 @@ namespace ACE.Server.Managers
             foreach (var complete in completions)
                 complete();
         }
+        public static void OnFoodConsumed(Player player, Food food, MotionCommand motionCommand)
+        {
+            if (player == null || food == null || motionCommand != MotionCommand.Drink)
+                return;
+
+            var name = food.Name ?? string.Empty;
+            var completions = new List<(PersistentGlobalQuest quest, int count)>();
+            lock (_persistentLock)
+            {
+                foreach (var quest in ActivePersistentQuests(DateTime.UtcNow))
+                {
+                    if (quest.Kind != GlobalQuestKind.ChugRace || IsNonRepeatPersistentQuestCompleted(player, quest))
+                        continue;
+
+                    if (!MatchesChugQuest(quest, name))
+                        continue;
+
+                    var progress = AddPersistentProgress(player, quest, 1);
+                    if (progress.Count >= quest.Required)
+                        completions.Add((quest, progress.Count));
+                    else if (progress.Count == 1 || progress.Count % 5 == 0)
+                        player.SendMessage($"[Global Quest:{GetLaneLabel(quest.Lane)}] {progress.Count}/{quest.Required} drinks chugged.", ChatMessageType.Broadcast);
+                }
+
+                SavePersistentStateIfDueUnsafe(DateTime.UtcNow);
+            }
+
+            foreach (var completion in completions)
+                CompletePersistentChugRace(player, completion.quest, completion.count);
+        }
+
+        private static bool MatchesChugQuest(PersistentGlobalQuest quest, string itemName)
+        {
+            if (string.IsNullOrWhiteSpace(itemName))
+                return false;
+
+            var lowered = itemName.ToLowerInvariant();
+            var target = quest.ItemName?.ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(target) && target != "anything stronger than water" && target != "booze" && target != "spirits")
+                return lowered.Contains(target);
+
+            return ChugQuestBoozeTerms.Any(term => lowered.Contains(term));
+        }
+
+        private static void CompletePersistentChugRace(Player player, PersistentGlobalQuest quest, int drinks)
+        {
+            if (!TryFinishPersistentQuest(player, quest))
+                return;
+
+            var levelXp = player.GetXPToNextLevel(player.Level ?? 1);
+            var bonus = Math.Max(1, (long)Math.Round(levelXp * (quest.RewardPercent / 100.0)));
+            player.EarnXP(bonus, XpType.Quest);
+            player.SendMessage($"[Global Quest Complete:{GetLaneLabel(quest.Lane)}] You chugged {drinks} drinks and earned {bonus:N0} XP ({quest.RewardPercent}% of level XP).", ChatMessageType.Broadcast);
+            BroadcastPersistentCompletion(player, quest, $"{player.Name} won the chug race after {drinks} questionable decisions!");
+            BroadcastPersistentWrapUp(quest);
+            RollPersistentQuest(quest.Lane, true, DateTime.UtcNow);
+        }
+
         private static WorldObject TryCreatePersistentT8CurrencyDrop(Player player, Creature source)
         {
             if (player == null || !IsTier8Creature(source))
@@ -237,9 +305,9 @@ namespace ACE.Server.Managers
                 Kind = quest.Kind,
                 TargetName = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.ItemName : quest.TargetName ?? "Tier 8 Creature",
                 RequiredKills = IsPersistentKillQuest(quest.Kind) ? quest.Required : 0,
-                RequiredTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? quest.Required : 0,
+                RequiredTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt || quest.Kind == GlobalQuestKind.ChugRace ? quest.Required : 0,
                 MyKills = IsPersistentKillQuest(quest.Kind) ? count : 0,
-                MyTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt ? count : 0,
+                MyTurnIns = quest.Kind == GlobalQuestKind.T8CurrencyHunt || quest.Kind == GlobalQuestKind.ChugRace ? count : 0,
                 Expiry = quest.Expiry,
                 ItemWcid = quest.Kind == GlobalQuestKind.T8CurrencyHunt || quest.Kind == GlobalQuestKind.VendorDeliveryRace ? quest.ItemWcid : 0,
                 LuminanceReward = quest.LuminanceReward,
@@ -386,9 +454,15 @@ namespace ACE.Server.Managers
                 GlobalQuestKind.T8MutatorHunt,
                 GlobalQuestKind.T8DungeonHunt,
                 GlobalQuestKind.CardinalTrek,
+                GlobalQuestKind.ChugRace,
+                GlobalQuestKind.ChugRace,
             };
             if (CanRollVendorDelivery())
+            {
                 availableKinds.Add(GlobalQuestKind.VendorDeliveryRace);
+                availableKinds.Add(GlobalQuestKind.VendorDeliveryRace);
+                availableKinds.Add(GlobalQuestKind.VendorDeliveryRace);
+            }
 
             if (excludedKinds != null)
                 availableKinds.RemoveAll(excludedKinds.Contains);
@@ -415,6 +489,9 @@ namespace ACE.Server.Managers
                     break;
                 case GlobalQuestKind.VendorDeliveryRace:
                     ConfigurePersistentVendorDelivery(quest);
+                    break;
+                case GlobalQuestKind.ChugRace:
+                    ConfigurePersistentChugRace(quest);
                     break;
                 default:
                     ConfigurePersistentLuminanceQuest(quest, minRequired, maxRequired, 0, 0);
@@ -510,6 +587,19 @@ namespace ACE.Server.Managers
             quest.ItemName = null;
             quest.ItemWcid = 0;
         }
+        private static void ConfigurePersistentChugRace(PersistentGlobalQuest quest)
+        {
+            var target = ChugQuestTargets[_rng.Next(ChugQuestTargets.Length)];
+            quest.Kind = GlobalQuestKind.ChugRace;
+            quest.Required = _rng.Next(5, 21);
+            quest.ItemName = target;
+            quest.ItemWcid = 0;
+            quest.RewardPercent = Math.Clamp(quest.Required * 8, 50, 200);
+            quest.LuminanceReward = 0;
+            quest.Direction = null;
+            quest.TargetName = $"Chug {quest.Required} {target}";
+        }
+
         private static void ConfigurePersistentKillVariation(PersistentGlobalQuest quest, int roll, int minRequired, int maxRequired, int minLum, int maxLum)
         {
             var variation = roll % 3;
@@ -627,7 +717,9 @@ namespace ACE.Server.Managers
         private static void BroadcastPersistentStart(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);
-            var msg = quest.Kind == GlobalQuestKind.VendorDeliveryRace
+            var msg = quest.Kind == GlobalQuestKind.ChugRace
+                ? $"[Global Quest:{lane}] Chug Race: first to drink {quest.Required} {quest.ItemName ?? "booze"} wins {quest.RewardPercent}% of level XP. Type /gquest for details."
+                : quest.Kind == GlobalQuestKind.VendorDeliveryRace
                 ? $"[Global Quest:{lane}] Dereth Express: buy {quest.ItemName} from {quest.SourceVendorName} in {quest.SourceTown}, then be first to deliver it to an NPC in {quest.DestinationTown} for {quest.RewardPercent}% of level XP. Type /gquest for details."
                 : quest.Kind == GlobalQuestKind.CardinalTrek
                     ? $"[Global Quest:{lane}] Cardinal Trek: first to travel {quest.Required} clicks {quest.Direction} on foot wins {quest.RewardPercent}% of level XP. Type /gquest for details."
@@ -641,7 +733,9 @@ namespace ACE.Server.Managers
         private static void BroadcastPersistentWrapUp(PersistentGlobalQuest quest)
         {
             var lane = GetLaneLabel(quest.Lane);
-            var msg = quest.Kind == GlobalQuestKind.VendorDeliveryRace
+            var msg = quest.Kind == GlobalQuestKind.ChugRace
+                ? $"[Global Quest:{lane}] The chug race for {quest.ItemName ?? "booze"} has ended. {quest.CompletionCount} adventurer{(quest.CompletionCount == 1 ? "" : "s")} completed it."
+                : quest.Kind == GlobalQuestKind.VendorDeliveryRace
                 ? $"[Global Quest:{lane}] Dereth Express from {quest.SourceTown} to {quest.DestinationTown} has ended."
                 : quest.Kind == GlobalQuestKind.CardinalTrek
                     ? $"[Global Quest:{lane}] The cardinal trek {quest.Direction} has ended."

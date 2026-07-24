@@ -286,5 +286,7 @@ namespace ACE.Entity.Enum.Properties
         IsSecondShadowWeapon             = 9080,
         IsOpportunistWeapon              = 9081,
         IsExecutionerWeapon              = 9082,
+        IsGravecallerCaster              = 9083,
+        CorpseRaisedByGravecaller        = 9084,
     }
 }

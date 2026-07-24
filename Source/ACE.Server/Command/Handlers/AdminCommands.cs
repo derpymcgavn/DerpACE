@@ -2432,7 +2432,11 @@ namespace ACE.Server.Command.Handlers
                 //obj.TimeToRot = double.MaxValue;
 
             if (obj.WeenieType == WeenieType.Creature)
+            {
                 obj.Location = session.Player.Location.InFrontOf(5f, true);
+                if (obj is Creature creature)
+                    BossMechanicManager.TryApplyBossMutators(creature);
+            }
             else
             {
                 var dist = Math.Max(2, obj.UseRadius ?? 2);

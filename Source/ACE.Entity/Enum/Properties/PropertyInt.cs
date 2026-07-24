@@ -730,6 +730,8 @@ namespace ACE.Entity.Enum.Properties
         GlobalQuestCurrencyCountedEpoch          = 9057,
         // DerpACE: amount of a global quest currency stack already credited during the counted epoch.
         GlobalQuestCurrencyCountedAmount         = 9058,
+        // DerpACE: per-NPC ambient town AI override. See TownNpcAiMode.
+        TownNpcAiOverride                       = 9059,
     }
 
     public static class PropertyIntExtensions
@@ -738,6 +740,8 @@ namespace ACE.Entity.Enum.Properties
         {
             switch (property)
             {
+                case PropertyInt.TownNpcAiOverride:
+                    return System.Enum.GetName(typeof(TownNpcAiMode), value);
                 case PropertyInt.ActivationResponse:
                     return System.Enum.GetName(typeof(ActivationResponse), value);
                 case PropertyInt.AetheriaBitfield:

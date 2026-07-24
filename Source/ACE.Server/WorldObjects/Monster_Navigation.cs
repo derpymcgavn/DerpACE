@@ -77,6 +77,7 @@ namespace ACE.Server.WorldObjects
         private double nextDoorOpenAttemptTime;
         private double nextMeleeCornerRecoveryTime;
         private double nextTacticalFlankTime;
+        private double nextMovementNetworkSync;
 
         private const double StuckSampleInterval = 0.75;
         private const float StuckMinTravelDistance = 0.30f;
@@ -94,9 +95,9 @@ namespace ACE.Server.WorldObjects
         private const float CrowdBlockerClearance = 1.35f;
         private const float CrowdEscapeStepMin = 1.4f;
         private const float CrowdEscapeStepMax = 3.4f;
-        private const double TacticalFlankCooldownMin = 4.0;
-        private const double TacticalFlankCooldownMax = 7.0;
-        private const float TacticalFlankChance = 0.22f;
+        private const double TacticalFlankCooldownMin = 2.5;
+        private const double TacticalFlankCooldownMax = 4.0;
+        private const float TacticalFlankChance = 0.65f;
         private const float TacticalFlankRangeBuffer = 1.75f;
         private const float TacticalFlankSpacing = 1.35f;
 
@@ -124,6 +125,21 @@ namespace ACE.Server.WorldObjects
             // send network actions
             var targetDist = GetDistanceToTarget();
             var turnTo = (IsRanged && targetDist <= MaxRange) || (CurrentAttack == CombatType.Magic && targetDist <= GetSpellMaxRange()) || AiImmobile;
+            var crossLandblockPursuit = !turnTo
+                && PathfindingEnabled
+                && Location?.Indoors == false
+                && AttackTarget?.Location?.Indoors == false
+                && (Location.Cell & 0xFFFF0000) != (AttackTarget.Location.Cell & 0xFFFF0000);
+            if (crossLandblockPursuit)
+            {
+                TryRoute();
+                if (IsRouteStartPending || IsRouting)
+                {
+                    IsTurning = false;
+                    return;
+                }
+            }
+
             if (turnTo)
                 TurnTo(AttackTarget);
             else
@@ -560,30 +576,26 @@ namespace ACE.Server.WorldObjects
 
             var forward = target.Location.GetCurrentDir();
             forward.Z = 0;
-
             if (forward.LengthSquared() <= 0.001f)
-            {
-                forward = Location.ToGlobal() - target.Location.ToGlobal();
-                forward.Z = 0;
-            }
+                forward = Vector3.UnitY;
+            else
+                forward = Vector3.Normalize(forward);
 
-            if (forward.LengthSquared() <= 0.001f)
-                return false;
-
-            forward = Vector3.Normalize(forward);
             var side = Vector3.Normalize(new Vector3(-forward.Y, forward.X, 0));
-            var spacing = Math.Max(TacticalFlankSpacing, (target.PhysicsObj?.GetRadius() ?? 0.5f) + (PhysicsObj?.GetRadius() ?? 0.5f) + 0.55f);
+            var spacing = Math.Max(TacticalFlankSpacing,
+                (target.PhysicsObj?.GetRadius() ?? 0.5f) + (PhysicsObj?.GetRadius() ?? 0.5f) + 0.55f);
 
-            var preferred = (Guid.Full & 1) == 0
-                ? new[] { -forward + side * 0.55f, -forward - side * 0.55f, side, -side }
-                : new[] { -forward - side * 0.55f, -forward + side * 0.55f, -side, side };
-
+            // Stable target-relative slots stop every melee mob from selecting the same
+            // left/right flank and renegotiating it on each AI tick.
+            var slot = (int)((Guid.Full ^ target.Guid.Full) % 8);
+            var slotOrder = new[] { slot, (slot + 1) % 8, (slot + 7) % 8, (slot + 4) % 8 };
             var bestScore = float.MinValue;
             ACE.Entity.Position best = null;
 
-            foreach (var dirCandidate in preferred)
+            for (var preference = 0; preference < slotOrder.Length; preference++)
             {
-                var dir = Vector3.Normalize(dirCandidate);
+                var angle = slotOrder[preference] * (MathF.PI * 2.0f / 8.0f);
+                var dir = Vector3.Normalize(forward * MathF.Cos(angle) + side * MathF.Sin(angle));
                 var candidate = new ACE.Entity.Position(target.Location)
                 {
                     PositionX = target.Location.PositionX + dir.X * spacing,
@@ -601,13 +613,12 @@ namespace ACE.Server.WorldObjects
                     continue;
 
                 var travelCost = Location.DistanceTo(candidate);
-                if (travelCost > 4.5f)
+                if (travelCost <= 0.60f && preference == 0)
+                    return false; // already owns its slot; attack instead of dancing
+                if (travelCost > 5.0f)
                     continue;
 
-                var score = candidate.SquaredDistanceTo(Location) * -0.15f;
-                score += Vector3.Dot(dir, -forward) * 2.0f;
-                score += GetFlankClearanceScore(candidate);
-
+                var score = GetFlankClearanceScore(candidate) - travelCost * 0.20f - preference * 4.0f;
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -698,7 +709,7 @@ namespace ACE.Server.WorldObjects
             if (status != WeenieError.ActionCancelled)
                 IsMoving = false;
 
-            if (IsMovingToHome)
+            if (IsMovingToHome && !IsRouting && !IsRouteStartPending)
                 PendingEndMoveToHome = true;
             if (IsGrantingPassage)
                 PendingEndGrantPassage = true;
@@ -844,7 +855,10 @@ namespace ACE.Server.WorldObjects
 
             TrackAndHandleStuck();
 
-            if (MonsterState == State.Awake && GetDistanceToTarget() >= MaxChaseRange)
+            var maxChaseRange = Location?.Indoors == true
+                ? MaxChaseRange
+                : Math.Max(MaxChaseRange, DerpACEConfig.MobOutdoorChaseRange);
+            if (MonsterState == State.Awake && GetDistanceToTarget() >= maxChaseRange)
             {
                 CancelMoveTo();
                 FindNextTarget();
@@ -866,7 +880,17 @@ namespace ACE.Server.WorldObjects
             UpdatePosition_SyncLocation();
 
             if (netsend)
-                SendUpdatePosition();
+            {
+                var now = Timers.RunningTime;
+                var interval = Math.Max(0.05f, DerpACEConfig.MobMovementSyncIntervalSeconds);
+                if (nextMovementNetworkSync <= 0)
+                    nextMovementNetworkSync = now + (Guid.Full % 5) * interval / 5.0;
+                if (now >= nextMovementNetworkSync)
+                {
+                    SendUpdatePosition();
+                    nextMovementNetworkSync = now + interval;
+                }
+            }
 
             if (DebugMove)
                 //Console.WriteLine($"{Name} ({Guid}) - UpdatePosition (velocity: {PhysicsObj.CachedVelocity.Length()})");
@@ -1089,6 +1113,13 @@ namespace ACE.Server.WorldObjects
             }
 
             NextCancelTime = Timers.RunningTime + 5.0f;
+            IsMovingToHome = true;
+
+            if (PathfindingEnabled && CanAttemptRouteAfterNullRoute(Timers.RunningTime) && TryRouteToPosition(home))
+            {
+                EmoteManager.OnHomeSick(prevAttackTarget);
+                return;
+            }
 
             MoveTo(home, RunRate, false, 1.0f);
 

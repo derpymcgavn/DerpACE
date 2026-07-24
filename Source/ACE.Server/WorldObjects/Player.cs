@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -184,8 +184,14 @@ namespace ACE.Server.WorldObjects
 
         public bool CanReceiveChallengeMagicAidFrom(Player sourcePlayer, string aidName = "magic")
         {
-            if (sourcePlayer == null || sourcePlayer == this || !IsRestrictedGearMode)
+            if (!IsRestrictedGearMode || sourcePlayer == this)
                 return true;
+
+            if (sourcePlayer == null)
+            {
+                SendMessage($"Your challenge vow rejects {aidName} from outside aid.", ChatMessageType.Magic);
+                return false;
+            }
 
             if (sourcePlayer.CurrentGearProvenance == CurrentGearProvenance)
                 return true;
@@ -1282,3 +1288,4 @@ namespace ACE.Server.WorldObjects
         }
     }
 }
+

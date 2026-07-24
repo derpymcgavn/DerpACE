@@ -118,6 +118,13 @@ namespace ACE.Server.WorldObjects
 
             vendor.MoneyIncome += (int)cost;
 
+            // Promissory notes neither receive persona pricing nor generate affinity.
+            var personaEligibleSpend = genericItems.Concat(uniqueItems)
+                .Where(item => item.ItemType != ItemType.PromissoryNote)
+                .Aggregate(0u, (sum, item) => sum + vendor.GetSellCost(item, this));
+            if (personaEligibleSpend > 0)
+                NpcPersonaManager.OnPurchase(this, vendor, personaEligibleSpend);
+
             Session.Network.EnqueueSend(new GameMessageSound(Guid, Sound.PickUpItem));
 
             if (PropertyManager.GetBool("player_receive_immediate_save").Item)
@@ -224,7 +231,7 @@ namespace ACE.Server.WorldObjects
             }
 
             // calculate pyreals to receive
-            var payoutCoinAmount = vendor.CalculatePayoutCoinAmount(sellList);
+            var payoutCoinAmount = vendor.CalculatePayoutCoinAmount(sellList, this);
 
             if (payoutCoinAmount < 0)
             {
@@ -291,6 +298,13 @@ namespace ACE.Server.WorldObjects
                     }
                 }
             }
+
+            // Redeeming promissory notes never improves vendor affinity.
+            var personaEligiblePayout = sellList.Values
+                .Where(item => item.ItemType != ItemType.PromissoryNote)
+                .Sum(item => vendor.GetBuyCost(item, this));
+            if (personaEligiblePayout > 0)
+                NpcPersonaManager.OnSale(this, vendor, personaEligiblePayout);
 
             // UpdateCoinValue removed -- already handled in TryCreateInInventoryWithNetworking
 

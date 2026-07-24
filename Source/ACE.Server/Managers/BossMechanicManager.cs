@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
+
+using log4net;
 
 using ACE.Common;
 using ACE.Database.Models.Shard;
@@ -62,6 +65,7 @@ namespace ACE.Server.Managers
         private static readonly HashSet<string> BossSafeMutators = new HashSet<string>(new[] { "vampiric", "nocturnal", "exploding", "healer", "enchanter", "shaman", "tank", "reaper", "necromancer", "warder" }, StringComparer.OrdinalIgnoreCase);
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true };
         private static readonly ConcurrentDictionary<uint, BossMechanicDocument> Published = new ConcurrentDictionary<uint, BossMechanicDocument>();
+        private static readonly ConcurrentDictionary<uint, IReadOnlyDictionary<string, BossMechanicRule[]>> CompiledRules = new ConcurrentDictionary<uint, IReadOnlyDictionary<string, BossMechanicRule[]>>();
         private static readonly ConcurrentDictionary<uint, byte> Missing = new ConcurrentDictionary<uint, byte>();
         private static readonly ConcurrentDictionary<uint, HashSet<string>> FiredRules = new ConcurrentDictionary<uint, HashSet<string>>();
         private static readonly ConcurrentDictionary<uint, BossMinionEncounter> MinionEncounters = new ConcurrentDictionary<uint, BossMinionEncounter>();
@@ -71,6 +75,7 @@ namespace ACE.Server.Managers
         private static readonly ConcurrentDictionary<uint, List<BossAppliedEffect>> AppliedEffects = new ConcurrentDictionary<uint, List<BossAppliedEffect>>();
         private static readonly ConcurrentDictionary<string, double> LastRuleRun = new ConcurrentDictionary<string, double>();
         private static bool StorageUnavailable;
+        private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         public static BossMechanicDocument NewDocument(uint wcid) => new BossMechanicDocument { WeenieClassId = wcid };
         public static string Serialize(BossMechanicDocument document) => JsonSerializer.Serialize(document, JsonOptions);
@@ -155,15 +160,30 @@ namespace ACE.Server.Managers
         public static BossMechanicDocument GetPublished(uint wcid)
         {
             if (Published.TryGetValue(wcid, out var cached)) return cached;
-            if (StorageUnavailable || Missing.ContainsKey(wcid)) return null;
+            if (Missing.ContainsKey(wcid)) return null;
+
+            var document = LoadPublishedFromDatabase(wcid) ?? LoadPublishedFromDataFolder(wcid);
+            if (document == null || Validate(document).Count > 0)
+            {
+                Missing[wcid] = 1;
+                return null;
+            }
+
+            Published[wcid] = document;
+            CompileRules(document);
+            return document;
+        }
+
+        private static BossMechanicDocument LoadPublishedFromDatabase(uint wcid)
+        {
+            if (StorageUnavailable)
+                return null;
+
             try
             {
                 using var context = new ShardDbContext();
                 var row = context.BossMechanicProfile.FirstOrDefault(x => x.WeenieClassId == wcid && x.Enabled);
-                var document = Deserialize(row?.PublishedJson);
-                if (document == null || Validate(document).Count > 0) { Missing[wcid] = 1; return null; }
-                Published[wcid] = document;
-                return document;
+                return Deserialize(row?.PublishedJson);
             }
             catch
             {
@@ -171,6 +191,41 @@ namespace ACE.Server.Managers
                 StorageUnavailable = true;
                 return null;
             }
+        }
+
+        private static BossMechanicDocument LoadPublishedFromDataFolder(uint wcid)
+        {
+            try
+            {
+                var folder = Path.Combine(AppContext.BaseDirectory, "Data", "DerpACE", "BossMechanics");
+                if (!Directory.Exists(folder))
+                    return null;
+
+                foreach (var path in Directory.EnumerateFiles(folder, $"{wcid}*.json"))
+                {
+                    var json = File.ReadAllText(path);
+                    var direct = Deserialize(json);
+                    if (direct?.WeenieClassId == wcid)
+                        return direct;
+
+                    using var doc = JsonDocument.Parse(json);
+                    if (!doc.RootElement.TryGetProperty("enabled", out var enabled) || enabled.GetBoolean())
+                    {
+                        if (doc.RootElement.TryGetProperty("publishedJson", out var publishedJson))
+                        {
+                            var wrapped = Deserialize(publishedJson.GetString());
+                            if (wrapped?.WeenieClassId == wcid)
+                                return wrapped;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"[BossMechanic] Failed to load profile {wcid} from Data/DerpACE/BossMechanics: {ex.Message}");
+            }
+
+            return null;
         }
 
         public static bool TryApplyBossMutators(Creature creature)
@@ -189,7 +244,26 @@ namespace ACE.Server.Managers
         public static void Invalidate(uint wcid)
         {
             Published.TryRemove(wcid, out _);
+            CompiledRules.TryRemove(wcid, out _);
             Missing.TryRemove(wcid, out _);
+        }
+
+        private static void CompileRules(BossMechanicDocument document)
+        {
+            CompiledRules[document.WeenieClassId] = (document.Rules ?? new List<BossMechanicRule>())
+                .GroupBy(rule => rule.Trigger ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static IReadOnlyList<BossMechanicRule> GetRules(BossMechanicDocument profile, string trigger)
+        {
+            if (!CompiledRules.TryGetValue(profile.WeenieClassId, out var compiled))
+            {
+                CompileRules(profile);
+                compiled = CompiledRules[profile.WeenieClassId];
+            }
+
+            return compiled.TryGetValue(trigger, out var rules) ? rules : Array.Empty<BossMechanicRule>();
         }
 
         public static void OnHealthChanged(Creature boss, uint previousHealth, bool critical = false, DamageType damageType = DamageType.Undef, uint damage = 0, Player target = null)
@@ -199,19 +273,19 @@ namespace ACE.Server.Managers
             if (profile == null) return;
             var now = Time.GetUnixTime();
             if (EncounterStarted.TryAdd(boss.Guid.Full, now))
-                foreach (var rule in profile.Rules.Where(r => r.Trigger == "combat_start")) TryExecuteRule(boss, rule, now, target);
+                foreach (var rule in GetRules(profile, "combat_start")) TryExecuteRule(boss, rule, now, target);
 
             var before = previousHealth * 100.0 / boss.Health.MaxValue;
             var after = boss.Health.Current * 100.0 / boss.Health.MaxValue;
             if (after >= before) return;
-            foreach (var rule in profile.Rules.Where(r => r.Trigger == "health_below" && before > r.ThresholdPercent && after <= r.ThresholdPercent))
+            foreach (var rule in GetRules(profile, "health_below").Where(r => before > r.ThresholdPercent && after <= r.ThresholdPercent))
                 TryExecuteRule(boss, rule, now, target);
             if (critical)
-                foreach (var rule in profile.Rules.Where(r => r.Trigger == "critical_hit")) TryExecuteRule(boss, rule, now, target);
-            foreach (var rule in profile.Rules.Where(r => r.Trigger == "damage_type" && Enum.TryParse<DamageType>(r.DamageType, true, out var dt) && damageType.HasFlag(dt)))
+                foreach (var rule in GetRules(profile, "critical_hit")) TryExecuteRule(boss, rule, now, target);
+            foreach (var rule in GetRules(profile, "damage_type").Where(r => Enum.TryParse<DamageType>(r.DamageType, true, out var dt) && damageType.HasFlag(dt)))
                 TryExecuteRule(boss, rule, now, target);
             var hitPercent = damage * 100.0 / boss.Health.MaxValue;
-            foreach (var rule in profile.Rules.Where(r => r.Trigger == "large_hit" && hitPercent >= r.DamagePercent))
+            foreach (var rule in GetRules(profile, "large_hit").Where(r => hitPercent >= r.DamagePercent))
                 TryExecuteRule(boss, rule, now, target);
         }
 
@@ -220,7 +294,7 @@ namespace ACE.Server.Managers
             if (boss == null || !boss.IsAlive || !EncounterStarted.TryGetValue(boss.Guid.Full, out var started)) return;
             var profile = GetPublished(boss.WeenieClassId);
             if (profile == null) return;
-            foreach (var rule in profile.Rules.Where(r => r.Trigger == "timer" && now - started >= r.IntervalSeconds))
+            foreach (var rule in GetRules(profile, "timer").Where(r => now - started >= r.IntervalSeconds))
             {
                 var key = $"{boss.Guid.Full}:{rule.Id}";
                 var last = LastRuleRun.GetOrAdd(key, started);
@@ -236,7 +310,7 @@ namespace ACE.Server.Managers
             if (profile == null) return;
             var now = Time.GetUnixTime();
             EncounterStarted.TryAdd(boss.Guid.Full, now);
-            foreach (var rule in profile.Rules.Where(r => r.Trigger == "boss_evades")) TryExecuteRule(boss, rule, now, target);
+            foreach (var rule in GetRules(profile, "boss_evades")) TryExecuteRule(boss, rule, now, target);
         }
         public static void OnSpellResisted(Creature boss)
         {
@@ -245,7 +319,7 @@ namespace ACE.Server.Managers
             if (profile == null) return;
             var now = Time.GetUnixTime();
             EncounterStarted.TryAdd(boss.Guid.Full, now);
-            foreach (var rule in profile.Rules.Where(r => r.Trigger == "spell_resisted")) TryExecuteRule(boss, rule, now);
+            foreach (var rule in GetRules(profile, "spell_resisted")) TryExecuteRule(boss, rule, now);
         }
 
         private static bool TryExecuteRule(Creature boss, BossMechanicRule rule, double now, Player target = null)
@@ -282,7 +356,7 @@ namespace ACE.Server.Managers
             if (creature == null) return;
             var profile = GetPublished(creature.WeenieClassId);
             if (profile != null)
-                foreach (var rule in profile.Rules.Where(r => r.Trigger == "death")) TryExecuteRule(creature, rule, Time.GetUnixTime());
+                foreach (var rule in GetRules(profile, "death")) TryExecuteRule(creature, rule, Time.GetUnixTime());
             if (MinionEncounters.ContainsKey(creature.Guid.Full))
             {
                 CleanupMinions(creature.Guid.Full);
@@ -306,8 +380,12 @@ namespace ACE.Server.Managers
                     boss.ApplyVisualEffects(effect);
                 else if (string.Equals(action.Type, "maintain_minions", StringComparison.OrdinalIgnoreCase))
                     MaintainMinions(boss, action);
-                else if (action.Type == "push" || action.Type == "pull" || action.Type == "blink" || action.Type == "scatter")
+                else if (action.Type == "push" || action.Type == "pull" || action.Type == "blink" || action.Type == "scatter" || action.Type == "knock_up")
                     ExecuteMovement(boss, action, target);
+                else if (string.Equals(action.Type, "apply_spell", StringComparison.OrdinalIgnoreCase))
+                    ApplyTemporarySpell(boss, action, target);
+                else if (string.Equals(action.Type, "set_phase", StringComparison.OrdinalIgnoreCase))
+                    ActivePhases[boss.Guid.Full] = action.Phase;
                 else if (string.Equals(action.Type, "taunt", StringComparison.OrdinalIgnoreCase))
                     ExecuteTaunt(boss, action, text);
             }
@@ -370,8 +448,15 @@ namespace ACE.Server.Managers
                     dx = (float)Math.Cos(angle); dy = (float)Math.Sin(angle); length = 1;
                 }
                 var direction = action.Type == "pull" || action.Type == "blink" ? -1.0 : 1.0;
-                desired.PositionX += (float)(dx / length * action.Distance * direction);
-                desired.PositionY += (float)(dy / length * action.Distance * direction);
+                if (action.Type == "knock_up")
+                {
+                    desired.PositionZ += (float)action.Distance;
+                }
+                else
+                {
+                    desired.PositionX += (float)(dx / length * action.Distance * direction);
+                    desired.PositionY += (float)(dy / length * action.Distance * direction);
+                }
                 if (!FlutterStone.TryResolveSafeDestination(player, desired, out var safe)) continue;
                 player.ApplyVisualEffects(PlayScript.LayingofHands, 0.7f);
                 player.Sequences.GetNextSequence(ACE.Server.Network.Sequence.SequenceType.ObjectForcePosition);

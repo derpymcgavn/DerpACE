@@ -98,13 +98,12 @@ namespace ACE.Server.Managers
                     }
 
                     var fileNameId = TryParseIdFromFileName(path);
-                    if (table.Id == 0 && fileNameId != 0)
+                    if (fileNameId != 0)
                     {
+                        if (table.Id != 0 && table.Id != fileNameId)
+                            log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' filename id 0x{fileNameId:X8} ({fileNameId}) does not match JSON Id 0x{table.Id:X8} ({table.Id}). Using filename id so this file only applies to its named ClothingBase.");
+
                         table.Id = fileNameId;
-                    }
-                    else if (table.Id != 0 && fileNameId != 0 && table.Id != fileNameId)
-                    {
-                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' filename id 0x{fileNameId:X8} ({fileNameId}) does not match JSON Id 0x{table.Id:X8} ({table.Id}). Using JSON Id.");
                     }
 
                     if (table.Id == 0)
@@ -113,15 +112,15 @@ namespace ACE.Server.Managers
                         continue;
                     }
 
-                    if (!IsClothingBaseId(table.Id))
+                    if (fileNameId != 0 && DatManager.PortalDat?.AllFiles?.ContainsKey(table.Id) == true && !allowBaseOverride)
                     {
-                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' Id 0x{table.Id:X8} ({table.Id}) is outside the ClothingBase range [0x10000000, 0x10FFFFFF]. Skipped.");
-                        continue;
+                        allowBaseOverride = true;
+                        log.Info($"CustomClothingManager: '{Path.GetFileName(path)}' patches existing portal.dat ClothingBase 0x{table.Id:X8} using filename id compatibility mode.");
                     }
 
-                    if (DatManager.PortalDat?.AllFiles?.ContainsKey(table.Id) == true && !allowBaseOverride)
+                    if (fileNameId == 0 && DatManager.PortalDat?.AllFiles?.ContainsKey(table.Id) == true && !allowBaseOverride)
                     {
-                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' targets existing portal.dat ClothingBase 0x{table.Id:X8}. Skipped to avoid changing every item that uses that base. Use @cbclone with a new custom ID, or set AllowBaseOverride=true if this is intentional.");
+                        log.Warn($"CustomClothingManager: '{Path.GetFileName(path)}' targets existing portal.dat ClothingBase 0x{table.Id:X8}. Skipped to avoid changing every item that uses that base. Use a filename beginning with the target ClothingBase id, @cbexport, or set AllowBaseOverride=true if this is intentional.");
                         continue;
                     }
 
@@ -193,10 +192,10 @@ namespace ACE.Server.Managers
             outPath = null;
 
             if (!IsClothingBaseId(sourceClothingBaseId))
-                return $"0x{sourceClothingBaseId:X8} is not a valid ClothingBase ID (range 0x10000000-0x10FFFFFF).";
+                return $"0x{sourceClothingBaseId:X8} is not a valid ClothingBase ID.";
 
             if (!IsClothingBaseId(outputClothingBaseId))
-                return $"0x{outputClothingBaseId:X8} is not a valid ClothingBase ID (range 0x10000000-0x10FFFFFF).";
+                return $"0x{outputClothingBaseId:X8} is not a valid ClothingBase ID.";
 
             if (!DatManager.PortalDat.AllFiles.ContainsKey(sourceClothingBaseId))
                 return $"ClothingBase 0x{sourceClothingBaseId:X8} not found in portal.dat.";
@@ -339,11 +338,21 @@ namespace ACE.Server.Managers
             var stem = Path.GetFileNameWithoutExtension(path) ?? string.Empty;
             var sepIdx = stem.IndexOfAny(new[] { '_', '-', ' ' });
             var idToken = sepIdx >= 0 ? stem.Substring(0, sepIdx) : stem;
-            return string.IsNullOrEmpty(idToken) ? 0 : ParseClothingBaseIdToken(idToken);
+            if (string.IsNullOrEmpty(idToken))
+                return 0;
+
+            var hexPrefixLength = 0;
+            while (hexPrefixLength < idToken.Length && Uri.IsHexDigit(idToken[hexPrefixLength]))
+                hexPrefixLength++;
+
+            if (hexPrefixLength >= 8 && uint.TryParse(idToken.Substring(0, 8), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexPrefix))
+                return hexPrefix;
+
+            return ParseClothingBaseIdToken(idToken);
         }
 
         private static bool IsClothingBaseId(uint id)
-            => id >= ClothingBaseMinId && id <= ClothingBaseMaxId;
+            => id != 0;
 
         private static uint ParseUint(JsonElement el)
         {

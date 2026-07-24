@@ -449,6 +449,8 @@ namespace ACE.Server.WorldObjects
             if (AlternateCurrency == null)
                 player.SendBankAwareVendorCoinValue();
 
+            if (action == VendorType.Open)
+                NpcPersonaManager.OnVisit(player, this);
             player.Session.Network.EnqueueSend(new GameEventApproachVendor(player.Session, this, altCurrencySpent));
 
             var rotateTime = Rotate(player); // vendor rotates to player
@@ -700,7 +702,7 @@ namespace ACE.Server.WorldObjects
 
             foreach (var item in purchaseItems)
             {
-                var cost = GetSellCost(item);
+                var cost = GetSellCost(item, player);
 
                 // detect rollover?
                 totalPrice += cost;
@@ -748,41 +750,39 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
-        public uint GetSellCost(WorldObject item) => GetSellCost(item.Value, item.ItemType);
+        public uint GetSellCost(WorldObject item, Player player = null) => GetSellCost(item.Value, item.ItemType, player);
 
-        public uint GetSellCost(Weenie item) => GetSellCost(item.GetValue(), item.GetItemType());
+        public uint GetSellCost(Weenie item, Player player = null) => GetSellCost(item.GetValue(), item.GetItemType(), player);
 
-        private uint GetSellCost(int? value, ItemType? itemType)
+        private uint GetSellCost(int? value, ItemType? itemType, Player player)
         {
-            var sellRate = SellPrice ?? 1.0;
-            if (itemType == ItemType.PromissoryNote)
-                sellRate = 1.15;
+            // Trade notes are monetary instruments, never relationship-discounted.
+            var sellRate = itemType == ItemType.PromissoryNote
+                ? 1.15
+                : player == null ? SellPrice ?? 1.0 : NpcPersonaManager.GetVendorRates(player, this).SellRate;
 
-            var cost = Math.Max(1, (uint)Math.Ceiling(((float)sellRate * (value ?? 0)) - 0.1));
-            return cost;
+            return Math.Max(1, (uint)Math.Ceiling(((float)sellRate * (value ?? 0)) - 0.1));
         }
 
-        public int GetBuyCost(WorldObject item) => GetBuyCost(item.Value, item.ItemType);
+        public int GetBuyCost(WorldObject item, Player player = null) => GetBuyCost(item.Value, item.ItemType, player);
 
-        public int GetBuyCost(Weenie item) => GetBuyCost(item.GetValue(), item.GetItemType());
+        public int GetBuyCost(Weenie item, Player player = null) => GetBuyCost(item.GetValue(), item.GetItemType(), player);
 
-        private int GetBuyCost(int? value, ItemType? itemType)
+        private int GetBuyCost(int? value, ItemType? itemType, Player player)
         {
-            var buyRate = BuyPrice ?? 1;
-            if (itemType == ItemType.PromissoryNote)
-                buyRate = 1.0;
+            // Trade notes always redeem at face value and never receive affinity bonuses.
+            var buyRate = itemType == ItemType.PromissoryNote
+                ? 1.0
+                : player == null ? BuyPrice ?? 1.0 : NpcPersonaManager.GetVendorRates(player, this).BuyRate;
 
-            var cost = Math.Max(1, (int)Math.Floor(((float)buyRate * (value ?? 0)) + 0.1));
-            return cost;
+            return Math.Max(1, (int)Math.Floor(((float)buyRate * (value ?? 0)) + 0.1));
         }
 
-        public int CalculatePayoutCoinAmount(Dictionary<uint, WorldObject> items)
+        public int CalculatePayoutCoinAmount(Dictionary<uint, WorldObject> items, Player player = null)
         {
             var payout = 0;
-
-            foreach (WorldObject item in items.Values)
-                payout += GetBuyCost(item);
-
+            foreach (var item in items.Values)
+                payout += GetBuyCost(item, player);
             return payout;
         }
 

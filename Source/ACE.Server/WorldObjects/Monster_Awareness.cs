@@ -192,7 +192,12 @@ namespace ACE.Server.WorldObjects
 
                 var prevAttackTarget = AttackTarget;
 
-                switch (CurrentTargetingTactic)
+                var useModernThreat = ACE.Server.Managers.DerpACEConfig.ModernMobAiEnabled
+                    && (TargetingTactic == TargetingTactic.None || TargetingTactic.HasFlag(TargetingTactic.Random));
+
+                if (useModernThreat)
+                    AttackTarget = SelectModernThreatTarget(visibleTargets, prevAttackTarget as Creature);
+                else switch (CurrentTargetingTactic)
                 {
                     case TargetingTactic.None:
 
@@ -428,6 +433,68 @@ namespace ACE.Server.WorldObjects
             return targetDistances[0].Target;
         }
 
+        private Creature SelectModernThreatTarget(List<Creature> targets, Creature current)
+        {
+            if (targets == null || targets.Count == 0)
+                return null;
+
+            Creature best = null;
+            var bestScore = float.MinValue;
+            var currentScore = float.MinValue;
+            var topDamager = DamageHistory.TopDamager?.TryGetPetOwnerOrAttacker();
+            var lastDamager = DamageHistory.LastDamager?.TryGetPetOwnerOrAttacker();
+
+            foreach (var target in targets)
+            {
+                if (target?.Location == null || target.PhysicsObj == null)
+                    continue;
+
+                var distance = (float)PhysicsObj.get_distance_to_object(target.PhysicsObj, true);
+                var score = 40.0f / (4.0f + Math.Max(0.0f, distance));
+
+                if (DamageHistory.TotalDamage.TryGetValue(target.Guid, out var damage))
+                {
+                    var healthScale = Math.Max(1.0f, Health?.MaxValue ?? 1);
+                    score += Math.Min(80.0f, damage.TotalDamage / healthScale * 80.0f);
+                }
+
+                if (ReferenceEquals(target, lastDamager)) score += 16.0f;
+                if (ReferenceEquals(target, topDamager)) score += 12.0f;
+                if (ReferenceEquals(target, current)) score += 18.0f;
+
+                if (target.Health != null && target.Health.MaxValue > 0)
+                {
+                    var healthRatio = Math.Clamp((float)target.Health.Current / target.Health.MaxValue, 0.0f, 1.0f);
+                    score += (1.0f - healthRatio) * 12.0f;
+                }
+
+                if (target is Player player)
+                {
+                    if (player.CombatMode == CombatMode.Magic) score += 7.0f;
+                    var wand = player.GetEquippedWand();
+                    if (wand?.W_DamageType == DamageType.Health
+                        || wand?.GetProperty(PropertyBool.IsHierophantCaster) == true)
+                        score += 12.0f;
+                    score += GetGearAggroDelta(player) * 20.0f;
+                }
+
+                if (ReferenceEquals(target, current)) currentScore = score;
+                if (score > bestScore)
+                {
+                    best = target;
+                    bestScore = score;
+                }
+            }
+
+            if (current != null && targets.Contains(current) && currentScore > float.MinValue)
+            {
+                var threshold = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.ModernMobAiSwitchThreshold);
+                if (best == null || bestScore < currentScore * threshold)
+                    return current;
+            }
+
+            return best ?? current ?? targets[0];
+        }
         private static Creature GetLowestLevelTarget(List<Creature> targets)
         {
             Creature selected = null;
@@ -643,7 +710,7 @@ namespace ACE.Server.WorldObjects
             foreach (var obj in visibleObjs)
             {
                 var nearbyCreature = obj.WeenieObj.WorldObject as Creature;
-                if (nearbyCreature == null || nearbyCreature.IsAwake || !nearbyCreature.Attackable && nearbyCreature.TargetingTactic == TargetingTactic.None)
+                if (nearbyCreature == null || nearbyCreature == this || !nearbyCreature.Attackable && nearbyCreature.TargetingTactic == TargetingTactic.None)
                     continue;
 
                 if ((nearbyCreature.Tolerance & AlertExclude) != 0)
@@ -677,9 +744,13 @@ namespace ACE.Server.WorldObjects
                     }
 
                     alerted = true;
+                    nearbyCreature.AddRetaliateTarget(AttackTarget);
 
-                    nearbyCreature.AttackTarget = AttackTarget;
-                    nearbyCreature.WakeUp(false);
+                    if (!nearbyCreature.IsAwake)
+                    {
+                        nearbyCreature.AttackTarget = AttackTarget;
+                        nearbyCreature.WakeUp(false);
+                    }
                 }
             }
             // only set alerted if monsters were actually alerted
@@ -703,7 +774,7 @@ namespace ACE.Server.WorldObjects
             foreach (var obj in visibleObjs)
             {
                 var nearbyCreature = obj.WeenieObj.WorldObject as Creature;
-                if (nearbyCreature == null || nearbyCreature == this || nearbyCreature.IsAwake)
+                if (nearbyCreature == null || nearbyCreature == this)
                     continue;
 
                 if (!IsInSameLoadedLandblockGroup(nearbyCreature))
@@ -723,8 +794,12 @@ namespace ACE.Server.WorldObjects
                 if (distSq > ScoutAssistRadiusSq)
                     continue;
 
-                nearbyCreature.AttackTarget = AttackTarget;
-                nearbyCreature.WakeUp(false);
+                nearbyCreature.AddRetaliateTarget(AttackTarget);
+                if (!nearbyCreature.IsAwake)
+                {
+                    nearbyCreature.AttackTarget = AttackTarget;
+                    nearbyCreature.WakeUp(false);
+                }
                 alerted = true;
             }
 

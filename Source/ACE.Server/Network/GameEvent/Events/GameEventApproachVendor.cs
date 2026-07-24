@@ -4,6 +4,7 @@ using System.Linq;
 using ACE.Database;
 using ACE.Entity.Models;
 using ACE.Server.DerpAce.Bank;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Network.GameEvent.Events
@@ -22,8 +23,9 @@ namespace ACE.Server.Network.GameEvent.Events
 
             Writer.Write(Convert.ToUInt32(vendor.DealMagicalItems ?? false));
 
-            Writer.Write((float)vendor.BuyPrice);
-            Writer.Write((float)vendor.SellPrice);
+            var personaRates = NpcPersonaManager.GetVendorRates(session.Player, vendor);
+            Writer.Write((float)personaRates.BuyRate);
+            Writer.Write((float)personaRates.SellRate);
 
             // the wcid of the alternate currency
             Writer.Write(vendor.AlternateCurrency ?? 0);

@@ -70,6 +70,7 @@ namespace ACE.Server.Factories
             var forcedStormcallerCaster = IsForcedWeaponModifier(roll, "stormcaller");
             var forcedOrbitweaverCaster = IsForcedWeaponModifier(roll, "orbitweaver");
             var forcedConfusionCaster = IsForcedWeaponModifier(roll, "confusion");
+            var forcedGravecallerCaster = IsForcedWeaponModifier(roll, "gravecaller", "necromancer");
 
             // Ensure custom life caster templates always use the life-damage mutation path.
             if (LifeCasterWcids.Contains((ACE.Server.Factories.Enum.WeenieClassName)wo.WeenieClassId) && wo.W_DamageType == DamageType.Undef)
@@ -255,10 +256,42 @@ namespace ACE.Server.Factories
 
             TryMutateWarMageSpecialCaster(wo, profile, roll, isMagical);
 
+            TryMutateGravecallerCaster(wo, profile, roll, isMagical, forcedGravecallerCaster);
+
             // Universal blast-on-strike: rare chance for any elemental caster T5+ to proc a level-3 blast.
             TryRollWeaponBlastProc(wo, profile);
         }
 
+        private static void TryMutateGravecallerCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical, bool forced)
+        {
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)
+                return;
+
+            if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsHierophantCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsConfusionCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsSkybreakerCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsStormcallerCaster) == true
+                || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOrbitweaverCaster) == true)
+                return;
+
+            if (!forced && (HasForcedWeaponModifier(roll) || profile.Tier < 6 || ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.02f))
+                return;
+
+            var title = wo.W_DamageType == DamageType.Health ? "of the Pale Shepherd"
+                : wo.W_DamageType == DamageType.Nether ? "of the Gravecaller"
+                : "of the Elemental Crypt";
+            wo.Name += " " + title;
+            wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsGravecallerCaster, true);
+            wo.CooldownId = Player.GravecallerCooldownId;
+            wo.CooldownDuration = 45.0;
+            wo.IconOverlayId = MutatorOverlayGravecaller;
+            ApplyLootUiEffects(wo, wo.W_DamageType, true);
+            wo.LongDesc = (wo.LongDesc ?? "")
+                + "\n\nGravecaller: cast any valid targeted spell on a corpse you may loot to raise its echo as a combat pet for 20 seconds."
+                + "\nThe revenant preserves the corpse's form, motion, sounds, and combat style. One revenant may serve at a time; each corpse answers only once. Cooldown: 45 seconds.";
+        }
         private static void TryMutateVoidConfusionCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)
         {
             if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)

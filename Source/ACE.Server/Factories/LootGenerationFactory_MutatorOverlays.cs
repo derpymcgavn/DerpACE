@@ -30,6 +30,7 @@ namespace ACE.Server.Factories
         private const uint MutatorOverlayStormcaller = 0x06002688u;    // cyan crystal shard
         private const uint MutatorOverlayOrbitweaver = 0x06002681u;    // green crystal shard
         private const uint MutatorOverlayConfusion = 0x060026A7u;      // purple Virindi mask
+        private const uint MutatorOverlayGravecaller = 0x0600269Cu;     // purple Asheron's Call sigil
 
         private const uint MutatorOverlayDefender = 0x06005B53u;       // bright shield
         private const uint MutatorOverlayThorns = 0x06005B26u;         // green shield
