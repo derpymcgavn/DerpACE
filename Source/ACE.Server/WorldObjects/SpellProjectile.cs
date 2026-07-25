@@ -136,7 +136,7 @@ namespace ACE.Server.WorldObjects
             if (spell.Wcid == 0)
                 return ProjectileSpellType.Undef;
 
-            if (spellID == CustomSpellManager.MeteorSquallSpellId)
+            if (spellID == CustomSpellManager.MeteorSquallSpellId || spellID == CustomSpellManager.RainfallFrostSpellId)
                 return ProjectileSpellType.Arc;
 
             if (spellID == CustomSpellManager.SpiralStarSpellId)

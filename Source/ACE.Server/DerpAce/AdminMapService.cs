@@ -212,6 +212,63 @@ namespace ACE.Server.DerpAce
                     WriteText(context, BuildBossMechanicsHelpHtml(), "text/html; charset=utf-8");
                     return;
                 }
+                if (path.Equals("/spell-workshop", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteText(context, "Admin map login required.", "text/plain; charset=utf-8");
+                        return;
+                    }
+                    WriteText(context, BuildSpellWorkshopHtml(), "text/html; charset=utf-8");
+                    return;
+                }
+                if (path.Equals("/api/spells/draft", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    string error = null;
+                    string json = null;
+                    if (!uint.TryParse(context.Request.QueryString["template"], out var templateId) ||
+                        !uint.TryParse(context.Request.QueryString["id"], out var targetId) ||
+                        !CustomSpellManager.TryCreateWorkshopDraft(templateId, targetId, out json, out error))
+                    {
+                        context.Response.StatusCode = 400;
+                        WriteJson(context, new { ok = false, error = error ?? "Template and custom spell ID are required." });
+                        return;
+                    }
+                    WriteJson(context, new { ok = true, json });
+                    return;
+                }
+                if (path.Equals("/api/spells/save", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { ok = false, error = "Use POST to save a custom spell." });
+                        return;
+                    }
+                    var request = ReadJsonBody<AdminSpellWorkshopSaveRequest>(context);
+                    string savedPath = null;
+                    string saveError = null;
+                    var loaded = 0;
+                    var ok = request != null && CustomSpellManager.TrySaveWorkshopJson(request.Json, request.FileName, out savedPath, out loaded, out saveError);
+                    if (!ok) context.Response.StatusCode = 400;
+                    WriteJson(context, ok
+                        ? new { ok = true, message = $"Saved {Path.GetFileName(savedPath)} and reloaded {loaded} custom spell definitions." }
+                        : new { ok = false, error = saveError ?? "Invalid spell request." });
+                    return;
+                }
                 if (path.Equals("/api/boss/draft", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -537,26 +594,42 @@ namespace ACE.Server.DerpAce
         {
             using var db = new ShardDbContext();
             var rows = db.BossMechanicProfile.OrderBy(x => x.ProfileName).ToList();
-            return new
+            var profiles = rows.Select(row => new AdminBossProfileSummary
             {
-                ok = true,
-                profiles = rows.Select(row =>
+                Profile = row.ProfileName,
+                WeenieClassId = row.WeenieClassId,
+                BossName = GetBossWeenieName(DatabaseManager.World.GetWeenie(row.WeenieClassId), row.WeenieClassId),
+                DraftRevision = row.DraftRevision,
+                PublishedRevision = row.PublishedRevision,
+                PreviousRevision = row.PreviousRevision,
+                Enabled = row.Enabled,
+                ModifiedBy = row.ModifiedBy,
+                ModifiedAt = row.ModifiedAt,
+                IsTemplate = false
+            }).ToList();
+
+            var databaseNames = rows.Select(x => x.ProfileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var databaseWcids = rows.Select(x => x.WeenieClassId).ToHashSet();
+            foreach (var template in LoadBossFileTemplates().Where(x => !databaseNames.Contains(x.ProfileName)))
+            {
+                profiles.Add(new AdminBossProfileSummary
                 {
-                    var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
-                    return new
-                    {
-                        profile = row.ProfileName,
-                        weenieClassId = row.WeenieClassId,
-                        bossName = GetBossWeenieName(weenie, row.WeenieClassId),
-                        draftRevision = row.DraftRevision,
-                        publishedRevision = row.PublishedRevision,
-                        previousRevision = row.PreviousRevision,
-                        enabled = row.Enabled,
-                        modifiedBy = row.ModifiedBy,
-                        modifiedAt = row.ModifiedAt
-                    };
-                }).ToList()
-            };
+                    Profile = template.ProfileName,
+                    WeenieClassId = template.WeenieClassId,
+                    BossName = GetBossWeenieName(DatabaseManager.World.GetWeenie(template.WeenieClassId), template.WeenieClassId),
+                    DraftRevision = template.DraftRevision,
+                    PublishedRevision = template.PublishedRevision,
+                    PreviousRevision = 0,
+                    Enabled = template.Enabled,
+                    ModifiedBy = "Data template",
+                    ModifiedAt = template.ModifiedAt,
+                    IsTemplate = true,
+                    HasWcidConflict = databaseWcids.Contains(template.WeenieClassId),
+                    TemplateError = template.Error
+                });
+            }
+
+            return new { ok = true, profiles = profiles.OrderBy(x => x.Profile).ToList() };
         }
 
         private static object GetBossProfile(string profileValue)
@@ -566,28 +639,125 @@ namespace ACE.Server.DerpAce
 
             using var db = new ShardDbContext();
             var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
-            if (row == null)
-                return new { ok = false, error = "Boss profile not found." };
+            if (row != null)
+            {
+                var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
+                return new
+                {
+                    ok = true,
+                    profile = row.ProfileName,
+                    weenieClassId = row.WeenieClassId,
+                    bossName = GetBossWeenieName(weenie, row.WeenieClassId),
+                    draftRevision = row.DraftRevision,
+                    publishedRevision = row.PublishedRevision,
+                    previousRevision = row.PreviousRevision,
+                    enabled = row.Enabled,
+                    modifiedBy = row.ModifiedBy,
+                    modifiedAt = row.ModifiedAt,
+                    draftJson = row.DraftJson,
+                    publishedJson = row.PublishedJson,
+                    previousJson = row.PreviousJson,
+                    isTemplate = false,
+                    hasWcidConflict = false,
+                    sourceFile = (string)null
+                };
+            }
 
-            var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
+            var template = LoadBossFileTemplates().FirstOrDefault(x => string.Equals(x.ProfileName, profileName, StringComparison.OrdinalIgnoreCase));
+            if (template == null)
+                return new { ok = false, error = "Boss profile not found." };
+            if (!string.IsNullOrWhiteSpace(template.Error))
+                return new { ok = false, error = $"Template '{profileName}' is invalid: {template.Error}" };
+
+            var conflict = db.BossMechanicProfile.Any(x => x.WeenieClassId == template.WeenieClassId);
             return new
             {
                 ok = true,
-                profile = row.ProfileName,
-                weenieClassId = row.WeenieClassId,
-                bossName = GetBossWeenieName(weenie, row.WeenieClassId),
-                draftRevision = row.DraftRevision,
-                publishedRevision = row.PublishedRevision,
-                previousRevision = row.PreviousRevision,
-                enabled = row.Enabled,
-                modifiedBy = row.ModifiedBy,
-                modifiedAt = row.ModifiedAt,
-                draftJson = row.DraftJson,
-                publishedJson = row.PublishedJson,
-                previousJson = row.PreviousJson
+                profile = template.ProfileName,
+                weenieClassId = template.WeenieClassId,
+                bossName = GetBossWeenieName(DatabaseManager.World.GetWeenie(template.WeenieClassId), template.WeenieClassId),
+                draftRevision = template.DraftRevision,
+                publishedRevision = template.PublishedRevision,
+                previousRevision = 0,
+                enabled = template.Enabled,
+                modifiedBy = "Data template",
+                modifiedAt = template.ModifiedAt,
+                draftJson = template.DraftJson,
+                publishedJson = template.PublishedJson,
+                previousJson = (string)null,
+                isTemplate = true,
+                hasWcidConflict = conflict,
+                sourceFile = template.SourceFile
             };
         }
 
+        private static List<AdminBossFileTemplate> LoadBossFileTemplates()
+        {
+            var templates = new List<AdminBossFileTemplate>();
+            var folder = Path.Combine(AppContext.BaseDirectory, "Data", "DerpACE", "BossMechanics");
+            if (!Directory.Exists(folder))
+                return templates;
+
+            foreach (var path in Directory.EnumerateFiles(folder, "*.json"))
+            {
+                var item = new AdminBossFileTemplate
+                {
+                    SourceFile = Path.GetFileName(path),
+                    ModifiedAt = File.GetLastWriteTimeUtc(path)
+                };
+                try
+                {
+                    var json = File.ReadAllText(path);
+                    using var wrapper = JsonDocument.Parse(json);
+                    var root = wrapper.RootElement;
+                    if (root.TryGetProperty("profileName", out var profileNameElement))
+                    {
+                        item.ProfileName = profileNameElement.GetString()?.Trim().ToLowerInvariant();
+                        if (root.TryGetProperty("weenieClassId", out var wcidElement))
+                            item.WeenieClassId = wcidElement.GetUInt32();
+                        if (root.TryGetProperty("draftRevision", out var draftRevisionElement))
+                            item.DraftRevision = draftRevisionElement.GetInt32();
+                        if (root.TryGetProperty("publishedRevision", out var publishedRevisionElement))
+                            item.PublishedRevision = publishedRevisionElement.GetInt32();
+                        if (root.TryGetProperty("enabled", out var enabledElement))
+                            item.Enabled = enabledElement.GetBoolean();
+                        if (root.TryGetProperty("draftJson", out var draftElement) && draftElement.ValueKind == JsonValueKind.String)
+                            item.DraftJson = draftElement.GetString();
+                        if (root.TryGetProperty("publishedJson", out var publishedElement) && publishedElement.ValueKind == JsonValueKind.String)
+                            item.PublishedJson = publishedElement.GetString();
+                    }
+                    else
+                    {
+                        var document = BossMechanicManager.Deserialize(json);
+                        item.WeenieClassId = document?.WeenieClassId ?? 0;
+                        item.ProfileName = $"template_{item.WeenieClassId}";
+                        item.DraftRevision = 1;
+                        item.PublishedRevision = 1;
+                        item.Enabled = true;
+                        item.DraftJson = json;
+                        item.PublishedJson = json;
+                    }
+
+                    var draft = BossMechanicManager.Deserialize(item.DraftJson ?? item.PublishedJson);
+                    var errors = BossMechanicManager.Validate(draft);
+                    if (errors.Count > 0)
+                        item.Error = string.Join(" ", errors);
+                    else if (item.WeenieClassId == 0)
+                        item.WeenieClassId = draft.WeenieClassId;
+                    if (!TryNormalizeBossProfileName(item.ProfileName, out var normalized, out var nameError))
+                        item.Error = nameError;
+                    else
+                        item.ProfileName = normalized;
+                }
+                catch (Exception ex)
+                {
+                    item.ProfileName ??= $"invalid_template_{templates.Count + 1}";
+                    item.Error = ex.Message;
+                }
+                templates.Add(item);
+            }
+            return templates;
+        }
         private static object HandleBossProfileAction(AdminBossProfileRequest request, string modifiedBy)
         {
             if (request == null)
@@ -2369,7 +2539,7 @@ namespace ACE.Server.DerpAce
 </style>
 </head>
 <body>
-<header class="topbar"><h1>Boss Operations</h1><a id="mapLink" href="/">Admin Map</a><span id="globalStatus" class="status">Loading profiles...</span></header>
+<header class="topbar"><h1>Boss Operations</h1><a id="mapLink" href="/">Admin Map</a><a id="spellLink" href="/spell-workshop">Spell Workshop</a><span id="globalStatus" class="status">Loading profiles...</span></header>
 <div class="layout">
 <aside class="rail">
   <div class="toolbar"><button id="newProfile">New Profile</button><button id="refreshProfiles" title="Refresh profiles">Refresh</button></div>
@@ -2388,10 +2558,10 @@ namespace ACE.Server.DerpAce
   <section class="section"><div class="toolbar"><h2>Profile JSON</h2><button id="formatJson" class="push">Format</button><button id="copyJson">Copy</button></div><textarea id="jsonEditor" class="jsonEditor" spellcheck="false"></textarea><p class="hint">This is the authoritative draft. All supported triggers, action arrays, phases, wildcards, mutators, and advanced fields remain editable here.</p></section>
   <section class="section"><div class="toolbar"><h2>Rules</h2><span id="ruleCount" class="badge">0 rules</span></div><div id="ruleList" class="ruleList"></div></section>
   <section class="section"><h2>Quick Add Rule</h2><div class="quick">
-    <div class="row"><label class="field"><span>Trigger</span><select id="quickTrigger"><option value="health_below">Health below</option><option value="combat_start">Combat start</option><option value="timer">Timer</option><option value="spell_resisted">Spell resisted</option><option value="boss_evades">Boss evades</option><option value="critical_hit">Boss receives critical</option><option value="damage_type">Incoming damage type</option><option value="large_hit">Large hit</option><option value="death">Death</option></select></label><label class="field"><span>Action</span><select id="quickAction"><option value="taunt">Taunt</option><option value="say">Say</option><option value="effect">PlayScript effect</option><option value="maintain_minions">Maintain minions</option><option value="push">Push</option><option value="pull">Pull</option><option value="blink">Blink</option><option value="scatter">Scatter</option><option value="knock_up">Knock up</option><option value="apply_spell">Apply spell</option><option value="set_phase">Set phase</option></select></label></div>
+    <div class="row"><label class="field"><span>Trigger</span><select id="quickTrigger"><option value="health_below">Health below</option><option value="combat_start">Combat start</option><option value="timer">Timer</option><option value="spell_resisted">Spell resisted</option><option value="boss_evades">Boss evades</option><option value="critical_hit">Boss receives critical</option><option value="damage_type">Incoming damage type</option><option value="large_hit">Large hit</option><option value="death">Death</option></select></label><label class="field"><span>Action</span><select id="quickAction"><option value="taunt">Taunt</option><option value="say">Say</option><option value="effect">PlayScript effect</option><option value="maintain_minions">Maintain minions</option><option value="mirror_minions">Mirror minions</option><option value="push">Push</option><option value="pull">Pull</option><option value="blink">Blink</option><option value="scatter">Scatter</option><option value="knock_up">Knock up</option><option value="frost_rain">Frost rain</option><option value="apply_spell">Apply spell</option><option value="set_phase">Set phase</option></select></label></div>
     <div class="row"><label class="field"><span>Threshold / interval / large-hit %</span><input id="quickAmount" type="number" value="75" min="1" max="3600"></label><label class="field"><span>Chance %</span><input id="quickChance" type="number" value="100" min="1" max="100"></label></div>
     <div class="row"><label class="field"><span>Minimum players</span><input id="quickPlayers" type="number" value="1" min="1" max="40"></label><label class="field"><span>Required phase</span><input id="quickRequiredPhase" placeholder="optional"></label></div>
-    <label class="field"><span>Text / PlayScript / phase / spell ID / minion WCID</span><input id="quickValue" list="playScripts" placeholder="Action value"><datalist id="playScripts">{{{{playScriptOptions}}}}</datalist></label>
+    <label class="field"><span>Text / PlayScript / phase / spell ID / minion shell WCID</span><input id="quickValue" list="playScripts" placeholder="Action value"><datalist id="playScripts">{{{{playScriptOptions}}}}</datalist></label>
     <div class="row"><label class="field"><span>Target</span><select id="quickTarget"><option value="trigger">Triggering player</option><option value="nearest">Nearest</option><option value="farthest">Farthest</option><option value="random">Random</option><option value="all">All nearby</option></select></label><label class="field"><span>Distance / minion count</span><input id="quickActionAmount" type="number" value="10" min="1" max="40"></label></div>
     <label class="field"><span>Damage type (damage_type trigger)</span><select id="quickDamageType"><option>Slash</option><option>Pierce</option><option>Bludgeon</option><option>Fire</option><option>Cold</option><option>Acid</option><option>Electric</option><option>Nether</option></select></label>
     <button id="addRule" class="primary">Add Rule</button>
@@ -2410,7 +2580,7 @@ namespace ACE.Server.DerpAce
 </div>
 <script>
 const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);const session=params.get('session')||'',mapToken=params.get('token')||'';let profiles=[],current=null,dirty=false;
-if(session)$('mapLink').href='/?session='+encodeURIComponent(session);
+if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('spellLink').href='/spell-workshop?session='+encodeURIComponent(session)}
 function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(mapToken)h['X-DerpACE-Map-Token']=mapToken;if(json)h['Content-Type']='application/json';return h}
 async function api(url,options={}){options.headers={...headers(!!options.body),...(options.headers||{})};options.cache='no-store';const res=await fetch(url,options);let data;try{data=await res.json()}catch{data={ok:false,error:await res.text()}}if(!res.ok||data.ok===false)throw Object.assign(new Error(data.error||data.message||res.statusText),{data});return data}
 function status(message,type=''){const el=$('globalStatus');el.textContent=message;el.className='status '+type}
@@ -2419,28 +2589,64 @@ function parseDraft(){try{return JSON.parse($('jsonEditor').value)}catch(e){thro
 function template(wcid=0){return{schemaVersion:1,weenieClassId:+wcid||0,mutators:[],rules:[]}}
 function setEditor(doc){$('jsonEditor').value=JSON.stringify(doc,null,2);dirty=false;renderRules()}
 async function loadProfiles(selectName=current?.profile){try{const data=await api('/api/boss/profiles');profiles=data.profiles||[];renderProfiles();if(selectName&&profiles.some(p=>p.profile===selectName))await loadProfile(selectName);status(`${profiles.length} boss profile${profiles.length===1?'':'s'} loaded.`)}catch(e){status(e.message,'error')}}
-function renderProfiles(){const term=$('profileSearch').value.trim().toLowerCase();$('profileList').innerHTML=profiles.filter(p=>!term||`${p.profile} ${p.bossName} ${p.weenieClassId}`.toLowerCase().includes(term)).map(p=>`<button class="profileItem ${current?.profile===p.profile?'active':''}" data-profile="${safe(p.profile)}"><strong><i class="dot ${p.enabled?'live':''}"></i>${safe(p.profile)}</strong><small>${safe(p.bossName)} · ${p.weenieClassId} · draft r${p.draftRevision}</small></button>`).join('')||'<span class="empty">No matching profiles.</span>';$('profileList').querySelectorAll('button').forEach(b=>b.onclick=()=>loadProfile(b.dataset.profile))}
-async function loadProfile(name){if(dirty&&!confirm('Discard unsaved draft changes?'))return;try{const data=await api('/api/boss/profile?profile='+encodeURIComponent(name));current=data;$('profileName').value=data.profile;$('profileName').readOnly=true;$('bossWcid').value=data.weenieClassId;$('bossWcid').readOnly=true;$('profileMeta').innerHTML=`<span>${safe(data.bossName)}</span><span>Draft r${data.draftRevision}</span><span>Published r${data.publishedRevision}</span><span>${data.enabled?'Enabled':'Disabled'}</span><span>Edited by ${safe(data.modifiedBy||'unknown')}</span>`;$('selectedSpawnProfile').textContent=data.profile;setEditor(JSON.parse(data.draftJson||'{}'));renderProfiles();setControls();status(`Loaded ${data.profile}.`)}catch(e){status(e.message,'error')}}
+function renderProfiles(){const term=$('profileSearch').value.trim().toLowerCase();$('profileList').innerHTML=profiles.filter(p=>!term||`${p.profile} ${p.bossName} ${p.weenieClassId}`.toLowerCase().includes(term)).map(p=>`<button class="profileItem ${current?.profile===p.profile?'active':''}" data-profile="${safe(p.profile)}"><strong><i class="dot ${p.enabled&&!p.isTemplate?'live':''}"></i>${safe(p.profile)} ${p.isTemplate?'<span class="badge">Template</span>':''}</strong><small>${safe(p.bossName)} &middot; ${p.weenieClassId} &middot; ${p.isTemplate?safe(p.templateError||'data file'):('draft r'+p.draftRevision)}</small></button>`).join('')||'<span class="empty">No matching profiles.</span>';$('profileList').querySelectorAll('button').forEach(b=>b.onclick=()=>loadProfile(b.dataset.profile))}
+async function loadProfile(name){if(dirty&&!confirm('Discard unsaved draft changes?'))return;try{const data=await api('/api/boss/profile?profile='+encodeURIComponent(name));current=data;$('profileName').value=data.profile;$('profileName').readOnly=true;$('bossWcid').value=data.weenieClassId;$('bossWcid').readOnly=true;$('profileMeta').innerHTML=data.isTemplate?`<span>${safe(data.bossName)}</span><span class="badge">Data template</span><span>${safe(data.sourceFile)}</span>${data.hasWcidConflict?'<span class="error">WCID already belongs to another database profile</span>':'<span>Save Draft to import</span>'}`:`<span>${safe(data.bossName)}</span><span>Draft r${data.draftRevision}</span><span>Published r${data.publishedRevision}</span><span>${data.enabled?'Enabled':'Disabled'}</span><span>Edited by ${safe(data.modifiedBy||'unknown')}</span>`;$('selectedSpawnProfile').textContent=data.isTemplate?'Template not imported':data.profile;setEditor(JSON.parse(data.draftJson||'{}'));renderProfiles();setControls();status(data.isTemplate?`Loaded template ${data.profile}. Save Draft to import it.`:`Loaded ${data.profile}.`)}catch(e){status(e.message,'error')}}
 function newProfile(){if(dirty&&!confirm('Discard unsaved draft changes?'))return;current=null;$('profileName').value='';$('profileName').readOnly=false;$('bossWcid').value='';$('bossWcid').readOnly=false;$('profileMeta').innerHTML='<span>New profile for an existing creature WCID.</span>';$('selectedSpawnProfile').textContent='No profile';setEditor(template());renderProfiles();setControls();$('profileName').focus()}
-function setControls(){const has=!!current;['validateDraft','saveDraft','publishDraft','rollbackProfile','restorePublished','toggleProfile','spawnAtPlayer','spawnAtLoc'].forEach(id=>$(id).disabled=!has);if(has)$('toggleProfile').textContent=current.enabled?'Disable':'Enable';else $('toggleProfile').textContent='Enable / Disable'}
+function setControls(){const has=!!current,isTemplate=!!current?.isTemplate;$('validateDraft').disabled=!has;$('saveDraft').disabled=!has;['publishDraft','rollbackProfile','restorePublished','toggleProfile','spawnAtPlayer','spawnAtLoc'].forEach(id=>$(id).disabled=!has||isTemplate);$('saveDraft').textContent=isTemplate?'Import Template':'Save Draft';$('toggleProfile').textContent=has&&!isTemplate?(current.enabled?'Disable':'Enable'):'Enable / Disable'}
 function renderRules(){let doc;try{doc=parseDraft();$('ruleCount').textContent=`${(doc.rules||[]).length} rules`;$('ruleList').innerHTML=(doc.rules||[]).map((r,i)=>`<details class="ruleCard"><summary><strong>${safe(r.id||'unnamed')}</strong><span class="badge">${safe(r.trigger||'unknown')}</span><span>${(r.actions||[]).length} action${(r.actions||[]).length===1?'':'s'}</span></summary><div class="ruleBody"><textarea data-rule-json="${i}" spellcheck="false">${safe(JSON.stringify(r,null,2))}</textarea><div class="ruleActions"><button data-apply="${i}">Apply Rule JSON</button><button data-up="${i}">Move Up</button><button data-copy-rule="${i}">Duplicate</button><button data-delete="${i}" class="danger">Remove</button></div></div></details>`).join('')||'<span class="empty">No rules yet.</span>';bindRuleButtons()}catch(e){$('ruleCount').textContent='Invalid JSON';$('ruleList').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
 function mutateRules(fn){try{const doc=parseDraft();doc.rules=doc.rules||[];fn(doc.rules);setEditor(doc);dirty=true}catch(e){status(e.message,'error')}}
 function bindRuleButtons(){$('ruleList').querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>mutateRules(r=>r[+b.dataset.apply]=JSON.parse(document.querySelector(`[data-rule-json="${b.dataset.apply}"]`).value)));$('ruleList').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>mutateRules(r=>r.splice(+b.dataset.delete,1)));$('ruleList').querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>mutateRules(r=>{const i=+b.dataset.up;if(i>0)[r[i-1],r[i]]=[r[i],r[i-1]]}));$('ruleList').querySelectorAll('[data-copy-rule]').forEach(b=>b.onclick=()=>mutateRules(r=>{const i=+b.dataset.copyRule;const copy=structuredClone(r[i]);copy.id=(copy.id||'rule')+'_copy';r.splice(i+1,0,copy)}))}
-function quickRule(){mutateRules(rules=>{const trigger=$('quickTrigger').value,kind=$('quickAction').value,value=$('quickValue').value.trim(),amount=+$('quickAmount').value;let action={type:kind};if(kind==='taunt')Object.assign(action,{channel:'local',text:value||'%t, face me.'});else if(kind==='say')action.text=value||'The encounter changes.';else if(kind==='effect')action.effect=value||'EnchantUpRed';else if(kind==='maintain_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:100});else if(['push','pull','blink','scatter','knock_up'].includes(kind))Object.assign(action,{target:$('quickTarget').value,distance:+$('quickActionAmount').value||10});else if(kind==='apply_spell')Object.assign(action,{target:$('quickTarget').value,spellId:+value});else if(kind==='set_phase')action.phase=value||'phase_2';const rule={id:`${trigger}_${Date.now().toString(36)}`,trigger,thresholdPercent:trigger==='health_below'?amount:0,intervalSeconds:trigger==='timer'?amount:0,chancePercent:+$('quickChance').value,minPlayers:+$('quickPlayers').value,damageType:trigger==='damage_type'?$('quickDamageType').value:null,damagePercent:trigger==='large_hit'?amount:0,once:trigger==='timer'?false:true,phase:$('quickRequiredPhase').value.trim()||null,actions:[action]};rules.push(rule)})}
+function quickRule(){mutateRules(rules=>{const trigger=$('quickTrigger').value,kind=$('quickAction').value,value=$('quickValue').value.trim(),amount=+$('quickAmount').value;let action={type:kind};if(kind==='taunt')Object.assign(action,{channel:'local',text:value||'%t, face me.'});else if(kind==='say')action.text=value||'The encounter changes.';else if(kind==='effect')action.effect=value||'EnchantUpRed';else if(kind==='maintain_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:100});else if(kind==='mirror_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:1000,source:'nearby',radius:60,durationSeconds:30,noXp:true,dropItems:false,noCorpse:true,translucency:0.35});else if(['push','pull','blink','scatter','knock_up'].includes(kind))Object.assign(action,{target:$('quickTarget').value,distance:+$('quickActionAmount').value||10});else if(kind==='frost_rain')Object.assign(action,{target:$('quickTarget').value,count:Math.min(8,+$('quickActionAmount').value||2),damageScale:0.25});else if(kind==='apply_spell')Object.assign(action,{target:$('quickTarget').value,spellId:+value});else if(kind==='set_phase')action.phase=value||'phase_2';const rule={id:`${trigger}_${Date.now().toString(36)}`,trigger,thresholdPercent:trigger==='health_below'?amount:0,intervalSeconds:trigger==='timer'?amount:0,chancePercent:+$('quickChance').value,minPlayers:+$('quickPlayers').value,damageType:trigger==='damage_type'?$('quickDamageType').value:null,damagePercent:trigger==='large_hit'?amount:0,once:trigger==='timer'?false:true,phase:$('quickRequiredPhase').value.trim()||null,actions:[action]};rules.push(rule)})}
 async function profileAction(action,extra={}){if(!current)throw new Error('Select a profile first.');return api('/api/boss/profile',{method:'POST',body:JSON.stringify({action,profile:current.profile,json:$('jsonEditor').value,...extra})})}
 async function createProfile(){const name=$('profileName').value.trim(),wcid=+$('bossWcid').value;const doc=parseDraft();doc.weenieClassId=wcid;$('jsonEditor').value=JSON.stringify(doc,null,2);const data=await api('/api/boss/profile',{method:'POST',body:JSON.stringify({action:'create',profile:name,weenieClassId:wcid,json:$('jsonEditor').value})});dirty=false;await loadProfiles(data.profile);status(data.message)}
-async function saveProfile(){if(!current)return createProfile();const data=await profileAction('save');dirty=false;await loadProfile(current.profile);status(data.message);return data}
+async function saveProfile(){if(!current||current.isTemplate)return createProfile();const data=await profileAction('save');dirty=false;await loadProfile(current.profile);status(data.message);return data}
 async function validateProfile(){try{const data=current?await profileAction('validate'):await createProfile();status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
 async function publishProfile(){if(!current)return status('Create the profile first.','error');if(!confirm(`Publish ${current.profile}? New spawns will use this revision immediately.`))return;try{await saveProfile();const data=await profileAction('publish');await loadProfiles(current.profile);status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
 async function simpleAction(action,extra={},confirmText=''){if(confirmText&&!confirm(confirmText))return;try{const data=await profileAction(action,extra);await loadProfiles(current.profile);status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
-async function loadPlayers(){try{const data=await api('/api/players');$('spawnPlayer').innerHTML='<option value="">Select player...</option>'+(data.players||[]).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${safe(p.guid)}">${safe(p.name)} · ${safe(p.loc||p.landblock)}</option>`).join('')}catch(e){status(e.message,'error')}}
+async function loadPlayers(){try{const data=await api('/api/players');$('spawnPlayer').innerHTML='<option value="">Select player...</option>'+(data.players||[]).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${safe(p.guid)}">${safe(p.name)} &middot; ${safe(p.loc||p.landblock)}</option>`).join('')}catch(e){status(e.message,'error')}}
 async function spawn(usePlayer){if(!current)return status('Select a published profile first.','error');const body={profile:current.profile,count:+$('spawnCount').value,distance:+$('spawnDistance').value};if(usePlayer)body.playerGuid=$('spawnPlayer').value;else body.loc=$('spawnLoc').value.trim();try{const data=await api('/api/boss/spawn',{method:'POST',body:JSON.stringify(body)});status(data.message);setTimeout(loadActive,800)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
-async function loadActive(){try{const data=await api('/api/boss/active');$('activeBosses').innerHTML=(data.bosses||[]).map(b=>{const pct=b.maxHealth?Math.max(0,Math.min(100,b.health*100/b.maxHealth)):0;return `<div class="bossInstance"><strong>${safe(b.name)} <span class="badge">${safe(b.profile)}</span></strong><small>${safe(b.guid)} · WCID ${b.weenieClassId}</small><div class="health"><i style="width:${pct}%"></i></div><small>${b.health.toLocaleString()} / ${b.maxHealth.toLocaleString()} · ${safe(b.loc||b.landblock)}</small><button data-despawn="${safe(b.guid)}" class="danger" style="margin-top:6px">Despawn</button></div>`}).join('')||'<span class="empty">No loaded boss-profile creatures.</span>';$('activeBosses').querySelectorAll('[data-despawn]').forEach(b=>b.onclick=async()=>{if(!confirm(`Despawn ${b.dataset.despawn}?`))return;try{const data=await api('/api/boss/despawn',{method:'POST',body:JSON.stringify({guid:b.dataset.despawn})});status(data.message);setTimeout(loadActive,800)}catch(e){status(e.message,'error')}})}catch(e){$('activeBosses').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
+async function loadActive(){try{const data=await api('/api/boss/active');$('activeBosses').innerHTML=(data.bosses||[]).map(b=>{const pct=b.maxHealth?Math.max(0,Math.min(100,b.health*100/b.maxHealth)):0;return `<div class="bossInstance"><strong>${safe(b.name)} <span class="badge">${safe(b.profile)}</span></strong><small>${safe(b.guid)} &middot; WCID ${b.weenieClassId}</small><div class="health"><i style="width:${pct}%"></i></div><small>${b.health.toLocaleString()} / ${b.maxHealth.toLocaleString()} &middot; ${safe(b.loc||b.landblock)}</small><button data-despawn="${safe(b.guid)}" class="danger" style="margin-top:6px">Despawn</button></div>`}).join('')||'<span class="empty">No loaded boss-profile creatures.</span>';$('activeBosses').querySelectorAll('[data-despawn]').forEach(b=>b.onclick=async()=>{if(!confirm(`Despawn ${b.dataset.despawn}?`))return;try{const data=await api('/api/boss/despawn',{method:'POST',body:JSON.stringify({guid:b.dataset.despawn})});status(data.message);setTimeout(loadActive,800)}catch(e){status(e.message,'error')}})}catch(e){$('activeBosses').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
 $('profileSearch').oninput=renderProfiles;$('newProfile').onclick=newProfile;$('refreshProfiles').onclick=()=>loadProfiles();$('jsonEditor').oninput=()=>{dirty=true;renderRules()};$('bossWcid').oninput=()=>{try{const d=parseDraft();d.weenieClassId=+$('bossWcid').value;$('jsonEditor').value=JSON.stringify(d,null,2);dirty=true;renderRules()}catch{}};$('formatJson').onclick=()=>{try{setEditor(parseDraft());dirty=true}catch(e){status(e.message,'error')}};$('copyJson').onclick=()=>navigator.clipboard.writeText($('jsonEditor').value);$('addRule').onclick=quickRule;$('saveDraft').onclick=()=>saveProfile().catch(e=>status((e.data?.errors||[e.message]).join(' | '),'error'));$('validateDraft').onclick=validateProfile;$('publishDraft').onclick=publishProfile;$('rollbackProfile').onclick=()=>simpleAction('rollback',{},`Roll ${current?.profile} back to its previous published revision?`);$('restorePublished').onclick=()=>simpleAction('restore-published',{},'Discard the current draft and restore the published revision?');$('toggleProfile').onclick=()=>simpleAction('set-enabled',{enabled:!current.enabled},`${current?.enabled?'Disable':'Enable'} ${current?.profile}?`);$('spawnAtPlayer').onclick=()=>spawn(true);$('spawnAtLoc').onclick=()=>spawn(false);$('refreshActive').onclick=loadActive;
 newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterval(()=>{if(!document.hidden)loadActive()},30000);
 </script>
 </body>
 </html>
+""";
+        }
+        private static string BuildSpellWorkshopHtml()
+        {
+            return """
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DerpACE Spell Workshop</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0f10;--panel:#121719;--line:#354146;--text:#edf2f3;--muted:#9ba8ad;--blue:#65b6e8;--green:#5bc78f;--red:#e47777}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,textarea{font:inherit;color:inherit}.top{height:52px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:#101517}.top h1{font-size:16px;margin:0}.top a{color:var(--blue);text-decoration:none}.top span{margin-left:auto;color:var(--muted)}main{display:grid;grid-template-columns:260px minmax(420px,1fr) 390px;min-height:calc(100vh - 52px)}aside,.guide{padding:16px;background:var(--panel);overflow:auto}aside{border-right:1px solid var(--line)}.guide{border-left:1px solid var(--line)}.editor{padding:16px;min-width:0}.field{display:grid;gap:4px;margin-bottom:11px}.field span{font-size:10px;color:var(--muted);text-transform:uppercase}.field input,.field textarea{width:100%;background:#080c0d;border:1px solid #3a474c;border-radius:4px;padding:8px}.actions{display:flex;gap:7px;flex-wrap:wrap}button{cursor:pointer;border:1px solid #46565c;border-radius:4px;background:#27353a;padding:8px 11px}button:hover{border-color:var(--green)}button.primary{background:#20533a}.note,.status{color:var(--muted)}.status.ok{color:var(--green)}.status.error{color:var(--red)}#spellJson{width:100%;height:calc(100vh - 145px);min-height:520px;resize:vertical;background:#070a0b;border:1px solid #38464b;border-radius:4px;padding:12px;color:#e9eff0;font:12px/1.5 Consolas,monospace;tab-size:2}.editorHead{display:flex;align-items:center;gap:8px;margin-bottom:10px}.editorHead h2{font-size:14px;margin:0}.editorHead .actions{margin-left:auto}details{border-top:1px solid var(--line);padding:9px 0}details:first-of-type{border-top:0}summary{cursor:pointer;font-weight:650}.vars{display:grid;gap:8px;margin-top:9px}.var{display:grid;grid-template-columns:145px 1fr;gap:8px}.var code{color:#b8dcf2}.var span{color:var(--muted)}h2{font-size:14px;margin:0 0 10px}.warning{margin-top:14px;color:#e3bd69}@media(max-width:1050px){main{grid-template-columns:220px 1fr}.guide{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}}@media(max-width:700px){main{display:block}aside,.guide{border:0;border-bottom:1px solid var(--line)}#spellJson{height:65vh}.top span{display:none}}
+</style></head><body>
+<header class="top"><h1>Spell Workshop</h1><a id="mapLink" href="/">Admin Map</a><a id="bossLink" href="/boss-mechanics">Boss Operations</a><span>Admin only</span></header>
+<main><aside><h2>Clone A Spell</h2><p class="note">Start from a working spell. The template supplies every field you do not override.</p>
+<label class="field"><span>Template spell ID</span><input id="templateId" type="number" min="1" value="2659"></label>
+<label class="field"><span>New custom ID</span><input id="targetId" type="number" min="65001" max="65535" value="65019"></label>
+<button id="clone" class="primary">Load Template</button>
+<hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+<label class="field"><span>JSON filename</span><input id="fileName" value="WorkshopSpell.json"></label>
+<div class="actions"><button id="format">Format JSON</button><button id="save" class="primary">Save + Reload</button></div>
+<p id="status" class="status">No spell loaded.</p><p class="warning">Saving reloads all custom spell JSON immediately. Existing casts are unaffected; future casts use the new definition.</p></aside>
+<section class="editor"><div class="editorHead"><h2>Authoritative JSON</h2><div class="actions"><button id="copy">Copy</button></div></div><textarea id="spellJson" spellcheck="false" placeholder="Load a template or paste CustomSpells JSON here."></textarea></section>
+<section class="guide"><h2>Field Reference</h2><p class="note">Top-level fields are convenient overrides. <code>SpellBase</code> and <code>DbSpell</code> expose the complete underlying records.</p>
+<details open><summary>Identity and targeting</summary><div class="vars">
+<div class="var"><code>Template</code><span>Existing spell ID or enum name to clone. This determines default behavior.</span></div><div class="var"><code>Id</code><span>Runtime ID, 65001-65535. Must be unique.</span></div><div class="var"><code>Name</code><span>Name shown by examine, casting, and enchantment UI.</span></div><div class="var"><code>SpellWords</code><span>Displayed incantation text; it does not choose components.</span></div><div class="var"><code>Desc</code><span>Human-readable spell description.</span></div><div class="var"><code>Icon</code><span>Spell icon DID as decimal or 0x hexadecimal.</span></div><div class="var"><code>School</code><span>WarMagic, LifeMagic, CreatureEnchantment, ItemEnchantment, or VoidMagic.</span></div><div class="var"><code>Category</code><span>Client stacking category. Matching categories can replace one another.</span></div><div class="var"><code>NonComponentTargetType</code><span>Allowed target ItemType flags, by names joined with commas or a numeric mask.</span></div></div></details>
+<details><summary>Cost, power, range, and duration</summary><div class="vars">
+<div class="var"><code>BaseMana</code><span>Base mana before skill and component adjustments.</span></div><div class="var"><code>Power</code><span>Spell tier/power used by resistance and dispel logic.</span></div><div class="var"><code>BaseRangeConstant</code><span>Range floor in world units.</span></div><div class="var"><code>BaseRangeMod</code><span>Additional range scaling.</span></div><div class="var"><code>Duration</code><span>Enchantment lifetime in seconds. Zero is immediate.</span></div><div class="var"><code>Bitfield</code><span>SpellFlags names or numeric mask: FastCast, Resistable, Beneficial, and related behavior.</span></div><div class="var"><code>MetaSpellType</code><span>Core spell behavior family. Keep the template value unless server handling supports the replacement.</span></div></div></details>
+<details><summary>Damage and enchantments</summary><div class="vars">
+<div class="var"><code>EType</code><span>Element/damage flags used by projectile and resistance logic.</span></div><div class="var"><code>DamageType</code><span>DamageType name or mask applied on impact.</span></div><div class="var"><code>BaseIntensity</code><span>Minimum damage or effect magnitude.</span></div><div class="var"><code>Variance</code><span>Random magnitude added above BaseIntensity.</span></div><div class="var"><code>StatModType</code><span>EnchantmentTypeFlags describing additive, multiplicative, skill, attribute, or defense changes.</span></div><div class="var"><code>StatModKey</code><span>Numeric property/skill/attribute targeted by the enchantment.</span></div><div class="var"><code>StatModVal</code><span>Modifier value. Multipliers generally use fractions, such as 0.10 for ten percent.</span></div><div class="var"><code>DotDuration</code><span>Total damage-over-time duration in seconds.</span></div></div></details>
+<details><summary>Projectile geometry</summary><div class="vars">
+<div class="var"><code>NumProjectiles</code><span>Base projectile count.</span></div><div class="var"><code>NumProjectilesVariance</code><span>Random additional projectile count.</span></div><div class="var"><code>SpreadAngle</code><span>Horizontal spread in radians.</span></div><div class="var"><code>VerticalAngle</code><span>Vertical launch angle in radians.</span></div><div class="var"><code>DefaultLaunchAngle</code><span>Fallback trajectory angle in radians.</span></div><div class="var"><code>NonTracking</code><span>True keeps the initial trajectory; false allows homing behavior.</span></div><div class="var"><code>CreateOffset</code><span><code>{X,Y,Z}</code> spawn offset from the projectile origin.</span></div><div class="var"><code>Padding</code><span><code>{X,Y,Z}</code> collision/launch padding.</span></div><div class="var"><code>Dims</code><span><code>{X,Y,Z}</code> projectile dimensions.</span></div><div class="var"><code>Peturbation</code><span><code>{X,Y,Z}</code> randomized trajectory perturbation. The source field keeps ACE's spelling.</span></div></div></details>
+<details><summary>Visuals, formula, and advanced records</summary><div class="vars">
+<div class="var"><code>CasterEffect</code><span>PlayScript enum run on the caster.</span></div><div class="var"><code>TargetEffect</code><span>PlayScript enum run on the target or impact.</span></div><div class="var"><code>Formula</code><span>Array of component IDs controlling the cast formula and gestures.</span></div><div class="var"><code>Wcid</code><span>Object WCID used by spell types that create or summon an object.</span></div><div class="var"><code>SpellBase</code><span>Advanced object containing any writable DAT SpellBase property. Top-level values are applied first.</span></div><div class="var"><code>DbSpell</code><span>Advanced object containing any writable world database spell property, including projectile physics fields.</span></div></div></details>
+</section></main>
+<script>
+const q=new URLSearchParams(location.search),session=q.get('session')||'',token=q.get('token')||'';const $=id=>document.getElementById(id);if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('bossLink').href='/boss-mechanics?session='+encodeURIComponent(session)}function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(token)h['X-DerpACE-Map-Token']=token;if(json)h['Content-Type']='application/json';return h}function status(text,type=''){const e=$('status');e.textContent=text;e.className='status '+type}async function api(url,opt={}){opt.headers={...headers(!!opt.body),...(opt.headers||{})};const r=await fetch(url,opt),d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||'Request failed');return d}$('clone').onclick=async()=>{try{const d=await api(`/api/spells/draft?template=${encodeURIComponent($('templateId').value)}&id=${encodeURIComponent($('targetId').value)}`);$('spellJson').value=d.json;status('Template loaded. Review every changed field before saving.','ok')}catch(e){status(e.message,'error')}};$('format').onclick=()=>{try{$('spellJson').value=JSON.stringify(JSON.parse($('spellJson').value),null,2);status('JSON is valid.','ok')}catch(e){status(e.message,'error')}};$('copy').onclick=()=>navigator.clipboard.writeText($('spellJson').value);$('save').onclick=async()=>{try{JSON.parse($('spellJson').value);const d=await api('/api/spells/save',{method:'POST',body:JSON.stringify({fileName:$('fileName').value,json:$('spellJson').value})});status(d.message,'ok')}catch(e){status(e.message,'error')}};
+</script></body></html>
 """;
         }
         private static string BuildIndexHtml()
@@ -2692,7 +2898,7 @@ aside {{ position:relative; z-index:30; pointer-events:auto; }}
     <input id=""loginPassword"" type=""password"" autocomplete=""current-password"" placeholder=""password"">
     <button id=""loginButton"">Log In</button>
   </div>
-  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><button id=""logoutButton"">Log Out</button></div>
+  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><a id=""spellWorkshopLink"" class=""adminOnly"" href=""/spell-workshop"" target=""_blank"">Spells</a><button id=""logoutButton"">Log Out</button></div>
   <div class=""controls adminOnly""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div></div><nav class=""sidebarTabs""><button class=""sidebarTab active"" data-side-tab=""players"">Players</button><button class=""sidebarTab adminOnly"" data-side-tab=""inspect"">Inspect</button><button class=""sidebarTab adminOnly"" data-side-tab=""legend"">Legend</button></nav><div class=""sidebarContent""><div class=""sidebarSearch sidePlayers""><input id=""playerSearch"" placeholder=""Search players or locations""><span id=""rosterCount"" class=""rosterCount"">0</span></div>
   <section id=""adminPanel"" class=""adminPanel adminOnly sideInspect"">
     <h2 id=""adminPlayerName"">Player</h2>
@@ -2785,6 +2991,7 @@ const loginPassword = document.getElementById('loginPassword');
 const sessionBar = document.getElementById('sessionBar');
 const sessionText = document.getElementById('sessionText');
 const bossMechanicsLink = document.getElementById('bossMechanicsLink');
+const spellWorkshopLink = document.getElementById('spellWorkshopLink');
 const bottomDock = document.getElementById('bottomDock');
 const adminPanel = document.getElementById('adminPanel');
 const adminPlayerName = document.getElementById('adminPlayerName');
@@ -2862,6 +3069,7 @@ function renderRareFeed(rares) {{
 function setBossMechanicsLink() {{
   if (!bossMechanicsLink) return;
   bossMechanicsLink.href = mapSessionToken ? `/boss-mechanics?session=${{encodeURIComponent(mapSessionToken)}}` : '/boss-mechanics';
+  if (spellWorkshopLink) spellWorkshopLink.href = mapSessionToken ? `/spell-workshop?session=${{encodeURIComponent(mapSessionToken)}}` : '/spell-workshop';
 }}
 function setAuthenticated(value, accountName, isAdmin) {{
   authenticated = !!value || !!token.value;
@@ -3557,6 +3765,40 @@ checkSession();
             public AdminMapFeeds Feeds { get; set; }
         }
 
+        private sealed class AdminSpellWorkshopSaveRequest
+        {
+            public string FileName { get; set; }
+            public string Json { get; set; }
+        }
+        private sealed class AdminBossProfileSummary
+        {
+            public string Profile { get; set; }
+            public uint WeenieClassId { get; set; }
+            public string BossName { get; set; }
+            public int DraftRevision { get; set; }
+            public int PublishedRevision { get; set; }
+            public int PreviousRevision { get; set; }
+            public bool Enabled { get; set; }
+            public string ModifiedBy { get; set; }
+            public DateTime ModifiedAt { get; set; }
+            public bool IsTemplate { get; set; }
+            public bool HasWcidConflict { get; set; }
+            public string TemplateError { get; set; }
+        }
+
+        private sealed class AdminBossFileTemplate
+        {
+            public string ProfileName { get; set; }
+            public uint WeenieClassId { get; set; }
+            public int DraftRevision { get; set; }
+            public string DraftJson { get; set; }
+            public int PublishedRevision { get; set; }
+            public string PublishedJson { get; set; }
+            public bool Enabled { get; set; }
+            public string SourceFile { get; set; }
+            public DateTime ModifiedAt { get; set; }
+            public string Error { get; set; }
+        }
         private sealed class AdminBossProfileRequest
         {
             public string Action { get; set; }

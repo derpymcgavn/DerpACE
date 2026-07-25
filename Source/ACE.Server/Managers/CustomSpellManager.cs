@@ -44,6 +44,7 @@ namespace ACE.Server.Managers
         public const uint HexdustSpellIdFirst = 65010;
         public const uint HexdustSpellIdLast = 65016;
         public const uint RoadrunnerSpellId = 65017;
+        public const uint RainfallFrostSpellId = 65018;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
@@ -54,7 +55,8 @@ namespace ACE.Server.Managers
                 || spellId == MeteorFragmentSpellId
                 || spellId == SpiralStarLashSpellId
                 || spellId == ChainLightningArcSpellId
-                || spellId == FrostWaveShieldSpellId;
+                || spellId == FrostWaveShieldSpellId
+                || spellId == RainfallFrostSpellId;
         }
 
         private const string ContentDirectoryEnvVar = "DERPACE_CUSTOM_SPELLS_DIR";
@@ -81,6 +83,7 @@ namespace ACE.Server.Managers
             EnsureDefaultFrostWaveShieldSpell();
             EnsureDefaultHexdustSpells();
             EnsureDefaultRoadrunnerSpell();
+            EnsureDefaultBossSpells();
 
             var loaded = LoadAll();
             ForceLoadDefaultWellFedSpell();
@@ -88,6 +91,7 @@ namespace ACE.Server.Managers
             ForceLoadDefaultFrostWaveShieldSpell();
             ForceLoadDefaultHexdustSpells();
             ForceLoadDefaultRoadrunnerSpell();
+            ForceLoadDefaultBossSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -102,6 +106,7 @@ namespace ACE.Server.Managers
             ForceLoadDefaultFrostWaveShieldSpell();
             ForceLoadDefaultHexdustSpells();
             ForceLoadDefaultRoadrunnerSpell();
+            ForceLoadDefaultBossSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -149,6 +154,15 @@ namespace ACE.Server.Managers
             }
         }
 
+        private static void ForceLoadDefaultBossSpells()
+        {
+            using var doc = JsonDocument.Parse(DefaultBossSpellsJson, JsonOptions);
+            if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in customSpells.EnumerateArray())
+                    TryApply(entry, "built-in BossSpells.json");
+            }
+        }
         private static void ForceLoadDefaultFrostWaveShieldSpell()
         {
             using var doc = JsonDocument.Parse(DefaultFrostWaveShieldJson, JsonOptions);
@@ -279,6 +293,87 @@ namespace ACE.Server.Managers
             }
         }
 
+        public static bool TryCreateWorkshopDraft(uint templateId, uint targetId, out string json, out string error)
+        {
+            json = null;
+            error = null;
+            if (targetId < FirstCustomSpellId || targetId > LastCustomSpellId)
+            {
+                error = $"Custom spell IDs must be between {FirstCustomSpellId} and {LastCustomSpellId}.";
+                return false;
+            }
+
+            var dbSpell = DatabaseManager.World.GetCachedSpell(templateId);
+            var spellBase = new Spell(templateId)._spellBase;
+            if (dbSpell == null || spellBase == null)
+            {
+                error = $"Template spell {templateId} was not found.";
+                return false;
+            }
+
+            json = "{\n  \"CustomSpells\": [\n" + IndentJson(CreateExportJson(templateId, targetId, spellBase, dbSpell), 4) + "\n  ]\n}";
+            return true;
+        }
+
+        public static bool TrySaveWorkshopJson(string json, string fileName, out string path, out int loaded, out string error)
+        {
+            path = null;
+            loaded = 0;
+            error = null;
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                error = "Spell JSON is empty.";
+                return false;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json, JsonOptions);
+                var entries = GetWorkshopEntries(doc.RootElement).ToList();
+                if (entries.Count == 0)
+                    throw new InvalidOperationException("Add at least one spell entry or a CustomSpells array.");
+
+                foreach (var entry in entries)
+                {
+                    if (!TryGet(entry, "Template", out var templateElement) || !TryReadSpellId(templateElement, out var templateId) ||
+                        DatabaseManager.World.GetCachedSpell(templateId) == null || new Spell(templateId)._spellBase == null)
+                        throw new InvalidOperationException("Every entry needs a valid existing Template spell.");
+                    if (!TryGet(entry, "Id", out var idElement) || !TryReadSpellId(idElement, out var targetId) || targetId < FirstCustomSpellId || targetId > LastCustomSpellId)
+                        throw new InvalidOperationException($"Every Id must be between {FirstCustomSpellId} and {LastCustomSpellId}.");
+                }
+
+                EnsureContentDirectory();
+                var safeName = string.IsNullOrWhiteSpace(fileName) ? "WorkshopSpell.json" : Path.GetFileName(fileName.Trim());
+                if (!safeName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) safeName += ".json";
+                foreach (var c in Path.GetInvalidFileNameChars()) safeName = safeName.Replace(c, '_');
+                path = Path.Combine(ContentDir, safeName);
+                File.WriteAllText(path, JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
+                loaded = Reload();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private static IEnumerable<JsonElement> GetWorkshopEntries(JsonElement root)
+        {
+            if (root.ValueKind == JsonValueKind.Array)
+                return root.EnumerateArray().ToArray();
+            if (root.ValueKind == JsonValueKind.Object && TryGet(root, "CustomSpells", out var entries) && entries.ValueKind == JsonValueKind.Array)
+                return entries.EnumerateArray().ToArray();
+            if (root.ValueKind == JsonValueKind.Object)
+                return new[] { root };
+            return Array.Empty<JsonElement>();
+        }
+
+        private static string IndentJson(string json, int spaces)
+        {
+            var padding = new string(' ', spaces);
+            return string.Join("\n", json.Replace("\r\n", "\n").Split('\n').Select(line => padding + line));
+        }
         private static string ResolveContentDir(string contentDir)
         {
             if (!string.IsNullOrWhiteSpace(contentDir))
@@ -1197,6 +1292,12 @@ namespace ACE.Server.Managers
                 File.WriteAllText(path, DefaultRoadrunnerJson);
         }
 
+        private static void EnsureDefaultBossSpells()
+        {
+            var path = Path.Combine(ContentDir, "BossSpells.json");
+            if (!File.Exists(path) || !File.ReadAllText(path).Contains("\"Id\": 65018"))
+                File.WriteAllText(path, DefaultBossSpellsJson);
+        }
         private static void EnsureDefaultFrostWaveShieldSpell()
         {
             var path = Path.Combine(ContentDir, "FrostWaveShield.json");
@@ -1289,6 +1390,19 @@ namespace ACE.Server.Managers
                 spreadAngle: 0.0f,
                 nonTracking: false,
                 createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.35f },
+                padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
+                peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
+            NormalizeProjectileSpell(
+                RainfallFrostSpellId,
+                SpellId.FrostBolt7,
+                "Rainfall's Frost",
+                DamageType.Cold,
+                baseIntensity: 90,
+                variance: 30,
+                numProjectiles: 1,
+                spreadAngle: 0.0f,
+                nonTracking: true,
+                createOffset: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 9.0f },
                 padding: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f },
                 peturbation: new JsonVector3 { X = 0.0f, Y = 0.0f, Z = 0.0f });
         }
@@ -1712,6 +1826,34 @@ namespace ACE.Server.Managers
 }
 ";
 
+        private const string DefaultBossSpellsJson =
+@"{
+  ""CustomSpells"": [
+    {
+      ""Template"": ""FrostBolt7"",
+      ""Id"": 65018,
+      ""Name"": ""Rainfall's Frost"",
+      ""SpellWords"": ""Release the Rain"",
+      ""Desc"": ""A shard of conjured winter that falls vertically from above its victim."",
+      ""Icon"": ""0x06001037"",
+      ""EType"": ""Cold"",
+      ""DamageType"": ""Cold"",
+      ""BaseMana"": 1,
+      ""BaseIntensity"": 90,
+      ""Variance"": 30,
+      ""NumProjectiles"": 1,
+      ""NumProjectilesVariance"": 0,
+      ""SpreadAngle"": 0,
+      ""NonTracking"": true,
+      ""CreateOffset"": [0, 0, 9.0],
+      ""Padding"": [0, 0, 0],
+      ""Peturbation"": [0, 0, 0],
+      ""CasterEffect"": ""EnchantUpBlue"",
+      ""TargetEffect"": ""BreatheFrost""
+    }
+  ]
+}
+";
         private const string DefaultFrostWaveShieldJson =
 @"{
   ""CustomSpells"": [

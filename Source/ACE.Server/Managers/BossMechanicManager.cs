@@ -11,6 +11,7 @@ using ACE.Common;
 using ACE.Database.Models.Shard;
 using ACE.Entity;
 using ACE.Server.Entity;
+using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
 using ACE.Server.Physics.Extensions;
 using ACE.Entity.Enum;
@@ -55,9 +56,17 @@ namespace ACE.Server.Managers
         public int Count { get; set; }
         public int Health { get; set; }
         public string Target { get; set; } = "trigger";
+        public string Source { get; set; } = "nearby";
+        public double Radius { get; set; } = WorldObject.LocalBroadcastRange;
         public double Distance { get; set; } = 10;
+        public double DurationSeconds { get; set; } = 30;
+        public bool NoXp { get; set; } = true;
+        public bool DropItems { get; set; }
+        public bool NoCorpse { get; set; } = true;
+        public double Translucency { get; set; } = -1;
         public uint SpellId { get; set; }
         public string Phase { get; set; }
+        public double DamageScale { get; set; } = 0.35;
     }
 
     public static class BossMechanicManager
@@ -68,8 +77,8 @@ namespace ACE.Server.Managers
         private static readonly ConcurrentDictionary<uint, IReadOnlyDictionary<string, BossMechanicRule[]>> CompiledRules = new ConcurrentDictionary<uint, IReadOnlyDictionary<string, BossMechanicRule[]>>();
         private static readonly ConcurrentDictionary<uint, byte> Missing = new ConcurrentDictionary<uint, byte>();
         private static readonly ConcurrentDictionary<uint, HashSet<string>> FiredRules = new ConcurrentDictionary<uint, HashSet<string>>();
-        private static readonly ConcurrentDictionary<uint, BossMinionEncounter> MinionEncounters = new ConcurrentDictionary<uint, BossMinionEncounter>();
-        private static readonly ConcurrentDictionary<uint, uint> MinionOwners = new ConcurrentDictionary<uint, uint>();
+        private static readonly ConcurrentDictionary<string, BossMinionEncounter> MinionEncounters = new ConcurrentDictionary<string, BossMinionEncounter>();
+        private static readonly ConcurrentDictionary<uint, string> MinionOwners = new ConcurrentDictionary<uint, string>();
         private static readonly ConcurrentDictionary<uint, double> EncounterStarted = new ConcurrentDictionary<uint, double>();
         private static readonly ConcurrentDictionary<uint, string> ActivePhases = new ConcurrentDictionary<uint, string>();
         private static readonly ConcurrentDictionary<uint, List<BossAppliedEffect>> AppliedEffects = new ConcurrentDictionary<uint, List<BossAppliedEffect>>();
@@ -143,6 +152,22 @@ namespace ACE.Server.Managers
                     {
                         if (action.Target != "trigger" && action.Target != "nearest" && action.Target != "farthest" && action.Target != "random" && action.Target != "all") errors.Add($"Rule {rule.Id}: unknown target selector '{action.Target}'.");
                         if (action.Distance < 1 || action.Distance > 40) errors.Add($"Rule {rule.Id}: movement distance must be 1-40 feet.");
+                    }
+                    else if (string.Equals(action.Type, "frost_rain", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (action.Target != "trigger" && action.Target != "nearest" && action.Target != "farthest" && action.Target != "random" && action.Target != "all") errors.Add($"Rule {rule.Id}: unknown target selector '{action.Target}'.");
+                        if (action.Count < 1 || action.Count > 8) errors.Add($"Rule {rule.Id}: frost rain must use 1-8 waves.");
+                        if (action.DamageScale < 0.05 || action.DamageScale > 1.0) errors.Add($"Rule {rule.Id}: frost rain damageScale must be 0.05-1.0.");                    }
+                    else if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (action.WeenieClassId == 0) errors.Add($"Rule {rule.Id}: mirror minion shell WCID must be nonzero.");
+                        if (action.Count < 1 || action.Count > 12) errors.Add($"Rule {rule.Id}: mirror minion count must be 1-12.");
+                        if (action.Health < 1 || action.Health > 1000000) errors.Add($"Rule {rule.Id}: mirror minion health must be 1-1,000,000.");
+                        if (action.Radius < 1 || action.Radius > 240) errors.Add($"Rule {rule.Id}: mirror source radius must be 1-240 feet.");
+                        if (action.DurationSeconds < 5 || action.DurationSeconds > 3600) errors.Add($"Rule {rule.Id}: mirror minion duration must be 5-3600 seconds.");
+                        if (action.Translucency > 1) errors.Add($"Rule {rule.Id}: translucency must be -1/default or 0.0-1.0.");
+                        if (action.Source != "nearby" && action.Source != "fellowship" && action.Source != "trigger_fellowship") errors.Add($"Rule {rule.Id}: mirror source must be nearby, fellowship, or trigger_fellowship.");
+                        if (action.WeenieClassId == document.WeenieClassId) errors.Add($"Rule {rule.Id}: a boss cannot mirror using copies of itself.");
                     }
                     else if (string.Equals(action.Type, "maintain_minions", StringComparison.OrdinalIgnoreCase))
                     {
@@ -357,18 +382,17 @@ namespace ACE.Server.Managers
             var profile = GetPublished(creature.WeenieClassId);
             if (profile != null)
                 foreach (var rule in GetRules(profile, "death")) TryExecuteRule(creature, rule, Time.GetUnixTime());
-            if (MinionEncounters.ContainsKey(creature.Guid.Full))
+            if (MinionEncounters.Keys.Any(key => key.StartsWith(creature.Guid.Full + ":", StringComparison.Ordinal)))
             {
                 CleanupMinions(creature.Guid.Full);
                 return;
             }
-            if (!MinionOwners.TryRemove(creature.Guid.Full, out var bossGuid) || !MinionEncounters.TryGetValue(bossGuid, out var encounter))
+            if (!MinionOwners.TryRemove(creature.Guid.Full, out var encounterKey) || !MinionEncounters.TryGetValue(encounterKey, out var encounter))
                 return;
             lock (encounter.Sync)
                 encounter.MinionGuids.Remove(creature.Guid.Full);
             if (encounter.Boss.TryGetTarget(out var boss) && boss.IsAlive && boss.Health.Current > 0)
-                MaintainMinions(boss, encounter.Action);
-        }
+                MaintainMinions(boss, encounter.Action);        }
         private static void ExecuteAction(Creature boss, BossMechanicAction action, Player target, int nearby)
         {
             try
@@ -380,8 +404,12 @@ namespace ACE.Server.Managers
                     boss.ApplyVisualEffects(effect);
                 else if (string.Equals(action.Type, "maintain_minions", StringComparison.OrdinalIgnoreCase))
                     MaintainMinions(boss, action);
+                else if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
+                    MaintainMinions(boss, action, target);
                 else if (action.Type == "push" || action.Type == "pull" || action.Type == "blink" || action.Type == "scatter" || action.Type == "knock_up")
                     ExecuteMovement(boss, action, target);
+                else if (string.Equals(action.Type, "frost_rain", StringComparison.OrdinalIgnoreCase))
+                    StartFrostRain(boss, action, target);
                 else if (string.Equals(action.Type, "apply_spell", StringComparison.OrdinalIgnoreCase))
                     ApplyTemporarySpell(boss, action, target);
                 else if (string.Equals(action.Type, "set_phase", StringComparison.OrdinalIgnoreCase))
@@ -458,12 +486,21 @@ namespace ACE.Server.Managers
                     desired.PositionY += (float)(dy / length * action.Distance * direction);
                 }
                 if (!FlutterStone.TryResolveSafeDestination(player, desired, out var safe)) continue;
-                player.ApplyVisualEffects(PlayScript.LayingofHands, 0.7f);
+                player.ApplyVisualEffects(GetMovementEffect(action.Type), 0.7f);
                 player.Sequences.GetNextSequence(ACE.Server.Network.Sequence.SequenceType.ObjectForcePosition);
                 player.UpdatePlayerPosition(safe, true);
             }
         }
 
+        private static PlayScript GetMovementEffect(string actionType) => actionType switch
+        {
+            "push" => PlayScript.ProjectileCollision,
+            "pull" => PlayScript.PortalStorm,
+            "scatter" => PlayScript.Launch,
+            "knock_up" => PlayScript.TransUpWhite,
+            "blink" => PlayScript.PortalExit,
+            _ => PlayScript.ProjectileCollision,
+        };
         private static IEnumerable<Player> SelectTargets(Creature boss, string selector, Player trigger)
         {
             var players = PlayerManager.GetAllOnline().Where(p => p?.Location != null && !p.IsDead && boss?.Location != null &&
@@ -505,10 +542,59 @@ namespace ACE.Server.Managers
                 }
             }
         }
-        private static void MaintainMinions(Creature boss, BossMechanicAction action)
+        private static void StartFrostRain(Creature boss, BossMechanicAction action, Player trigger)
+        {
+            if (boss?.Location == null || !boss.IsAlive)
+                return;
+
+            var waves = Math.Clamp(action.Count, 1, 8);
+            var damageScale = (float)Math.Clamp(action.DamageScale, 0.05, 1.0);
+            boss.ApplyVisualEffects(PlayScript.EnchantUpBlue);
+            boss.EnqueueBroadcast(new GameMessageHearSpeech("Release the rain!", boss.Name, boss.Guid.Full, ChatMessageType.Spellcasting), WorldObject.LocalBroadcastRange);
+
+            var chain = new ActionChain();
+            for (var wave = 0; wave < waves; wave++)
+            {
+                if (wave > 0)
+                    chain.AddDelaySeconds(0.65);
+                chain.AddAction(boss, () =>
+                {
+                    if (boss.IsDead || !boss.IsAlive || boss.Location == null)
+                        return;
+
+                    var spell = new Spell(CustomSpellManager.RainfallFrostSpellId);
+                    foreach (var player in SelectTargets(boss, action.Target, trigger).ToList())
+                    {
+                        if (player?.Location == null || player.IsDead || player.Teleporting)
+                            continue;
+
+                        player.ApplyVisualEffects(PlayScript.EnchantUpBlue, 0.35f);
+                        if (spell.NotFound)
+                        {
+                            player.ApplyVisualEffects(PlayScript.BreatheFrost);
+                            player.TakeDamage(boss, DamageType.Cold, Math.Max(1.0f, 90.0f * damageScale), BodyPart.Chest);
+                            continue;
+                        }
+
+                        // Using the victim as projectile origin makes the +9 Z offset fall vertically.
+                        boss.TryCastSpell(spell, player, boss, boss, false, true, true, damageScale, player);
+                    }
+                });
+            }
+            chain.EnqueueChain();
+        }
+        private static string GetMinionEncounterKey(Creature boss, BossMechanicAction action)
+        {
+            var type = string.IsNullOrWhiteSpace(action?.Type) ? "minions" : action.Type.Trim().ToLowerInvariant();
+            var source = string.IsNullOrWhiteSpace(action?.Source) ? "nearby" : action.Source.Trim().ToLowerInvariant();
+            return $"{boss.Guid.Full}:{type}:{action?.WeenieClassId ?? 0}:{source}";
+        }
+        private static void MaintainMinions(Creature boss, BossMechanicAction action, Player trigger = null)
         {
             if (boss?.Location == null || boss.CurrentLandblock == null || !boss.IsAlive) return;
-            var encounter = MinionEncounters.GetOrAdd(boss.Guid.Full, _ => new BossMinionEncounter(boss, action));
+            var encounterKey = GetMinionEncounterKey(boss, action);
+            var encounter = MinionEncounters.GetOrAdd(encounterKey, _ => new BossMinionEncounter(boss, action));
+            encounter.Action = action;
             lock (encounter.Sync)
             {
                 encounter.MinionGuids.RemoveWhere(guid =>
@@ -531,44 +617,159 @@ namespace ACE.Server.Managers
                     position.LandblockId = new LandblockId(position.GetCell());
                     minion.Location = position;
                     minion.GeneratorId = boss.Guid.Full;
-                    minion.SetProperty(PropertyInt.XpOverride, 0);
-                    minion.SetProperty(PropertyBool.NoCorpse, true);
-                    var endurance = minion.Attributes[PropertyAttribute.Endurance];
-                    endurance.StartingValue = 0;
-                    endurance.Ranks = 0;
-                    endurance.ExperienceSpent = 0;
-                    minion.Health.StartingValue = 100;
-                    minion.Health.Ranks = 0;
-                    minion.Health.ExperienceSpent = 0;
+                    if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
+                        PrepareMirrorMinion(boss, minion, action, trigger);
+                    else
+                        PrepareBasicMinion(minion);
                     if (!LandblockManager.AddObject(minion, true))
                     {
                         minion.Destroy();
                         break;
                     }
-                    var delta = 100L - minion.Health.MaxValue;
+                    var targetHealth = GetMinionHealth(action);
+                    var delta = targetHealth - minion.Health.MaxValue;
                     minion.Health.StartingValue = (uint)Math.Max(1, (long)minion.Health.StartingValue + delta);
-                    minion.Health.Current = Math.Min(100u, minion.Health.MaxValue);
+                    minion.Health.Current = Math.Min((uint)targetHealth, minion.Health.MaxValue);
+                    if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
+                    {
+                        WakeMirrorMinion(minion, boss, trigger);
+                        ScheduleMinionExpiry(encounterKey, minion, action.DurationSeconds);
+                    }
                     encounter.MinionGuids.Add(minion.Guid.Full);
-                    MinionOwners[minion.Guid.Full] = boss.Guid.Full;
+                    MinionOwners[minion.Guid.Full] = encounterKey;
                 }
             }
         }
 
+        private static void PrepareBasicMinion(Creature minion)
+        {
+            minion.SetProperty(PropertyInt.XpOverride, 0);
+            minion.SetProperty(PropertyBool.NoCorpse, true);
+            var endurance = minion.Attributes[PropertyAttribute.Endurance];
+            endurance.StartingValue = 0;
+            endurance.Ranks = 0;
+            endurance.ExperienceSpent = 0;
+            minion.Health.StartingValue = 100;
+            minion.Health.Ranks = 0;
+            minion.Health.ExperienceSpent = 0;
+        }
+
+        private static void PrepareMirrorMinion(Creature boss, Creature minion, BossMechanicAction action, Player trigger)
+        {
+            minion.CreatureType = ACE.Entity.Enum.CreatureType.Simulacrum;
+            minion.SetProperty(PropertyBool.IsSimulacrumMob, false);
+            var source = SelectMirrorSource(boss, action, trigger);
+            if (source != null)
+                minion.TryCopyFromPlayer(source);
+            minion.Name = source != null ? $"Mirror of {source.Name}" : $"Mirror {minion.Name}";
+            minion.GeneratorId = boss.Guid.Full;
+            minion.TreasureCorpse = action.DropItems;
+            minion.NoCorpse = action.NoCorpse || !action.DropItems;
+            if (!action.DropItems)
+                minion.DeathTreasureType = null;
+            if (action.NoXp)
+            {
+                minion.SetProperty(PropertyInt.XpOverride, 0);
+                minion.LuminanceAward = 0;
+            }
+            if (action.Translucency >= 0)
+                minion.Translucency = (float)Math.Clamp(action.Translucency, 0, 1);
+            minion.ApplyVisualEffects(PlayScript.EnchantUpPurple);
+        }
+
+        private static long GetMinionHealth(BossMechanicAction action)
+        {
+            if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
+                return Math.Clamp(action.Health <= 0 ? 100 : action.Health, 1, 1000000);
+            return 100;
+        }
+
+        private static Player SelectMirrorSource(Creature boss, BossMechanicAction action, Player trigger)
+        {
+            var candidates = SelectMirrorSources(boss, action, trigger).ToList();
+            if (candidates.Count == 0)
+                return trigger;
+            return candidates[ThreadSafeRandom.Next(0, candidates.Count)];
+        }
+
+        private static IEnumerable<Player> SelectMirrorSources(Creature boss, BossMechanicAction action, Player trigger)
+        {
+            if (boss?.Location == null)
+                return Enumerable.Empty<Player>();
+
+            var radius = Math.Clamp(action.Radius <= 0 ? WorldObject.LocalBroadcastRange : action.Radius, 1, 240);
+            var nearby = PlayerManager.GetAllOnline()
+                .Where(p => p?.Location != null && !p.IsDead && p.Location.Landblock == boss.Location.Landblock)
+                .Where(p => boss.Location.Distance2DSquared(p.Location) <= radius * radius)
+                .ToList();
+
+            if (action.Source == "nearby" || trigger == null)
+                return nearby;
+
+            if (trigger.Fellowship?.FellowshipMembers == null)
+                return nearby.Where(p => p == trigger);
+
+            var fellowGuids = new HashSet<uint>();
+            foreach (var member in trigger.Fellowship.FellowshipMembers.Values)
+                if (member.TryGetTarget(out var fellow) && fellow != null)
+                    fellowGuids.Add(fellow.Guid.Full);
+
+            return nearby.Where(p => fellowGuids.Contains(p.Guid.Full));
+        }
+
+        private static void WakeMirrorMinion(Creature minion, Creature boss, Player trigger)
+        {
+            if (minion?.CreatureType != ACE.Entity.Enum.CreatureType.Simulacrum)
+                return;
+
+            var target = trigger != null && trigger.Location != null && minion.Location != null && trigger.Location.Landblock == minion.Location.Landblock
+                ? trigger
+                : GetNearestPlayer(boss);
+            minion.AttackTarget = target;
+            minion.CurrentAttack = null;
+            minion.MonsterState = Creature.State.Awake;
+            minion.IsAwake = true;
+            minion.WakeUp(false);
+        }
+
+        private static void ScheduleMinionExpiry(string encounterKey, Creature minion, double durationSeconds)
+        {
+            if (minion == null || durationSeconds <= 0 || durationSeconds >= 3600)
+                return;
+
+            var chain = new ActionChain();
+            chain.AddDelaySeconds(Math.Max(5.0, durationSeconds));
+            chain.AddAction(minion, () =>
+            {
+                if (minion.IsDestroyed)
+                    return;
+                MinionOwners.TryRemove(minion.Guid.Full, out _);
+                if (MinionEncounters.TryGetValue(encounterKey, out var encounter))
+                    lock (encounter.Sync)
+                        encounter.MinionGuids.Remove(minion.Guid.Full);
+                minion.EnqueueBroadcast(new GameMessageScript(minion.Guid, PlayScript.EnchantDownPurple, 1.0f));
+                minion.Destroy();
+            });
+            chain.EnqueueChain();
+        }
         private static void CleanupMinions(uint bossGuid)
         {
-            if (!MinionEncounters.TryRemove(bossGuid, out var encounter)) return;
-            lock (encounter.Sync)
+            var prefix = bossGuid + ":";
+            foreach (var encounterKey in MinionEncounters.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal)).ToList())
             {
-                foreach (var guid in encounter.MinionGuids)
+                if (!MinionEncounters.TryRemove(encounterKey, out var encounter)) continue;
+                lock (encounter.Sync)
                 {
-                    MinionOwners.TryRemove(guid, out _);
-                    if (encounter.Boss.TryGetTarget(out var boss))
-                        (boss.CurrentLandblock?.GetObject(guid) as Creature)?.Destroy();
+                    foreach (var guid in encounter.MinionGuids)
+                    {
+                        MinionOwners.TryRemove(guid, out _);
+                        if (encounter.Boss.TryGetTarget(out var boss))
+                            (boss.CurrentLandblock?.GetObject(guid) as Creature)?.Destroy();
+                    }
+                    encounter.MinionGuids.Clear();
                 }
-                encounter.MinionGuids.Clear();
             }
         }
-
         private sealed class BossAppliedEffect
         {
             public BossAppliedEffect(Player player, uint spellId, uint casterGuid) { Player = new WeakReference<Player>(player); SpellId = spellId; CasterGuid = casterGuid; }
@@ -582,7 +783,7 @@ namespace ACE.Server.Managers
             public BossMinionEncounter(Creature boss, BossMechanicAction action) { Boss = new WeakReference<Creature>(boss); Action = action; }
             public object Sync { get; } = new object();
             public WeakReference<Creature> Boss { get; }
-            public BossMechanicAction Action { get; }
+            public BossMechanicAction Action { get; set; }
             public HashSet<uint> MinionGuids { get; } = new HashSet<uint>();
         }    }
 }

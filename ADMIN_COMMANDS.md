@@ -65,6 +65,8 @@ Use `@lootconfig list` to inspect current probabilities before comparing generat
 | `@cbreload` | Developer | Reloads custom ClothingBase JSON. |
 | `@cbclear` | Developer | Flushes the clothing-table cache. |
 
+The browser Spell Workshop is at `http://127.0.0.1:9110/spell-workshop` and requires an authenticated admin-map session. Load a known template spell, choose a custom ID from `65001` through `65535`, edit or validate the generated JSON, then use **Save + Reload** to write it under `Data/CustomSpells`. The right-side reference explains every supported top-level field and the advanced `SpellBase` and `DbSpell` records.
+
 ## Boss Mechanics
 
 | Command | Access | Purpose |
@@ -76,7 +78,7 @@ Use `@lootconfig list` to inspect current probabilities before comparing generat
 | `@boss add-effect <profile> <health%> <PlayScript>` | Admin | Adds a validated PlayScript effect. |
 | `@boss show|validate|publish|rollback <profile>` | Admin | Reviews, validates, publishes, or rolls back a profile revision. |
 
-The browser operations page is at `http://127.0.0.1:9110/boss-mechanics` and uses the same admin map login/session. It lists every database profile, edits the authoritative draft JSON and individual rules, validates and publishes revisions, rolls back or enables/disables profiles, spawns published bosses at an online player or full LOC, and lists/despawns active boss instances. World spawns and despawns are queued onto the server world action loop. Published profiles are cached by WCID and invalidated when changed. JSON fallbacks can live in `Data/DerpACE/BossMechanics/<wcid>*.json`.
+The browser operations page is at `http://127.0.0.1:9110/boss-mechanics` and uses the same admin map login/session. It lists every database profile plus valid JSON templates from `Data/DerpACE/BossMechanics`, imports templates as database drafts, edits the authoritative draft JSON and individual rules, validates and publishes revisions, rolls back or enables/disables profiles, spawns published bosses at an online player or full LOC, and lists/despawns active boss instances. World spawns and despawns are queued onto the server world action loop. Published profiles are cached by WCID and invalidated when changed. JSON fallbacks can live in `Data/DerpACE/BossMechanics/<wcid>*.json`. The built-in `frost_rain` action accepts `target`, `count` (1-8 waves), and `damageScale` (0.05-1.0). Push, pull, scatter, knock-up, and blink each use a movement-appropriate visual effect. The `mirror_minions` action spawns hostile Simulacrum-style copies of random nearby players or the triggering player's fellowship, using `weenieClassId` as the shell, plus `count`, `health`, `source`, `radius`, `durationSeconds`, `noXp`, `dropItems`, `noCorpse`, and `translucency` toggles. Copied player equipment is for the clone appearance/combat package and is filtered from corpse loot.
 
 ## Pathfinding
 
@@ -99,7 +101,7 @@ The web admin map is configured in `DerpAce.json` with the `admin_map_*` setting
 @derpconfig reload
 ```
 
-The default local address is `http://127.0.0.1:9110/`. Admin accounts can use controls and edit inventory data; player accounts are limited to their own account/fellowship view. The admin-only boss profile editor and live spawn operations are available at `/boss-mechanics`. Inventory icons load from `Data/AdminMap/icons` using eight-digit hexadecimal DID PNG filenames. Do not expose the service publicly without a strong token and appropriate network controls.
+The default local address is `http://127.0.0.1:9110/`. Admin accounts can use controls and edit inventory data; player accounts are limited to their own account/fellowship view. The admin-only boss profile editor and live spawn operations are available at `/boss-mechanics`; the custom Spell Workshop is available at `/spell-workshop`. Inventory icons load from `Data/AdminMap/icons` using eight-digit hexadecimal DID PNG filenames. Do not expose the service publicly without a strong token and appropriate network controls.
 
 ## General Command Discovery
 
