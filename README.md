@@ -43,7 +43,7 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Current DerpACE Abilities And Commands (July 11, 2026)
+### Current DerpACE Abilities And Commands (July 24, 2026)
 This section is the current operator-facing source of truth for active DerpACE systems. Older patch notes below are historical and may describe earlier balance values.
 
 See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator workflows and command examples.
@@ -66,8 +66,10 @@ See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator 
 | Bank | `enable_bank` plus `bank_*` | Yes | Controls coin banking, direct deposit, vendor bank spend, and overflow behavior. |
 | Admin map | `admin_map_enabled` plus `admin_map_*` | Yes | `@derpconfig reload` restarts the map service with the new host, port, token, image, and calibration settings. |
 | Custom spells | JSON files plus `@customspells` commands | Reload command | No hard-off JSON toggle yet; spell packages are an import/export pipeline and custom spell data is intentionally loaded through `@customspells reload` or startup. |
-| Custom ClothingBase | JSON files plus `@cb*` commands | Reload command | No hard-off JSON toggle yet; custom clothing is a data merge pipeline keyed by ClothingBase id filenames. |
-| Fixed utility items | Item WCIDs and live item behavior | Item-specific | Foci containers, Aetherial Quiver, random dye, weapon appearance tailoring kit, spell focus, Slayer Gems, Nomad tools/runes, and starter books are currently always available if their weenies exist. |
+| Custom ClothingBase | JSON files plus `@cb*` commands | Reload command | No hard-off JSON toggle yet; custom clothing is a data merge pipeline keyed by ClothingBase id filenames and supports normal CustomClothingBase-style filename prefixes. |
+| Fixed utility items | Item WCIDs and live item behavior | Item-specific | Foci containers, Aetherial Quiver, random dye, weapon appearance tailoring kit, spell focus, Slayer Gems, Flutter Stones, Nomad tools/runes, and starter books are currently always available if their weenies exist. |
+| Boss mechanics | Database profiles plus `Data/DerpACE/BossMechanics/*.json` fallback | Live publish / cache invalidation | Admins can draft, validate, publish, roll back, and clone boss profiles with safe mechanics. The web builder lives at `/boss-mechanics` behind the admin map login. |
+| Monster pathfinding | `pathfinding`, `pathfinding_*` server properties | Yes | DotRecast navmeshes are generated on demand, cached to disk, import/exportable, and now used for smarter routed home movement and outdoor endpoint snapping. |
 
 #### Admin Commands
 | Command | Purpose |
@@ -86,6 +88,10 @@ See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator 
 | `@derpconfig reload` | Reloads `DerpAce.json` and restarts runtime services that need it, including the admin map web UI. |
 | `@ironmanmode on|off|toggle|status` | Enables or disables player Ironman opt-in server-wide. |
 | `@gquestreroll daily|weekly|all` | Ends and rerolls stale daily and/or weekly global quests while preserving freshness rules. |
+| `@boss create <profile> <sourceWcid> [newBossWcid]` | Creates a boss mechanics draft. With a new WCID, exports cloned boss SQL for import/reload before spawning. |
+| `@boss add-minions|add-taunt|add-say|add-effect|show|validate|publish|rollback ...` | Builds and safely publishes boss mechanics profiles. |
+| `@wiflag <player> [reroll|on|off]` | Shows or manages a player WI loot bias flag for testing. |
+| `@pathfinding status|on|off|load|rebuild|unload|list|prebuild [stop]|export <zip>|import <zip>` | Manages DotRecast navmesh generation and cached mesh packs. |
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
 
@@ -101,7 +107,7 @@ See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator 
 | `/hardcore on`, `/hardcore confirm` | Begins and confirms Hardcore challenge mode. Hardcore uses its own gear provenance economy and death rules. |
 | `/hardcoretop` | Shows Hardcore leaderboard. |
 | `/topkillers`, `/hardcoretopkillers` | Shows creature kill/death leaderboards. |
-| `/gquest` | Shows half-hour, hourly, daily, and weekly global quests, rewards, personal progress, completion state, and time remaining. |
+| `/gquest` | Shows half-hour, hourly, daily, and weekly global quests, rewards, personal progress, completion state, and time remaining. Includes hunts, item races, drunken mob hunts, chug races, Cardinal Trek, Dereth Express, and T8 luminance/currency variants. |
 | `/mail help` | Shows player mail commands for text mail, MMD payment, item shipping, COD, claiming, declining, and deleting. |
 | `/bank list`, `/bank store`, `/bank take` | Stores and withdraws bankable items. |
 | `/cash list`, `/cash give`, `/cash take` | Shows, deposits, and withdraws banked currency. |
@@ -181,7 +187,7 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 #### Other Current Custom Systems
 | System | Current behavior |
 |---|---|
-| Custom Clothing Base | JSON filenames identify the custom `ClothingBase` id. Save under `Source/ACE.Server/Data/CustomClothingBase/<clothingBaseId>[_label].json`; use `@cbexport`, edit JSON, then `@cbreload` or restart. |
+| Custom Clothing Base | JSON filenames identify the custom `ClothingBase` id. Save under `Source/ACE.Server/Data/CustomClothingBase/<clothingBaseId>[_label].json` or the runtime `Data/CustomClothingBase` folder; use `@cbclone` for isolated custom IDs, `@cbexport` for intentional base overrides, then `@cbreload` or restart. Existing portal.dat base IDs require `AllowBaseOverride: true` unless the filename explicitly targets them in the supported CustomClothingBase-compatible format. |
 | Custom Spells | JSON files in `Data/CustomSpells` load at runtime. SQL export/import commands include a marked DerpACE JSON block for easy admin copy/edit/clone workflows. |
 | Weapon Appearance Tailoring Kit | WCID `420420423` creates a non-destructive weapon appearance stamp from a donor weapon, then applies that appearance to a same-family destination weapon while preserving destination stats, spells, procs, damage type, and particles. |
 | Foci Containers | Foci WCIDs `15268`, `15269`, `15270`, `15271`, `43173` act as 15-slot side containers for scarabs, prismatic tapers, and mana stones, and contents persist across relog. |
@@ -193,8 +199,15 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Starter And Path Books | WCID `2000612` Derptide Intro is granted to every newly created character. WCID `2000613` The Road Less Traveled is granted to standard/blind Ironmen on conversion. Nomads receive WCID `2000611` The Road That Keeps You on conversion. Ironman conversion preserves beginner quest/help items such as Calling Stone, Pathwarden Token, Letters From Home, Gear Knight core tools, Mud Golem Essence, books, and quest-stamped objects. |
 | Battlemage Helm | Battlemage gear lets War Magic substitute for compatible Light Weapon wield and activation requirements while equipped, with green/red appraisal feedback on affected weapons. |
 | Challenge Economy And Magic Isolation | Normal players can wear any gear. Hardcore and Ironman-family characters use hidden gear provenance tags and may only equip/trade/mail restricted gear from their matching challenge economy. Helpful magic aid, heals, transfers, friendly negative dispels, item buffs, and Hierophant echo heals are isolated across challenge economies. |
+| Leaderboard Cache | Ironman, Hardcore, and killer leaderboards are served from periodic in-memory snapshots. Player leaderboard scans are batched over time to avoid a large synchronous database or player-list spike when someone types a command. |
+| Global Quest Scheduler | Half-hour/hour quests can repeat normally; daily and weekly lanes persist through restarts, prevent same-lane repeats, and cannot roll the same type at the same time. Item-race completions reroll the active race immediately. Correct the Corruption uses stackable Horribly Forged Derp Coins only while that event is active and pays partial credit on event end. |
+| Roadrunner | Outdoor road movement can apply a custom run-speed spell while the player remains on roads and refreshes the client skill panel when removed. |
+| Flutter Stone | Stackable blink utility item with cooldown overlay, 30 second cooldown, or 20 seconds for specialized Arcane Lore. Movement uses safety checks to avoid portal space, void, and interior wall/door blinks. |
+| Boss Mechanics | Boss profiles live in the shard database with draft/published/previous revisions and may also be loaded from `Data/DerpACE/BossMechanics/<wcid>*.json`. Built-in actions include speech/taunts, PlayScript effects, maintained low-health minions, movement effects, spell application, and phase changes. The admin-only `/boss-mechanics` operations page can create/load/edit/validate/publish/rollback/enable profiles, spawn published bosses at an online player or full LOC, list active instances, and safely despawn them. |
+| Pathfinding And Town Ambient AI | DotRecast indoor/outdoor navmeshes are generated on demand, cached, import/exportable, and used by monsters for route recovery/home return. Town ambient NPC behavior is intentionally quiet: NPCs move/gesture locally, and Ulgrim in Ayan favors the tavern/keg with a safe `MimeDrink` motion. |
+| WI Loot Bias | Optional WI-style loot flavor can factor the player name into luck. `@wiflag` lets admins inspect, reroll, or toggle a player's flag for testing. |
 | Random Dye | WCID `420420420` applies a random palette to compatible armor, clothing, weapons, casters, and shields. |
-| Admin Map Web UI | Optional read-only web service showing visible online players on a real Dereth coordinate map. Configure in `DerpAce.json`: `admin_map_enabled`, `admin_map_host` default `127.0.0.1`, `admin_map_port` default `9110`, `admin_map_token`, `admin_map_show_admins`, `admin_map_refresh_seconds`, `admin_map_image_path` default `Data/AdminMap/dereth-map.jpg`, and the four `admin_map_bounds_*_pct` calibration edges. Visit `http://127.0.0.1:9110/`; JSON is at `/api/players`. Clicking an indoor/dungeon player generates a cached top-down SVG floor plan for that dungeon landblock from server DAT geometry and overlays player dots; JSON is at `/api/dungeon?landblock=0x........`. `@derpconfig reload` restarts the service with new settings. |
+| Admin Map Web UI | Optional web service for admins and account-scoped player viewing. Configure in `DerpAce.json`: `admin_map_enabled`, `admin_map_host` default `127.0.0.1`, `admin_map_port` default `9110`, `admin_map_token`, `admin_map_show_admins`, `admin_map_refresh_seconds`, `admin_map_image_path` default `Data/AdminMap/dereth-map.png`, `admin_map_icon_path` default `Data/AdminMap/icons`, and the four `admin_map_bounds_*_pct` calibration edges. Visit `http://127.0.0.1:9110/`; JSON is at `/api/players`. Admin accounts get map controls and inventory editing; player accounts only see their own account/fellowship context. Inventory icon PNGs are loaded from `Data/AdminMap/icons` by eight-digit DID filename and layered in the browser. Clicking an indoor/dungeon player generates a cached top-down SVG floor plan for that dungeon landblock from server DAT geometry and overlays player dots; JSON is at `/api/dungeon?landblock=0x........`. Right-click map copying, collapsible panels, feeds, stats, and `/boss-mechanics` share the same admin map login/session. `@derpconfig reload` restarts the service with new settings. |
 
 ### Historical Development Notes
 The notes below are retained as implementation history. Prefer the current sections above when checking live behavior, commands, aliases, or balance.
@@ -203,7 +216,7 @@ The notes below are retained as implementation history. Prefer the current secti
 Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.
 
 #### Town Tier Resolution (`Source/ACE.Server/Factories/Tables/VendorTownTier.cs`)
-* Town anchor coordinates are now sourced **directly from the in-database `PointsOfInterest` table** (the same data that powers `/telepoi`), so every POI the server knows about is automatically a town anchor — no hand-curated landblock table to drift out of sync.
+* Town anchor coordinates are now sourced **directly from the in-database `PointsOfInterest` table** (the same data that powers `/telepoi`), so every POI the server knows about is automatically a town anchor -- no hand-curated landblock table to drift out of sync.
 * `VendorTownTier.GetTierForVendor(Vendor)` resolves loot tier 1-7 from the vendor's town anchor. The default sweep is +/-3 landblocks, with wider overrides for spread-out cities.
 * `GetTownName(...)` returns the human-readable town name for diagnostics, Dereth Express, and `@vendortier`.
 * `GetAllTownAnchors()` is used by town landblock preloading.

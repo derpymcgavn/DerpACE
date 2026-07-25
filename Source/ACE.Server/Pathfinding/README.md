@@ -19,7 +19,7 @@ When a creature needs pathfinding in a landblock for the first time:
 
 For performance, you can pre-generate all navmeshes at once:
 
-- **Command**: `/pathfind prebuild` - Scans all landblocks and generates meshes
+- **Command**: `/pathfinding prebuild` - Scans all landblocks and generates meshes
 - **Auto-prebuild**: Set `pathfinding_prebuild_on_boot=true` in config (not recommended, slow startup)
 - **Shipped Packs**: Drop a pre-baked `.zip` in `Pathfinding/Pack/` (see `Pack/README.md`)
 
@@ -30,7 +30,7 @@ Prebuilding is purely optional. It just avoids the small delay when each landblo
 To share pre-generated navmeshes:
 
 ```
-/pathfind export "C:\path\to\DerpACE-Navmeshes.zip"
+/pathfinding export "C:\path\to\DerpACE-Navmeshes.zip"
 ```
 
 This creates a zip of all cached meshes that can be:
@@ -40,11 +40,11 @@ This creates a zip of all cached meshes that can be:
 
 ## Commands
 
-- `/pathfind <x> <y>` - Draw a pathfinding route to coordinates
-- `/pathfind prebuild` - Generate all navmeshes now (slow, optional)
-- `/pathfind status` - Show prebuild progress
-- `/pathfind rebuild <landblock>` - Regenerate mesh for one landblock
-- `/pathfind export <path>` - Export all cached meshes to a zip
+- `/pathfinding prebuild` - Generate all navmeshes now (slow, optional)
+- `/pathfinding status` - Show enabled state, cache counts, mesh roots, and prebuild progress
+- `/pathfinding rebuild` - Regenerate the mesh for your current landblock
+- `/pathfinding export <path>` - Export all cached meshes to a zip
+- `/pathfinding import <path>` - Import a cached mesh zip
 
 ## Configuration
 

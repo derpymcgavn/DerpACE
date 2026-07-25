@@ -25,6 +25,8 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Pathfinding.Geometry;
 using ACE.Server.Entity;
+using ACE.Server.Entity.Actions;
+using ACE.Server.Factories;
 using ACE.Server.Managers;
 using ACE.Server.Network.Enum;
 using ACE.Server.Network.GameMessages.Messages;
@@ -225,6 +227,68 @@ namespace ACE.Server.DerpAce
                         return;
                     }
                     WriteJson(context, SaveBossDraft(ReadJsonBody<AdminBossDraftRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    return;
+                }
+                if (path.Equals("/api/boss/profiles", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    WriteJson(context, BuildBossProfileList());
+                    return;
+                }
+                if (path.Equals("/api/boss/profile", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    if (string.Equals(context.Request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, GetBossProfile(context.Request.QueryString["profile"]));
+                    else if (string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, HandleBossProfileAction(ReadJsonBody<AdminBossProfileRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    else
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { ok = false, error = "Use GET or POST for boss profiles." });
+                    }
+                    return;
+                }
+                if (path.Equals("/api/boss/active", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    WriteJson(context, BuildActiveBossList());
+                    return;
+                }
+                if (path.Equals("/api/boss/spawn", StringComparison.OrdinalIgnoreCase) ||
+                    path.Equals("/api/boss/despawn", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 405;
+                        WriteJson(context, new { ok = false, error = "Use POST for boss world actions." });
+                        return;
+                    }
+                    var adminName = GetValidSession(context)?.AccountName ?? "map-token";
+                    WriteJson(context, path.EndsWith("/spawn", StringComparison.OrdinalIgnoreCase)
+                        ? QueueBossSpawn(ReadJsonBody<AdminBossSpawnRequest>(context), adminName)
+                        : QueueBossDespawn(ReadJsonBody<AdminBossDespawnRequest>(context), adminName));
                     return;
                 }
                 if (path.Equals("/api/session", StringComparison.OrdinalIgnoreCase))
@@ -469,6 +533,345 @@ namespace ACE.Server.DerpAce
             }
         }
 
+        private static object BuildBossProfileList()
+        {
+            using var db = new ShardDbContext();
+            var rows = db.BossMechanicProfile.OrderBy(x => x.ProfileName).ToList();
+            return new
+            {
+                ok = true,
+                profiles = rows.Select(row =>
+                {
+                    var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
+                    return new
+                    {
+                        profile = row.ProfileName,
+                        weenieClassId = row.WeenieClassId,
+                        bossName = GetBossWeenieName(weenie, row.WeenieClassId),
+                        draftRevision = row.DraftRevision,
+                        publishedRevision = row.PublishedRevision,
+                        previousRevision = row.PreviousRevision,
+                        enabled = row.Enabled,
+                        modifiedBy = row.ModifiedBy,
+                        modifiedAt = row.ModifiedAt
+                    };
+                }).ToList()
+            };
+        }
+
+        private static object GetBossProfile(string profileValue)
+        {
+            if (!TryNormalizeBossProfileName(profileValue, out var profileName, out var error))
+                return new { ok = false, error };
+
+            using var db = new ShardDbContext();
+            var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
+            if (row == null)
+                return new { ok = false, error = "Boss profile not found." };
+
+            var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
+            return new
+            {
+                ok = true,
+                profile = row.ProfileName,
+                weenieClassId = row.WeenieClassId,
+                bossName = GetBossWeenieName(weenie, row.WeenieClassId),
+                draftRevision = row.DraftRevision,
+                publishedRevision = row.PublishedRevision,
+                previousRevision = row.PreviousRevision,
+                enabled = row.Enabled,
+                modifiedBy = row.ModifiedBy,
+                modifiedAt = row.ModifiedAt,
+                draftJson = row.DraftJson,
+                publishedJson = row.PublishedJson,
+                previousJson = row.PreviousJson
+            };
+        }
+
+        private static object HandleBossProfileAction(AdminBossProfileRequest request, string modifiedBy)
+        {
+            if (request == null)
+                return new { ok = false, error = "Boss profile request is required." };
+            if (!TryNormalizeBossProfileName(request.Profile, out var profileName, out var nameError))
+                return new { ok = false, error = nameError };
+
+            var action = request.Action?.Trim().ToLowerInvariant();
+            using var db = new ShardDbContext();
+            var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
+
+            if (action == "create")
+            {
+                if (row != null)
+                    return new { ok = false, error = "That profile name already exists." };
+                if (request.WeenieClassId == 0)
+                    return new { ok = false, error = "Boss WCID must be nonzero." };
+                if (db.BossMechanicProfile.Any(x => x.WeenieClassId == request.WeenieClassId))
+                    return new { ok = false, error = "That boss WCID is already assigned to another profile." };
+                var weenie = DatabaseManager.World.GetWeenie(request.WeenieClassId);
+                if (weenie == null || (WeenieType)weenie.Type != WeenieType.Creature)
+                    return new { ok = false, error = $"WCID {request.WeenieClassId} is not an existing creature." };
+
+                var document = string.IsNullOrWhiteSpace(request.Json)
+                    ? BossMechanicManager.NewDocument(request.WeenieClassId)
+                    : BossMechanicManager.Deserialize(request.Json);
+                if (document != null)
+                    document.WeenieClassId = request.WeenieClassId;
+                var errors = BossMechanicManager.Validate(document);
+                if (errors.Count > 0)
+                    return new { ok = false, error = string.Join(" ", errors), errors };
+
+                row = new BossMechanicProfile
+                {
+                    ProfileName = profileName,
+                    WeenieClassId = request.WeenieClassId,
+                    DraftRevision = 1,
+                    DraftJson = BossMechanicManager.Serialize(document),
+                    Enabled = false,
+                    ModifiedBy = modifiedBy,
+                    ModifiedAt = DateTime.UtcNow
+                };
+                db.BossMechanicProfile.Add(row);
+                db.SaveChanges();
+                log.Warn($"[DerpACE AdminMap] {modifiedBy} created boss profile {profileName} for WCID {row.WeenieClassId}.");
+                return new { ok = true, message = $"Created draft '{profileName}' for {GetBossWeenieName(weenie, row.WeenieClassId)} ({row.WeenieClassId}).", profile = profileName };
+            }
+
+            if (row == null)
+                return new { ok = false, error = "Boss profile not found." };
+
+            switch (action)
+            {
+                case "validate":
+                    var validateDocument = BossMechanicManager.Deserialize(string.IsNullOrWhiteSpace(request.Json) ? row.DraftJson : request.Json);
+                    var validateErrors = BossMechanicManager.Validate(validateDocument);
+                    if (validateDocument != null && validateDocument.WeenieClassId != row.WeenieClassId)
+                        validateErrors.Add($"Profile WCID is {row.WeenieClassId}, but the draft uses {validateDocument.WeenieClassId}.");
+                    return validateErrors.Count == 0
+                        ? new { ok = true, message = "Draft is valid and ready to publish.", errors = validateErrors }
+                        : new { ok = false, message = "Draft has validation errors.", errors = validateErrors };
+
+                case "save":
+                    if (string.IsNullOrWhiteSpace(request.Json))
+                        return new { ok = false, error = "Draft JSON is required." };
+                    var document = BossMechanicManager.Deserialize(request.Json);
+                    var errors = BossMechanicManager.Validate(document);
+                    if (errors.Count > 0)
+                        return new { ok = false, error = string.Join(" ", errors), errors };
+                    if (document.WeenieClassId != row.WeenieClassId)
+                        return new { ok = false, error = $"Profile WCID is {row.WeenieClassId}, but the draft uses {document.WeenieClassId}." };
+                    row.DraftJson = BossMechanicManager.Serialize(document);
+                    row.DraftRevision++;
+                    break;
+
+                case "publish":
+                    var publishDocument = BossMechanicManager.Deserialize(row.DraftJson);
+                    var publishErrors = BossMechanicManager.Validate(publishDocument);
+                    if (publishErrors.Count > 0)
+                        return new { ok = false, error = string.Join(" ", publishErrors), errors = publishErrors };
+                    if (DatabaseManager.World.GetWeenie(row.WeenieClassId) == null)
+                        return new { ok = false, error = $"Boss WCID {row.WeenieClassId} is not loaded in world data." };
+                    row.PreviousJson = row.PublishedJson;
+                    row.PreviousRevision = row.PublishedRevision;
+                    row.PublishedJson = row.DraftJson;
+                    row.PublishedRevision = row.DraftRevision;
+                    row.Enabled = true;
+                    break;
+
+                case "rollback":
+                    if (string.IsNullOrWhiteSpace(row.PreviousJson))
+                        return new { ok = false, error = "No previous published revision exists." };
+                    (row.PublishedJson, row.PreviousJson) = (row.PreviousJson, row.PublishedJson);
+                    (row.PublishedRevision, row.PreviousRevision) = (row.PreviousRevision, row.PublishedRevision);
+                    row.Enabled = true;
+                    break;
+
+                case "set-enabled":
+                    row.Enabled = request.Enabled;
+                    if (row.Enabled && string.IsNullOrWhiteSpace(row.PublishedJson))
+                        return new { ok = false, error = "Publish a valid revision before enabling this profile." };
+                    break;
+
+                case "restore-published":
+                    if (string.IsNullOrWhiteSpace(row.PublishedJson))
+                        return new { ok = false, error = "This profile has no published revision." };
+                    row.DraftJson = row.PublishedJson;
+                    row.DraftRevision++;
+                    break;
+
+                default:
+                    return new { ok = false, error = "Supported actions are create, validate, save, publish, rollback, set-enabled, and restore-published." };
+            }
+
+            row.ModifiedBy = modifiedBy;
+            row.ModifiedAt = DateTime.UtcNow;
+            db.SaveChanges();
+            BossMechanicManager.Invalidate(row.WeenieClassId);
+            log.Warn($"[DerpACE AdminMap] {modifiedBy} performed boss profile action '{action}' on {profileName} r{row.DraftRevision}/{row.PublishedRevision}.");
+            return new
+            {
+                ok = true,
+                message = action switch
+                {
+                    "save" => $"Saved draft revision {row.DraftRevision}.",
+                    "publish" => $"Published revision {row.PublishedRevision}; new spawns use it immediately.",
+                    "rollback" => $"Rolled back to published revision {row.PublishedRevision}.",
+                    "set-enabled" => row.Enabled ? "Boss mechanics enabled." : "Boss mechanics disabled for new and active encounters.",
+                    _ => $"Restored published revision {row.PublishedRevision} into draft revision {row.DraftRevision}."
+                }
+            };
+        }
+
+        private static object BuildActiveBossList()
+        {
+            using var db = new ShardDbContext();
+            var profiles = db.BossMechanicProfile.ToList().GroupBy(x => x.WeenieClassId).ToDictionary(x => x.Key, x => x.First());
+            var bosses = new List<object>();
+            foreach (var landblock in LandblockManager.GetLoadedLandblocks())
+            {
+                foreach (var creature in landblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>())
+                {
+                    if (!profiles.TryGetValue(creature.WeenieClassId, out var profile))
+                        continue;
+                    bosses.Add(new
+                    {
+                        guid = $"0x{creature.Guid.Full:X8}",
+                        name = creature.Name,
+                        profile = profile.ProfileName,
+                        weenieClassId = creature.WeenieClassId,
+                        enabled = profile.Enabled,
+                        health = creature.Health?.Current ?? 0,
+                        maxHealth = creature.Health?.MaxValue ?? 0,
+                        loc = creature.Location?.ToLOCString(),
+                        landblock = creature.Location?.LandblockId.ToString()
+                    });
+                }
+            }
+            return new { ok = true, bosses };
+        }
+
+        private static object QueueBossSpawn(AdminBossSpawnRequest request, string adminName)
+        {
+            if (request == null)
+                return new { ok = false, error = "Boss spawn request is required." };
+            if (!TryNormalizeBossProfileName(request.Profile, out var profileName, out var profileError))
+                return new { ok = false, error = profileError };
+
+            using var db = new ShardDbContext();
+            var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
+            if (row == null)
+                return new { ok = false, error = "Boss profile not found." };
+            if (!row.Enabled || string.IsNullOrWhiteSpace(row.PublishedJson))
+                return new { ok = false, error = "Publish and enable the boss profile before spawning it." };
+            var published = BossMechanicManager.Deserialize(row.PublishedJson);
+            var errors = BossMechanicManager.Validate(published);
+            if (errors.Count > 0)
+                return new { ok = false, error = string.Join(" ", errors), errors };
+            var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
+            if (weenie == null || (WeenieType)weenie.Type != WeenieType.Creature)
+                return new { ok = false, error = $"Boss WCID {row.WeenieClassId} is not a loaded creature." };
+
+            Position spawnPosition;
+            string destination;
+            if (!string.IsNullOrWhiteSpace(request.PlayerGuid))
+            {
+                if (!TryGetPlayerGuid(request.PlayerGuid, out var playerGuid))
+                    return new { ok = false, error = "Player GUID is invalid." };
+                var player = PlayerManager.GetOnlinePlayer(playerGuid);
+                if (player?.Location == null)
+                    return new { ok = false, error = "The selected player is not online." };
+                spawnPosition = player.Location.InFrontOf(Math.Clamp(request.Distance <= 0 ? 5.0f : request.Distance, 2.0f, 30.0f), true);
+                destination = $"near {player.Name}";
+            }
+            else if (!string.IsNullOrWhiteSpace(request.Loc))
+            {
+                if (!TryParseLoc(request.Loc, out spawnPosition, out var locError))
+                    return new { ok = false, error = locError };
+                destination = spawnPosition.ToLOCString();
+            }
+            else
+                return new { ok = false, error = "Choose an online player or provide a full LOC string." };
+
+            spawnPosition = new Position(spawnPosition);
+            spawnPosition.LandblockId = new LandblockId(spawnPosition.GetCell());
+            var count = Math.Clamp(request.Count <= 0 ? 1 : request.Count, 1, 10);
+            WorldManager.EnqueueAction(new ActionEventDelegate(() =>
+            {
+                var spawned = 0;
+                for (var i = 0; i < count; i++)
+                {
+                    var creature = WorldObjectFactory.CreateNewWorldObject(row.WeenieClassId) as Creature;
+                    if (creature == null)
+                        break;
+                    var position = new Position(spawnPosition);
+                    if (count > 1)
+                    {
+                        var angle = i * Math.PI * 2.0 / count;
+                        position.PositionX += (float)Math.Cos(angle) * 3.0f;
+                        position.PositionY += (float)Math.Sin(angle) * 3.0f;
+                        position.LandblockId = new LandblockId(position.GetCell());
+                    }
+                    creature.Location = position;
+                    BossMechanicManager.TryApplyBossMutators(creature);
+                    if (creature.EnterWorld())
+                        spawned++;
+                    else
+                        creature.Destroy();
+                }
+                log.Warn($"[DerpACE AdminMap] {adminName} spawned {spawned}/{count} '{profileName}' boss creature(s) {destination}.");
+            }));
+
+            return new { ok = true, message = $"Queued {count} x {profileName} ({row.WeenieClassId}) {destination}." };
+        }
+
+        private static object QueueBossDespawn(AdminBossDespawnRequest request, string adminName)
+        {
+            if (!TryGetPlayerGuid(request?.Guid, out var guid))
+                return new { ok = false, error = "Boss GUID is missing or invalid." };
+
+            Creature boss = null;
+            foreach (var landblock in LandblockManager.GetLoadedLandblocks())
+            {
+                boss = landblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>().FirstOrDefault(x => x.Guid.Full == guid);
+                if (boss != null)
+                    break;
+            }
+            if (boss == null)
+                return new { ok = false, error = "That boss is no longer active." };
+
+            using var db = new ShardDbContext();
+            if (!db.BossMechanicProfile.Any(x => x.WeenieClassId == boss.WeenieClassId))
+                return new { ok = false, error = "The selected creature is not assigned to a boss profile." };
+
+            var captured = boss;
+            var bossName = boss.Name;
+            WorldManager.EnqueueAction(new ActionEventDelegate(() =>
+            {
+                if (!captured.IsDestroyed)
+                {
+                    BossMechanicManager.Reset(captured);
+                    captured.FadeOutAndDestroy();
+                }
+                log.Warn($"[DerpACE AdminMap] {adminName} despawned boss {bossName} (0x{guid:X8}).");
+            }));
+            return new { ok = true, message = $"Queued despawn for {bossName} (0x{guid:X8})." };
+        }
+
+        private static string GetBossWeenieName(ACE.Database.Models.World.Weenie weenie, uint wcid)
+        {
+            return weenie?.WeeniePropertiesString?.FirstOrDefault(x => x.Type == (int)PropertyString.Name)?.Value
+                ?? $"Unknown WCID {wcid}";
+        }
+        private static bool TryNormalizeBossProfileName(string value, out string profileName, out string error)
+        {
+            profileName = (value ?? string.Empty).Trim().ToLowerInvariant();
+            error = null;
+            if (profileName.Length < 3 || profileName.Length > 64 || profileName.Any(c => !char.IsLetterOrDigit(c) && c != '_' && c != '-'))
+            {
+                error = "Profile names use 3-64 letters, numbers, _ or -.";
+                return false;
+            }
+            return true;
+        }
         private static object SaveBossDraft(AdminBossDraftRequest request, string modifiedBy)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Profile) || string.IsNullOrWhiteSpace(request.Json))
@@ -1952,15 +2355,94 @@ namespace ACE.Server.DerpAce
             var playScriptOptions = string.Join(string.Empty, Enum.GetNames(typeof(ACE.Entity.Enum.PlayScript))
                 .Where(name => name != nameof(ACE.Entity.Enum.PlayScript.Invalid))
                 .Select(name => $"<option value=\"{name}\"></option>"));
-            var html = @"<!doctype html><html lang=""en""><head><meta charset=""utf-8""><meta name=""viewport"" content=""width=device-width,initial-scale=1""><title>DerpACE Boss Builder</title>
-<style>:root{color-scheme:dark;--bg:#0c1011;--panel:#151b1d;--line:#344146;--text:#edf2f3;--muted:#a8b4b8;--green:#65d299;--amber:#efc36b;--blue:#71b7e8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Segoe UI,Arial,sans-serif}header{position:sticky;top:0;z-index:2;display:flex;gap:16px;align-items:center;padding:12px 20px;background:#101618;border-bottom:1px solid var(--line)}header h1{margin:0;font-size:18px}a{color:var(--blue)}main{max-width:1200px;margin:auto;padding:18px}.grid{display:grid;grid-template-columns:minmax(300px,.8fr) minmax(400px,1.2fr);gap:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px}.panel h2{font-size:15px;margin:0 0 10px}.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.wide{grid-column:1/-1}label{display:grid;gap:4px;color:var(--muted);font-size:11px;text-transform:uppercase}input,select,textarea,button{font:inherit;color:var(--text);background:#0b0f10;border:1px solid #46555a;border-radius:4px;padding:8px}textarea{min-height:70px;resize:vertical}button{cursor:pointer;background:#26373d}button:hover{border-color:var(--green)}.primary{background:#24543d}.rule{display:grid;grid-template-columns:1fr auto;gap:8px;border-top:1px solid var(--line);padding:8px 0}.muted{color:var(--muted)}.ideaBar{display:flex;flex-wrap:wrap;gap:6px}.ideaBar button{font-size:11px;padding:5px 7px}pre{white-space:pre-wrap;overflow:auto;background:#080b0c;border:1px solid #293438;padding:12px;min-height:130px}.actions{display:flex;gap:8px;margin-top:8px}.note{color:var(--amber)}table{width:100%;border-collapse:collapse}td,th{padding:7px;border-bottom:1px solid var(--line);text-align:left}@media(max-width:850px){.grid,.fields{grid-template-columns:1fr}}</style></head>
-<body><header><h1>Boss Builder</h1><a href=""/"">Admin Map</a></header><main><div class=""grid""><section class=""panel""><h2>Boss Identity</h2><div class=""fields""><label>Profile<input id=""profile"" value=""hollow_king""></label><label>Source WCID<input id=""source"" type=""number"" value=""9000001""></label><label class=""wide"">New boss WCID (optional)<input id=""boss"" type=""number"" placeholder=""990000011""></label><label class=""wide"">Mutator perks (up to 3, comma separated)<input id=""mutators"" placeholder=""vampiric, shaman, tank""><small>Boss-safe: vampiric, nocturnal, exploding, healer, enchanter, shaman, tank, reaper, necromancer, warder.</small></label></div><h2 style=""margin-top:16px"">Add Rule</h2><div class=""fields""><label>When<select id=""trigger""><option value=""health_below"">Health falls below...</option><option value=""combat_start"">Combat starts</option><option value=""timer"">Every few seconds</option><option value=""spell_resisted"">Boss resists a spell</option><option value=""death"">Boss dies</option></select></label><label id=""thresholdWrap"">Health threshold %<input id=""threshold"" type=""number"" min=""1"" max=""99"" value=""75""></label><label id=""intervalWrap"" style=""display:none"">Seconds<input id=""interval"" type=""number"" min=""1"" max=""3600"" value=""20""></label><label>Chance %<input id=""chance"" type=""number"" min=""1"" max=""100"" value=""100""></label><label>Minimum nearby players<input id=""minPlayers"" type=""number"" min=""1"" max=""40"" value=""1""></label><label>Required phase (optional)<input id=""rulePhase"" placeholder=""default""></label><label id=""repeatWrap"" style=""display:none"">Repeat<select id=""repeat""><option value=""yes"">Keep repeating</option><option value=""no"">Only once</option></select></label><label>Action<select id=""action""><option value=""taunt"">Taunt</option><option value=""say"">Simple local speech</option><option value=""effect"">Visual effect</option><option value=""maintain_minions"">Maintained minions</option><option value=""push"">Push players</option><option value=""pull"">Pull players</option><option value=""blink"">Blink players toward boss</option><option value=""scatter"">Scatter players</option><option value=""knock_up"">Knock players upward</option><option value=""apply_spell"">Temporary spell effect</option><option value=""set_phase"">Set encounter phase</option></select></label><label id=""channelWrap"">Channel<select id=""channel""><option value=""local"">Local</option><option value=""fellowship"">Fellowship</option></select></label><label id=""phaseWrap"" style=""display:none"">New phase<input id=""newPhase"" value=""phase_2""></label><label id=""spellWrap"" style=""display:none"">Spell ID<input id=""spellId"" type=""number"" min=""1""><small>Uses the spell's native duration and stacking.</small></label><label id=""targetWrap"" style=""display:none"">Targets<select id=""target""><option value=""trigger"">Triggering player</option><option value=""nearest"">Nearest player</option><option value=""farthest"">Farthest player</option><option value=""random"">Random player</option><option value=""all"">All nearby players</option></select></label><label id=""distanceWrap"" style=""display:none"">Distance (feet)<input id=""distance"" type=""number"" min=""1"" max=""40"" value=""15""></label><label id=""effectWrap"" style=""display:none"">PlayScript<input id=""effect"" list=""playScripts"" value=""EnchantUpRed"" autocomplete=""off""><datalist id=""playScripts"">{{PLAY_SCRIPT_OPTIONS}}</datalist><small>Type to search all valid server effects.</small></label><label id=""minionWcidWrap"" style=""display:none"">Minion WCID<input id=""minionWcid"" type=""number""></label><label id=""countWrap"" style=""display:none"">Count 1-12<input id=""count"" type=""number"" min=""1"" max=""12"" value=""4""></label><label id=""textWrap"" class=""wide"">Text<textarea id=""text"">%t, you have disturbed what sleeps below.</textarea><small>Wildcards: %t target player, %b boss name, %h boss health %, %n nearby players.</small></label></div><div class=""actions""><button id=""add"" class=""primary"">Add Rule</button><button id=""clear"">Clear Rules</button></div><h2 style=""margin-top:16px"">Taunt Ideas</h2><div id=""ideas"" class=""ideaBar""></div><div id=""rules""></div></section>
-<section class=""panel""><h2>Generated Commands</h2><pre id=""commands""></pre><div class=""actions""><button data-copy=""commands"">Copy Commands</button></div><h2 style=""margin-top:16px"">Equivalent Profile JSON</h2><pre id=""json""></pre><div class=""actions""><button data-copy=""json"">Copy JSON</button><button id=""saveDraft"" class=""primary"">Save Draft</button></div><div id=""saveStatus"" class=""muted""></div><p class=""note"">Commands edit a draft. Always validate, then publish. Import cloned-boss SQL and reload world content before spawning a new WCID.</p></section></div>
-<section class=""panel"" style=""margin-top:14px""><h2>Built-in Runtime Actions</h2><table><tr><th>Action</th><th>Behavior</th></tr><tr><td>say</td><td>Local speech from the boss.</td></tr><tr><td>taunt / local</td><td>Local encounter speech.</td></tr><tr><td>taunt / fellowship</td><td>Sends the line to fellowships represented near the boss.</td></tr><tr><td>effect</td><td>Runs a validated PlayScript.</td></tr><tr><td>maintain_minions</td><td>Maintains 1-12 copies of one WCID at 100 health; zero XP/no corpse; cleans up with boss.</td></tr></table></section></main>
-<script>const rules=[];const $=id=>document.getElementById(id);const ideas=['Your courage smells borrowed.','Stand together. It makes the breaking easier.','I have ended better fellowships than yours.','Another falls, and still you pretend this is victory.','Run. I enjoy the second chase.','The chamber remembers every name it buries.','Your healer cannot mend what I am about to remove.','You brought friends. Good. I brought hunger.'];ideas.forEach(t=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{$('text').value=t;$('action').value='taunt';sync()};$('ideas').appendChild(b)});function sync(){const a=$('action').value;const t=$('trigger').value;$('thresholdWrap').style.display=t==='health_below'?'grid':'none';$('intervalWrap').style.display=t==='timer'?'grid':'none';$('repeatWrap').style.display=t==='timer'?'grid':'none';$('channelWrap').style.display=a==='taunt'?'grid':'none';$('effectWrap').style.display=a==='effect'?'grid':'none';const movement=['push','pull','blink','scatter','knock_up'].includes(a);$('targetWrap').style.display=(movement||a==='apply_spell')?'grid':'none';$('distanceWrap').style.display=movement?'grid':'none';$('spellWrap').style.display=a==='apply_spell'?'grid':'none';$('phaseWrap').style.display=a==='set_phase'?'grid':'none';$('minionWcidWrap').style.display=a==='maintain_minions'?'grid':'none';$('countWrap').style.display=a==='maintain_minions'?'grid':'none';$('textWrap').style.display=(a==='taunt'||a==='say')?'grid':'none'}$('action').onchange=sync;$('trigger').onchange=sync;function render(){const p=$('profile').value.trim()||'boss';const src=$('source').value;const dst=$('boss').value;const mutators=$('mutators').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,3);let c=['@boss create '+p+' '+src+(dst?' '+dst:'')];const jsonRules=rules.map((r,i)=>{let action;if(r.action==='maintain_minions'){if(r.trigger==='health_below')c.push('@boss add-minions '+p+' '+r.threshold+' '+r.minionWcid+' '+r.count);action={type:'maintain_minions',weenieClassId:+r.minionWcid,count:+r.count,health:100}}else if(r.action==='effect'){if(r.trigger==='health_below')c.push('@boss add-effect '+p+' '+r.threshold+' '+r.effect);action={type:'effect',effect:r.effect}}else if(['push','pull','blink','scatter','knock_up'].includes(r.action)){action={type:r.action,target:r.target,distance:+r.distance}}else if(r.action==='apply_spell'){action={type:'apply_spell',target:r.target,spellId:+r.spellId}}else if(r.action==='set_phase'){action={type:'set_phase',phase:r.newPhase}}else if(r.action==='taunt'){if(r.trigger==='health_below')c.push('@boss add-taunt '+p+' '+r.threshold+' '+r.channel+' '+r.text);action={type:'taunt',channel:r.channel,text:r.text}}else{if(r.trigger==='health_below')c.push('@boss add-say '+p+' '+r.threshold+' '+r.text);action={type:'say',text:r.text}}return{id:r.trigger+'_'+(i+1),trigger:r.trigger,thresholdPercent:r.trigger==='health_below'?+r.threshold:0,intervalSeconds:r.trigger==='timer'?+r.interval:0,chancePercent:+r.chance,minPlayers:+r.minPlayers,once:r.trigger==='timer'?r.repeat!=='yes':true,phase:r.rulePhase||null,actions:[action]}});c.push('@boss validate '+p,'@boss publish '+p);$('commands').textContent=c.join('\n');$('json').textContent=JSON.stringify({schemaVersion:1,weenieClassId:+(dst||src),mutators:mutators,rules:jsonRules},null,2);$('rules').innerHTML=rules.map((r,i)=>'<div class=""rule""><span><strong>'+triggerLabel(r)+'</strong> '+r.action+(r.channel?' / '+r.channel:'')+' &middot; '+r.chance+'% &middot; '+r.minPlayers+'+ players</span><span><button data-op=""up"" data-i=""'+i+'"">Up</button><button data-op=""copy"" data-i=""'+i+'"">Duplicate</button><button data-op=""remove"" data-i=""'+i+'"">Remove</button></span></div>').join('');$('rules').querySelectorAll('button').forEach(b=>b.onclick=()=>{const i=+b.dataset.i;if(b.dataset.op==='remove')rules.splice(i,1);else if(b.dataset.op==='copy')rules.splice(i+1,0,{...rules[i]});else if(b.dataset.op==='up'&&i>0)[rules[i-1],rules[i]]=[rules[i],rules[i-1]];render()})}function triggerLabel(r){return r.trigger==='health_below'?r.threshold+'% health':r.trigger==='timer'?'every '+r.interval+'s':r.trigger.replaceAll('_',' ')}$('add').onclick=()=>{const a=$('action').value;rules.push({trigger:$('trigger').value,threshold:$('threshold').value,interval:$('interval').value,chance:$('chance').value,minPlayers:$('minPlayers').value,rulePhase:$('rulePhase').value.trim(),repeat:$('repeat').value,action:a,channel:a==='taunt'?$('channel').value:null,text:$('text').value,effect:$('effect').value,target:$('target').value,distance:$('distance').value,spellId:$('spellId').value,newPhase:$('newPhase').value.trim(),minionWcid:$('minionWcid').value,count:$('count').value});render()};$('clear').onclick=()=>{rules.length=0;render()};['profile','source','boss','mutators'].forEach(id=>$(id).oninput=render);document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=()=>navigator.clipboard.writeText($(b.dataset.copy).textContent));$('saveDraft').onclick=async()=>{const out=$('saveStatus');out.textContent='Validating and saving...';const headers={'Content-Type':'application/json'};const params=new URLSearchParams(location.search);const session=params.get('session');if(session)headers['X-DerpACE-Map-Session']=session;const res=await fetch('/api/boss/draft',{method:'POST',headers:headers,body:JSON.stringify({profile:$('profile').value,json:$('json').textContent})});const data=await res.json();out.textContent=data.message||data.error||res.statusText};sync();render();</script></body></html>";
-            return html.Replace("{{PLAY_SCRIPT_OPTIONS}}", playScriptOptions, StringComparison.Ordinal);
-        }
 
+            return $$$$"""
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DerpACE Boss Operations</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0f10;--surface:#121719;--surface2:#182023;--line:#354146;--text:#edf2f3;--muted:#99a7ac;--green:#59c58c;--blue:#62aee1;--amber:#e4b95f;--red:#e06e6e}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer;background:#26343a;border:1px solid #45555b;border-radius:4px;padding:7px 10px}button:hover{border-color:var(--green)}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:#215239}.danger{background:#512727}.quiet{background:transparent}.topbar{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:#101517;position:sticky;top:0;z-index:4}.topbar h1{font-size:16px;margin:0}.topbar a{color:var(--blue);text-decoration:none}.topbar .status{margin-left:auto;color:var(--muted);max-width:55vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.layout{display:grid;grid-template-columns:260px minmax(440px,1fr) 340px;min-height:calc(100vh - 52px)}.rail,.ops{background:var(--surface);padding:12px;overflow:auto}.rail{border-right:1px solid var(--line)}.ops{border-left:1px solid var(--line)}.workspace{padding:16px;min-width:0}.toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.toolbar .push{margin-left:auto}.section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}.section:first-child{border-top:0;margin-top:0;padding-top:0}h2{font-size:14px;margin:0 0 10px}h3{font-size:12px;margin:0 0 8px;color:var(--muted);text-transform:uppercase}.field{display:grid;gap:4px;margin-bottom:9px}.field>span{font-size:10px;color:var(--muted);text-transform:uppercase}.field input,.field select,.field textarea{width:100%;background:#090d0e;border:1px solid #3b484d;border-radius:4px;padding:8px}.field textarea{resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.search{width:100%;background:#090d0e;border:1px solid #3b484d;border-radius:4px;padding:8px;margin-bottom:8px}.profileList{display:grid;gap:4px}.profileItem{width:100%;text-align:left;padding:8px;background:transparent;border-color:transparent}.profileItem:hover,.profileItem.active{background:#202a2e;border-color:#405056}.profileItem strong,.profileItem small{display:block}.profileItem small{color:var(--muted);margin-top:2px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:#68757a}.dot.live{background:var(--green)}.meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);margin:-4px 0 12px}.jsonEditor{width:100%;min-height:390px;background:#070a0b;border:1px solid #38464b;border-radius:4px;padding:11px;font:12px/1.5 Consolas,monospace;tab-size:2;resize:vertical}.ruleList{display:grid;gap:6px;margin-top:10px}.ruleCard{border:1px solid var(--line);border-radius:4px;background:var(--surface2)}.ruleCard summary{cursor:pointer;padding:9px;display:flex;gap:8px;align-items:center}.ruleCard summary strong{flex:1}.ruleBody{padding:0 9px 9px}.ruleBody textarea{width:100%;min-height:180px;background:#090d0e;border:1px solid #3b484d;color:var(--text);font:12px/1.45 Consolas,monospace;padding:8px}.ruleActions{display:flex;gap:6px;margin-top:7px}.quick{padding:10px;background:var(--surface2);border:1px solid var(--line);border-radius:4px}.hint,.empty{color:var(--muted)}.warning{color:var(--amber)}.error{color:var(--red)}.spawnBox{border:1px solid var(--line);padding:10px;border-radius:4px;background:#101618}.activeList{display:grid;gap:6px}.bossInstance{border-top:1px solid var(--line);padding-top:8px}.bossInstance:first-child{border-top:0}.bossInstance strong,.bossInstance small{display:block}.bossInstance small{color:var(--muted)}.bossInstance .health{height:5px;background:#293237;margin:6px 0}.bossInstance .health i{display:block;height:100%;background:var(--red)}.badge{font-size:10px;border:1px solid #48585e;padding:2px 5px;border-radius:3px;color:var(--muted)}dialog{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:6px;max-width:520px;width:calc(100% - 30px)}dialog::backdrop{background:rgba(0,0,0,.65)}@media(max-width:1050px){.layout{grid-template-columns:220px 1fr}.ops{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:16px}}@media(max-width:720px){.layout{display:block}.rail,.ops{border:0;border-bottom:1px solid var(--line)}.ops{display:block}.row{grid-template-columns:1fr}.status{display:none}}
+</style>
+</head>
+<body>
+<header class="topbar"><h1>Boss Operations</h1><a id="mapLink" href="/">Admin Map</a><span id="globalStatus" class="status">Loading profiles...</span></header>
+<div class="layout">
+<aside class="rail">
+  <div class="toolbar"><button id="newProfile">New Profile</button><button id="refreshProfiles" title="Refresh profiles">Refresh</button></div>
+  <input id="profileSearch" class="search" placeholder="Search profile, boss, WCID">
+  <div id="profileList" class="profileList"></div>
+</aside>
+<main class="workspace">
+  <div class="toolbar">
+    <button id="validateDraft">Validate</button><button id="saveDraft" class="primary">Save Draft</button><button id="publishDraft">Save + Publish</button><button id="rollbackProfile">Rollback</button><button id="restorePublished">Restore Published</button>
+    <button id="toggleProfile" class="push">Enable / Disable</button>
+  </div>
+  <section class="section">
+    <div class="row"><label class="field"><span>Profile name</span><input id="profileName" placeholder="hollow_king"></label><label class="field"><span>Boss WCID</span><input id="bossWcid" type="number" min="1" placeholder="42047186"></label></div>
+    <div id="profileMeta" class="meta"><span>No profile selected.</span></div>
+  </section>
+  <section class="section"><div class="toolbar"><h2>Profile JSON</h2><button id="formatJson" class="push">Format</button><button id="copyJson">Copy</button></div><textarea id="jsonEditor" class="jsonEditor" spellcheck="false"></textarea><p class="hint">This is the authoritative draft. All supported triggers, action arrays, phases, wildcards, mutators, and advanced fields remain editable here.</p></section>
+  <section class="section"><div class="toolbar"><h2>Rules</h2><span id="ruleCount" class="badge">0 rules</span></div><div id="ruleList" class="ruleList"></div></section>
+  <section class="section"><h2>Quick Add Rule</h2><div class="quick">
+    <div class="row"><label class="field"><span>Trigger</span><select id="quickTrigger"><option value="health_below">Health below</option><option value="combat_start">Combat start</option><option value="timer">Timer</option><option value="spell_resisted">Spell resisted</option><option value="boss_evades">Boss evades</option><option value="critical_hit">Boss receives critical</option><option value="damage_type">Incoming damage type</option><option value="large_hit">Large hit</option><option value="death">Death</option></select></label><label class="field"><span>Action</span><select id="quickAction"><option value="taunt">Taunt</option><option value="say">Say</option><option value="effect">PlayScript effect</option><option value="maintain_minions">Maintain minions</option><option value="push">Push</option><option value="pull">Pull</option><option value="blink">Blink</option><option value="scatter">Scatter</option><option value="knock_up">Knock up</option><option value="apply_spell">Apply spell</option><option value="set_phase">Set phase</option></select></label></div>
+    <div class="row"><label class="field"><span>Threshold / interval / large-hit %</span><input id="quickAmount" type="number" value="75" min="1" max="3600"></label><label class="field"><span>Chance %</span><input id="quickChance" type="number" value="100" min="1" max="100"></label></div>
+    <div class="row"><label class="field"><span>Minimum players</span><input id="quickPlayers" type="number" value="1" min="1" max="40"></label><label class="field"><span>Required phase</span><input id="quickRequiredPhase" placeholder="optional"></label></div>
+    <label class="field"><span>Text / PlayScript / phase / spell ID / minion WCID</span><input id="quickValue" list="playScripts" placeholder="Action value"><datalist id="playScripts">{{{{playScriptOptions}}}}</datalist></label>
+    <div class="row"><label class="field"><span>Target</span><select id="quickTarget"><option value="trigger">Triggering player</option><option value="nearest">Nearest</option><option value="farthest">Farthest</option><option value="random">Random</option><option value="all">All nearby</option></select></label><label class="field"><span>Distance / minion count</span><input id="quickActionAmount" type="number" value="10" min="1" max="40"></label></div>
+    <label class="field"><span>Damage type (damage_type trigger)</span><select id="quickDamageType"><option>Slash</option><option>Pierce</option><option>Bludgeon</option><option>Fire</option><option>Cold</option><option>Acid</option><option>Electric</option><option>Nether</option></select></label>
+    <button id="addRule" class="primary">Add Rule</button>
+  </div></section>
+</main>
+<aside class="ops">
+  <section class="section"><div class="toolbar"><h2>Spawn Boss</h2><span id="selectedSpawnProfile" class="badge">No profile</span></div><div class="spawnBox">
+    <label class="field"><span>At online player</span><select id="spawnPlayer"><option value="">Select player...</option></select></label>
+    <div class="row"><label class="field"><span>Count</span><input id="spawnCount" type="number" min="1" max="10" value="1"></label><label class="field"><span>Distance</span><input id="spawnDistance" type="number" min="2" max="30" value="5"></label></div>
+    <button id="spawnAtPlayer" class="primary">Spawn At Player</button>
+    <label class="field" style="margin-top:12px"><span>Or full LOC</span><textarea id="spawnLoc" rows="3" placeholder="0x7F0401AD [12.3 -28.4 0.0] 1 0 0 0"></textarea></label><button id="spawnAtLoc">Spawn At LOC</button>
+  </div></section>
+  <section class="section"><div class="toolbar"><h2>Active Bosses</h2><button id="refreshActive" class="push">Refresh</button></div><div id="activeBosses" class="activeList"><span class="empty">Loading...</span></div></section>
+  <section class="section"><h2>Workflow</h2><p class="hint">Create or load a profile, edit and validate its draft, publish it, then spawn it. Publishing invalidates the runtime cache immediately. Existing encounters see enabled profile changes on their next mechanic check.</p><p class="warning">New WCIDs still need their weenie SQL imported and world data reloaded before a profile can be created or spawned.</p></section>
+</aside>
+</div>
+<script>
+const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);const session=params.get('session')||'',mapToken=params.get('token')||'';let profiles=[],current=null,dirty=false;
+if(session)$('mapLink').href='/?session='+encodeURIComponent(session);
+function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(mapToken)h['X-DerpACE-Map-Token']=mapToken;if(json)h['Content-Type']='application/json';return h}
+async function api(url,options={}){options.headers={...headers(!!options.body),...(options.headers||{})};options.cache='no-store';const res=await fetch(url,options);let data;try{data=await res.json()}catch{data={ok:false,error:await res.text()}}if(!res.ok||data.ok===false)throw Object.assign(new Error(data.error||data.message||res.statusText),{data});return data}
+function status(message,type=''){const el=$('globalStatus');el.textContent=message;el.className='status '+type}
+function safe(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function parseDraft(){try{return JSON.parse($('jsonEditor').value)}catch(e){throw new Error('JSON: '+e.message)}}
+function template(wcid=0){return{schemaVersion:1,weenieClassId:+wcid||0,mutators:[],rules:[]}}
+function setEditor(doc){$('jsonEditor').value=JSON.stringify(doc,null,2);dirty=false;renderRules()}
+async function loadProfiles(selectName=current?.profile){try{const data=await api('/api/boss/profiles');profiles=data.profiles||[];renderProfiles();if(selectName&&profiles.some(p=>p.profile===selectName))await loadProfile(selectName);status(`${profiles.length} boss profile${profiles.length===1?'':'s'} loaded.`)}catch(e){status(e.message,'error')}}
+function renderProfiles(){const term=$('profileSearch').value.trim().toLowerCase();$('profileList').innerHTML=profiles.filter(p=>!term||`${p.profile} ${p.bossName} ${p.weenieClassId}`.toLowerCase().includes(term)).map(p=>`<button class="profileItem ${current?.profile===p.profile?'active':''}" data-profile="${safe(p.profile)}"><strong><i class="dot ${p.enabled?'live':''}"></i>${safe(p.profile)}</strong><small>${safe(p.bossName)} · ${p.weenieClassId} · draft r${p.draftRevision}</small></button>`).join('')||'<span class="empty">No matching profiles.</span>';$('profileList').querySelectorAll('button').forEach(b=>b.onclick=()=>loadProfile(b.dataset.profile))}
+async function loadProfile(name){if(dirty&&!confirm('Discard unsaved draft changes?'))return;try{const data=await api('/api/boss/profile?profile='+encodeURIComponent(name));current=data;$('profileName').value=data.profile;$('profileName').readOnly=true;$('bossWcid').value=data.weenieClassId;$('bossWcid').readOnly=true;$('profileMeta').innerHTML=`<span>${safe(data.bossName)}</span><span>Draft r${data.draftRevision}</span><span>Published r${data.publishedRevision}</span><span>${data.enabled?'Enabled':'Disabled'}</span><span>Edited by ${safe(data.modifiedBy||'unknown')}</span>`;$('selectedSpawnProfile').textContent=data.profile;setEditor(JSON.parse(data.draftJson||'{}'));renderProfiles();setControls();status(`Loaded ${data.profile}.`)}catch(e){status(e.message,'error')}}
+function newProfile(){if(dirty&&!confirm('Discard unsaved draft changes?'))return;current=null;$('profileName').value='';$('profileName').readOnly=false;$('bossWcid').value='';$('bossWcid').readOnly=false;$('profileMeta').innerHTML='<span>New profile for an existing creature WCID.</span>';$('selectedSpawnProfile').textContent='No profile';setEditor(template());renderProfiles();setControls();$('profileName').focus()}
+function setControls(){const has=!!current;['validateDraft','saveDraft','publishDraft','rollbackProfile','restorePublished','toggleProfile','spawnAtPlayer','spawnAtLoc'].forEach(id=>$(id).disabled=!has);if(has)$('toggleProfile').textContent=current.enabled?'Disable':'Enable';else $('toggleProfile').textContent='Enable / Disable'}
+function renderRules(){let doc;try{doc=parseDraft();$('ruleCount').textContent=`${(doc.rules||[]).length} rules`;$('ruleList').innerHTML=(doc.rules||[]).map((r,i)=>`<details class="ruleCard"><summary><strong>${safe(r.id||'unnamed')}</strong><span class="badge">${safe(r.trigger||'unknown')}</span><span>${(r.actions||[]).length} action${(r.actions||[]).length===1?'':'s'}</span></summary><div class="ruleBody"><textarea data-rule-json="${i}" spellcheck="false">${safe(JSON.stringify(r,null,2))}</textarea><div class="ruleActions"><button data-apply="${i}">Apply Rule JSON</button><button data-up="${i}">Move Up</button><button data-copy-rule="${i}">Duplicate</button><button data-delete="${i}" class="danger">Remove</button></div></div></details>`).join('')||'<span class="empty">No rules yet.</span>';bindRuleButtons()}catch(e){$('ruleCount').textContent='Invalid JSON';$('ruleList').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
+function mutateRules(fn){try{const doc=parseDraft();doc.rules=doc.rules||[];fn(doc.rules);setEditor(doc);dirty=true}catch(e){status(e.message,'error')}}
+function bindRuleButtons(){$('ruleList').querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>mutateRules(r=>r[+b.dataset.apply]=JSON.parse(document.querySelector(`[data-rule-json="${b.dataset.apply}"]`).value)));$('ruleList').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>mutateRules(r=>r.splice(+b.dataset.delete,1)));$('ruleList').querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>mutateRules(r=>{const i=+b.dataset.up;if(i>0)[r[i-1],r[i]]=[r[i],r[i-1]]}));$('ruleList').querySelectorAll('[data-copy-rule]').forEach(b=>b.onclick=()=>mutateRules(r=>{const i=+b.dataset.copyRule;const copy=structuredClone(r[i]);copy.id=(copy.id||'rule')+'_copy';r.splice(i+1,0,copy)}))}
+function quickRule(){mutateRules(rules=>{const trigger=$('quickTrigger').value,kind=$('quickAction').value,value=$('quickValue').value.trim(),amount=+$('quickAmount').value;let action={type:kind};if(kind==='taunt')Object.assign(action,{channel:'local',text:value||'%t, face me.'});else if(kind==='say')action.text=value||'The encounter changes.';else if(kind==='effect')action.effect=value||'EnchantUpRed';else if(kind==='maintain_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:100});else if(['push','pull','blink','scatter','knock_up'].includes(kind))Object.assign(action,{target:$('quickTarget').value,distance:+$('quickActionAmount').value||10});else if(kind==='apply_spell')Object.assign(action,{target:$('quickTarget').value,spellId:+value});else if(kind==='set_phase')action.phase=value||'phase_2';const rule={id:`${trigger}_${Date.now().toString(36)}`,trigger,thresholdPercent:trigger==='health_below'?amount:0,intervalSeconds:trigger==='timer'?amount:0,chancePercent:+$('quickChance').value,minPlayers:+$('quickPlayers').value,damageType:trigger==='damage_type'?$('quickDamageType').value:null,damagePercent:trigger==='large_hit'?amount:0,once:trigger==='timer'?false:true,phase:$('quickRequiredPhase').value.trim()||null,actions:[action]};rules.push(rule)})}
+async function profileAction(action,extra={}){if(!current)throw new Error('Select a profile first.');return api('/api/boss/profile',{method:'POST',body:JSON.stringify({action,profile:current.profile,json:$('jsonEditor').value,...extra})})}
+async function createProfile(){const name=$('profileName').value.trim(),wcid=+$('bossWcid').value;const doc=parseDraft();doc.weenieClassId=wcid;$('jsonEditor').value=JSON.stringify(doc,null,2);const data=await api('/api/boss/profile',{method:'POST',body:JSON.stringify({action:'create',profile:name,weenieClassId:wcid,json:$('jsonEditor').value})});dirty=false;await loadProfiles(data.profile);status(data.message)}
+async function saveProfile(){if(!current)return createProfile();const data=await profileAction('save');dirty=false;await loadProfile(current.profile);status(data.message);return data}
+async function validateProfile(){try{const data=current?await profileAction('validate'):await createProfile();status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
+async function publishProfile(){if(!current)return status('Create the profile first.','error');if(!confirm(`Publish ${current.profile}? New spawns will use this revision immediately.`))return;try{await saveProfile();const data=await profileAction('publish');await loadProfiles(current.profile);status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
+async function simpleAction(action,extra={},confirmText=''){if(confirmText&&!confirm(confirmText))return;try{const data=await profileAction(action,extra);await loadProfiles(current.profile);status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
+async function loadPlayers(){try{const data=await api('/api/players');$('spawnPlayer').innerHTML='<option value="">Select player...</option>'+(data.players||[]).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${safe(p.guid)}">${safe(p.name)} · ${safe(p.loc||p.landblock)}</option>`).join('')}catch(e){status(e.message,'error')}}
+async function spawn(usePlayer){if(!current)return status('Select a published profile first.','error');const body={profile:current.profile,count:+$('spawnCount').value,distance:+$('spawnDistance').value};if(usePlayer)body.playerGuid=$('spawnPlayer').value;else body.loc=$('spawnLoc').value.trim();try{const data=await api('/api/boss/spawn',{method:'POST',body:JSON.stringify(body)});status(data.message);setTimeout(loadActive,800)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
+async function loadActive(){try{const data=await api('/api/boss/active');$('activeBosses').innerHTML=(data.bosses||[]).map(b=>{const pct=b.maxHealth?Math.max(0,Math.min(100,b.health*100/b.maxHealth)):0;return `<div class="bossInstance"><strong>${safe(b.name)} <span class="badge">${safe(b.profile)}</span></strong><small>${safe(b.guid)} · WCID ${b.weenieClassId}</small><div class="health"><i style="width:${pct}%"></i></div><small>${b.health.toLocaleString()} / ${b.maxHealth.toLocaleString()} · ${safe(b.loc||b.landblock)}</small><button data-despawn="${safe(b.guid)}" class="danger" style="margin-top:6px">Despawn</button></div>`}).join('')||'<span class="empty">No loaded boss-profile creatures.</span>';$('activeBosses').querySelectorAll('[data-despawn]').forEach(b=>b.onclick=async()=>{if(!confirm(`Despawn ${b.dataset.despawn}?`))return;try{const data=await api('/api/boss/despawn',{method:'POST',body:JSON.stringify({guid:b.dataset.despawn})});status(data.message);setTimeout(loadActive,800)}catch(e){status(e.message,'error')}})}catch(e){$('activeBosses').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
+$('profileSearch').oninput=renderProfiles;$('newProfile').onclick=newProfile;$('refreshProfiles').onclick=()=>loadProfiles();$('jsonEditor').oninput=()=>{dirty=true;renderRules()};$('bossWcid').oninput=()=>{try{const d=parseDraft();d.weenieClassId=+$('bossWcid').value;$('jsonEditor').value=JSON.stringify(d,null,2);dirty=true;renderRules()}catch{}};$('formatJson').onclick=()=>{try{setEditor(parseDraft());dirty=true}catch(e){status(e.message,'error')}};$('copyJson').onclick=()=>navigator.clipboard.writeText($('jsonEditor').value);$('addRule').onclick=quickRule;$('saveDraft').onclick=()=>saveProfile().catch(e=>status((e.data?.errors||[e.message]).join(' | '),'error'));$('validateDraft').onclick=validateProfile;$('publishDraft').onclick=publishProfile;$('rollbackProfile').onclick=()=>simpleAction('rollback',{},`Roll ${current?.profile} back to its previous published revision?`);$('restorePublished').onclick=()=>simpleAction('restore-published',{},'Discard the current draft and restore the published revision?');$('toggleProfile').onclick=()=>simpleAction('set-enabled',{enabled:!current.enabled},`${current?.enabled?'Disable':'Enable'} ${current?.profile}?`);$('spawnAtPlayer').onclick=()=>spawn(true);$('spawnAtLoc').onclick=()=>spawn(false);$('refreshActive').onclick=loadActive;
+newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterval(()=>{if(!document.hidden)loadActive()},30000);
+</script>
+</body>
+</html>
+""";
+        }
         private static string BuildIndexHtml()
         {
             var refresh = Math.Max(1, DerpAceConfigManager.Config.AdminMapRefreshSeconds);
@@ -3075,6 +3557,28 @@ checkSession();
             public AdminMapFeeds Feeds { get; set; }
         }
 
+        private sealed class AdminBossProfileRequest
+        {
+            public string Action { get; set; }
+            public string Profile { get; set; }
+            public uint WeenieClassId { get; set; }
+            public string Json { get; set; }
+            public bool Enabled { get; set; }
+        }
+
+        private sealed class AdminBossSpawnRequest
+        {
+            public string Profile { get; set; }
+            public string PlayerGuid { get; set; }
+            public string Loc { get; set; }
+            public int Count { get; set; }
+            public float Distance { get; set; }
+        }
+
+        private sealed class AdminBossDespawnRequest
+        {
+            public string Guid { get; set; }
+        }
         private sealed class AdminBossDraftRequest
         {
             public string Profile { get; set; }

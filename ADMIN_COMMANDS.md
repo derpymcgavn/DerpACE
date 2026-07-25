@@ -13,7 +13,7 @@ This guide covers DerpACE-specific operator workflows. Commands are entered in g
 
 Forced rerolls use the normal freshness rules: daily and weekly cannot match each other, and neither lane repeats its outgoing quest type. The replacement is announced and saved immediately.
 
-Persistent global quests include tier-8 hunts, mutator and dungeon hunts, Correct the Corruption, Cardinal Trek, and Dereth Express. Cardinal Trek counts grounded overworld travel only. Dereth Express parcels are stamped to the purchaser, source vendor, and quest epoch.
+Persistent global quests include tier-8 hunts, mutator and dungeon hunts, Correct the Corruption, Cardinal Trek, Dereth Express, chug races, and item races. Cardinal Trek counts grounded overworld travel only. Dereth Express parcels are stamped to the purchaser, source vendor, and quest epoch. Correct the Corruption coins only drop while that event is active, stack to save pack space, and partial contributions can be paid when the event ends.
 
 ## Runtime Configuration
 
@@ -23,6 +23,7 @@ Persistent global quests include tier-8 hunts, mutator and dungeon hunts, Correc
 | `@lootconfig list` | Developer | Lists live loot, mutator, mob, armor, and vendor tuning. |
 | `@lootconfig set <key> <value>` | Developer | Changes a supported live tuning value. |
 | `@ironmanmode on|off|toggle|status` | Admin | Controls whether players may opt into Ironman modes. |
+| `@wiflag <player> [reroll|on|off]` | Admin | Shows or changes a player WI loot bias flag for testing. |
 
 Changes affecting generated objects apply to future loot rolls, spawns, or vendor restocks. Existing objects retain their rolled properties unless explicitly converted.
 
@@ -64,6 +65,32 @@ Use `@lootconfig list` to inspect current probabilities before comparing generat
 | `@cbreload` | Developer | Reloads custom ClothingBase JSON. |
 | `@cbclear` | Developer | Flushes the clothing-table cache. |
 
+## Boss Mechanics
+
+| Command | Access | Purpose |
+|---|---|---|
+| `@boss create <profile> <sourceWcid> [newBossWcid]` | Admin | Creates a draft profile. If `newBossWcid` is provided, exports cloned boss SQL that must be imported/reloaded before spawning. |
+| `@boss add-minions <profile> <health%> <minionWcid> <count>` | Admin | Adds maintained 100-health nuisance minions at a health threshold. |
+| `@boss add-taunt <profile> <health%> <local|fellowship> <text>` | Admin | Adds threshold speech using local or fellowship delivery. |
+| `@boss add-say <profile> <health%> <text>` | Admin | Adds simple local threshold speech. |
+| `@boss add-effect <profile> <health%> <PlayScript>` | Admin | Adds a validated PlayScript effect. |
+| `@boss show|validate|publish|rollback <profile>` | Admin | Reviews, validates, publishes, or rolls back a profile revision. |
+
+The browser operations page is at `http://127.0.0.1:9110/boss-mechanics` and uses the same admin map login/session. It lists every database profile, edits the authoritative draft JSON and individual rules, validates and publishes revisions, rolls back or enables/disables profiles, spawns published bosses at an online player or full LOC, and lists/despawns active boss instances. World spawns and despawns are queued onto the server world action loop. Published profiles are cached by WCID and invalidated when changed. JSON fallbacks can live in `Data/DerpACE/BossMechanics/<wcid>*.json`.
+
+## Pathfinding
+
+| Command | Access | Purpose |
+|---|---|---|
+| `@pathfinding status` | Developer | Shows whether pathfinding is enabled and how many meshes are cached/pending. |
+| `@pathfinding on|off` | Developer | Toggles the server pathfinding property. |
+| `@pathfinding load|rebuild|unload` | Developer | Loads, rebuilds, or unloads the current landblock navmesh. |
+| `@pathfinding list` | Developer | Lists cached navmesh ids. |
+| `@pathfinding prebuild [stop]` | Developer | Starts or cancels background mesh prebuilding. |
+| `@pathfinding export <zipPath>` / `@pathfinding import <zipPath>` | Developer | Shares cached indoor/outdoor navmesh packs. |
+
+Meshes are generated on demand and cached under the configured pathfinding mesh root. Rebuild affected landblocks if old cached outdoor meshes still produce bad routes.
+
 ## Admin Map
 
 The web admin map is configured in `DerpAce.json` with the `admin_map_*` settings. After changing host, port, token, map image, calibration, or refresh values, run:
@@ -72,7 +99,7 @@ The web admin map is configured in `DerpAce.json` with the `admin_map_*` setting
 @derpconfig reload
 ```
 
-The default local address is `http://127.0.0.1:9110/`. Do not expose the service publicly without a strong token and appropriate network controls.
+The default local address is `http://127.0.0.1:9110/`. Admin accounts can use controls and edit inventory data; player accounts are limited to their own account/fellowship view. The admin-only boss profile editor and live spawn operations are available at `/boss-mechanics`. Inventory icons load from `Data/AdminMap/icons` using eight-digit hexadecimal DID PNG filenames. Do not expose the service publicly without a strong token and appropriate network controls.
 
 ## General Command Discovery
 
