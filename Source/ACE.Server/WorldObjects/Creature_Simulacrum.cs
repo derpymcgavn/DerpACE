@@ -260,6 +260,52 @@ namespace ACE.Server.WorldObjects
             Biota.PropertiesSpellBook = new Dictionary<int, float>(p.Biota.PropertiesSpellBook);
         }
 
+        private void CopyCombatStateFromPlayer(Player p)
+        {
+            SetupTableId = p.SetupTableId;
+            MotionTableId = p.MotionTableId;
+            PhysicsTableId = p.PhysicsTableId;
+            SoundTableId = p.SoundTableId;
+            CombatTableDID = p.CombatTableDID;
+
+            Level = p.Level;
+            Faction1Bits = p.Faction1Bits;
+
+            DamageRating = p.GetDamageRating();
+            DamageResistRating = p.GetDamageResistRating();
+            CritRating = p.GetCritRating();
+            CritDamageRating = p.GetCritDamageRating();
+            CritResistRating = p.GetCritResistRating();
+            CritDamageResistRating = p.GetCritDamageResistRating();
+            PKDamageRating = p.GetPKDamageRating();
+            PKDamageResistRating = p.GetPKDamageResistRating();
+            HealingBoostRating = p.GetHealingBoostRating();
+
+            SetProperty(PropertyBool.AiUseHumanMagicAnimations, true);
+            SetProperty(PropertyBool.AiUsesMana, true);
+
+            SetCombatMode(GetCloneCombatMode(p));
+        }
+
+        private static CombatMode GetCloneCombatMode(Player p)
+        {
+            if (p.CombatMode == CombatMode.Magic && p.GetEquippedWand() != null)
+                return CombatMode.Magic;
+
+            if (p.CombatMode == CombatMode.Missile && p.GetEquippedMissileWeapon() != null)
+                return CombatMode.Missile;
+
+            if (p.CombatMode == CombatMode.Melee)
+                return CombatMode.Melee;
+
+            if (p.GetEquippedWand() != null)
+                return CombatMode.Magic;
+
+            if (p.GetEquippedMissileWeapon() != null)
+                return CombatMode.Missile;
+
+            return CombatMode.Melee;
+        }
         private void CopyVoidProjectileSpellsFromPlayer(Player p)
         {
             Biota.PropertiesSpellBook = new Dictionary<int, float>();

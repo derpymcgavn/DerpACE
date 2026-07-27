@@ -57,12 +57,15 @@ namespace ACE.Server.Managers
         public int Health { get; set; }
         public string Target { get; set; } = "trigger";
         public string Source { get; set; } = "nearby";
+        public string DamageType { get; set; } = "Fire";
         public double Radius { get; set; } = WorldObject.LocalBroadcastRange;
         public double Distance { get; set; } = 10;
+        public double DelaySeconds { get; set; }
         public double DurationSeconds { get; set; } = 30;
         public bool NoXp { get; set; } = true;
         public bool DropItems { get; set; }
         public bool NoCorpse { get; set; } = true;
+        public bool DestroyCorpse { get; set; }
         public double Translucency { get; set; } = -1;
         public uint SpellId { get; set; }
         public string Phase { get; set; }
@@ -158,7 +161,14 @@ namespace ACE.Server.Managers
                         if (action.Target != "trigger" && action.Target != "nearest" && action.Target != "farthest" && action.Target != "random" && action.Target != "all") errors.Add($"Rule {rule.Id}: unknown target selector '{action.Target}'.");
                         if (action.Count < 1 || action.Count > 8) errors.Add($"Rule {rule.Id}: frost rain must use 1-8 waves.");
                         if (action.DamageScale < 0.05 || action.DamageScale > 1.0) errors.Add($"Rule {rule.Id}: frost rain damageScale must be 0.05-1.0.");                    }
-                    else if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
+                    else if (string.Equals(action.Type, "explode_corpse", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!Enum.TryParse<DamageType>(action.DamageType, true, out var explodeType) || explodeType == DamageType.Undef) errors.Add($"Rule {rule.Id}: explode_corpse damageType must be valid.");
+                        if (action.Radius < 1 || action.Radius > 80) errors.Add($"Rule {rule.Id}: explode_corpse radius must be 1-80 feet.");
+                        if (action.DamageScale < 0.01 || action.DamageScale > 2.0) errors.Add($"Rule {rule.Id}: explode_corpse damageScale must be 0.01-2.0.");
+                        if (action.DelaySeconds < 0 || action.DelaySeconds > 30) errors.Add($"Rule {rule.Id}: explode_corpse delaySeconds must be 0-30.");
+                        if (!string.IsNullOrWhiteSpace(action.Effect) && (!Enum.TryParse<PlayScript>(action.Effect, true, out var explodeEffect) || explodeEffect == PlayScript.Invalid || !Enum.IsDefined(typeof(PlayScript), explodeEffect))) errors.Add($"Rule {rule.Id}: unknown explode_corpse effect '{action.Effect}'.");
+                    }                    else if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
                     {
                         if (action.WeenieClassId == 0) errors.Add($"Rule {rule.Id}: mirror minion shell WCID must be nonzero.");
                         if (action.Count < 1 || action.Count > 12) errors.Add($"Rule {rule.Id}: mirror minion count must be 1-12.");
@@ -406,6 +416,8 @@ namespace ACE.Server.Managers
                     MaintainMinions(boss, action);
                 else if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
                     MaintainMinions(boss, action, target);
+                else if (string.Equals(action.Type, "explode_corpse", StringComparison.OrdinalIgnoreCase))
+                    StartCorpseExplosion(boss, action);
                 else if (action.Type == "push" || action.Type == "pull" || action.Type == "blink" || action.Type == "scatter" || action.Type == "knock_up")
                     ExecuteMovement(boss, action, target);
                 else if (string.Equals(action.Type, "frost_rain", StringComparison.OrdinalIgnoreCase))
@@ -542,6 +554,86 @@ namespace ACE.Server.Managers
                 }
             }
         }
+        private static void StartCorpseExplosion(Creature boss, BossMechanicAction action)
+        {
+            if (boss?.Location == null || boss.CurrentLandblock == null)
+                return;
+
+            if (action.DestroyCorpse)
+                boss.NoCorpse = true;
+
+            var landblock = boss.CurrentLandblock;
+            var origin = new Position(boss.Location);
+            var sourceName = boss.Name;
+            var maxHealth = Math.Max(1u, boss.Health.MaxValue);
+            var radius = Math.Clamp(action.Radius <= 0 ? DerpACEConfig.ExplodingMobRadius : action.Radius, 1, 80);
+            var damageScale = (float)Math.Clamp(action.DamageScale <= 0 ? DerpACEConfig.ExplodingMobDamageScale : action.DamageScale, 0.01, 2.0);
+            var damageType = Enum.TryParse<DamageType>(action.DamageType, true, out var parsed) && parsed != DamageType.Undef ? parsed : DamageType.Fire;
+            var effect = GetCorpseExplosionEffect(action.Effect, damageType);
+
+            boss.EnqueueBroadcast(new GameMessageScript(boss.Guid, PlayScript.EnchantUpRed, 1.0f), WorldObject.LocalBroadcastRange);
+
+            var chain = new ActionChain();
+            if (action.DelaySeconds > 0)
+                chain.AddDelaySeconds(Math.Clamp(action.DelaySeconds, 0, 30));
+            chain.AddAction(boss, () => ExecuteCorpseExplosion(boss, landblock, origin, sourceName, maxHealth, radius, damageScale, damageType, effect));
+            chain.EnqueueChain();
+        }
+
+        private static void ExecuteCorpseExplosion(Creature source, Landblock landblock, Position origin, string sourceName, uint maxHealth, double radius, float damageScale, DamageType damageType, PlayScript effect)
+        {
+            if (landblock == null || origin == null)
+                return;
+
+            source?.EnqueueBroadcast(new GameMessageScript(source.Guid, effect, 2.0f), WorldObject.LocalBroadcastRange);
+            var baseDamage = Math.Max(1, (int)Math.Round(maxHealth * damageScale));
+            var radiusSq = radius * radius;
+            var targets = landblock.GetAllWorldObjectsForDiagnostics()
+                .OfType<Player>()
+                .Where(player => player?.Location != null && !player.IsDead && origin.SquaredDistanceTo(player.Location) <= radiusSq)
+                .ToList();
+
+            foreach (var player in targets)
+            {
+                var variance = ThreadSafeRandom.Next(0.75f, 1.25f);
+                var damage = (int)Math.Max(1, Math.Round(baseDamage * variance));
+                var resistMod = player.GetResistanceMod(damageType, source, null);
+                damage = (int)Math.Max(1, Math.Round(damage * resistMod));
+
+                var taken = (uint)(-player.UpdateVitalDelta(player.Health, -damage));
+                if (source != null)
+                    player.DamageHistory.Add(source, damageType, taken);
+                player.EnqueueBroadcast(new GameMessageScript(player.Guid, effect, 1.0f));
+
+                if (taken <= 0)
+                    continue;
+
+                player.Session?.Network.EnqueueSend(new GameMessageSystemChat($"{sourceName}'s corpse erupts for {taken} {damageType.ToString().ToLowerInvariant()} damage! [Boss Mechanic]", ChatMessageType.CombatEnemy));
+                if (player.Health.Current == 0 && source != null)
+                {
+                    player.OnDeath(new DamageHistoryInfo(source), damageType, false);
+                    player.Die();
+                }
+            }
+        }
+
+        private static PlayScript GetCorpseExplosionEffect(string requestedEffect, DamageType damageType)
+        {
+            if (!string.IsNullOrWhiteSpace(requestedEffect) && Enum.TryParse<PlayScript>(requestedEffect, true, out var parsed) && parsed != PlayScript.Invalid && Enum.IsDefined(typeof(PlayScript), parsed))
+                return parsed;
+
+            return damageType switch
+            {
+                DamageType.Cold => PlayScript.BreatheFrost,
+                DamageType.Acid => PlayScript.BreatheAcid,
+                DamageType.Electric => PlayScript.BreatheLightning,
+                DamageType.Nether => PlayScript.SpecialStatePurple,
+                DamageType.Bludgeon => PlayScript.ProjectileCollision,
+                DamageType.Slash => PlayScript.SplatterLowLeftBack,
+                DamageType.Pierce => PlayScript.SplatterUpRightFront,
+                _ => PlayScript.Explode,
+            };
+        }
         private static void StartFrostRain(Creature boss, BossMechanicAction action, Player trigger)
         {
             if (boss?.Location == null || !boss.IsAlive)
@@ -626,7 +718,7 @@ namespace ACE.Server.Managers
                         minion.Destroy();
                         break;
                     }
-                    var targetHealth = GetMinionHealth(action);
+                    var targetHealth = GetMinionHealth(action, minion);
                     var delta = targetHealth - minion.Health.MaxValue;
                     minion.Health.StartingValue = (uint)Math.Max(1, (long)minion.Health.StartingValue + delta);
                     minion.Health.Current = Math.Min((uint)targetHealth, minion.Health.MaxValue);
@@ -677,10 +769,10 @@ namespace ACE.Server.Managers
             minion.ApplyVisualEffects(PlayScript.EnchantUpPurple);
         }
 
-        private static long GetMinionHealth(BossMechanicAction action)
+        private static long GetMinionHealth(BossMechanicAction action, Creature minion)
         {
             if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))
-                return Math.Clamp(action.Health <= 0 ? 100 : action.Health, 1, 1000000);
+                return action.Health > 0 ? Math.Clamp(action.Health, 1, 1000000) : Math.Max(1, minion?.Health?.MaxValue ?? 100);
             return 100;
         }
 
