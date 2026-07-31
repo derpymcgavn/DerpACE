@@ -12,6 +12,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.DerpAce;
+using ACE.Server.Entity;
 using ACE.Server.WorldObjects;
 using ACE.Server.Managers;
 
@@ -52,7 +53,10 @@ namespace ACE.Server.Factories
             // pull character data from the dat file
             var sex = heritageGroup.Genders[(int)characterCreateInfo.Gender];
 
-            player.SetProperty(PropertyDataId.MotionTable, sex.MotionTable);
+            var motionTable = characterCreateInfo.Heritage == HeritageGroup.Empyrean
+                ? EmpyreanMotionTables.GetGrounded((Gender)characterCreateInfo.Gender)
+                : sex.MotionTable;
+            player.SetProperty(PropertyDataId.MotionTable, motionTable);
             player.SetProperty(PropertyDataId.SoundTable, sex.SoundTable);
             player.SetProperty(PropertyDataId.PhysicsEffectTable, sex.PhysicsTable);
             player.SetProperty(PropertyDataId.Setup, sex.SetupID);

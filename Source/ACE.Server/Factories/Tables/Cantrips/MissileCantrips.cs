@@ -126,7 +126,9 @@ namespace ACE.Server.Factories.Tables
 
         public static SpellId Roll()
         {
-            return missileCantrips.Roll();
+            return LootSpellWeightManager.Roll("missile", missileCantrips);
         }
+
+        public static ChanceTable<SpellId> DefaultWeights => missileCantrips;
     }
 }

@@ -10,13 +10,25 @@ namespace ACE.Server.WorldObjects
 {
     partial class Player
     {
+        private const double RoadrunnerSettingsRefreshInterval = 5.0;
         private double nextRoadrunnerCheckTime;
+        private double nextRoadrunnerSettingsRefreshTime;
+        private double roadrunnerCheckInterval = 0.25;
+        private bool roadrunnerEnabled;
         private void RoadrunnerTick(double currentUnixTime)
         {
             if (currentUnixTime < nextRoadrunnerCheckTime)
                 return;
-            nextRoadrunnerCheckTime = currentUnixTime + Math.Max(0.10, PropertyManager.GetDouble("roadrunner_check_interval").Item);
-            var shouldHaveRoadrunner = PropertyManager.GetBool("roadrunner_enabled").Item && IsOnOutdoorRoad();
+
+            if (currentUnixTime >= nextRoadrunnerSettingsRefreshTime)
+            {
+                roadrunnerEnabled = PropertyManager.GetBool("roadrunner_enabled").Item;
+                roadrunnerCheckInterval = Math.Max(0.10, PropertyManager.GetDouble("roadrunner_check_interval").Item);
+                nextRoadrunnerSettingsRefreshTime = currentUnixTime + RoadrunnerSettingsRefreshInterval;
+            }
+
+            nextRoadrunnerCheckTime = currentUnixTime + roadrunnerCheckInterval;
+            var shouldHaveRoadrunner = roadrunnerEnabled && IsOnOutdoorRoad();
             var enchantment = EnchantmentManager.GetEnchantment(CustomSpellManager.RoadrunnerSpellId);
             if (!shouldHaveRoadrunner)
             {

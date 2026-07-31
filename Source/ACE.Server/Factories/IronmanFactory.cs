@@ -10,6 +10,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.DerpAce;
+using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Managers;
 using ACE.Server.Network.Enum;
@@ -1101,7 +1102,10 @@ namespace ACE.Server.Factories
             player.SetProperty(PropertyInt.Gender, (int)genderKey);
             player.SetProperty(PropertyString.Sex, (int)genderKey == 1 ? "Male" : "Female");
 
-            player.SetProperty(PropertyDataId.MotionTable, sex.MotionTable);
+            var motionTable = raceRoll == HeritageGroup.Empyrean
+                ? EmpyreanMotionTables.GetGrounded((Gender)genderKey)
+                : sex.MotionTable;
+            player.SetProperty(PropertyDataId.MotionTable, motionTable);
             player.SetProperty(PropertyDataId.SoundTable, sex.SoundTable);
             player.SetProperty(PropertyDataId.PhysicsEffectTable, sex.PhysicsTable);
             player.SetProperty(PropertyDataId.Setup, sex.SetupID);

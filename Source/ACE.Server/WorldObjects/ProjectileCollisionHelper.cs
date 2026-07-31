@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
@@ -149,6 +150,37 @@ namespace ACE.Server.WorldObjects
             worldObject.HitMsg = true;
         }
 
+        private static Creature SelectNearestProjectileBounceTarget(Landblock landblock, Creature origin, Player sourcePlayer, Creature excludedTarget, double radiusSq, uint landblockCell, IReadOnlyCollection<Creature> excludedTargets = null)
+        {
+            Creature nearest = null;
+            var nearestSq = double.MaxValue;
+            if (landblock == null || origin?.Location == null)
+                return null;
+
+            foreach (var worldObject in landblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is not Creature candidate
+                    || candidate == excludedTarget
+                    || candidate == sourcePlayer
+                    || excludedTargets?.Contains(candidate) == true
+                    || !candidate.IsAlive
+                    || !candidate.Attackable
+                    || !candidate.IsMonster
+                    || candidate.Teleporting
+                    || candidate.Location == null
+                    || (candidate.Location.Cell & 0xFFFF0000) != landblockCell)
+                    continue;
+
+                var distanceSq = origin.Location.SquaredDistanceTo(candidate.Location);
+                if (distanceSq > radiusSq || distanceSq >= nearestSq)
+                    continue;
+
+                nearest = candidate;
+                nearestSq = distanceSq;
+            }
+
+            return nearest;
+        }
         private static void TryLaunchRicochet(WorldObject projectile, Player sourcePlayer, Creature firstTarget)
         {
             if (sourcePlayer == null || firstTarget == null)
@@ -176,20 +208,7 @@ namespace ACE.Server.WorldObjects
                 return;
 
             var firstLandblock = firstTarget.Location.Cell & 0xFFFF0000;
-            var bounceTarget = landblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Creature>()
-                .Where(c => c != null
-                            && c != firstTarget
-                            && c != sourcePlayer
-                            && c.IsAlive
-                            && c.Attackable
-                            && c.IsMonster
-                            && !c.Teleporting
-                            && c.Location != null
-                            && (c.Location.Cell & 0xFFFF0000) == firstLandblock
-                            && firstTarget.Location.SquaredDistanceTo(c.Location) <= radiusSq)
-                .OrderBy(c => firstTarget.Location.SquaredDistanceTo(c.Location))
-                .FirstOrDefault();
+            var bounceTarget = SelectNearestProjectileBounceTarget(landblock, firstTarget, sourcePlayer, firstTarget, radiusSq, firstLandblock);
 
             if (bounceTarget == null)
                 return;
@@ -262,29 +281,11 @@ namespace ACE.Server.WorldObjects
                 return;
 
             var firstLandblock = firstTarget.Location.Cell & 0xFFFF0000;
-            var candidates = landblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Creature>()
-                .Where(c => c != null
-                            && c != firstTarget
-                            && c != sourcePlayer
-                            && c.IsAlive
-                            && c.Attackable
-                            && c.IsMonster
-                            && !c.Teleporting
-                            && c.Location != null
-                            && (c.Location.Cell & 0xFFFF0000) == firstLandblock)
-                .ToList();
-
-            var bounceTargets = new System.Collections.Generic.List<Creature>();
+            var bounceTargets = new List<Creature>();
             var currentTarget = firstTarget;
             while (bounceTargets.Count < 4 && currentTarget?.Location != null)
             {
-                var nextTarget = candidates
-                    .Where(c => !bounceTargets.Contains(c)
-                                && currentTarget.Location.SquaredDistanceTo(c.Location) <= radiusSq)
-                    .OrderBy(c => currentTarget.Location.SquaredDistanceTo(c.Location))
-                    .FirstOrDefault();
-
+                var nextTarget = SelectNearestProjectileBounceTarget(landblock, currentTarget, sourcePlayer, firstTarget, radiusSq, firstLandblock, bounceTargets);
                 if (nextTarget == null)
                     break;
 

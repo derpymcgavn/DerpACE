@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Factories.Enum;
@@ -160,6 +161,12 @@ namespace ACE.Server.Factories
             ["confusion"] = TreasureWeaponType.Caster,
         };
 
+        private static readonly Dictionary<TreasureWeaponType, string[]> WeaponMutatorsByType = WeaponMutatorTestTypes
+            .GroupBy(entry => entry.Value)
+            .ToDictionary(group => group.Key, group => group.Select(entry => entry.Key).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+
+        private static bool TryGetCompatibleWeaponMutators(TreasureWeaponType weaponType, out string[] mutators)
+            => WeaponMutatorsByType.TryGetValue(weaponType, out mutators) && mutators.Length > 0;
         private static readonly Dictionary<string, string> ShieldMutatorAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["defender"] = "defender",

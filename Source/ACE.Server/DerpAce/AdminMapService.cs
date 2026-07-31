@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using System.Drawing.Imaging;
 
 using log4net;
+using Microsoft.EntityFrameworkCore;
 
 using ACE.DatLoader;
 using ACE.DatLoader.FileTypes;
@@ -27,6 +28,8 @@ using ACE.Server.Pathfinding.Geometry;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
+using ACE.Server.Factories.Entity;
+using ACE.Server.Factories.Tables;
 using ACE.Server.Managers;
 using ACE.Server.Network.Enum;
 using ACE.Server.Network.GameMessages.Messages;
@@ -223,6 +226,86 @@ namespace ACE.Server.DerpAce
                     WriteText(context, BuildSpellWorkshopHtml(), "text/html; charset=utf-8");
                     return;
                 }
+                if (path.Equals("/loot-lab", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteText(context, "Admin map login required.", "text/plain; charset=utf-8");
+                        return;
+                    }
+                    WriteText(context, BuildLootLabHtml(), "text/html; charset=utf-8");
+                    return;
+                }
+                if (path.Equals("/api/loot/config", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, BuildLootConfigSnapshot());
+                    else if (context.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, HandleLootConfigUpdate(ReadJsonBody<AdminLootConfigUpdateRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    else
+                        WriteJson(context, new { ok = false, error = "Use GET or POST for loot config." });
+                    return;
+                }
+
+                if (path.Equals("/api/loot/tiers", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+
+                    if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, BuildLootTierSnapshot());
+                    else if (context.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, HandleLootTierUpdate(ReadJsonBody<AdminLootTierRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    else
+                        WriteJson(context, new { ok = false, error = "Use GET or POST for loot tiers." });
+                    return;
+                }
+
+                if (path.Equals("/api/loot/spell-weights", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+
+                    var pool = context.Request.QueryString["pool"] ?? "armor";
+                    if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, BuildLootSpellWeightSnapshot(pool));
+                    else if (context.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, HandleLootSpellWeightUpdate(ReadJsonBody<AdminLootSpellWeightRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    else
+                        WriteJson(context, new { ok = false, error = "Use GET or POST for loot spell weights." });
+                    return;
+                }
+
+                if (path.Equals("/api/loot/simulate", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    if (!context.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                    {
+                        WriteJson(context, new { ok = false, error = "Use POST for loot simulation." });
+                        return;
+                    }
+                    WriteJson(context, HandleLootSimulation(ReadJsonBody<AdminLootSimulationRequest>(context)));
+                    return;
+                }
+
                 if (path.Equals("/api/spells/draft", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -593,7 +676,7 @@ namespace ACE.Server.DerpAce
         private static object BuildBossProfileList()
         {
             using var db = new ShardDbContext();
-            var rows = db.BossMechanicProfile.OrderBy(x => x.ProfileName).ToList();
+            var rows = db.BossMechanicProfile.AsNoTracking().OrderBy(x => x.ProfileName).ToList();
             var profiles = rows.Select(row => new AdminBossProfileSummary
             {
                 Profile = row.ProfileName,
@@ -638,7 +721,7 @@ namespace ACE.Server.DerpAce
                 return new { ok = false, error };
 
             using var db = new ShardDbContext();
-            var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
+            var row = db.BossMechanicProfile.AsNoTracking().FirstOrDefault(x => x.ProfileName == profileName);
             if (row != null)
             {
                 var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
@@ -894,7 +977,7 @@ namespace ACE.Server.DerpAce
         private static object BuildActiveBossList()
         {
             using var db = new ShardDbContext();
-            var profiles = db.BossMechanicProfile.ToList().GroupBy(x => x.WeenieClassId).ToDictionary(x => x.Key, x => x.First());
+            var profiles = db.BossMechanicProfile.AsNoTracking().ToList().GroupBy(x => x.WeenieClassId).ToDictionary(x => x.Key, x => x.First());
             var bosses = new List<object>();
             foreach (var landblock in LandblockManager.GetLoadedLandblocks())
             {
@@ -927,7 +1010,7 @@ namespace ACE.Server.DerpAce
                 return new { ok = false, error = profileError };
 
             using var db = new ShardDbContext();
-            var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
+            var row = db.BossMechanicProfile.AsNoTracking().FirstOrDefault(x => x.ProfileName == profileName);
             if (row == null)
                 return new { ok = false, error = "Boss profile not found." };
             if (!row.Enabled || string.IsNullOrWhiteSpace(row.PublishedJson))
@@ -2613,6 +2696,264 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
 </html>
 """;
         }
+        private static readonly AdminLootConfigEntry[] LootConfigEntries = new[]
+        {
+            LootEntry("enable_custom_weapons", "Master", "Custom weapon mutators", "Allows DerpACE weapon affixes to roll on generated loot.", "toggle"),
+            LootEntry("enable_armor_enchants", "Master", "Armor enchant mutators", "Allows boosted armor bane/enchantment rolls.", "toggle"),
+            LootEntry("enable_vampiric_jewelry", "Master", "Vampiric jewelry", "Allows jewelry to roll passive/on-hit vampiric effects.", "toggle"),
+            LootEntry("loot_modifier_global_drop_multiplier", "Global Balance", "Global mutator drop multiplier", "Multiplies custom loot modifier drop chances before clamping.", "number", 0, 10, 0.05),
+            LootEntry("loot_modifier_exclusive_per_item", "Global Balance", "One custom modifier per item", "When enabled, most items stop after one exclusive custom affix.", "toggle"),
+            LootEntry("loot_modifier_interchangeable", "Global Balance", "Interchangeable weapon families", "Lets eligible weapon types borrow alternate themed mutators at higher tiers.", "toggle"),
+            LootEntry("loot_modifier_interchangeable_min_tier", "Global Balance", "Interchangeable min tier", "Minimum tier before weapon-family borrowing is allowed.", "number", 1, 8, 1),
+            LootEntry("armor_bane_chance_normal", "Armor", "Normal armor bane chance", "Per-bane roll chance for normal armor.", "percent", 0, 1, 0.01),
+            LootEntry("armor_bane_chance_covenant", "Armor", "Covenant armor bane chance", "Per-bane roll chance for Covenant armor.", "percent", 0, 1, 0.01),
+            LootEntry("armor_enchantment_chance_bonus", "Armor", "Armor enchant bonus", "Flat bonus added to tier enchantment roll chance.", "percent", 0, 1, 0.01),
+            LootEntry("armor_max_enchantments", "Armor", "Max armor enchantments", "Maximum extra critter/life enchantments per armor piece.", "number", 0, 6, 1),
+            LootEntry("armor_extra_enchantment_chance_mult", "Armor", "Extra enchant diminishing multiplier", "Each additional enchant roll is multiplied by this value.", "percent", 0, 1, 0.01),
+            LootEntry("weapon_blast_proc_min_tier", "Weapon Blast", "Blast min tier", "Minimum treasure tier for elemental blast-on-strike.", "number", 1, 8, 1),
+            LootEntry("weapon_blast_proc_chance_min", "Weapon Blast", "Blast drop chance min", "Chance at min tier for a weapon to receive a blast proc.", "percent", 0, 1, 0.001),
+            LootEntry("weapon_blast_proc_chance_max", "Weapon Blast", "Blast drop chance max", "Chance at tier 8 for a weapon to receive a blast proc.", "percent", 0, 1, 0.001),
+            LootEntry("weapon_blast_proc_rate_min", "Weapon Blast", "Blast proc rate min", "Minimum per-hit proc rate rolled onto the weapon.", "percent", 0, 1, 0.001),
+            LootEntry("weapon_blast_proc_rate_max", "Weapon Blast", "Blast proc rate max", "Maximum per-hit proc rate rolled onto the weapon.", "percent", 0, 1, 0.001),
+            LootEntry("defender_drop_chance", "Weapon Mutators", "Defender shield chance", "Chance for eligible shields to roll Defender.", "percent", 0, 1, 0.001),
+            LootEntry("archmagi_drop_chance", "Weapon Mutators", "Archmagi caster chance", "Chance for eligible casters to roll Archmagi.", "percent", 0, 1, 0.001),
+            LootEntry("hierophant_drop_chance", "Weapon Mutators", "Hierophant caster chance", "Chance for eligible life casters to roll Hierophant.", "percent", 0, 1, 0.001),
+            LootEntry("thief_dagger_drop_chance", "Weapon Mutators", "Thief dagger chance", "Chance for daggers to roll the Thief affix.", "percent", 0, 1, 0.001),
+            LootEntry("sentinel_spear_drop_chance", "Weapon Mutators", "Sentinel spear chance", "Chance for spears to roll Sentinel.", "percent", 0, 1, 0.001),
+            LootEntry("unarmed_elem_drop_chance", "Weapon Mutators", "Elemental unarmed chance", "Chance for unarmed weapons to roll elemental nomad-style effects.", "percent", 0, 1, 0.001),
+            LootEntry("fencer_blade_drop_chance", "Weapon Mutators", "Fencer blade chance", "Chance for swords to roll Fencer.", "percent", 0, 1, 0.001),
+            LootEntry("ravager_axe_drop_chance", "Weapon Mutators", "Ravager axe chance", "Chance for axes/hammers to roll Ravager.", "percent", 0, 1, 0.001),
+            LootEntry("warden_maul_drop_chance", "Weapon Mutators", "Warden maul chance", "Chance for mauls to roll Warden.", "percent", 0, 1, 0.001),
+            LootEntry("resolute_blade_drop_chance", "Weapon Mutators", "Resolute blade chance", "Chance for swords to roll Resolute.", "percent", 0, 1, 0.001),
+            LootEntry("polebreaker_drop_chance", "Weapon Mutators", "Polebreaker staff chance", "Chance for staves to roll Polebreaker.", "percent", 0, 1, 0.001),
+            LootEntry("stalker_bow_drop_chance", "Weapon Mutators", "Stalker bow chance", "Chance for bows to roll Stalker.", "percent", 0, 1, 0.001),
+            LootEntry("breacher_crossbow_drop_chance", "Weapon Mutators", "Breacher crossbow chance", "Chance for crossbows to roll Breacher.", "percent", 0, 1, 0.001),
+            LootEntry("reaper_atlatl_drop_chance", "Weapon Mutators", "Reaper atlatl chance", "Chance for atlatls to roll Reaper.", "percent", 0, 1, 0.001),
+            LootEntry("ricochet_atlatl_drop_chance", "Weapon Mutators", "Ricochet atlatl chance", "Chance for atlatls to roll Ricochet.", "percent", 0, 1, 0.001),
+            LootEntry("dinnerware_weapon_drop_chance", "Dinnerware", "Dinnerware weapon chance", "Chance for art-object rolls to become throwable dinnerware.", "percent", 0, 1, 0.001),
+            LootEntry("dinnerware_spin_drop_chance", "Dinnerware", "Dinnerware spin chance", "Chance for dinnerware to roll bounce/spin behavior.", "percent", 0, 1, 0.001),
+            LootEntry("dinnerware_spin_damage_scale", "Dinnerware", "Dinnerware bounce damage", "Damage scale for bounce hits.", "percent", 0, 1, 0.01),
+            LootEntry("dinnerware_spin_radius", "Dinnerware", "Dinnerware bounce radius", "Search radius for bounce targets.", "number", 1, 40, 0.5),
+            LootEntry("vampiric_jewelry_drop_chance", "Jewelry", "Vampiric jewelry chance", "Chance for eligible jewelry to roll vampiric points.", "percent", 0, 1, 0.001),
+            LootEntry("vampiric_jewelry_on_hit_proc_chance", "Jewelry", "Jewelry on-hit chance", "Per-piece chance to fire the on-hit heal.", "percent", 0, 1, 0.001),
+            LootEntry("derpcoin_base_chance", "Mob Rewards", "Derpcoin base chance", "Base derpcoin chance for mutator mobs.", "percent", 0, 1, 0.001),
+            LootEntry("derpcoin_max_chance", "Mob Rewards", "Derpcoin max chance", "Maximum derpcoin chance at high tier.", "percent", 0, 1, 0.001),
+            LootEntry("derpcoin_stack_multiplier", "Mob Rewards", "Derpcoin stack multiplier", "Multiplier per extra mutator stacked on a mob.", "number", 0, 10, 0.05),
+            LootEntry("mob_modifier_min_tier", "Mob Mutators", "Mob mutator min tier", "Minimum treasure tier before mob mutators roll.", "number", 1, 8, 1),
+            LootEntry("mob_modifier_defense_skill_cap", "Mob Mutators", "Mutator defense cap", "Caps defensive skills on mutated mobs; 0 disables.", "number", 0, 1200, 25),
+            LootEntry("mob_nocturnal_chance", "Mob Mutators", "Nocturnal chance", "Per-spawn Nocturnal chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_exploding_chance", "Mob Mutators", "Exploding chance", "Per-spawn Exploding chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_vampiric_chance", "Mob Mutators", "Vampiric mob chance", "Per-spawn Vampiric chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_thief_chance", "Mob Mutators", "Thief mob chance", "Per-spawn Thief chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_healer_chance", "Mob Mutators", "Healer chance", "Per-spawn Healer chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_tank_chance", "Mob Mutators", "Tank chance", "Per-spawn Tank chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_reaper_chance", "Mob Mutators", "Reaper mob chance", "Per-spawn Reaper chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_necromancer_chance", "Mob Mutators", "Necromancer chance", "Per-spawn Necromancer chance.", "percent", 0, 1, 0.0001),
+            LootEntry("mob_warder_chance", "Mob Mutators", "Warder chance", "Per-spawn Warder chance.", "percent", 0, 1, 0.0001),
+            LootEntry("vendor_random_loot_enabled", "Vendors", "Random vendor loot", "Allows configured vendors to stock random loot.", "toggle"),
+            LootEntry("vendor_random_loot_min_items", "Vendors", "Vendor min items", "Minimum random items per vendor category.", "number", 0, 100, 1),
+            LootEntry("vendor_random_loot_max_items", "Vendors", "Vendor max items", "Maximum random items per vendor category.", "number", 0, 200, 1),
+        };
+
+        private static AdminLootConfigEntry LootEntry(string key, string group, string label, string help, string kind, double min = 0, double max = 1, double step = 0.01)
+            => new AdminLootConfigEntry { Key = key, Group = group, Label = label, Help = help, Kind = kind, Min = min, Max = max, Step = step };
+
+        private static object BuildLootConfigSnapshot()
+        {
+            var config = DerpAceConfigManager.Config;
+            var properties = typeof(DerpAceConfiguration).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+                .Select(property => new { Property = property, JsonName = property.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonPropertyNameAttribute), false).OfType<System.Text.Json.Serialization.JsonPropertyNameAttribute>().FirstOrDefault()?.Name ?? property.Name })
+                .ToDictionary(x => x.JsonName, x => x.Property, StringComparer.OrdinalIgnoreCase);
+
+            var entries = LootConfigEntries.Select(entry =>
+            {
+                properties.TryGetValue(entry.Key, out var property);
+                var raw = property?.GetValue(config);
+                return new
+                {
+                    key = entry.Key,
+                    group = entry.Group,
+                    label = entry.Label,
+                    help = entry.Help,
+                    kind = entry.Kind,
+                    min = entry.Min,
+                    max = entry.Max,
+                    step = entry.Step,
+                    value = raw,
+                    type = property?.PropertyType.Name ?? "unknown"
+                };
+            }).ToList();
+
+            return new { ok = true, entries, groups = entries.Select(x => x.group).Distinct().ToList() };
+        }
+
+        private static object HandleLootConfigUpdate(AdminLootConfigUpdateRequest request, string adminName)
+        {
+            if (request?.Values == null || request.Values.Count == 0)
+                return new { ok = false, error = "No loot config values were provided." };
+
+            var allowed = LootConfigEntries.Select(x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var updates = request.Values.Where(kvp => allowed.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
+            if (updates.Count == 0)
+                return new { ok = false, error = "No recognized loot config values were provided." };
+
+            if (!DerpAceConfigManager.TryUpdate(updates, out var errors))
+                return new { ok = false, error = string.Join(" ", errors), errors };
+
+            log.Warn($"[DerpACE AdminMap] {adminName} updated {updates.Count} loot config setting(s).");
+            return new { ok = true, message = $"Saved and applied {updates.Count} loot config setting(s)." };
+        }
+
+        private static object HandleLootSimulation(AdminLootSimulationRequest request)
+        {
+            var requestedTier = request?.Tier ?? 8;
+            if (!LootTierManager.IsSupportedTier(requestedTier))
+                return new { ok = false, error = $"Loot tier {requestedTier} is not enabled. Configure it under Endgame Tier Profiles first." };
+            var tier = requestedTier;
+            var count = Math.Clamp(request?.Count ?? 100, 1, 5000);
+            var table = string.IsNullOrWhiteSpace(request?.Table) ? "all" : request.Table.Trim().ToLowerInvariant();
+            var summary = LootGenerationFactory_Test.TestLootGen(count, tier, false, table);
+            return new { ok = true, tier, count, table, summary };
+        }
+
+        private static object BuildLootTierSnapshot()
+        {
+            return new
+            {
+                ok = true,
+                tiers = LootTierManager.GetDefinitions(),
+                maximumTier = LootTierManager.MaximumTier,
+                baseTiers = Enumerable.Range(1, 8).ToArray()
+            };
+        }
+
+        private static object HandleLootTierUpdate(AdminLootTierRequest request, string adminName)
+        {
+            if (!LootTierManager.TrySave(request?.Tiers, out var error))
+                return new { ok = false, error };
+
+            var count = request?.Tiers?.Count ?? 0;
+            log.Warn($"[DerpACE AdminMap] {adminName} saved {count} custom loot tier profile(s).");
+            return new { ok = true, message = $"Saved and hot-applied {count} custom loot tier profile(s).", maximumTier = LootTierManager.MaximumTier };
+        }
+
+        private static object BuildLootSpellWeightSnapshot(string pool)
+        {
+            pool = string.IsNullOrWhiteSpace(pool) ? "armor" : pool.Trim().ToLowerInvariant();
+            var defaults = GetLootSpellDefaults(pool);
+            if (defaults == null)
+                return new { ok = false, error = $"Unknown loot spell pool '{pool}'." };
+
+            return new
+            {
+                ok = true,
+                pools = LootSpellWeightManager.PoolNames,
+                data = LootSpellWeightManager.GetSnapshot(pool, defaults)
+            };
+        }
+
+        private static object HandleLootSpellWeightUpdate(AdminLootSpellWeightRequest request, string adminName)
+        {
+            var pool = request?.Pool?.Trim().ToLowerInvariant() ?? "";
+            var defaults = GetLootSpellDefaults(pool);
+            if (defaults == null)
+                return new { ok = false, error = $"Unknown loot spell pool '{pool}'." };
+
+            if (request.Reset)
+            {
+                LootSpellWeightManager.Reset(pool);
+                log.Warn($"[DerpACE AdminMap] {adminName} reset the {pool} loot spell weights.");
+                return new { ok = true, message = $"Reset {pool} spell weights to ACE defaults." };
+            }
+
+            if (!LootSpellWeightManager.TryUpdate(pool, request.Entries, out var error))
+                return new { ok = false, error };
+
+            log.Warn($"[DerpACE AdminMap] {adminName} updated {request.Entries.Count} {pool} loot spell weights.");
+            return new { ok = true, message = $"Saved and hot-applied {request.Entries.Count} {pool} spell weights." };
+        }
+
+        private static ChanceTable<SpellId> GetLootSpellDefaults(string pool)
+        {
+            return pool?.ToLowerInvariant() switch
+            {
+                "armor" => ArmorCantrips.DefaultWeights,
+                "melee" => MeleeCantrips.DefaultWeights,
+                "missile" => MissileCantrips.DefaultWeights,
+                "caster" => WandCantrips.DefaultWeights,
+                "jewelry" => JewelryCantrips.DefaultWeights,
+                _ => null
+            };
+        }
+
+        private static string BuildLootLabHtml()
+        {
+            return """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DerpACE Loot Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1011;--panel:#121819;--line:#2c3b3f;--text:#edf4f2;--muted:#9bacaa;--blue:#5eb8df;--green:#60c58f;--amber:#d8b768;--red:#e17d7d}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select{font:inherit;color:inherit}.top{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;background:#111719;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}.top h1{font-size:16px;margin:0 8px 0 0}.top a{color:var(--blue);text-decoration:none}.top button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:8px 11px;cursor:pointer}.top button:hover{border-color:var(--green)}.status{margin-left:auto;color:var(--muted)}main{display:grid;grid-template-columns:250px minmax(0,1fr) 360px;gap:14px;padding:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;min-width:0;overflow:hidden}.panel h2{font-size:13px;margin:0;padding:10px 12px;color:#9ee4bf;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.03em}.groups{display:flex;flex-direction:column;padding:8px}.groups button{text-align:left;background:transparent;border:0;border-radius:4px;padding:9px 10px;color:var(--text);cursor:pointer}.groups button:hover,.groups button.active{background:#21434b}.groups small{float:right;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:10px;padding:12px}.setting{display:grid;gap:8px;background:#172022;border:1px solid #2b3d42;border-radius:6px;padding:10px}.setting.dirty{border-color:var(--amber);box-shadow:0 0 0 1px rgba(216,183,104,.25)}.setting header{display:flex;align-items:center;gap:9px}.setting strong{font-size:13px}.setting small{color:var(--muted);line-height:1.35}.setting input{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.setting input[type=checkbox]{width:auto;transform:scale(1.2)}.tools{padding:12px;display:grid;gap:10px}.tools h2{margin:-12px -12px 0}.tools button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:9px;cursor:pointer}.tools input,.tools select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.hint{color:var(--muted)}pre{white-space:pre-wrap;max-height:390px;overflow:auto;background:#07090a;border:1px solid var(--line);border-radius:4px;padding:10px;color:#dbe8e5}.pill{display:inline-block;margin-left:6px;color:var(--muted)}.tierProfiles{grid-column:1/-1}.tierHead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}.tierHead .hint{flex:1}.tierCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px;padding:12px}.tierCard{background:#172022;border:1px solid #2b3d42;border-radius:6px;padding:10px;display:grid;gap:9px}.tierCard.dirty{border-color:var(--amber)}.tierTitle{display:grid;grid-template-columns:76px minmax(160px,1fr) auto auto;gap:8px;align-items:center}.tierTitle input,.tierFields input,.tierFields select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:7px}.tierTitle input[type=checkbox]{width:auto}.tierFields{display:grid;grid-template-columns:repeat(3,minmax(110px,1fr));gap:8px}.tierFields label{display:grid;gap:3px;color:var(--muted);font-size:11px}.tierFields .wide{grid-column:1/-1}.tierCard button{background:#34272a;border:1px solid #68464b;border-radius:4px;padding:7px 9px;cursor:pointer}.spellWeights{grid-column:1/3}.weightToolbar{display:grid;grid-template-columns:160px minmax(180px,1fr) 120px 110px auto;gap:8px;padding:12px;border-bottom:1px solid var(--line)}.weightToolbar input,.weightToolbar select,.weightRow input{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.weightActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.weightActions button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:8px 11px;cursor:pointer}.weightSummary{padding:10px 12px;color:var(--muted)}.weightRows{padding:0 12px 12px;display:grid;gap:5px;max-height:520px;overflow:auto}.weightRow{display:grid;grid-template-columns:minmax(230px,1fr) 100px 85px 44px 54px;gap:10px;align-items:center;background:#172022;border:1px solid #293a3e;border-radius:4px;padding:7px 9px}.weightRow.disabled{opacity:.55}.weightName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.weightName small{display:block;color:var(--muted)}.chance{text-align:right;color:#9ee4bf;font-variant-numeric:tabular-nums}.weightRow a{color:var(--blue);text-decoration:none}
+@media(max-width:1050px){main{grid-template-columns:210px 1fr}.tools,.spellWeights{grid-column:1/-1}.weightToolbar{grid-template-columns:1fr 1fr 110px 110px}}@media(max-width:700px){main{display:block}.panel{margin:10px}.tierCards{grid-template-columns:1fr}.tierFields,.tierTitle{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><h1>Loot Lab</h1><a id="mapLink" href="/">Admin Map</a><a id="bossLink" href="/boss-mechanics">Boss Operations</a><a id="spellLink" href="/spell-workshop">Spell Workshop</a><button id="save">Save Changes</button><button id="reload">Reload</button><span id="status" class="status">Loading...</span></header>
+<main>
+  <section class="panel"><h2>Config Groups</h2><div id="groups" class="groups"></div></section>
+  <section class="panel"><h2 id="groupTitle">Settings</h2><div id="settings" class="grid"></div></section>
+  <aside class="panel tools"><h2>Simulator</h2><p class="hint">Save config and spell weights first, then test the live loot tables.</p><label>Tier<input id="simTier" type="number" min="1" max="8" value="8"></label><label>Items<input id="simCount" type="number" min="1" max="5000" value="250"></label><label>Table<select id="simTable"><option>all</option><option>melee</option><option>missile</option><option>caster</option><option>jewelry</option><option>armor</option><option>aetheria</option></select></label><button id="simulate">Run Simulation</button><pre id="simOut">No simulation yet.</pre></aside>
+  <section class="panel spellWeights"><h2>Loot Spell Weights</h2>
+    <div class="weightToolbar"><select id="weightPool"><option value="armor">Armor / Clothing</option><option value="melee">Melee Weapons</option><option value="missile">Missile Weapons</option><option value="caster">Casters</option><option value="jewelry">Jewelry</option></select><input id="weightSearch" placeholder="Filter spell name or ID"><input id="addSpellId" type="number" min="1" placeholder="Base spell ID"><input id="addWeight" type="number" min="0" step="0.001" value="0.01"><div class="weightActions"><button id="addWeightRow">Add</button></div></div>
+    <div class="weightSummary"><span id="weightStatus">Loading spell weights...</span> Weights are relative and normalize automatically. Use 0 to disable a spell. Only base spells with four cantrip levels are accepted.</div>
+    <div class="weightActions" style="padding:0 12px 10px"><button id="saveWeights">Save + Hot Apply</button><button id="resetWeights">Reset Pool</button><a id="openSpellEditor" href="/spell-workshop">Open Spell Definition Editor</a></div>
+    <div id="weightRows" class="weightRows"></div>
+  </section>
+  <section class="panel tierProfiles"><h2>Endgame Tier Profiles</h2>
+    <div class="tierHead"><span class="hint">Add T9+ by inheriting safe ACE tables, then layer explicit endgame scaling. Disabled tiers cannot be generated or simulated.</span><button id="addTier">Add Tier</button><button id="saveTiers">Save + Hot Apply</button></div>
+    <div id="tierCards" class="tierCards"></div>
+  </section>
+</main>
+<script>
+const q=new URLSearchParams(location.search),session=q.get('session')||'',token=q.get('token')||'';
+const $=id=>document.getElementById(id);
+if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('bossLink').href='/boss-mechanics?session='+encodeURIComponent(session);$('spellLink').href='/spell-workshop?session='+encodeURIComponent(session)}
+function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(token)h['X-DerpACE-Map-Token']=token;if(json)h['Content-Type']='application/json';return h}
+async function api(url,opt={}){const r=await fetch(url,{...opt,headers:{...headers(false),...(opt.headers||{})},cache:'no-store'});const text=await r.text();let d;try{d=JSON.parse(text)}catch{d={ok:false,error:text}}if(!r.ok||d.ok===false)throw new Error(d.error||r.statusText);return d}
+function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+let entries=[],currentGroup='',dirty=new Map(),spellEntries=[],spellCustomized=false,spellDirty=false,tierEntries=[],tierDirty=false;
+function setStatus(text){$('status').textContent=text}
+function displayValue(e){return e.value ?? 0}
+function storeValue(e,input){if(e.kind==='toggle')return input.checked;if(e.type==='Int32'||e.type==='UInt32')return parseInt(input.value||0,10);return Number(input.value||0)}
+function renderGroups(){const groups=[...new Set(entries.map(e=>e.group))];if(!currentGroup)currentGroup=groups[0]||'';$('groups').innerHTML=groups.map(g=>`<button class="${g===currentGroup?'active':''}" data-group="${safe(g)}">${safe(g)}<small>${entries.filter(e=>e.group===g).length}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{currentGroup=b.dataset.group;render()})}
+function render(){renderGroups();$('groupTitle').textContent=currentGroup||'Settings';const list=entries.filter(e=>e.group===currentGroup);$('settings').innerHTML=list.map(e=>{const changed=dirty.has(e.key);if(e.kind==='toggle')return `<article class="setting ${changed?'dirty':''}"><header><input data-key="${safe(e.key)}" type="checkbox" ${e.value?'checked':''}><strong>${safe(e.label)}</strong><span class="pill">${safe(e.key)}</span></header><small>${safe(e.help)}</small></article>`;return `<article class="setting ${changed?'dirty':''}"><header><strong>${safe(e.label)}</strong><span class="pill">${safe(e.key)}</span></header><input data-key="${safe(e.key)}" type="number" min="${e.min}" max="${e.max}" step="${e.step}" value="${displayValue(e)}"><small>${safe(e.help)}</small></article>`}).join('');$('settings').querySelectorAll('input').forEach(input=>input.oninput=()=>{const e=entries.find(x=>x.key===input.dataset.key);dirty.set(e.key,storeValue(e,input));setStatus(`${dirty.size} unsaved change${dirty.size===1?'':'s'}.`)})}
+async function load(){const d=await api('/api/loot/config');entries=d.entries||[];dirty.clear();currentGroup=currentGroup||((d.groups||[])[0]||'');render();setStatus(`${entries.length} loot settings loaded.`)}
+function tierValue(entry,key,input){if(input.type==='checkbox')return input.checked;if(['tier','baseTier','workmanshipBonus','spellcraftBonus','wieldLevelRequirement'].includes(key))return parseInt(input.value||0,10);if(key==='name'||key==='description')return input.value;return Number(input.value||0)}
+function renderTiers(){const fields=[['baseTier','Base ACE tier','number',1,8,1],['lootQualityBonus','Loot quality bonus','number',0,1,.01],['dropCountMultiplier','Drop count x','number',.1,10,.05],['valueMultiplier','Value x','number',.1,100,.05],['workmanshipBonus','Workmanship +','number',0,20,1],['spellcraftBonus','Spellcraft +','number',0,500,1],['armorMultiplier','Armor level x','number',.1,10,.05],['weaponDamageMultiplier','Weapon damage x','number',.1,10,.05],['maxManaMultiplier','Max mana x','number',.1,10,.05],['wieldLevelRequirement','Min wield level','number',0,10000,1]];$('tierCards').innerHTML=tierEntries.length?tierEntries.map((e,i)=>'<article class="tierCard '+(tierDirty?'dirty':'')+'" data-index="'+i+'"><div class="tierTitle"><input data-key="tier" type="number" min="9" max="100" value="'+e.tier+'" title="Custom tier number"><input data-key="name" value="'+safe(e.name||('Tier '+e.tier))+'" placeholder="Tier name"><label><input data-key="enabled" type="checkbox" '+(e.enabled?'checked':'')+'> Enabled</label><button class="removeTier">Remove</button></div><div class="tierFields">'+fields.map(f=>'<label>'+f[1]+'<input data-key="'+f[0]+'" type="'+f[2]+'" min="'+f[3]+'" max="'+f[4]+'" step="'+f[5]+'" value="'+(e[f[0]]??0)+'"></label>').join('')+'<label class="wide">Description<input data-key="description" value="'+safe(e.description||'')+'" placeholder="What makes this tier distinct?"></label></div></article>').join(''):'<p class="hint">No custom tiers yet. Add T9 when you are ready; tiers 1-8 continue using ACE unchanged.</p>';$('tierCards').querySelectorAll('input').forEach(input=>input.oninput=()=>{const card=input.closest('.tierCard'),entry=tierEntries[+card.dataset.index],key=input.dataset.key;entry[key]=tierValue(entry,key,input);tierDirty=true;card.classList.add('dirty')});$('tierCards').querySelectorAll('.removeTier').forEach(button=>button.onclick=()=>{tierEntries.splice(+button.closest('.tierCard').dataset.index,1);tierDirty=true;renderTiers()})}
+async function loadTiers(){const d=await api('/api/loot/tiers');tierEntries=d.tiers||[];tierDirty=false;$('simTier').max=Math.max(8,d.maximumTier||8);renderTiers()}
+$('addTier').onclick=()=>{const ordered=[...tierEntries].sort((a,b)=>(+a.tier||0)-(+b.tier||0)),seed=ordered.length?ordered[ordered.length-1]:null,next=Math.max(8,...tierEntries.map(e=>+e.tier||8))+1;tierEntries.push(seed?{...seed,tier:next,name:'Tier '+next}:{tier:next,name:'Tier '+next,enabled:true,baseTier:8,lootQualityBonus:0.05,dropCountMultiplier:1,valueMultiplier:1.1,workmanshipBonus:0,spellcraftBonus:0,armorMultiplier:1,weaponDamageMultiplier:1,maxManaMultiplier:1,wieldLevelRequirement:0,description:''});tierDirty=true;renderTiers()};
+$('saveTiers').onclick=async()=>{try{const d=await api('/api/loot/tiers',{method:'POST',headers:headers(true),body:JSON.stringify({tiers:tierEntries})});await loadTiers();setStatus(d.message)}catch(e){setStatus(e.message)}};
+function spellEditorUrl(id){const base=$('spellLink').href;return base+(base.includes('?')?'&':'?')+'template='+encodeURIComponent(id)}
+function showWeightStatus(message){$('weightStatus').textContent=message||spellEntries.length+' spells; '+(spellCustomized?'custom pool':'ACE defaults')+(spellDirty?', unsaved changes':'')+'.'}
+function renderWeights(){const filter=$('weightSearch').value.trim().toLowerCase(),total=spellEntries.reduce((n,e)=>n+Math.max(0,+e.weight||0),0);const shown=spellEntries.filter(e=>!filter||String(e.name).toLowerCase().includes(filter)||String(e.spellId).includes(filter));$('weightRows').innerHTML=shown.map(e=>'<div class="weightRow '+(+e.weight===0?'disabled':'')+'" data-id="'+e.spellId+'"><div class="weightName">'+safe(e.name)+'<small>Spell ID '+e.spellId+'</small></div><input class="spellWeight" type="number" min="0" step="0.001" value="'+e.weight+'"><div class="chance">'+(total>0?(Math.max(0,+e.weight||0)/total*100).toFixed(2):'0.00')+'%</div><a href="'+spellEditorUrl(e.spellId)+'" target="_blank">Edit</a><button class="removeWeight" title="Remove spell">x</button></div>').join('');$('weightRows').querySelectorAll('.spellWeight').forEach(input=>input.onchange=()=>{const row=input.closest('.weightRow'),entry=spellEntries.find(e=>String(e.spellId)===row.dataset.id);entry.weight=Math.max(0,Number(input.value)||0);spellDirty=true;renderWeights()});$('weightRows').querySelectorAll('.removeWeight').forEach(button=>button.onclick=()=>{const id=button.closest('.weightRow').dataset.id;spellEntries=spellEntries.filter(e=>String(e.spellId)!==id);spellDirty=true;renderWeights()});showWeightStatus()}
+async function loadWeights(){const d=await api('/api/loot/spell-weights?pool='+encodeURIComponent($('weightPool').value));spellEntries=d.data.entries||[];spellCustomized=!!d.data.customized;spellDirty=false;renderWeights()}
+$('weightPool').onchange=()=>loadWeights().catch(e=>showWeightStatus(e.message));
+$('weightSearch').oninput=renderWeights;
+$('openSpellEditor').href=$('spellLink').href;
+$('addWeightRow').onclick=()=>{const id=+$('addSpellId').value,weight=Math.max(0,+$('addWeight').value||0);if(!id)return showWeightStatus('Enter a base cantrip spell ID.');if(spellEntries.some(e=>e.spellId===id))return showWeightStatus('That spell is already in this pool.');spellEntries.push({spellId:id,name:'Spell '+id,weight:weight,chance:0});spellDirty=true;$('addSpellId').value='';renderWeights()};
+$('saveWeights').onclick=async()=>{try{const d=await api('/api/loot/spell-weights',{method:'POST',headers:headers(true),body:JSON.stringify({pool:$('weightPool').value,entries:spellEntries})});await loadWeights();showWeightStatus(d.message);setStatus(d.message)}catch(e){showWeightStatus(e.message);setStatus(e.message)}};
+$('resetWeights').onclick=async()=>{if(!confirm('Reset this spell pool to ACE defaults?'))return;try{const d=await api('/api/loot/spell-weights',{method:'POST',headers:headers(true),body:JSON.stringify({pool:$('weightPool').value,reset:true,entries:[]})});await loadWeights();showWeightStatus(d.message);setStatus(d.message)}catch(e){showWeightStatus(e.message)}};
+$('reload').onclick=()=>Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
+$('save').onclick=async()=>{if(!dirty.size)return setStatus('No changes to save.');const d=await api('/api/loot/config',{method:'POST',headers:headers(true),body:JSON.stringify({values:Object.fromEntries(dirty)})});setStatus(d.message||'Saved.');await load()};
+$('simulate').onclick=async()=>{try{$('simOut').textContent='Running...';const d=await api('/api/loot/simulate',{method:'POST',headers:headers(true),body:JSON.stringify({tier:+$('simTier').value,count:+$('simCount').value,table:$('simTable').value})});$('simOut').textContent=d.summary||'Simulation complete.';setStatus(`Simulated ${d.count} T${d.tier} item rolls.`)}catch(e){$('simOut').textContent=e.message;setStatus(e.message)}};
+Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
+</script>
+</body>
+</html>
+""";
+        }
         private static string BuildSpellWorkshopHtml()
         {
             return """
@@ -2659,7 +3000,8 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
 <div class="var"><code>CasterEffect</code><span>PlayScript enum run on the caster.</span></div><div class="var"><code>TargetEffect</code><span>PlayScript enum run on the target or impact.</span></div><div class="var"><code>Formula</code><span>Array of component IDs controlling the cast formula and gestures.</span></div><div class="var"><code>Wcid</code><span>Object WCID used by spell types that create or summon an object.</span></div><div class="var"><code>SpellBase</code><span>Advanced object containing any writable DAT SpellBase property. Top-level values are applied first.</span></div><div class="var"><code>DbSpell</code><span>Advanced object containing any writable world database spell property, including projectile physics fields.</span></div></div></details>
 </section></main>
 <script>
-const q=new URLSearchParams(location.search),session=q.get('session')||'',token=q.get('token')||'';const $=id=>document.getElementById(id);if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('bossLink').href='/boss-mechanics?session='+encodeURIComponent(session)}
+const q=new URLSearchParams(location.search),session=q.get('session')||'',token=q.get('token')||'';const $=id=>document.getElementById(id);if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('bossLink').href='/boss-mechanics?session='+encodeURIComponent(session)}const requestedTemplate=q.get('template');if(requestedTemplate)$('templateId').value=requestedTemplate;
+
 function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(token)h['X-DerpACE-Map-Token']=token;if(json)h['Content-Type']='application/json';return h}
 function status(text,type=''){const e=$('status');e.textContent=text;e.className='status '+type}
 async function api(url,opt={}){opt.headers={...headers(!!opt.body),...(opt.headers||{})};const r=await fetch(url,opt),d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||'Request failed');return d}
@@ -2849,7 +3191,7 @@ button {{ border: 1px solid rgba(255,255,255,.18); border-radius: 4px; backgroun
 @media (max-width: 980px) {{ .bottomDock {{ left: 12px; grid-template-columns: 1fr; }} .statGrid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
 @media (max-width: 860px) {{ body {{ grid-template-columns: 1fr; }} #map {{ min-height: 64vh; }} aside {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} .bottomDock {{ position: static; margin: 8px 12px 12px; }} .inventoryPanel {{ inset: 10px; grid-template-columns: 1fr; }} .inventoryEditPane {{ border-left: 0; border-top: 1px solid rgba(255,255,255,.12); }} }}
 /* Modern Admin Map shell */
-body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overflow:hidden;background:#0b0f11}}#map{{height:100vh;min-height:0;background-color:#11181a}}.mapToolbar{{position:absolute;z-index:8;left:14px;right:14px;top:14px;display:flex;align-items:center;gap:8px;min-height:48px;padding:7px 8px 7px 14px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(11,16,18,.9);box-shadow:0 12px 34px rgba(0,0,0,.32);backdrop-filter:blur(12px)}}.mapToolbar h1{{margin:0;font-size:15px;white-space:nowrap}}.toolbarStatus{{min-width:0;flex:1;color:#aebbb6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.toolbarActions{{display:flex;gap:5px}}.toolbarActions button{{width:34px;height:32px;padding:0;display:grid;place-items:center;background:#202b2e;font-size:16px}}aside{{height:100vh;min-height:0;padding:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:#121719;box-shadow:-14px 0 36px rgba(0,0,0,.2)}}.sidebarHeader{{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.1);background:#151c1e}}.loginPanel,.sessionBar,.controls{{margin-bottom:0}}.sessionBar{{grid-template-columns:minmax(0,1fr) auto auto}}.sidebarTabs{{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#101517}}.sidebarTab{{padding:7px 5px;background:transparent;color:#98a7a2;border-color:transparent;font-size:12px}}.sidebarTab.active{{color:#fff;background:#263538;border-color:#46585c}}.sidebarContent{{min-height:0;overflow:auto;padding:12px 14px 20px;scrollbar-gutter:stable}}.sidebarSearch{{position:sticky;top:-12px;z-index:3;display:grid;grid-template-columns:1fr auto;gap:6px;margin:-12px -2px 8px;padding:12px 2px 8px;background:#121719}}.rosterCount{{min-width:38px;display:grid;place-items:center;color:#9fb0aa;font-size:11px}}body[data-side-view=""players""] .sideInspect,body[data-side-view=""players""] .sideLegend,body[data-side-view=""inspect""] .sidePlayers,body[data-side-view=""inspect""] .sideLegend,body[data-side-view=""legend""] .sidePlayers,body[data-side-view=""legend""] .sideInspect{{display:none!important}}.player{{margin:0 -6px;padding:10px 8px;border-top:0;border-bottom:1px solid rgba(255,255,255,.08);border-radius:3px}}.player:hover{{background:rgba(255,255,255,.045)}}.player.selected{{margin:0 -6px;padding:10px 8px;background:#23363a;box-shadow:inset 3px 0 #71b7e8}}.player .inventoryActions{{opacity:.62}}.player:hover .inventoryActions,.player.selected .inventoryActions{{opacity:1}}.adminPanel,.watchPanel,.legend{{border-radius:5px;background:#171e20}}.bottomDock{{left:14px;right:14px;bottom:14px;gap:10px}}.dockPanel{{border-radius:6px;background:rgba(10,15,17,.9);backdrop-filter:blur(10px)}}.zoomControls{{left:14px;bottom:150px;grid-template-columns:repeat(4,34px)}}.zoomControls button{{width:34px;height:34px;background:rgba(15,22,24,.92)}}.inventoryPanel{{inset:18px;grid-template-columns:minmax(430px,1fr) minmax(340px,420px);border-radius:7px}}.inventoryListPane,.inventoryEditPane{{padding:16px}}.inventorySlot{{width:42px;height:42px}}.inventoryGrid{{grid-template-columns:repeat(auto-fill,42px);gap:5px}}body.sidebarCollapsed{{grid-template-columns:minmax(0,1fr) 0}}body.sidebarCollapsed aside{{visibility:hidden}}.emptyRoster{{padding:24px 8px;text-align:center;color:#7f8d88;font-size:12px}}@media(max-width:860px){{body{{height:auto;overflow:auto;grid-template-columns:1fr}}#map{{height:65vh;min-height:480px}}aside{{height:auto;min-height:520px}}body.sidebarCollapsed{{grid-template-columns:1fr}}body.sidebarCollapsed aside{{display:none}}.mapToolbar{{left:8px;right:8px;top:8px}}.toolbarStatus{{display:none}}.bottomDock{{left:8px;right:8px;bottom:8px}}}}
+body{{grid-template-columns:minmax(0,1fr) 390px;height:100vh;min-height:0;overflow:hidden;background:#0b0f11}}#map{{height:100vh;min-height:0;background-color:#11181a}}.mapToolbar{{position:absolute;z-index:8;left:14px;right:14px;top:14px;display:flex;align-items:center;gap:8px;min-height:48px;padding:7px 8px 7px 14px;border:1px solid rgba(255,255,255,.14);border-radius:6px;background:rgba(11,16,18,.9);box-shadow:0 12px 34px rgba(0,0,0,.32);backdrop-filter:blur(12px)}}.mapToolbar h1{{margin:0;font-size:15px;white-space:nowrap}}.toolbarStatus{{min-width:0;flex:1;color:#aebbb6;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.toolbarActions{{display:flex;gap:5px}}.toolbarActions button{{width:34px;height:32px;padding:0;display:grid;place-items:center;background:#202b2e;font-size:16px}}aside{{height:100vh;min-height:0;padding:0;display:grid;grid-template-rows:auto auto minmax(0,1fr);overflow:hidden;background:#121719;box-shadow:-14px 0 36px rgba(0,0,0,.2)}}.sidebarHeader{{padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.1);background:#151c1e}}.loginPanel,.sessionBar,.controls{{margin-bottom:0}}.sessionBar{{grid-template-columns:minmax(0,1fr) auto auto auto auto}}.sidebarTabs{{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);background:#101517}}.sidebarTab{{padding:7px 5px;background:transparent;color:#98a7a2;border-color:transparent;font-size:12px}}.sidebarTab.active{{color:#fff;background:#263538;border-color:#46585c}}.sidebarContent{{min-height:0;overflow:auto;padding:12px 14px 20px;scrollbar-gutter:stable}}.sidebarSearch{{position:sticky;top:-12px;z-index:3;display:grid;grid-template-columns:1fr auto;gap:6px;margin:-12px -2px 8px;padding:12px 2px 8px;background:#121719}}.rosterCount{{min-width:38px;display:grid;place-items:center;color:#9fb0aa;font-size:11px}}body[data-side-view=""players""] .sideInspect,body[data-side-view=""players""] .sideLegend,body[data-side-view=""inspect""] .sidePlayers,body[data-side-view=""inspect""] .sideLegend,body[data-side-view=""legend""] .sidePlayers,body[data-side-view=""legend""] .sideInspect{{display:none!important}}.player{{margin:0 -6px;padding:10px 8px;border-top:0;border-bottom:1px solid rgba(255,255,255,.08);border-radius:3px}}.player:hover{{background:rgba(255,255,255,.045)}}.player.selected{{margin:0 -6px;padding:10px 8px;background:#23363a;box-shadow:inset 3px 0 #71b7e8}}.player .inventoryActions{{opacity:.62}}.player:hover .inventoryActions,.player.selected .inventoryActions{{opacity:1}}.adminPanel,.watchPanel,.legend{{border-radius:5px;background:#171e20}}.bottomDock{{left:14px;right:14px;bottom:14px;gap:10px}}.dockPanel{{border-radius:6px;background:rgba(10,15,17,.9);backdrop-filter:blur(10px)}}.zoomControls{{left:14px;bottom:150px;grid-template-columns:repeat(4,34px)}}.zoomControls button{{width:34px;height:34px;background:rgba(15,22,24,.92)}}.inventoryPanel{{inset:18px;grid-template-columns:minmax(430px,1fr) minmax(340px,420px);border-radius:7px}}.inventoryListPane,.inventoryEditPane{{padding:16px}}.inventorySlot{{width:42px;height:42px}}.inventoryGrid{{grid-template-columns:repeat(auto-fill,42px);gap:5px}}body.sidebarCollapsed{{grid-template-columns:minmax(0,1fr) 0}}body.sidebarCollapsed aside{{visibility:hidden}}.emptyRoster{{padding:24px 8px;text-align:center;color:#7f8d88;font-size:12px}}@media(max-width:860px){{body{{height:auto;overflow:auto;grid-template-columns:1fr}}#map{{height:65vh;min-height:480px}}aside{{height:auto;min-height:520px}}body.sidebarCollapsed{{grid-template-columns:1fr}}body.sidebarCollapsed aside{{display:none}}.mapToolbar{{left:8px;right:8px;top:8px}}.toolbarStatus{{display:none}}.bottomDock{{left:8px;right:8px;bottom:8px}}}}
 /* Login/sidebar click safety */
 aside {{ position:relative; z-index:30; pointer-events:auto; }}
 .sidebarHeader {{ position:relative; z-index:40; pointer-events:auto; }}
@@ -2927,7 +3269,7 @@ aside {{ position:relative; z-index:30; pointer-events:auto; }}
     <input id=""loginPassword"" type=""password"" autocomplete=""current-password"" placeholder=""password"">
     <button id=""loginButton"">Log In</button>
   </div>
-  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><a id=""spellWorkshopLink"" class=""adminOnly"" href=""/spell-workshop"" target=""_blank"">Spells</a><button id=""logoutButton"">Log Out</button></div>
+  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><a id=""spellWorkshopLink"" class=""adminOnly"" href=""/spell-workshop"" target=""_blank"">Spells</a><a id=""lootLabLink"" class=""adminOnly"" href=""/loot-lab"" target=""_blank"">Loot Lab</a><button id=""logoutButton"">Log Out</button></div>
   <div class=""controls adminOnly""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div></div><nav class=""sidebarTabs""><button class=""sidebarTab active"" data-side-tab=""players"">Players</button><button class=""sidebarTab adminOnly"" data-side-tab=""inspect"">Inspect</button><button class=""sidebarTab adminOnly"" data-side-tab=""legend"">Legend</button></nav><div class=""sidebarContent""><div class=""sidebarSearch sidePlayers""><input id=""playerSearch"" placeholder=""Search players or locations""><span id=""rosterCount"" class=""rosterCount"">0</span></div>
   <section id=""adminPanel"" class=""adminPanel adminOnly sideInspect"">
     <h2 id=""adminPlayerName"">Player</h2>
@@ -3021,6 +3363,7 @@ const sessionBar = document.getElementById('sessionBar');
 const sessionText = document.getElementById('sessionText');
 const bossMechanicsLink = document.getElementById('bossMechanicsLink');
 const spellWorkshopLink = document.getElementById('spellWorkshopLink');
+const lootLabLink = document.getElementById('lootLabLink');
 const bottomDock = document.getElementById('bottomDock');
 const adminPanel = document.getElementById('adminPanel');
 const adminPlayerName = document.getElementById('adminPlayerName');
@@ -3099,6 +3442,7 @@ function setBossMechanicsLink() {{
   if (!bossMechanicsLink) return;
   bossMechanicsLink.href = mapSessionToken ? `/boss-mechanics?session=${{encodeURIComponent(mapSessionToken)}}` : '/boss-mechanics';
   if (spellWorkshopLink) spellWorkshopLink.href = mapSessionToken ? `/spell-workshop?session=${{encodeURIComponent(mapSessionToken)}}` : '/spell-workshop';
+  if (lootLabLink) lootLabLink.href = mapSessionToken ? `/loot-lab?session=${{encodeURIComponent(mapSessionToken)}}` : '/loot-lab';
 }}
 function setAuthenticated(value, accountName, isAdmin) {{
   authenticated = !!value || !!token.value;
@@ -3854,6 +4198,41 @@ checkSession();
         {
             public string Profile { get; set; }
             public string Json { get; set; }
+        }
+        private sealed class AdminLootConfigEntry
+        {
+            public string Key { get; set; }
+            public string Group { get; set; }
+            public string Label { get; set; }
+            public string Help { get; set; }
+            public string Kind { get; set; }
+            public double Min { get; set; }
+            public double Max { get; set; }
+            public double Step { get; set; }
+        }
+
+        private sealed class AdminLootConfigUpdateRequest
+        {
+            public Dictionary<string, JsonElement> Values { get; set; } = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private sealed class AdminLootTierRequest
+        {
+            public List<LootTierDefinition> Tiers { get; set; } = new List<LootTierDefinition>();
+        }
+
+        private sealed class AdminLootSpellWeightRequest
+        {
+            public string Pool { get; set; }
+            public bool Reset { get; set; }
+            public List<LootSpellWeight> Entries { get; set; } = new List<LootSpellWeight>();
+        }
+
+        private sealed class AdminLootSimulationRequest
+        {
+            public int Tier { get; set; } = 8;
+            public int Count { get; set; } = 250;
+            public string Table { get; set; } = "all";
         }
         private sealed class AdminMapLoginRequest
         {

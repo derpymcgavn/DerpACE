@@ -207,7 +207,9 @@ namespace ACE.Server.Factories.Tables
 
         public static SpellId Roll()
         {
-            return armorCantrips.Roll();
+            return LootSpellWeightManager.Roll("armor", armorCantrips);
         }
+
+        public static ChanceTable<SpellId> DefaultWeights => armorCantrips;
     }
 }

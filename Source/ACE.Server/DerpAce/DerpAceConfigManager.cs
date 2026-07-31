@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -84,6 +88,73 @@ namespace ACE.Server.DerpAce
             {
                 log.Error($"[DerpAce] Save failed: {ex}");
             }
+        }
+        public static bool TryUpdate(IDictionary<string, JsonElement> values, out List<string> errors)
+        {
+            errors = new List<string>();
+            if (values == null || values.Count == 0)
+                return true;
+
+            var properties = typeof(DerpAceConfiguration)
+                .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                .Select(property => new
+                {
+                    Property = property,
+                    JsonName = property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? property.Name
+                })
+                .ToDictionary(x => x.JsonName, x => x.Property, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var entry in values)
+            {
+                if (!properties.TryGetValue(entry.Key, out var property) || !property.CanWrite)
+                {
+                    errors.Add($"Unknown config key '{entry.Key}'.");
+                    continue;
+                }
+
+                try
+                {
+                    var value = ConvertJsonValue(entry.Value, property.PropertyType);
+                    property.SetValue(Config, value);
+                }
+                catch (Exception ex)
+                {
+                    errors.Add($"{entry.Key}: {ex.Message}");
+                }
+            }
+
+            if (errors.Count > 0)
+                return false;
+
+            Save();
+            Apply();
+            return true;
+        }
+
+        private static object ConvertJsonValue(JsonElement value, Type targetType)
+        {
+            var nullableType = Nullable.GetUnderlyingType(targetType);
+            if (nullableType != null)
+            {
+                if (value.ValueKind == JsonValueKind.Null)
+                    return null;
+                targetType = nullableType;
+            }
+
+            if (targetType == typeof(string))
+                return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+            if (targetType == typeof(bool))
+                return value.ValueKind == JsonValueKind.True || (value.ValueKind != JsonValueKind.False && bool.Parse(value.ToString()));
+            if (targetType == typeof(int))
+                return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var i) ? i : int.Parse(value.ToString(), CultureInfo.InvariantCulture);
+            if (targetType == typeof(uint))
+                return value.ValueKind == JsonValueKind.Number && value.TryGetUInt32(out var u) ? u : uint.Parse(value.ToString(), CultureInfo.InvariantCulture);
+            if (targetType == typeof(float))
+                return value.ValueKind == JsonValueKind.Number && value.TryGetSingle(out var f) ? f : float.Parse(value.ToString(), CultureInfo.InvariantCulture);
+            if (targetType == typeof(double))
+                return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var d) ? d : double.Parse(value.ToString(), CultureInfo.InvariantCulture);
+
+            return JsonSerializer.Deserialize(value.GetRawText(), targetType, _jsonOptions);
         }
 
         // ── private helpers ──────────────────────────────────────────────────

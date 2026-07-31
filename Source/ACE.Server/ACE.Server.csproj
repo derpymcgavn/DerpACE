@@ -301,6 +301,7 @@
     <None Include="Data\CustomClothingBase\**\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\CustomClothingBase\" />
     <None Include="Data\AdminMap\**\*.*" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\AdminMap\" />
     <None Include="Data\DerpACE\BossMechanics\**\*.json" CopyToOutputDirectory="PreserveNewest" LinkBase="Data\DerpACE\BossMechanics\" />
+    <None Include="Content\sql\**\*.sql" CopyToOutputDirectory="PreserveNewest" LinkBase="Content\sql\" />
   </ItemGroup>
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">

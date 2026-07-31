@@ -112,19 +112,15 @@ namespace ACE.Server.WorldObjects
             baseDamage = Math.Max(1, baseDamage);
 
             var radiusSq = radius * radius;
-            var targets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Creature>()
-                .Where(c => c != null
-                            && c != this
-                            && !c.IsDead
-                            && c.Location != null
-                            && Location.SquaredDistanceTo(c.Location) <= radiusSq)
-                .ToList();
-
-            if (targets.Count == 0) return;
-
-            foreach (var target in targets)
+            foreach (var worldObject in CurrentLandblock.GetWorldObjectsForLocalQuery())
             {
+                if (worldObject is not Creature target
+                    || target == this
+                    || target.IsDead
+                    || target.Location == null
+                    || Location.SquaredDistanceTo(target.Location) > radiusSq)
+                    continue;
+
                 // Random variance ±25%
                 var variance = ThreadSafeRandom.Next(0.75f, 1.25f);
                 var dmg = (int)Math.Max(1, Math.Round(baseDamage * variance));

@@ -14,20 +14,24 @@ namespace ACE.Server.Factories
         /// </summary>
         public static WorldObject CreateWeapon(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
         {
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             var weaponType = WeaponTypeChance.Roll(profile.Tier);
 
             if (TryResolveWeaponMutator(forcedWeaponMutator, out var canonicalMutator)
                 && TryGetWeaponMutatorTestType(canonicalMutator, out var forcedWeaponType))
                 weaponType = forcedWeaponType;
 
+            WorldObject weapon;
             if (weaponType.IsMeleeWeapon())
-                return CreateMeleeWeapon(profile, isMagical, weaponType, forcedWeaponMutator);
+                weapon = CreateMeleeWeapon(profile, isMagical, weaponType, forcedWeaponMutator);
             else if (weaponType.IsMissileWeapon())
-                return CreateMissileWeapon(profile, isMagical, forcedWeaponType: weaponType, forcedWeaponMutator: forcedWeaponMutator);
+                weapon = CreateMissileWeapon(profile, isMagical, forcedWeaponType: weaponType, forcedWeaponMutator: forcedWeaponMutator);
             else
-                return CreateCaster(profile, isMagical, forcedWeaponMutator);
-        }
+                weapon = CreateCaster(profile, isMagical, forcedWeaponMutator);
 
+            return LootTierManager.Apply(weapon, tierContext);
+        }
         private static float RollWeaponSpeedMod(TreasureDeath treasureDeath)
         {
             var qualityLevel = QualityChance.Roll(treasureDeath);

@@ -329,8 +329,11 @@ namespace ACE.Server.Managers
             if (boss == null || !boss.IsAlive || !EncounterStarted.TryGetValue(boss.Guid.Full, out var started)) return;
             var profile = GetPublished(boss.WeenieClassId);
             if (profile == null) return;
-            foreach (var rule in GetRules(profile, "timer").Where(r => now - started >= r.IntervalSeconds))
+            foreach (var rule in GetRules(profile, "timer"))
             {
+                if (now - started < rule.IntervalSeconds)
+                    continue;
+
                 var key = $"{boss.Guid.Full}:{rule.Id}";
                 var last = LastRuleRun.GetOrAdd(key, started);
                 if (now - last >= rule.IntervalSeconds && TryExecuteRule(boss, rule, now))
@@ -361,8 +364,7 @@ namespace ACE.Server.Managers
         {
             var phase = ActivePhases.GetOrAdd(boss.Guid.Full, "default");
             if (!string.IsNullOrWhiteSpace(rule.Phase) && !string.Equals(rule.Phase, phase, StringComparison.OrdinalIgnoreCase)) return false;
-            var nearby = PlayerManager.GetAllOnline().Count(p => p?.Location != null && boss.Location != null &&
-                p.Location.Landblock == boss.Location.Landblock && boss.Location.Distance2DSquared(p.Location) <= WorldObject.LocalBroadcastRange * WorldObject.LocalBroadcastRange);
+            var nearby = CountNearbyPlayers(boss, WorldObject.LocalBroadcastRange);
             if (nearby < rule.MinPlayers) return false;
             if (ThreadSafeRandom.Next(0.0f, 100.0f) >= rule.ChancePercent) return false;
 
@@ -440,10 +442,13 @@ namespace ACE.Server.Managers
                 return;
             }
 
+            if (boss?.Location == null || boss.CurrentLandblock == null)
+                return;
+
             var recipients = new Dictionary<uint, Player>();
-            foreach (var player in PlayerManager.GetAllOnline())
+            foreach (var worldObject in boss.CurrentLandblock.GetWorldObjectsForLocalQuery())
             {
-                if (player?.Location == null || boss.Location == null || player.Location.Landblock != boss.Location.Landblock)
+                if (worldObject is not Player player || player.Location == null || player.Location.Landblock != boss.Location.Landblock)
                     continue;
                 if (boss.Location.Distance2DSquared(player.Location) > WorldObject.LocalBroadcastRange * WorldObject.LocalBroadcastRange)
                     continue;
@@ -457,11 +462,43 @@ namespace ACE.Server.Managers
             foreach (var recipient in recipients.Values)
                 recipient.Session?.Network.EnqueueSend(new GameMessageSystemChat($"[{boss.Name}] {text}", ChatMessageType.Fellowship));
         }
-        private static Player GetNearestPlayer(Creature boss) => PlayerManager.GetAllOnline()
-            .Where(p => p?.Location != null && boss?.Location != null && p.Location.Landblock == boss.Location.Landblock)
-            .Where(p => boss.Location.Distance2DSquared(p.Location) <= WorldObject.LocalBroadcastRange * WorldObject.LocalBroadcastRange)
-            .OrderBy(p => boss.Location.Distance2DSquared(p.Location))
-            .FirstOrDefault();
+        private static Player GetNearestPlayer(Creature boss)
+        {
+            if (boss?.Location == null || boss.CurrentLandblock == null)
+                return null;
+
+            var rangeSq = WorldObject.LocalBroadcastRange * WorldObject.LocalBroadcastRange;
+            Player nearest = null;
+            var nearestSq = double.MaxValue;
+            foreach (var worldObject in boss.CurrentLandblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is not Player player || player.Location == null || player.Location.Landblock != boss.Location.Landblock)
+                    continue;
+                var distanceSq = boss.Location.Distance2DSquared(player.Location);
+                if (distanceSq > rangeSq || distanceSq >= nearestSq)
+                    continue;
+                nearest = player;
+                nearestSq = distanceSq;
+            }
+            return nearest;
+        }
+
+        private static int CountNearbyPlayers(Creature boss, double radius)
+        {
+            if (boss?.Location == null || boss.CurrentLandblock == null)
+                return 0;
+
+            var radiusSq = radius * radius;
+            var count = 0;
+            foreach (var worldObject in boss.CurrentLandblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is Player player && player.Location != null &&
+                    player.Location.Landblock == boss.Location.Landblock &&
+                    boss.Location.Distance2DSquared(player.Location) <= radiusSq)
+                    count++;
+            }
+            return count;
+        }
 
         private static string ExpandText(string text, Creature boss, Player target, int nearby)
         {
@@ -515,17 +552,46 @@ namespace ACE.Server.Managers
         };
         private static IEnumerable<Player> SelectTargets(Creature boss, string selector, Player trigger)
         {
-            var players = PlayerManager.GetAllOnline().Where(p => p?.Location != null && !p.IsDead && boss?.Location != null &&
-                p.Location.Landblock == boss.Location.Landblock && boss.Location.Distance2DSquared(p.Location) <= WorldObject.LocalBroadcastRange * WorldObject.LocalBroadcastRange).ToList();
+            if (boss?.Location == null || boss.CurrentLandblock == null)
+                return Enumerable.Empty<Player>();
+
+            var broadcastRangeSq = WorldObject.LocalBroadcastRange * WorldObject.LocalBroadcastRange;
+            var players = new List<Player>();
+            foreach (var worldObject in boss.CurrentLandblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is Player player && player.Location != null && !player.IsDead &&
+                    player.Location.Landblock == boss.Location.Landblock &&
+                    boss.Location.Distance2DSquared(player.Location) <= broadcastRangeSq)
+                    players.Add(player);
+            }
             if (players.Count == 0) return players;
             return selector switch
             {
                 "all" => players,
-                "random" => new[] { players[ThreadSafeRandom.Next(0, players.Count)] },
-                "farthest" => new[] { players.OrderByDescending(p => boss.Location.Distance2DSquared(p.Location)).First() },
-                "nearest" => new[] { players.OrderBy(p => boss.Location.Distance2DSquared(p.Location)).First() },
-                _ => new[] { trigger != null && players.Contains(trigger) ? trigger : players.OrderBy(p => boss.Location.Distance2DSquared(p.Location)).First() },
+                "random" => new[] { players[ThreadSafeRandom.Next(0, players.Count - 1)] },
+                "farthest" => new[] { SelectByDistance(players, boss.Location, false) },
+                "nearest" => new[] { SelectByDistance(players, boss.Location, true) },
+                _ => new[] { trigger != null && players.Contains(trigger) ? trigger : SelectByDistance(players, boss.Location, true) },
             };
+        }
+
+        private static Player SelectByDistance(IEnumerable<Player> players, Position origin, bool nearest)
+        {
+            Player selected = null;
+            var selectedSq = nearest ? double.MaxValue : double.MinValue;
+            foreach (var player in players)
+            {
+                if (player?.Location == null)
+                    continue;
+
+                var distanceSq = origin.Distance2DSquared(player.Location);
+                if (nearest ? distanceSq >= selectedSq : distanceSq <= selectedSq)
+                    continue;
+
+                selected = player;
+                selectedSq = distanceSq;
+            }
+            return selected;
         }
         private static void ApplyTemporarySpell(Creature boss, BossMechanicAction action, Player trigger)
         {
@@ -588,13 +654,11 @@ namespace ACE.Server.Managers
             source?.EnqueueBroadcast(new GameMessageScript(source.Guid, effect, 2.0f), WorldObject.LocalBroadcastRange);
             var baseDamage = Math.Max(1, (int)Math.Round(maxHealth * damageScale));
             var radiusSq = radius * radius;
-            var targets = landblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Player>()
-                .Where(player => player?.Location != null && !player.IsDead && origin.SquaredDistanceTo(player.Location) <= radiusSq)
-                .ToList();
-
-            foreach (var player in targets)
+            foreach (var worldObject in landblock.GetWorldObjectsForLocalQuery())
             {
+                if (worldObject is not Player player || player.Location == null || player.IsDead || player.Location.Landblock != origin.Landblock || origin.SquaredDistanceTo(player.Location) > radiusSq)
+                    continue;
+
                 var variance = ThreadSafeRandom.Next(0.75f, 1.25f);
                 var damage = (int)Math.Max(1, Math.Round(baseDamage * variance));
                 var resistMod = player.GetResistanceMod(damageType, source, null);
@@ -655,7 +719,7 @@ namespace ACE.Server.Managers
                         return;
 
                     var spell = new Spell(CustomSpellManager.RainfallFrostSpellId);
-                    foreach (var player in SelectTargets(boss, action.Target, trigger).ToList())
+                    foreach (var player in SelectTargets(boss, action.Target, trigger))
                     {
                         if (player?.Location == null || player.IsDead || player.Teleporting)
                             continue;
@@ -781,19 +845,24 @@ namespace ACE.Server.Managers
             var candidates = SelectMirrorSources(boss, action, trigger).ToList();
             if (candidates.Count == 0)
                 return trigger;
-            return candidates[ThreadSafeRandom.Next(0, candidates.Count)];
+            return candidates[ThreadSafeRandom.Next(0, candidates.Count - 1)];
         }
 
         private static IEnumerable<Player> SelectMirrorSources(Creature boss, BossMechanicAction action, Player trigger)
         {
-            if (boss?.Location == null)
+            if (boss?.Location == null || boss.CurrentLandblock == null)
                 return Enumerable.Empty<Player>();
 
             var radius = Math.Clamp(action.Radius <= 0 ? WorldObject.LocalBroadcastRange : action.Radius, 1, 240);
-            var nearby = PlayerManager.GetAllOnline()
-                .Where(p => p?.Location != null && !p.IsDead && p.Location.Landblock == boss.Location.Landblock)
-                .Where(p => boss.Location.Distance2DSquared(p.Location) <= radius * radius)
-                .ToList();
+            var radiusSq = radius * radius;
+            var nearby = new List<Player>();
+            foreach (var worldObject in boss.CurrentLandblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is Player player && player.Location != null && !player.IsDead &&
+                    player.Location.Landblock == boss.Location.Landblock &&
+                    boss.Location.Distance2DSquared(player.Location) <= radiusSq)
+                    nearby.Add(player);
+            }
 
             if (action.Source == "nearby" || trigger == null)
                 return nearby;

@@ -1,6 +1,7 @@
 using System;
 using ACE.Entity.Enum;
 using ACE.Server.Factories;
+using ACE.Server.Factories.Tables;
 using ACE.Server.Network;
 
 namespace ACE.Server.Command.Handlers
@@ -33,9 +34,9 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            if (tier < 1 || tier > 8)
+            if (!LootTierManager.IsSupportedTier(tier))
             {
-                Console.WriteLine($"Tier must be 1-8.  You entered tier {tier}, which does not exist!");
+                Console.WriteLine($"Tier {tier} is not enabled. Configure T9+ in Loot Lab first.");
                 return;
             }
 

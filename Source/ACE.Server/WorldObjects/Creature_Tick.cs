@@ -17,8 +17,11 @@ namespace ACE.Server.WorldObjects
             List<WorldObject> expireItems = null;
 
             // added where clause
-            foreach (var wo in EquippedObjects.Values.Where(i => i.EnchantmentManager.HasEnchantments || i.Lifespan.HasValue))
+            foreach (var wo in EquippedObjects.Values)
             {
+                if (!wo.EnchantmentManager.HasEnchantments && !wo.Lifespan.HasValue)
+                    continue;
+
                 // FIXME: wo.NextHeartbeatTime is double.MaxValue here
                 //if (wo.NextHeartbeatTime <= currentUnixTime)
                     //wo.Heartbeat(currentUnixTime);

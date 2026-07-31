@@ -697,23 +697,7 @@ namespace ACE.Server.WorldObjects
                         {
                             var cleaveDamage = Math.Max(1.0f, damageEvent.Damage * cleaveScale);
                             var radiusSq = cleaveRadius * cleaveRadius;
-
-                            var splashTargets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
-                                .OfType<Creature>()
-                                .Where(c => c != null
-                                            && c != target
-                                            && c != this
-                                            && c.IsAlive
-                                            && c.Attackable
-                                            && c.IsMonster
-                                            && !c.Teleporting
-                                            && c.Location != null
-                                            && target.Location.SquaredDistanceTo(c.Location) <= radiusSq)
-                                .OrderBy(c => target.Location.SquaredDistanceTo(c.Location))
-                                .Take(cleaveMaxSecondary)
-                                .ToList();
-
-                            foreach (var splashTarget in splashTargets)
+                            foreach (var splashTarget in SelectNearestMonsterTargets(target.Location, radiusSq, cleaveMaxSecondary, target))
                             {
                                 splashTarget.TakeDamage(this, damageEvent.DamageType, cleaveDamage, false);
                                 splashTarget.ApplyVisualEffects(ACE.Entity.Enum.PlayScript.Explode);
@@ -1053,16 +1037,7 @@ namespace ACE.Server.WorldObjects
                         if (CurrentLandblock != null && target.Location != null)
                         {
                             var cleaveDamage = damageEvent.Damage * 0.3f;
-                            var splashTargets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
-                                .OfType<Creature>()
-                                .Where(c => c != null && c != target && c != this && c.IsAlive && c.Attackable
-                                            && c.IsMonster && !c.Teleporting && c.Location != null
-                                            && target.Location.SquaredDistanceTo(c.Location) <= 25.0f) // 5 meter radius
-                                .OrderBy(c => target.Location.SquaredDistanceTo(c.Location))
-                                .Take(2)
-                                .ToList();
-
-                            foreach (var splash in splashTargets)
+                            foreach (var splash in SelectNearestMonsterTargets(target.Location, 25.0f, 2, target))
                             {
                                 splash.TakeDamage(this, damageEvent.DamageType, cleaveDamage, false);
                             }
@@ -1740,6 +1715,47 @@ namespace ACE.Server.WorldObjects
             actionChain.EnqueueChain();
         }
 
+        private List<Creature> SelectNearestMonsterTargets(ACE.Entity.Position origin, double radiusSq, int maxTargets, Creature excludedTarget, Func<Creature, bool> extraFilter = null)
+        {
+            var selected = new List<Creature>(Math.Max(0, maxTargets));
+            var distances = new List<double>(Math.Max(0, maxTargets));
+            if (maxTargets <= 0 || CurrentLandblock == null || origin == null)
+                return selected;
+
+            foreach (var worldObject in CurrentLandblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is not Creature candidate
+                    || candidate == excludedTarget
+                    || candidate == this
+                    || !candidate.IsAlive
+                    || !candidate.Attackable
+                    || !candidate.IsMonster
+                    || candidate.Teleporting
+                    || candidate.Location == null
+                    || extraFilter?.Invoke(candidate) == false)
+                    continue;
+
+                var distanceSq = origin.SquaredDistanceTo(candidate.Location);
+                if (distanceSq > radiusSq)
+                    continue;
+
+                var insertAt = 0;
+                while (insertAt < distances.Count && distances[insertAt] <= distanceSq)
+                    insertAt++;
+                if (insertAt >= maxTargets)
+                    continue;
+
+                selected.Insert(insertAt, candidate);
+                distances.Insert(insertAt, distanceSq);
+                if (selected.Count > maxTargets)
+                {
+                    selected.RemoveAt(selected.Count - 1);
+                    distances.RemoveAt(distances.Count - 1);
+                }
+            }
+
+            return selected;
+        }
         private void TryProcLugianHammerThrow(Creature primaryTarget, DamageEvent damageEvent)
         {
             if (primaryTarget == null
@@ -1759,20 +1775,7 @@ namespace ACE.Server.WorldObjects
 
             var radius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowRadius) ?? 10.0));
             var radiusSq = radius * radius;
-            var secondaryTarget = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Creature>()
-                .Where(c => c != null
-                            && c != primaryTarget
-                            && c != this
-                            && c.IsAlive
-                            && c.Attackable
-                            && c.IsMonster
-                            && !c.Teleporting
-                            && c.Location != null
-                            && primaryTarget.Location.SquaredDistanceTo(c.Location) <= radiusSq
-                            && CanDamage(c))
-                .OrderBy(c => primaryTarget.Location.SquaredDistanceTo(c.Location))
-                .FirstOrDefault();
+            var secondaryTarget = SelectNearestMonsterTargets(primaryTarget.Location, radiusSq, 1, primaryTarget, CanDamage).FirstOrDefault();
 
             if (secondaryTarget == null)
                 return;

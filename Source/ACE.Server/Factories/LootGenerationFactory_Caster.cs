@@ -51,7 +51,8 @@ namespace ACE.Server.Factories
 
         public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
         {
-            // this function is only used by test methods, and is not part of regular lootgen
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             var treasureRoll = new TreasureRoll(TreasureItemType.Caster);
             treasureRoll.WeaponType = TreasureWeaponType.Caster;
             treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
@@ -59,10 +60,8 @@ namespace ACE.Server.Factories
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
             MutateCaster(wo, profile, isMagical, treasureRoll);
-
-            return wo;
+            return LootTierManager.Apply(wo, tierContext);
         }
-
         private static void MutateCaster(WorldObject wo, TreasureDeath profile, bool isMagical, TreasureRoll roll)
         {
             var forcedShadowCloneCaster = IsForcedWeaponModifier(roll, "shadowclone");

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
@@ -47,8 +49,12 @@ namespace ACE.Server.Managers
             PropertyInt.AuraPlayScript3,
         };
 
-        // Last broadcast time per player guid.
-        private static readonly Dictionary<uint, double> _lastTick = new Dictionary<uint, double>();
+        private static readonly HashSet<uint> ValidPlayScripts = Enum.GetValues<PlayScript>()
+            .Select(value => (uint)value)
+            .ToHashSet();
+
+        // Landblock groups heartbeat players concurrently.
+        private static readonly ConcurrentDictionary<uint, double> _lastTick = new ConcurrentDictionary<uint, double>();
 
         // =================================================================
         //  Core tick — call from Player.Heartbeat (~every 5 s)
@@ -83,7 +89,7 @@ namespace ACE.Server.Managers
                 var raw = player.GetProperty(slot);
                 if (raw == null || raw.Value == 0) continue;
 
-                if (!Enum.IsDefined(typeof(PlayScript), (uint)raw.Value))
+                if (!ValidPlayScripts.Contains((uint)raw.Value))
                 {
                     log.Warn($"AuraManager: {player.Name} slot {slot} has invalid PlayScript id {raw.Value} — clearing.");
                     player.RemoveProperty(slot);
@@ -129,7 +135,7 @@ namespace ACE.Server.Managers
             if (slot < 1 || slot > AuraSlots.Length)
                 return $"Slot must be 1-{AuraSlots.Length}.";
 
-            if (!Enum.IsDefined(typeof(PlayScript), scriptId) || scriptId == 0)
+            if (!ValidPlayScripts.Contains(scriptId) || scriptId == 0)
                 return $"PlayScript id {scriptId} is not valid. Use '@aura list' to see all options.";
 
             player.SetProperty(AuraSlots[slot - 1], (int)scriptId);
@@ -181,7 +187,7 @@ namespace ACE.Server.Managers
         public static void OnPlayerLogout(Player player)
         {
             if (player != null)
-                _lastTick.Remove(player.Guid.Full);
+                _lastTick.TryRemove(player.Guid.Full, out _);
         }
     }
 }

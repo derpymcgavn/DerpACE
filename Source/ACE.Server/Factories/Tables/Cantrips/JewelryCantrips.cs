@@ -169,7 +169,9 @@ namespace ACE.Server.Factories.Tables
 
         public static SpellId Roll()
         {
-            return jewelryCantrips.Roll();
+            return LootSpellWeightManager.Roll("jewelry", jewelryCantrips);
         }
+
+        public static ChanceTable<SpellId> DefaultWeights => jewelryCantrips;
     }
 }

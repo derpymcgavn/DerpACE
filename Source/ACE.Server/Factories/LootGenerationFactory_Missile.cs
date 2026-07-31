@@ -16,7 +16,8 @@ namespace ACE.Server.Factories
     {
         public static WorldObject CreateMissileWeapon(TreasureDeath profile, bool isMagical, bool mutate = true, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null)
         {
-            // this function is only used by test methods, and is not part of regular lootgen
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             var treasureRoll = new TreasureRoll(TreasureItemType.Weapon);
             treasureRoll.WeaponType = forcedWeaponType ?? WeaponTypeChance.MissileChances.Roll();
             treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
@@ -28,12 +29,11 @@ namespace ACE.Server.Factories
                 || treasureRoll.WeaponType == TreasureWeaponType.Discus
                 || treasureRoll.WeaponType == TreasureWeaponType.Platter)
                 MutateDinnerware(wo, profile, isMagical, treasureRoll);
-            else
+            else if (mutate)
                 MutateMissileWeapon(wo, profile, isMagical, treasureRoll);
-            
-            return wo;
-        }
 
+            return LootTierManager.Apply(wo, tierContext);
+        }
         private static void MutateMissileWeapon(WorldObject wo, TreasureDeath profile, bool isMagical, TreasureRoll roll)
         {
             // new method / mutation scripts

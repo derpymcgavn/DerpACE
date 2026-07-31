@@ -1,5 +1,11 @@
 using System;
+using System.Diagnostics;
 using System.Text;
+using System.Threading;
+
+using ACE.Database;
+using ACE.Server.Network;
+using ACE.Server.Network.Managers;
 
 using ACE.Common.Performance;
 
@@ -9,6 +15,9 @@ namespace ACE.Server.Managers
     {
         public static bool IsRunning;
         public static bool IsRunningCumulative;
+
+        private static long lastAllocatedBytes;
+        private static DateTime lastRuntimeSnapshotUtc;
 
 
         public enum MonitorType
@@ -114,10 +123,9 @@ namespace ACE.Server.Managers
             if (IsRunning)
                 return;
 
-            Reset();
-
             IsRunning = true;
             IsRunningCumulative = true;
+            Reset();
         }
 
         public static void Stop()
@@ -207,6 +215,8 @@ namespace ACE.Server.Managers
             last5mClear = DateTime.UtcNow;
             last1hClear = DateTime.UtcNow;
             last24hClear = DateTime.UtcNow;
+            lastAllocatedBytes = 0;
+            lastRuntimeSnapshotUtc = default;
         }
 
 
@@ -284,6 +294,7 @@ namespace ACE.Server.Managers
         public new static string ToString()
         {
             var sb = new StringBuilder();
+            AppendRuntimeSnapshot(sb);
 
             sb.Append($"Monitoring Durations: ~5m {Monitors5mRunTime.TotalMinutes:N2} min, ~1h {Monitors1hRunTime.TotalMinutes:N2} min, ~24h {Monitors24hRunTime.TotalMinutes:N2} min{'\n'}");
             sb.Append($"~5m Hits   Avg  Long  Last Tot - ~1h Hits   Avg  Long  Last  Tot - ~24h Hits  Avg  Long  Last   Tot (s) - Name{'\n'}");
@@ -329,6 +340,35 @@ namespace ACE.Server.Managers
             return sb.ToString();
         }
 
+        private static void AppendRuntimeSnapshot(StringBuilder sb)
+        {
+            const double bytesPerMiB = 1024.0 * 1024.0;
+            var now = DateTime.UtcNow;
+            var allocatedBytes = GC.GetTotalAllocatedBytes(false);
+            var elapsedSeconds = lastRuntimeSnapshotUtc == default ? 0 : (now - lastRuntimeSnapshotUtc).TotalSeconds;
+            var allocationRate = elapsedSeconds > 0 ? Math.Max(0, allocatedBytes - lastAllocatedBytes) / bytesPerMiB / elapsedSeconds : 0;
+            lastAllocatedBytes = allocatedBytes;
+            lastRuntimeSnapshotUtc = now;
+
+            var gc = GC.GetGCMemoryInfo();
+            using var process = Process.GetCurrentProcess();
+            process.Refresh();
+            ThreadPool.GetAvailableThreads(out var availableWorkers, out var availableIo);
+            ThreadPool.GetMaxThreads(out var maxWorkers, out var maxIo);
+
+            var c2sPackets = NetworkStatistics.C2S_Packets_Aggregate;
+            var s2cPackets = NetworkStatistics.S2C_Packets_Aggregate;
+            var c2sRetransmits = NetworkStatistics.C2S_RequestsForRetransmit_Aggregate;
+            var s2cRetransmits = NetworkStatistics.S2C_RequestsForRetransmit_Aggregate;
+            var c2sRetransmitPercent = c2sPackets == 0 ? 0 : c2sRetransmits * 100.0 / c2sPackets;
+            var s2cRetransmitPercent = s2cPackets == 0 ? 0 : s2cRetransmits * 100.0 / s2cPackets;
+
+            sb.Append($"Runtime snapshot - Sessions: {NetworkManager.GetSessionCount():N0}, DB queue: {DatabaseManager.Shard.QueueCount:N0}, CPU: {process.TotalProcessorTime.TotalSeconds:N1}s total{'\n'}");
+            sb.Append($"Memory - Working set: {process.WorkingSet64 / bytesPerMiB:N1} MiB, private: {process.PrivateMemorySize64 / bytesPerMiB:N1} MiB, managed: {GC.GetTotalMemory(false) / bytesPerMiB:N1} MiB, heap: {gc.HeapSizeBytes / bytesPerMiB:N1} MiB, fragmented: {gc.FragmentedBytes / bytesPerMiB:N1} MiB{'\n'}");
+            sb.Append($"GC - Collections: {GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)}, pause: {gc.PauseTimePercentage:N2}%, allocation rate: {(elapsedSeconds > 0 ? $"{allocationRate:N2} MiB/s" : "sample again for MiB/s")}{'\n'}");
+            sb.Append($"Thread pool - Worker busy: {maxWorkers - availableWorkers:N0}/{maxWorkers:N0}, IO busy: {maxIo - availableIo:N0}/{maxIo:N0}{'\n'}");
+            sb.Append($"Network - C2S: {c2sPackets:N0} packets, {c2sRetransmits:N0} retransmits ({c2sRetransmitPercent:N3}%); S2C: {s2cPackets:N0} packets, {s2cRetransmits:N0} retransmits ({s2cRetransmitPercent:N3}%); CRC errors: {NetworkStatistics.C2S_CRCErrors_Aggregate:N0}{'\n'}");
+        }
         private static void AddMonitorOutputToStringBuilder(TimedEventHistory eventHistory5m, TimedEventHistory eventHistory1h, TimedEventHistory eventHistory24h, string name, StringBuilder sb)
         {
             sb.Append($"{eventHistory5m.TotalEvents.ToString().PadLeft(7)} {eventHistory5m.AverageEventDuration:N4} {eventHistory5m.LongestEvent:N3} {eventHistory5m.LastEvent:N3} {((int)eventHistory5m.TotalSeconds).ToString().PadLeft(3)} - " +

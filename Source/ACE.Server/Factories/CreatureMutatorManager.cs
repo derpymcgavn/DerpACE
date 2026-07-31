@@ -135,8 +135,8 @@ namespace ACE.Server.Factories
             {
                 var candidates = _mutators.Values
                     .Where(m => m.Enabled)
-                    .OrderBy(m => ThreadSafeRandom.Next(0, 999999))
                     .ToList();
+                Shuffle(candidates);
 
                 var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -162,10 +162,14 @@ namespace ACE.Server.Factories
                 var maxMutators = GetMaxMutatorsForTier(tier);
                 while (applied.Count < maxMutators && RollBonusMutatorSlot(tier, applied.Count))
                 {
-                    var bonus = candidates
-                        .Where(m => !applied.Contains(m.Identifier) && m.CanApply(creature, tier))
-                        .OrderBy(m => ThreadSafeRandom.Next(0, 999999))
-                        .FirstOrDefault();
+                    CreatureMutator bonus = null;
+                    foreach (var candidate in candidates)
+                    {
+                        if (applied.Contains(candidate.Identifier) || !candidate.CanApply(creature, tier))
+                            continue;
+                        bonus = candidate;
+                        break;
+                    }
 
                     if (bonus == null)
                         break;
@@ -189,6 +193,16 @@ namespace ACE.Server.Factories
         /// <summary>
         /// Finds a mutator by name (case-insensitive).
         /// </summary>
+        private static void Shuffle<T>(IList<T> items)
+        {
+            for (var i = items.Count - 1; i > 0; i--)
+            {
+                var j = ThreadSafeRandom.Next(0, i);
+                if (i == j)
+                    continue;
+                (items[i], items[j]) = (items[j], items[i]);
+            }
+        }
         private static int GetMaxMutatorsForTier(int tier)
         {
             if (tier >= 8) return 4;

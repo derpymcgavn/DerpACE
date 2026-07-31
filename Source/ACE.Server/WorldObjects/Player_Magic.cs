@@ -1208,21 +1208,12 @@ namespace ACE.Server.WorldObjects
 
             var baseLandblock = Location.Cell & 0xFFFF0000;
             var radiusSq = FrostWaveShieldRadius * FrostWaveShieldRadius;
-            var targets = CurrentLandblock.GetAllWorldObjectsForDiagnostics()
-                .OfType<Creature>()
-                .Where(creature => creature != null
-                    && creature != this
-                    && creature.IsMonster
-                    && creature.IsAlive
-                    && creature.Attackable
-                    && !creature.Teleporting
-                    && creature.Location != null
-                    && (creature.Location.Cell & 0xFFFF0000) == baseLandblock
-                    && Location.SquaredDistanceTo(creature.Location) <= radiusSq
-                    && CanDamage(creature))
-                .OrderBy(creature => Location.SquaredDistanceTo(creature.Location))
-                .Take(FrostWaveShieldMaxTargets)
-                .ToList();
+            var targets = SelectNearestMonsterTargets(
+                Location,
+                radiusSq,
+                FrostWaveShieldMaxTargets,
+                null,
+                creature => (creature.Location.Cell & 0xFFFF0000) == baseLandblock && CanDamage(creature));
 
             foreach (var target in targets)
             {
@@ -1319,10 +1310,10 @@ namespace ACE.Server.WorldObjects
             if (CurrentLandblock != null)
             {
                 var radiusSq = bounceRadius * bounceRadius;
-                var creatures = CurrentLandblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>();
-                foreach (var creature in creatures)
+                var creatures = CurrentLandblock.GetWorldObjectsForLocalQuery();
+                foreach (var worldObject in creatures)
                 {
-                    if (creature == targetCreature || creature == this || creature == caster ||
+                    if (worldObject is not Creature creature || creature == targetCreature || creature == this || creature == caster ||
                         !creature.IsAlive || !creature.Attackable || creature.Teleporting || creature.Location == null ||
                         targetCreature.Location.SquaredDistanceTo(creature.Location) > radiusSq)
                         continue;

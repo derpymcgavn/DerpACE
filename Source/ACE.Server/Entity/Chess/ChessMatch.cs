@@ -178,10 +178,13 @@ namespace ACE.Server.Entity.Chess
 
             if (Sides[(int)Chess.InverseColor(color)] == null)
             {
-                var ai_enabled = PropertyManager.GetDouble("chess_ai_start_time").Item;
+                var ai_enabled = ChessBoard.IsAyanUlgrimChessboard
+                    ? 3.0
+                    : PropertyManager.GetDouble("chess_ai_start_time").Item;
                 if (ai_enabled > 0)
                 {
-                    player.Session.Network.EnqueueSend(new GameMessageSystemChat($"If another player doesn't join within {ai_enabled} seconds, the game will automatically start with AI", ChatMessageType.Broadcast));
+                    var opponent = ChessBoard.IsAyanUlgrimChessboard ? "Ulgrim" : "AI";
+                    player.Session.Network.EnqueueSend(new GameMessageSystemChat($"If another player doesn't join within {ai_enabled:0.#} seconds, the game will automatically start with {opponent}.", ChatMessageType.Broadcast));
                     StartAiTime = DateTime.UtcNow.AddSeconds(ai_enabled);
                 }
             }
@@ -198,6 +201,7 @@ namespace ACE.Server.Entity.Chess
             if (color == ChessColor.None)
                 return;
 
+            ChessBoard.EngageAiOpponent();
             AddSide(null, color);
         }
 
@@ -399,6 +403,7 @@ namespace ACE.Server.Entity.Chess
             NextRangeCheck = null;
 
             ChessBoard.ChessMatch = null;
+            ChessBoard.ReleaseAiOpponent();
         }
 
         public void FinishTurn()

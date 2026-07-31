@@ -9,6 +9,7 @@ using ACE.Database.Models.Shard;
 using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
+using ACE.Server.Entity;
 using ACE.Server.Managers;
 using ACE.Server.Network;
 using ACE.Server.Network.GameEvent.Events;
@@ -551,36 +552,31 @@ namespace ACE.Server.WorldObjects
             // Check if Character is Empyrean, and if we need to set/change/send new motion table
             if (Heritage == (int)HeritageGroup.Empyrean)
             {
-                // These are the motion tables for Empyrean float and not-float (one for each gender). They are hard-coded into the client.
-                const uint EmpyreanMaleFloatMotionDID = 0x0900020Bu;
-                const uint EmpyreanFemaleFloatMotionDID = 0x0900020Au;
-                const uint EmpyreanMaleMotionDID = 0x0900020Eu;
-                const uint EmpyreanFemaleMotionDID = 0x0900020Du;
-
-                // Check for the Levitation option for Empyrean. Shadow crown and Undead flames are handled by client.
+                // Levitation is cosmetic and remains selectable at the barber.
+                // New Empyreans start grounded; this option deliberately preserves both choices.
                 if (Gender == (int)ACE.Entity.Enum.Gender.Male) // Male
                 {
-                    if (option_bound == 1 && MotionTableId != EmpyreanMaleMotionDID)
+                    if (option_bound == 1 && MotionTableId != EmpyreanMotionTables.MaleGrounded)
                     {
-                        MotionTableId = EmpyreanMaleMotionDID;
+                        MotionTableId = EmpyreanMotionTables.MaleGrounded;
                         Session.Network.EnqueueSend(new GameMessagePrivateUpdateDataID(this, PropertyDataId.MotionTable, MotionTableId));
                     }
-                    else if (option_bound == 0 && MotionTableId != EmpyreanMaleFloatMotionDID)
+                    else if (option_bound == 0 && MotionTableId != EmpyreanMotionTables.MaleFloating)
                     {
-                        MotionTableId = EmpyreanMaleFloatMotionDID;
+                        MotionTableId = EmpyreanMotionTables.MaleFloating;
                         Session.Network.EnqueueSend(new GameMessagePrivateUpdateDataID(this, PropertyDataId.MotionTable, MotionTableId));
                     }
                 }
                 else // Female
                 {
-                    if (option_bound == 1 && MotionTableId != EmpyreanFemaleMotionDID)
+                    if (option_bound == 1 && MotionTableId != EmpyreanMotionTables.FemaleGrounded)
                     {
-                        MotionTableId = EmpyreanFemaleMotionDID;
+                        MotionTableId = EmpyreanMotionTables.FemaleGrounded;
                         Session.Network.EnqueueSend(new GameMessagePrivateUpdateDataID(this, PropertyDataId.MotionTable, MotionTableId));
                     }
-                    else if (option_bound == 0 && MotionTableId != EmpyreanFemaleFloatMotionDID)
+                    else if (option_bound == 0 && MotionTableId != EmpyreanMotionTables.FemaleFloating)
                     {
-                        MotionTableId = EmpyreanFemaleFloatMotionDID;
+                        MotionTableId = EmpyreanMotionTables.FemaleFloating;
                         Session.Network.EnqueueSend(new GameMessagePrivateUpdateDataID(this, PropertyDataId.MotionTable, MotionTableId));
                     }
                 }

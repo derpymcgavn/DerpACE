@@ -95,6 +95,16 @@ See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator 
 | `testlootgen -info` | Console examples for bulk loot generation. |
 | `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
 
+#### Extensible Endgame Loot Tiers
+Loot Lab (/loot-lab, admin login required) includes an **Endgame Tier Profiles** editor for T9-T100. A custom tier inherits all legacy selection, mutation, spell, and material tables from ACE tier 1-8, then applies only the configured endgame overrides. This keeps new tiers compatible with ACE's fixed eight-row tables and avoids adding hard-coded array branches for every expansion.
+
+1. Open Loot Lab and select **Add Tier**.
+2. Set the custom tier number/name and choose the base ACE tier to inherit, normally T8.
+3. Tune loot-quality bonus, drop count, value, workmanship, spellcraft, armor, weapon damage, mana, and optional minimum wield level.
+4. Save and hot-apply. Profiles persist in Data/DerpACE/LootTiers.json.
+5. Assign that tier number to a treasure_death profile used by the intended endgame creatures or chests. @lootgen, /ciloot, and testlootgen accept the tier immediately.
+
+An unconfigured database tier above T8 safely generates with T8 behavior rather than indexing beyond ACE's tables. Admin generation and simulation require the custom tier to be enabled, which catches unfinished tier profiles before they are used for content testing.
 #### Player Commands
 | Command | Purpose |
 |---|---|
@@ -830,6 +840,18 @@ Server-wide rotating kill quest that gives all online players the same timed obj
 * New events can be added by extending the `ServerEvents` class and the `start`/`end` switch statements in `DerpACEEventCommands.cs`
 
 
+### Live Server Performance Benchmark
+
+Use the built-in monitor on a populated server to compare synchronization and simulation changes under the same workload:
+
+1. Restart the server and allow normal DAT, world, and loot caches to warm for at least five minutes.
+2. Run `@serverperformance start` before the test window.
+3. Exercise a representative busy landblock for 10-15 minutes: movement, combat, spell projectiles, loot generation, corpses, and nearby observers.
+4. Run `@serverperformance` twice at least 60 seconds apart. The second sample includes a useful managed allocation rate.
+5. Run `@landblockperformance` and `@serverstatus`, then retain all three outputs with player count and test duration.
+6. Use `@serverperformance reset` before an A/B comparison; use `@serverperformance stop` when prolonged instrumentation is not needed.
+
+The performance report includes world/network stage timings, managed allocation rate, heap fragmentation, GC pause percentage, process memory, thread-pool pressure, shard database queue depth, packet totals, retransmits, and CRC errors. For sync investigations, prioritize long `UpdateGameWorld`, `TickOutbound`, physics/navigation spikes, a growing DB queue, sustained allocation, or rising retransmit percentages.
 ***
 ## Full Command Reference
 

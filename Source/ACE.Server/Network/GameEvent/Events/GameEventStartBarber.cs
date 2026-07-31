@@ -1,9 +1,9 @@
+using ACE.Server.Entity;
+
 namespace ACE.Server.Network.GameEvent.Events
 {
     public class GameEventStartBarber : GameEventMessage
     {
-        public const uint EmpyreanMaleMotionDID   = 0x0900020E;
-        public const uint EmpyreanFemaleMotionDID = 0x0900020D;
 
         public GameEventStartBarber(Session session)
             : base(GameEventType.StartBarber, GameMessageGroup.UIQueue, session, 68)
@@ -31,9 +31,9 @@ namespace ACE.Server.Network.GameEvent.Events
             Writer.Write(player.SetupTableId);
 
             // option1 - specifies the toggle option for some races, such as floating empyrean or flaming head on undead
-            // 0 = using the "default" animation (normal running for most, float for empyrean)
-            // 1 = using the "bound/running" animation for empyrean
-            var option1 = player.MotionTableId == EmpyreanFemaleMotionDID || player.MotionTableId == EmpyreanMaleMotionDID ? 1 : 0;
+            // 0 = floating Empyrean animation
+            // 1 = grounded/running Empyrean animation (new-character default)
+            var option1 = EmpyreanMotionTables.IsGrounded(player.MotionTableId) ? 1 : 0;
             Writer.Write(option1);
 
             // option2 - seems to be unused

@@ -470,7 +470,7 @@ namespace ACE.Server.Entity
         /// This will tick anything that can be multi-threaded safely using LandblockGroups as thread boundaries
         /// This should be called after TickPhysics() and before Tick()
         /// </summary>
-        public void TickMultiThreadedWork(double currentUnixTime)
+        public void TickMultiThreadedWork(double currentUnixTime, DateTime currentUtc)
         {
             using var instanceScope = LScape.PushInstance(InstanceId);
 
@@ -563,9 +563,9 @@ namespace ACE.Server.Entity
 
             // Heartbeat
             stopwatch.Restart();
-            if (lastHeartBeat + heartbeatInterval <= DateTime.UtcNow)
+            if (lastHeartBeat + heartbeatInterval <= currentUtc)
             {
-                var thisHeartBeat = DateTime.UtcNow;
+                var thisHeartBeat = currentUtc;
 
                 ProcessPendingWorldObjectAdditionsAndRemovals();
 
@@ -606,12 +606,12 @@ namespace ACE.Server.Entity
 
             // Database Save
             stopwatch.Restart();
-            if (lastDatabaseSave + databaseSaveInterval <= DateTime.UtcNow)
+            if (lastDatabaseSave + databaseSaveInterval <= currentUtc)
             {
                 ProcessPendingWorldObjectAdditionsAndRemovals();
 
                 SaveDB();
-                lastDatabaseSave = DateTime.UtcNow;
+                lastDatabaseSave = currentUtc;
             }
             ServerPerformanceMonitor.AddToCumulativeEvent(ServerPerformanceMonitor.CumulativeEventHistoryType.Landblock_Tick_Database_Save, stopwatch.Elapsed.TotalSeconds);
 
@@ -623,7 +623,7 @@ namespace ACE.Server.Entity
         /// This will tick everything that should be done single threaded on the main ACE World thread
         /// This should be called after TickPhysics() and after Tick()
         /// </summary>
-        public void TickSingleThreadedWork(double currentUnixTime)
+        public void TickSingleThreadedWork(double currentUnixTime, DateTime currentUtc)
         {
             using var instanceScope = LScape.PushInstance(InstanceId);
 
@@ -668,16 +668,16 @@ namespace ACE.Server.Entity
             Monitor1h.RegisterEventEnd();
             monitorsRequireEventStart = true;
 
-            if (DateTime.UtcNow - last5mClear >= last5mClearInteval)
+            if (currentUtc - last5mClear >= last5mClearInteval)
             {
                 Monitor5m.ClearEventHistory();
-                last5mClear = DateTime.UtcNow;
+                last5mClear = currentUtc;
             }
 
-            if (DateTime.UtcNow - last1hClear >= last1hClearInteval)
+            if (currentUtc - last1hClear >= last1hClearInteval)
             {
                 Monitor1h.ClearEventHistory();
-                last1hClear = DateTime.UtcNow;
+                last1hClear = currentUtc;
             }
         }
 
@@ -972,11 +972,41 @@ namespace ACE.Server.Entity
             if (wo is Corpse && wo.Level.HasValue)
             {
                 var corpseLimit = PropertyManager.GetLong("corpse_spam_limit").Item;
-                var corpseList = worldObjects.Values.Union(pendingAdditions.Values).Where(w => w is Corpse && w.Level.HasValue && w.VictimId == wo.VictimId).OrderBy(w => w.CreationTimestamp);
+                var corpseCount = 0;
+                WorldObject oldestCorpse = null;
+                var oldestTimestamp = double.MaxValue;
 
-                if (corpseList.Count() > corpseLimit)
+                foreach (var candidate in worldObjects.Values)
                 {
-                    var corpse = GetObject(corpseList.First(w => w.TimeToRot > Corpse.EmptyDecayTime).Guid);
+                    if (candidate is not Corpse || !candidate.Level.HasValue || candidate.VictimId != wo.VictimId)
+                        continue;
+
+                    corpseCount++;
+                    var timestamp = candidate.CreationTimestamp ?? 0;
+                    if (candidate.TimeToRot > Corpse.EmptyDecayTime && timestamp < oldestTimestamp)
+                    {
+                        oldestCorpse = candidate;
+                        oldestTimestamp = timestamp;
+                    }
+                }
+
+                foreach (var candidate in pendingAdditions.Values)
+                {
+                    if (candidate is not Corpse || !candidate.Level.HasValue || candidate.VictimId != wo.VictimId)
+                        continue;
+
+                    corpseCount++;
+                    var timestamp = candidate.CreationTimestamp ?? 0;
+                    if (candidate.TimeToRot > Corpse.EmptyDecayTime && timestamp < oldestTimestamp)
+                    {
+                        oldestCorpse = candidate;
+                        oldestTimestamp = timestamp;
+                    }
+                }
+
+                if (corpseCount > corpseLimit && oldestCorpse != null)
+                {
+                    var corpse = GetObject(oldestCorpse.Guid);
 
                     if (corpse != null)
                     {
@@ -1112,6 +1142,8 @@ namespace ACE.Server.Entity
             return worldObjects.Values;
         }
 
+
+
         public List<WorldObject> GetAllWorldObjectsForDiagnostics()
         {
             // We do not ProcessPending here, and we return ToList() to avoid cross-thread issues.
@@ -1119,6 +1151,14 @@ namespace ACE.Server.Entity
             return worldObjects.Values.ToList();
         }
 
+        /// <summary>
+        /// Allocation-free object view for code already executing on this landblock's tick thread.
+        /// Callers must not retain the collection or use it from diagnostics/background threads.
+        /// </summary>
+        internal Dictionary<ObjectGuid, WorldObject>.ValueCollection GetWorldObjectsForLocalQuery()
+        {
+            return worldObjects.Values;
+        }
         public bool IsInstanceTemplateObject(WorldObject worldObject)
         {
             return worldObject != null && instanceTemplateObjectGuids.Contains(worldObject.Guid);

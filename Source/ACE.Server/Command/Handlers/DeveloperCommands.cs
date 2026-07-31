@@ -23,6 +23,7 @@ using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Factories;
 using ACE.Server.Factories.Enum;
+using ACE.Server.Factories.Tables;
 using ACE.Server.Managers;
 using ACE.Server.Network;
 using ACE.Server.Network.GameEvent.Events;
@@ -2396,9 +2397,9 @@ namespace ACE.Server.Command.Handlers
                 }
             }
 
-            if (tier < 1 || tier > 8)
+            if (!LootTierManager.IsSupportedTier(tier))
             {
-                session.Network.EnqueueSend(new GameMessageSystemChat($"Loot Tier must be a number between 1 and 8", ChatMessageType.Broadcast));
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Loot tier {tier} is not enabled. Configure T9+ in Loot Lab first.", ChatMessageType.Broadcast));
                 return;
             }
 
@@ -2460,7 +2461,11 @@ namespace ACE.Server.Command.Handlers
         {
             var tier = 1;
             int.TryParse(parameters[0], out tier);
-            tier = Math.Clamp(tier, 1, 8);
+            if (!LootTierManager.IsSupportedTier(tier))
+            {
+                session.Network.EnqueueSend(new GameMessageSystemChat($"Loot tier {tier} is not enabled. Configure T9+ in Loot Lab first.", ChatMessageType.Broadcast));
+                return;
+            }
 
             var numItems = 1;
             if (parameters.Length > 1)
@@ -3481,9 +3486,9 @@ namespace ACE.Server.Command.Handlers
                 CommandHandlerHelper.WriteOutputInfo(session, $"Invalid tier {parameters[0]}");
                 return;
             }
-            if (tier < 1 || tier > 8)
+            if (tier < 1 || tier > 100)
             {
-                CommandHandlerHelper.WriteOutputInfo(session, "Please enter a tier between 1-8");
+                CommandHandlerHelper.WriteOutputInfo(session, "Please enter a tier between 1-100");
                 return;
             }
             using (var ctx = new WorldDbContext())

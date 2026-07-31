@@ -40,6 +40,8 @@ namespace ACE.Server.Factories
 
             try
             {
+                var tierContext = LootTierManager.Resolve(profile);
+                var generationProfile = tierContext.Profile;
                 int numItems;
                 WorldObject lootWorldObject;
 
@@ -48,7 +50,7 @@ namespace ACE.Server.Factories
                 var itemChance = ThreadSafeRandom.Next(1, 100);
                 if (itemChance <= profile.ItemChance)
                 {
-                    numItems = ThreadSafeRandom.Next(profile.ItemMinAmount, profile.ItemMaxAmount);
+                    numItems = LootTierManager.ScaleDropCount(ThreadSafeRandom.Next(profile.ItemMinAmount, profile.ItemMaxAmount), tierContext);
 
                     for (var i = 0; i < numItems; i++)
                     {
@@ -62,7 +64,7 @@ namespace ACE.Server.Factories
                 itemChance = ThreadSafeRandom.Next(1, 100);
                 if (itemChance <= profile.MagicItemChance)
                 {
-                    numItems = ThreadSafeRandom.Next(profile.MagicItemMinAmount, profile.MagicItemMaxAmount);
+                    numItems = LootTierManager.ScaleDropCount(ThreadSafeRandom.Next(profile.MagicItemMinAmount, profile.MagicItemMaxAmount), tierContext);
 
                     for (var i = 0; i < numItems; i++)
                     {
@@ -76,7 +78,7 @@ namespace ACE.Server.Factories
                 itemChance = ThreadSafeRandom.Next(1, 100);
                 if (itemChance <= profile.MundaneItemChance)
                 {
-                    numItems = ThreadSafeRandom.Next(profile.MundaneItemMinAmount, profile.MundaneItemMaxAmount);
+                    numItems = LootTierManager.ScaleDropCount(ThreadSafeRandom.Next(profile.MundaneItemMinAmount, profile.MundaneItemMaxAmount), tierContext);
 
                     for (var i = 0; i < numItems; i++)
                     {
@@ -89,7 +91,7 @@ namespace ACE.Server.Factories
                     // extra roll for mundane:
                     // https://asheron.fandom.com/wiki/Announcements_-_2010/04_-_Shedding_Skin :: May 5th, 2010 entry
                     // aetheria and coalesced mana were handled in here
-                    lootWorldObject = TryRollMundaneAddon(profile);
+                    lootWorldObject = LootTierManager.Apply(TryRollMundaneAddon(generationProfile), tierContext);
 
                     if (lootWorldObject != null)
                         loot.Add(lootWorldObject);
@@ -105,20 +107,23 @@ namespace ACE.Server.Factories
 
         public static WorldObject CreateRandomLootObjects(TreasureDeath treasureDeath, TreasureItemCategory category, TreasureItemType treasureItemType = TreasureItemType.Undef)
         {
-            var treasureRoll = RollWcid(treasureDeath, category, treasureItemType);
+            var tierContext = LootTierManager.Resolve(treasureDeath);
+            var effectiveProfile = tierContext.Profile;
+            var treasureRoll = RollWcid(effectiveProfile, category, treasureItemType);
 
-            if (treasureRoll == null) return null;
+            if (treasureRoll == null)
+                return null;
 
-            var wo = CreateAndMutateWcid(treasureDeath, treasureRoll, category == TreasureItemCategory.MagicItem);
-
-            return wo;
+            var wo = CreateAndMutateWcid(effectiveProfile, treasureRoll, category == TreasureItemCategory.MagicItem);
+            return LootTierManager.Apply(wo, tierContext);
         }
-
         public static WorldObject TryCreateMutatedMobWeaponDrop(TreasureDeath profile, int mutatorCount)
         {
             if (profile == null || mutatorCount <= 0)
                 return null;
 
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             var tier = Math.Clamp(profile.Tier, 1, 8);
             var dropChance = Math.Clamp(0.05f + tier * 0.02f + mutatorCount * 0.08f, 0.10f, 0.65f);
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= dropChance)
@@ -132,19 +137,14 @@ namespace ACE.Server.Factories
                 if (roll == null)
                     return null;
 
-                var candidates = WeaponMutatorTestTypes
-                    .Where(entry => entry.Value == roll.WeaponType)
-                    .Select(entry => entry.Key)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                if (candidates.Count == 0)
+                if (!TryGetCompatibleWeaponMutators(roll.WeaponType, out var candidates))
                     continue;
 
-                var mutator = candidates[ThreadSafeRandom.Next(0, candidates.Count - 1)];
+                var mutator = candidates[ThreadSafeRandom.Next(0, candidates.Length - 1)];
                 roll.ForcedWeaponMutator = mutator;
                 var weapon = CreateAndMutateWcid(profile, roll, true);
                 if (weapon != null && HasWeaponMutator(weapon, mutator))
-                    return weapon;
+                    return LootTierManager.Apply(weapon, tierContext);
 
                 weapon?.Destroy();
             }
@@ -953,6 +953,8 @@ namespace ACE.Server.Factories
         /// </summary>
         public static WorldObject CreateRandomLootObjects_Test(TreasureDeath profile, bool isMagical, LootBias lootBias = LootBias.UnBiased)
         {
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             WorldObject wo = null;
 
             var treasureItemTypeChances = isMagical ? TreasureItemTypeChances.DefaultMagical : TreasureItemTypeChances.DefaultNonMagical;
@@ -1010,7 +1012,7 @@ namespace ACE.Server.Factories
                     wo = CreateDinnerware(profile, isMagical);
                     break;
             }
-            return wo;
+            return LootTierManager.Apply(wo, tierContext);
         }
 
         /// <summary>
@@ -1019,6 +1021,8 @@ namespace ACE.Server.Factories
         /// </summary>
         public static bool MutateItem(WorldObject item, TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
         {
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             // should ideally be split up between getting the item type,
             // and getting the specific mutate function parameters
             // however, with the way the current loot tables are set up, this is not ideal...
@@ -1143,6 +1147,7 @@ namespace ACE.Server.Factories
             else
                 return false;
 
+            LootTierManager.Apply(item, tierContext);
             return true;
         }
     }

@@ -121,14 +121,15 @@ namespace ACE.Server.Network
         {
             try
             {
+                var now = DateTime.UtcNow;
                 // Check if the player has been booted
                 if (PendingTermination != null)
                 {
                     if (PendingTermination.TerminationStatus == SessionTerminationPhase.Initialized)
                     {
                         State = SessionState.TerminationStarted;
-                        Network.Update(); // boot messages may need sending
-                        if (DateTime.UtcNow.Ticks > PendingTermination.TerminationEndTicks)
+                        Network.Update(now); // boot messages may need sending
+                        if (now.Ticks > PendingTermination.TerminationEndTicks)
                             PendingTermination.TerminationStatus = SessionTerminationPhase.SessionWorkCompleted;
                     }
                     return;
@@ -138,18 +139,18 @@ namespace ACE.Server.Network
                     return;
 
                 // Checks if the session has stopped responding.
-                if (DateTime.UtcNow.Ticks >= Network.TimeoutTick)
+                if (now.Ticks >= Network.TimeoutTick)
                 {
                     // The Session has reached a timeout.  Send the client the error disconnect signal, and then drop the session
                     Terminate(SessionTerminationReason.NetworkTimeout);
                     return;
                 }
 
-                Network.Update();
+                Network.Update(now);
 
                 // Live server seemed to take about 6 seconds. 4 seconds is nice because it has smooth animation, and saves the user 2 seconds every logoff
                 // This could be made 0 for instant logoffs.
-                if (logOffRequestTime != DateTime.MinValue && logOffRequestTime.AddSeconds(6) <= DateTime.UtcNow)
+                if (logOffRequestTime != DateTime.MinValue && logOffRequestTime.AddSeconds(6) <= now)
                     SendFinalLogOffMessages();
 
                 // This section deviates from known retail pcaps/behavior, but appears to be the least harmful way to work around something that seemingly didn't occur to players using ThwargLauncher connecting to retail servers.
@@ -157,11 +158,11 @@ namespace ACE.Server.Network
                 if (State == SessionState.AuthConnected) // TODO: why is this needed? Why didn't retail have this problem? Is this fuzzy memory?
                 {
                     if (lastCharacterSelectPingReply == DateTime.MinValue)
-                        lastCharacterSelectPingReply = DateTime.UtcNow.AddSeconds(100);
-                    else if (DateTime.UtcNow > lastCharacterSelectPingReply)
+                        lastCharacterSelectPingReply = now.AddSeconds(100);
+                    else if (now > lastCharacterSelectPingReply)
                     {
                         Network.EnqueueSend(new GameEventPingResponse(this));
-                        lastCharacterSelectPingReply = DateTime.UtcNow.AddSeconds(100);
+                        lastCharacterSelectPingReply = now.AddSeconds(100);
                     }
                 }
                 else if (lastCharacterSelectPingReply != DateTime.MinValue)

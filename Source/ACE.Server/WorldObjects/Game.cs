@@ -2,6 +2,7 @@ using System;
 
 using ACE.Entity;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity.Chess;
 using ACE.Server.Entity.Actions;
@@ -16,9 +17,14 @@ namespace ACE.Server.WorldObjects
     /// </summary>
     public class Game : WorldObject
     {
+        public const uint AyanUlgrimChessboardGuid = 0x7113408B;
+
         public ChessMatch ChessMatch;
 
         private bool active;
+        private Creature aiOpponent;
+
+        public bool IsAyanUlgrimChessboard => Guid.Full == AyanUlgrimChessboardGuid;
 
         /// <summary>
         /// A new biota be created taking all of its values from weenie.
@@ -73,6 +79,58 @@ namespace ACE.Server.WorldObjects
                 ChessMatch = new ChessMatch(this);
 
             ChessMatch.Join(player);
+        }
+
+        internal void EngageAiOpponent()
+        {
+            if (!IsAyanUlgrimChessboard || CurrentLandblock == null || Location == null)
+                return;
+
+            Creature ulgrim = null;
+            foreach (var worldObject in CurrentLandblock.GetWorldObjectsForLocalQuery())
+            {
+                if (worldObject is Creature creature && creature.WeenieClassId == 6873 && creature.Location != null)
+                {
+                    ulgrim = creature;
+                    break;
+                }
+            }
+
+            if (ulgrim == null)
+                return;
+
+            var chessDouble = WorldObjectFactory.CreateNewWorldObject(26457) as Creature;
+            if (chessDouble == null)
+                return;
+
+            chessDouble.Name = "The Unpleasant Opponent";
+            chessDouble.Location = new Position(ulgrim.Location);
+            chessDouble.GeneratorId = Guid.Full;
+            chessDouble.Attackable = false;
+            chessDouble.ItemUseable = Usable.No;
+            chessDouble.NoCorpse = true;
+            chessDouble.SetProperty(PropertyInt.XpOverride, 0);
+            chessDouble.SetProperty(PropertyInt.TownNpcAiOverride, (int)TownNpcAiMode.Disabled);
+
+            if (!LandblockManager.AddObject(chessDouble, true))
+            {
+                chessDouble.Destroy();
+                return;
+            }
+
+            aiOpponent = chessDouble;
+            var approach = Location.InFrontOf(5.5, true);
+            chessDouble.MoveTo(approach, chessDouble.GetRunRate(), true, 1.0f);
+        }
+
+        internal void ReleaseAiOpponent()
+        {
+            if (aiOpponent != null && !aiOpponent.IsDestroyed)
+            {
+                aiOpponent.ApplyVisualEffects(PlayScript.Destroy);
+                aiOpponent.Destroy();
+            }
+            aiOpponent = null;
         }
 
         public void ActOnJoin_Legacy(Player player)

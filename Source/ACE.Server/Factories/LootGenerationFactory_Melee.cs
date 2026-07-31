@@ -287,19 +287,17 @@ namespace ACE.Server.Factories
 
         public static WorldObject CreateMeleeWeapon(TreasureDeath profile, bool isMagical, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null)
         {
-            // this function is only used by test methods, and is not part of regular lootgen
+            var tierContext = LootTierManager.Resolve(profile);
+            profile = tierContext.Profile;
             var treasureRoll = new TreasureRoll(TreasureItemType.Weapon);
             treasureRoll.WeaponType = forcedWeaponType ?? WeaponTypeChance.MeleeChances.Roll();
             treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
             treasureRoll.Wcid = WeaponWcids.Roll(profile, ref treasureRoll.WeaponType);
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
-
             MutateMeleeWeapon(wo, profile, isMagical, treasureRoll);
-
-            return wo;
+            return LootTierManager.Apply(wo, tierContext);
         }
-
         private static void MutateMeleeWeapon(WorldObject wo, TreasureDeath profile, bool isMagical, TreasureRoll roll)
         {
             // thanks to 4eyebiped for helping with the data analysis of magloot retail logs

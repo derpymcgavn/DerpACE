@@ -36,6 +36,8 @@ namespace ACE.Server.Network.Managers
 
         private static readonly ReaderWriterLockSlim sessionLock = new ReaderWriterLockSlim();
         private static readonly Session[] sessionMap = new Session[ConfigManager.Config.Server.Network.MaximumAllowedSessions];
+        private static int activeSessionCount;
+        private static readonly int parallelSessionThreshold = Math.Max(8, Environment.ProcessorCount * 2);
 
         /// <summary>
         /// Handles ClientMessages in InboundMessageManager
@@ -194,15 +196,7 @@ namespace ACE.Server.Network.Managers
 
         public static int GetSessionCount()
         {
-            sessionLock.EnterReadLock();
-            try
-            {
-                return sessionMap.Count(s => s != null);
-            }
-            finally
-            {
-                sessionLock.ExitReadLock();
-            }
+            return Volatile.Read(ref activeSessionCount);
         }
 
         public static int GetAuthenticatedSessionCount()
@@ -280,6 +274,7 @@ namespace ACE.Server.Network.Managers
                                 log.DebugFormat("Creating new session for {0} with id {1}", endPoint, i);
                                 session = new Session(connectionListener, endPoint, i, ServerId);
                                 sessionMap[i] = session;
+                                Interlocked.Increment(ref activeSessionCount);
                                 break;
                             }
                         }
@@ -334,7 +329,10 @@ namespace ACE.Server.Network.Managers
             {
                 log.DebugFormat("Removing session for {0} with id {1}", session.EndPointC2S, session.Network.ClientId);
                 if (sessionMap[session.Network.ClientId] == session)
+                {
                     sessionMap[session.Network.ClientId] = null;
+                    Interlocked.Decrement(ref activeSessionCount);
+                }
             }
             finally
             {
@@ -354,15 +352,23 @@ namespace ACE.Server.Network.Managers
             sessionLock.EnterUpgradeableReadLock();
             try
             {
-                // The session tick outbound processes pending actions and handles outgoing messages
+                // Thread-pool fan-out costs more than it saves for the common low-population case.
+                // Every live session is still serviced once per world loop.
                 ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.DoSessionWork_TickOutbound);
-                Parallel.ForEach(sessionMap, ConfigManager.Config.Server.Threading.NetworkManagerParallelOptions, s => s?.TickOutbound());
+                if (activeSessionCount >= parallelSessionThreshold)
+                    Parallel.ForEach(sessionMap, ConfigManager.Config.Server.Threading.NetworkManagerParallelOptions, s => s?.TickOutbound());
+                else
+                    foreach (var session in sessionMap)
+                        session?.TickOutbound();
                 ServerPerformanceMonitor.RegisterEventEnd(ServerPerformanceMonitor.MonitorType.DoSessionWork_TickOutbound);
 
                 // Removes sessions in the NetworkTimeout state, including sessions that have reached a timeout limit.
                 ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.DoSessionWork_RemoveSessions);
-                foreach (var session in sessionMap.Where(k => !Equals(null, k)))
+                foreach (var session in sessionMap)
                 {
+                    if (session == null)
+                        continue;
+
                     if (session.PendingTermination != null && session.PendingTermination.TerminationStatus == SessionTerminationPhase.SessionWorkCompleted)
                     {
                         session.DropSession();

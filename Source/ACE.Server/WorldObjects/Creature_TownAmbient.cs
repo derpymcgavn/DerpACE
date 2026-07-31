@@ -141,7 +141,7 @@ namespace ACE.Server.WorldObjects
             if (currentUnixTime < nextTownAmbientActionTime || IsBusy || EmoteManager.IsBusy || IsMoving || IsTurning)
                 return;
 
-            var nearbyObjects = CurrentLandblock.GetAllWorldObjectsForDiagnostics();
+            var nearbyObjects = CurrentLandblock.GetWorldObjectsForLocalQuery();
             RememberNearbyVisitor(nearbyObjects);
 
             if (!string.IsNullOrEmpty(pendingTownAmbientReply))
@@ -228,7 +228,7 @@ namespace ACE.Server.WorldObjects
 
         private bool TryMoveUlgrimToAyanBar()
         {
-            var objects = CurrentLandblock.GetAllWorldObjectsForDiagnostics();
+            var objects = CurrentLandblock.GetWorldObjectsForLocalQuery();
             var barkeeper = objects
                 .OfType<Creature>()
                 .FirstOrDefault(candidate => candidate.WeenieClassId == AyanBarkeeperWcid && candidate.Location != null);

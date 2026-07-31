@@ -295,6 +295,7 @@ namespace ACE.Server.Managers
 
         public static readonly RollingAmountOverTimeTracker TickPhysicsEfficiencyTracker = new RollingAmountOverTimeTracker(TimeSpan.FromMinutes(1));
         public static readonly RollingAmountOverTimeTracker TickMultiThreadedWorkEfficiencyTracker = new RollingAmountOverTimeTracker(TimeSpan.FromMinutes(1));
+        private static readonly ConcurrentBag<WorldObject> movedObjects = new ConcurrentBag<WorldObject>();
 
         /// <summary>
         /// Processes physics objects in all active landblocks for updating
@@ -303,7 +304,7 @@ namespace ACE.Server.Managers
         {
             ProcessPendingLandblockGroupAdditions();
 
-            var movedObjects = new ConcurrentBag<WorldObject>();
+            movedObjects.Clear();
 
             if (ConfigManager.Config.Server.Threading.MultiThreadedLandblockGroupPhysicsTicking)
             {
@@ -366,6 +367,8 @@ namespace ACE.Server.Managers
         private static void TickMultiThreadedWork()
         {
             ProcessPendingLandblockGroupAdditions();
+            var currentUnixTime = Time.GetUnixTime();
+            var currentUtc = DateTime.UtcNow;
 
             if (ConfigManager.Config.Server.Threading.MultiThreadedLandblockGroupTicking)
             {
@@ -384,7 +387,7 @@ namespace ACE.Server.Managers
                     swInner.Start();
 
                     foreach (var landblock in landblockGroup)
-                        landblock.TickMultiThreadedWork(Time.GetUnixTime());
+                        landblock.TickMultiThreadedWork(currentUnixTime, currentUtc);
 
                     swInner.Stop();
                     landblockGroup.TickMultiThreadedWorkTracker.RegisterAmount(swInner.Elapsed.TotalSeconds);
@@ -409,7 +412,7 @@ namespace ACE.Server.Managers
                 foreach (var landblockGroup in landblockGroups)
                 {
                     foreach (var landblock in landblockGroup)
-                        landblock.TickMultiThreadedWork(Time.GetUnixTime());
+                        landblock.TickMultiThreadedWork(currentUnixTime, currentUtc);
                 }
             }
         }
@@ -417,11 +420,13 @@ namespace ACE.Server.Managers
         private static void TickSingleThreadedWork()
         {
             ProcessPendingLandblockGroupAdditions();
+            var currentUnixTime = Time.GetUnixTime();
+            var currentUtc = DateTime.UtcNow;
 
             foreach (var landblockGroup in landblockGroups)
             {
                 foreach (var landblock in landblockGroup)
-                    landblock.TickSingleThreadedWork(Time.GetUnixTime());
+                    landblock.TickSingleThreadedWork(currentUnixTime, currentUtc);
             }
         }
 
