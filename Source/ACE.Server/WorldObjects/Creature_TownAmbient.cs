@@ -30,11 +30,22 @@ namespace ACE.Server.WorldObjects
         private double nextUlgrimAyanActionTime;
         private bool ulgrimAyanAtBar;
         private int ulgrimAyanRoundsRemaining;
+        private Queue<Position> ulgrimAyanRoute;
+        private bool ulgrimAyanRouteToBar;
 
         private const uint UlgrimTheUnpleasantWcid = 6873;
         private const uint AyanBarkeeperWcid = 6856;
         private const uint GenericKegWcid = 157;
         private const uint BeerKegWcid = 8377;
+
+        private static readonly (uint Cell, float X, float Y, float Z, float RotationW, float RotationZ)[] UlgrimAyanBarRoute =
+        {
+            (0x1134001E, 78.883987f, 141.738052f, 42.005501f, -0.029212f, -0.999573f),
+            (0x1134001E, 83.818565f, 141.598587f, 42.005501f,  0.997190f,  0.074917f),
+            (0x11340138, 83.818764f, 151.815582f, 42.005501f,  1.000000f, -0.000013f),
+            (0x11340138, 84.540955f, 154.150040f, 42.005501f,  0.988769f, -0.149451f),
+            (0x11340138, 84.268410f, 155.953644f, 42.005501f,  0.997190f,  0.074917f),
+        };
 
         private static readonly MotionCommand[] TownAmbientMotions =
         {
@@ -189,6 +200,9 @@ namespace ACE.Server.WorldObjects
 
         private void AyanUlgrimTick(double currentUnixTime)
         {
+            if (AdvanceUlgrimAyanRoute(currentUnixTime))
+                return;
+
             if (nextUlgrimAyanActionTime <= 0)
             {
                 nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(20.0f, 50.0f);
@@ -201,12 +215,7 @@ namespace ACE.Server.WorldObjects
             if (!ulgrimAyanAtBar)
             {
                 if (TryMoveUlgrimToAyanBar())
-                {
-                    ulgrimAyanAtBar = true;
-                    ulgrimAyanRoundsRemaining = ThreadSafeRandom.Next(2, 5);
-                    nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(15.0f, 25.0f);
                     return;
-                }
 
                 // If the tavern is not loaded or reachable, Ulgrim remains at his proper spawn.
                 PerformUlgrimDrinkingRound();
@@ -221,9 +230,7 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
-            ReturnTownAmbientHome();
-            ulgrimAyanAtBar = false;
-            nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(75.0f, 150.0f);
+            StartUlgrimAyanRoute(false);
         }
 
         private bool TryMoveUlgrimToAyanBar()
@@ -246,13 +253,62 @@ namespace ACE.Server.WorldObjects
             if (barAnchor?.Location == null || barAnchor.Location.Landblock != Location.Landblock)
                 return false;
 
-            var width = (PhysicsObj?.GetRadius() ?? 0.5f) > 0.7f ? AgentWidth.Wide : AgentWidth.Narrow;
-            var destination = Pathfinder.GetRandomPointWithinCircle(barAnchor.Location, 2.5f, width);
-            if (destination == null || destination.Landblock != Location.Landblock)
+            StartUlgrimAyanRoute(true);
+            return true;
+        }
+
+        private void StartUlgrimAyanRoute(bool toBar)
+        {
+            ulgrimAyanRoute = new Queue<Position>(UlgrimAyanBarRoute.Length);
+            ulgrimAyanRouteToBar = toBar;
+
+            if (toBar)
+            {
+                foreach (var waypoint in UlgrimAyanBarRoute)
+                    ulgrimAyanRoute.Enqueue(CreateUlgrimAyanWaypoint(waypoint));
+            }
+            else
+            {
+                for (var i = UlgrimAyanBarRoute.Length - 1; i >= 0; i--)
+                    ulgrimAyanRoute.Enqueue(CreateUlgrimAyanWaypoint(UlgrimAyanBarRoute[i]));
+            }
+        }
+
+        private bool AdvanceUlgrimAyanRoute(double currentUnixTime)
+        {
+            if (ulgrimAyanRoute == null)
                 return false;
 
-            MoveTo(destination, GetRunRate(), true, 1.0f);
+            if (IsBusy || EmoteManager.IsBusy || IsMoving || IsTurning)
+                return true;
+
+            if (ulgrimAyanRoute.Count > 0)
+            {
+                var destination = ulgrimAyanRoute.Dequeue();
+                var useRecordedFacing = ulgrimAyanRouteToBar && ulgrimAyanRoute.Count == 0;
+                MoveTo(destination, GetRunRate(), useRecordedFacing, 0.5f);
+                return true;
+            }
+
+            ulgrimAyanRoute = null;
+            if (ulgrimAyanRouteToBar)
+            {
+                ulgrimAyanAtBar = true;
+                ulgrimAyanRoundsRemaining = ThreadSafeRandom.Next(2, 5);
+                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(15.0f, 25.0f);
+            }
+            else
+            {
+                ulgrimAyanAtBar = false;
+                ReturnTownAmbientHome();
+                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(75.0f, 150.0f);
+            }
             return true;
+        }
+
+        private static Position CreateUlgrimAyanWaypoint((uint Cell, float X, float Y, float Z, float RotationW, float RotationZ) waypoint)
+        {
+            return new Position(waypoint.Cell, waypoint.X, waypoint.Y, waypoint.Z, 0, 0, waypoint.RotationZ, waypoint.RotationW);
         }
 
         private void PerformUlgrimDrinkingRound()

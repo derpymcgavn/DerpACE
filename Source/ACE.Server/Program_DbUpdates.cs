@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography;
-using System.Threading;
 
 using ACE.Common;
 
@@ -180,6 +180,8 @@ namespace ACE.Server
 
         private static void AutoApplyWorldCustomizations()
         {
+            const int progressInterval = 2000;
+
             var content_folders_search_option = ConfigManager.Config.Offline.RecurseWorldCustomizationPaths ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
             var content_folders = new List<string> { GetContentFolder() };
             content_folders.AddRange(ConfigManager.Config.Offline.WorldCustomizationAddedPaths ?? Array.Empty<string>());
@@ -194,11 +196,13 @@ namespace ACE.Server
 
             var worldPatchVersion = GetCurrentWorldPatchVersion();
             var manifest = LoadWorldCustomizationManifest();
-            var forceReapply = !string.Equals(manifest.WorldPatchVersion, worldPatchVersion, StringComparison.OrdinalIgnoreCase);
+            var forceReapply = !string.IsNullOrWhiteSpace(worldPatchVersion)
+                && !string.Equals(manifest.WorldPatchVersion, worldPatchVersion, StringComparison.OrdinalIgnoreCase);
             if (forceReapply)
-                Console.WriteLine($"World database patch changed from '{manifest.WorldPatchVersion ?? "none"}' to '{worldPatchVersion ?? "unknown"}'. Reapplying all customizations once.");
+                Console.WriteLine($"World database patch changed from '{manifest.WorldPatchVersion ?? "none"}' to '{worldPatchVersion}'. Reapplying all customizations once.");
 
             var sqlFiles = new List<FileInfo>();
+            var scanTimer = Stopwatch.StartNew();
             foreach (var path in content_folders)
             {
                 var contentDI = new DirectoryInfo(path);
@@ -206,17 +210,32 @@ namespace ACE.Server
                     continue;
 
                 Console.WriteLine($"Scanning SQL files within {path} .... ");
-                sqlFiles.AddRange(contentDI.GetFiles("*.sql", content_folders_search_option));
+                try
+                {
+                    foreach (var filePath in Directory.EnumerateFiles(path, "*.sql", content_folders_search_option))
+                    {
+                        sqlFiles.Add(new FileInfo(filePath));
+                        if (sqlFiles.Count % progressInterval == 0)
+                            Console.WriteLine($" Found {sqlFiles.Count:N0} SQL files ({scanTimer.Elapsed.TotalSeconds:N1}s elapsed) .... ");
+                    }
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    Console.WriteLine($" Unable to completely scan customization path {path}: {ex.Message}");
+                }
             }
 
             sqlFiles = sqlFiles
                 .OrderBy(f => f.FullName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            Console.WriteLine($"Found {sqlFiles.Count:N0} customization SQL files in {scanTimer.Elapsed.TotalSeconds:N1}s.");
+
             if (sqlFiles.Count == 0)
             {
                 Console.WriteLine("No World Customization SQL scripts found.");
-                manifest.WorldPatchVersion = worldPatchVersion;
+                if (!string.IsNullOrWhiteSpace(worldPatchVersion))
+                    manifest.WorldPatchVersion = worldPatchVersion;
                 SaveWorldCustomizationManifest(manifest);
                 return;
             }
@@ -225,11 +244,25 @@ namespace ACE.Server
             var skipped = 0;
             var skippedFailed = 0;
             var failed = 0;
+            var processed = 0;
+            var importTimer = Stopwatch.StartNew();
             using var sqlConnect = new MySqlConnector.MySqlConnection($"server={ConfigManager.Config.MySql.World.Host};port={ConfigManager.Config.MySql.World.Port};user={ConfigManager.Config.MySql.World.Username};password={ConfigManager.Config.MySql.World.Password};database={ConfigManager.Config.MySql.World.Database};{ConfigManager.Config.MySql.World.ConnectionOptions}");
 
             foreach (var file in sqlFiles)
             {
-                var signature = BuildWorldCustomizationSignature(file);
+                WorldCustomizationManifestEntry signature;
+                try
+                {
+                    signature = BuildWorldCustomizationMetadata(file);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    failed++;
+                    Console.WriteLine($"Unable to inspect customization {file.FullName}: {ex.Message}");
+                    ReportWorldCustomizationProgress(++processed, sqlFiles.Count, importTimer, progressInterval);
+                    continue;
+                }
+
                 if (!forceReapply && manifest.Files.TryGetValue(signature.Path, out var previous) && previous.Matches(signature))
                 {
                     if (previous.Status == WorldCustomizationImportStatus.Failed)
@@ -240,15 +273,17 @@ namespace ACE.Server
                     else
                         skipped++;
 
+                    ReportWorldCustomizationProgress(++processed, sqlFiles.Count, importTimer, progressInterval);
                     continue;
                 }
 
                 Console.Write($"Applying {file.FullName} .... ");
-                var sqlDBFile = File.ReadAllText(file.FullName);
-                sqlDBFile = sqlDBFile.Replace("ace_world", ConfigManager.Config.MySql.World.Database);
-                Console.Write($"Importing into World database on SQL server at {ConfigManager.Config.MySql.World.Host}:{ConfigManager.Config.MySql.World.Port} .... ");
                 try
                 {
+                    signature.Sha256 = ComputeWorldCustomizationHash(file);
+                    var sqlDBFile = File.ReadAllText(file.FullName);
+                    sqlDBFile = sqlDBFile.Replace("ace_world", ConfigManager.Config.MySql.World.Database);
+                    Console.Write($"Importing into World database on SQL server at {ConfigManager.Config.MySql.World.Host}:{ConfigManager.Config.MySql.World.Port} .... ");
                     ExecuteWorldCustomizationScript(sqlConnect, sqlDBFile);
                     signature.Status = WorldCustomizationImportStatus.Applied;
                     signature.LastError = null;
@@ -274,14 +309,31 @@ namespace ACE.Server
                     Console.WriteLine(" error!");
                     Console.WriteLine($" Unable to apply customization due to following exception: {ex}");
                 }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    signature.Status = WorldCustomizationImportStatus.Failed;
+                    signature.LastError = ex.Message;
+                    manifest.Files[signature.Path] = signature;
+                    failed++;
+                    Console.WriteLine(" error!");
+                    Console.WriteLine($" Unable to read customization: {ex.Message}");
+                }
+
+                ReportWorldCustomizationProgress(++processed, sqlFiles.Count, importTimer, progressInterval);
             }
 
             CleanupConnection(sqlConnect);
-            manifest.WorldPatchVersion = worldPatchVersion;
+            if (!string.IsNullOrWhiteSpace(worldPatchVersion))
+                manifest.WorldPatchVersion = worldPatchVersion;
             SaveWorldCustomizationManifest(manifest);
             Console.WriteLine($"World Customization SQL scripts import complete! Imported {imported:N0}, skipped unchanged {skipped:N0}, skipped unchanged failed {skippedFailed:N0}, failed {failed:N0}.");
         }
 
+        private static void ReportWorldCustomizationProgress(int processed, int total, Stopwatch timer, int interval)
+        {
+            if (processed % interval == 0 || processed == total)
+                Console.WriteLine($"Checked {processed:N0}/{total:N0} customization files ({timer.Elapsed.TotalSeconds:N1}s elapsed) .... ");
+        }
 
         private const int MySqlDuplicateEntryErrorNumber = 1062;
         private static readonly Regex BossMechanicProfileInsertRegex = new Regex(@"INSERT\s+INTO\s+`?boss_mechanic_profile`?\s*\([^;]*?;", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
@@ -384,22 +436,31 @@ CREATE TABLE IF NOT EXISTS `boss_mechanic_profile` (
 
         private static void SaveWorldCustomizationManifest(WorldCustomizationManifest manifest)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(WorldCustomizationManifestPath));
-            File.WriteAllText(WorldCustomizationManifestPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+            var directory = Path.GetDirectoryName(WorldCustomizationManifestPath);
+            Directory.CreateDirectory(directory);
+
+            var temporaryPath = WorldCustomizationManifestPath + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(manifest));
+            File.Move(temporaryPath, WorldCustomizationManifestPath, true);
         }
 
-        private static WorldCustomizationManifestEntry BuildWorldCustomizationSignature(FileInfo file)
+        private static WorldCustomizationManifestEntry BuildWorldCustomizationMetadata(FileInfo file)
         {
-            using var stream = File.OpenRead(file.FullName);
+            file.Refresh();
             return new WorldCustomizationManifestEntry
             {
                 Path = file.FullName.ToUpperInvariant(),
                 Length = file.Length,
                 LastWriteUtcTicks = file.LastWriteTimeUtc.Ticks,
-                Sha256 = Convert.ToHexString(SHA256.HashData(stream)),
                 ImportedUtc = DateTime.UtcNow,
                 Status = WorldCustomizationImportStatus.Pending
             };
+        }
+
+        private static string ComputeWorldCustomizationHash(FileInfo file)
+        {
+            using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 65536, FileOptions.SequentialScan);
+            return Convert.ToHexString(SHA256.HashData(stream));
         }
 
         private sealed class WorldCustomizationManifest
@@ -422,8 +483,7 @@ CREATE TABLE IF NOT EXISTS `boss_mechanic_profile` (
             {
                 return other != null
                     && Length == other.Length
-                    && LastWriteUtcTicks == other.LastWriteUtcTicks
-                    && string.Equals(Sha256, other.Sha256, StringComparison.OrdinalIgnoreCase);
+                    && LastWriteUtcTicks == other.LastWriteUtcTicks;
             }
         }
 
@@ -433,16 +493,15 @@ CREATE TABLE IF NOT EXISTS `boss_mechanic_profile` (
             Applied,
             Failed
         }
+
         private static void AutoApplyDatabaseUpdates()
         {
             log.Info($"Automatic Database Patching started...");
-            Thread.Sleep(1000);
 
             PatchDatabase("Authentication", ConfigManager.Config.MySql.Authentication.Host, ConfigManager.Config.MySql.Authentication.Port, ConfigManager.Config.MySql.Authentication.Username, ConfigManager.Config.MySql.Authentication.Password, ConfigManager.Config.MySql.Authentication.Database, ConfigManager.Config.MySql.Shard.Database, ConfigManager.Config.MySql.World.Database);
             PatchDatabase("Shard", ConfigManager.Config.MySql.Shard.Host, ConfigManager.Config.MySql.Shard.Port, ConfigManager.Config.MySql.Shard.Username, ConfigManager.Config.MySql.Shard.Password, ConfigManager.Config.MySql.Authentication.Database, ConfigManager.Config.MySql.Shard.Database, ConfigManager.Config.MySql.World.Database);
             PatchDatabase("World", ConfigManager.Config.MySql.World.Host, ConfigManager.Config.MySql.World.Port, ConfigManager.Config.MySql.World.Username, ConfigManager.Config.MySql.World.Password, ConfigManager.Config.MySql.Authentication.Database, ConfigManager.Config.MySql.Shard.Database, ConfigManager.Config.MySql.World.Database);
 
-            Thread.Sleep(1000);
             log.Info($"Automatic Database Patching complete.");
         }
 

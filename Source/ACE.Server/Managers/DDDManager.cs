@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,6 +21,9 @@ namespace ACE.Server.Managers
 {
     public static class DDDManager
     {
+        private const int FileSizeCacheVersion = 1;
+        private const int ProgressInterval = 10000;
+
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         public static bool Debug = false;
@@ -52,16 +57,27 @@ namespace ACE.Server.Managers
 
         public static void Initialize()
         {
-            InitIterations(DatDatabaseType.Portal, DatManager.PortalDat);
-            InitIterations(DatDatabaseType.Cell, DatManager.CellDat);
-            InitIterations(DatDatabaseType.Language, DatManager.LanguageDat);
-            if (DatManager.HighResDat != null)
-                InitIterations(DatDatabaseType.HighRes, DatManager.HighResDat);
+            var timer = Stopwatch.StartNew();
+            var fileSizeCache = LoadFileSizeCache();
+            var cacheChanged = false;
 
-            log.DebugFormat("DDDManager Initialized.");
+            Iterations.Clear();
+            DatFileSizes.Clear();
+            CompressedDatFilesCache.Clear();
+
+            cacheChanged |= InitIterations(DatDatabaseType.Portal, DatManager.PortalDat, fileSizeCache);
+            cacheChanged |= InitIterations(DatDatabaseType.Cell, DatManager.CellDat, fileSizeCache);
+            cacheChanged |= InitIterations(DatDatabaseType.Language, DatManager.LanguageDat, fileSizeCache);
+            if (DatManager.HighResDat != null)
+                cacheChanged |= InitIterations(DatDatabaseType.HighRes, DatManager.HighResDat, fileSizeCache);
+
+            if (cacheChanged)
+                SaveFileSizeCache(fileSizeCache);
+
+            log.Info($"DDDManager initialized in {timer.Elapsed.TotalSeconds:N1}s.");
         }
 
-        private static void InitIterations(DatDatabaseType datDatabaseType, DatDatabase datDatabase)
+        private static bool InitIterations(DatDatabaseType datDatabaseType, DatDatabase datDatabase, DDDFileSizeCache fileSizeCache)
         {
             Iterations.TryAdd(datDatabaseType, new());
             DatFileSizes.TryAdd(datDatabaseType, new());
@@ -70,16 +86,27 @@ namespace ACE.Server.Managers
             for (var i = 1; i <= datDatabase.Iteration; i++)
                 Iterations[datDatabaseType].TryAdd((uint)i, new());
 
-            var precacheCompressedDATFiles = ConfigManager.Config.DDD.PrecacheCompressedDATFiles;
+            foreach (var file in datDatabase.AllFiles.Values)
+            {
+                Iterations[datDatabaseType].TryAdd(file.Iteration, new());
+                Iterations[datDatabaseType][file.Iteration].Add(file.ObjectId);
+            }
+
+            var precacheCompressedDatFiles = ConfigManager.Config.DDD.PrecacheCompressedDATFiles;
+            var timer = Stopwatch.StartNew();
+            if (TryLoadFileSizes(datDatabaseType, datDatabase, fileSizeCache))
+            {
+                if (precacheCompressedDatFiles)
+                    PrecacheCompressedFiles(datDatabaseType, datDatabase);
+
+                log.Info($"Iterations for {datDatabaseType} initialized from cache in {timer.Elapsed.TotalSeconds:N1}s. Iterations.Count={Iterations[datDatabaseType].Count} | FileCount={datDatabase.AllFiles.Count:N0} | DatFileSizes.Count={DatFileSizes[datDatabaseType].Count:N0}{(precacheCompressedDatFiles ? " | precached compressed files" : "")}");
+                return false;
+            }
 
             var fileCount = 0;
             Parallel.ForEach(datDatabase.AllFiles, file =>
             {
                 var fileName = file.Value.ObjectId;
-                var fileIter = file.Value.Iteration;
-
-                Iterations[datDatabaseType].TryAdd(fileIter, new());
-
                 var datFile = datDatabase.GetReaderForFile(fileName);
                 var uncompressedFileSize = datFile.Buffer.Length;
                 var compressedDatFile = Compress(datFile.Buffer);
@@ -87,14 +114,143 @@ namespace ACE.Server.Managers
                 var useCompressedFile = compressedFileSize + 4 < uncompressedFileSize;
                 var fileSizeToSend = useCompressedFile ? compressedFileSize : 0;
 
-                Iterations[datDatabaseType][fileIter].Add(fileName);
-                Interlocked.Increment(ref fileCount);
                 DatFileSizes[datDatabaseType].TryAdd(fileName, (uncompressedFileSize, fileSizeToSend));
 
-                if (useCompressedFile && precacheCompressedDATFiles)
+                if (useCompressedFile && precacheCompressedDatFiles)
                     CompressedDatFilesCache[datDatabaseType].TryAdd(fileName, PrependUncompressedFileSize(compressedDatFile, (uint)uncompressedFileSize));
+
+                var completed = Interlocked.Increment(ref fileCount);
+                if (completed % ProgressInterval == 0)
+                    log.Info($"DDD {datDatabaseType}: analyzed {completed:N0}/{datDatabase.AllFiles.Count:N0} files ({timer.Elapsed.TotalSeconds:N1}s elapsed).");
             });
-            log.Info($"Iterations for {datDatabaseType} initialized. Iterations.Count={Iterations[datDatabaseType].Count} | FileCount={fileCount} | DatFileSizes.Count={DatFileSizes[datDatabaseType].Count}{(precacheCompressedDATFiles ? " | precached Compressed files" : "")}");
+
+            UpdateFileSizeCache(datDatabaseType, datDatabase, fileSizeCache);
+            log.Info($"Iterations for {datDatabaseType} analyzed in {timer.Elapsed.TotalSeconds:N1}s. Iterations.Count={Iterations[datDatabaseType].Count} | FileCount={fileCount:N0} | DatFileSizes.Count={DatFileSizes[datDatabaseType].Count:N0}{(precacheCompressedDatFiles ? " | precached compressed files" : "")}");
+            return true;
+        }
+
+        private static string FileSizeCachePath => Path.Combine(AppContext.BaseDirectory, "Data", "DDD", "file-size-cache.json");
+
+        private static DDDFileSizeCache LoadFileSizeCache()
+        {
+            try
+            {
+                if (File.Exists(FileSizeCachePath))
+                {
+                    var cache = JsonSerializer.Deserialize<DDDFileSizeCache>(File.ReadAllText(FileSizeCachePath));
+                    if (cache?.Version == FileSizeCacheVersion)
+                    {
+                        cache.Databases ??= new Dictionary<string, DDDDatabaseFileSizeCache>(StringComparer.OrdinalIgnoreCase);
+                        return cache;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"Unable to load DDD file-size cache; DAT files will be analyzed again: {ex.Message}");
+            }
+
+            return new DDDFileSizeCache();
+        }
+
+        private static void SaveFileSizeCache(DDDFileSizeCache cache)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(FileSizeCachePath);
+                Directory.CreateDirectory(directory);
+                var temporaryPath = FileSizeCachePath + ".tmp";
+                File.WriteAllText(temporaryPath, JsonSerializer.Serialize(cache));
+                File.Move(temporaryPath, FileSizeCachePath, true);
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"Unable to save DDD file-size cache: {ex.Message}");
+            }
+        }
+
+        private static bool TryLoadFileSizes(DatDatabaseType datDatabaseType, DatDatabase datDatabase, DDDFileSizeCache cache)
+        {
+            var key = datDatabaseType.ToString();
+            if (!cache.Databases.TryGetValue(key, out var databaseCache) || databaseCache.Files == null)
+                return false;
+
+            var fileInfo = new FileInfo(datDatabase.FilePath);
+            if (databaseCache.DatLength != fileInfo.Length
+                || databaseCache.DatLastWriteUtcTicks != fileInfo.LastWriteTimeUtc.Ticks
+                || databaseCache.Iteration != datDatabase.Iteration
+                || databaseCache.FileCount != datDatabase.AllFiles.Count
+                || databaseCache.Files.Count != datDatabase.AllFiles.Count)
+                return false;
+
+            foreach (var fileId in datDatabase.AllFiles.Keys)
+            {
+                if (!databaseCache.Files.TryGetValue(fileId, out var size))
+                {
+                    DatFileSizes[datDatabaseType].Clear();
+                    return false;
+                }
+
+                DatFileSizes[datDatabaseType].TryAdd(fileId, (size.UncompressedFileSize, size.CompressedFileSize));
+            }
+
+            return true;
+        }
+
+        private static void UpdateFileSizeCache(DatDatabaseType datDatabaseType, DatDatabase datDatabase, DDDFileSizeCache cache)
+        {
+            var fileInfo = new FileInfo(datDatabase.FilePath);
+            cache.Databases[datDatabaseType.ToString()] = new DDDDatabaseFileSizeCache
+            {
+                DatLength = fileInfo.Length,
+                DatLastWriteUtcTicks = fileInfo.LastWriteTimeUtc.Ticks,
+                Iteration = datDatabase.Iteration,
+                FileCount = datDatabase.AllFiles.Count,
+                Files = DatFileSizes[datDatabaseType].ToDictionary(
+                    pair => pair.Key,
+                    pair => new DDDFileSizeEntry
+                    {
+                        UncompressedFileSize = pair.Value.UncompressedFileSize,
+                        CompressedFileSize = pair.Value.CompressedFileSize,
+                    }),
+            };
+        }
+
+        private static void PrecacheCompressedFiles(DatDatabaseType datDatabaseType, DatDatabase datDatabase)
+        {
+            var candidates = DatFileSizes[datDatabaseType].Where(pair => pair.Value.CompressedFileSize > 0);
+            Parallel.ForEach(candidates, pair =>
+            {
+                var compressed = Compress(datDatabase.GetReaderForFile(pair.Key).Buffer);
+                CompressedDatFilesCache[datDatabaseType].TryAdd(pair.Key, PrependUncompressedFileSize(compressed, (uint)pair.Value.UncompressedFileSize));
+            });
+        }
+
+        private sealed class DDDFileSizeCache
+        {
+            public DDDFileSizeCache() { }
+
+            public int Version { get; set; } = FileSizeCacheVersion;
+            public Dictionary<string, DDDDatabaseFileSizeCache> Databases { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private sealed class DDDDatabaseFileSizeCache
+        {
+            public DDDDatabaseFileSizeCache() { }
+
+            public long DatLength { get; set; }
+            public long DatLastWriteUtcTicks { get; set; }
+            public int Iteration { get; set; }
+            public int FileCount { get; set; }
+            public Dictionary<uint, DDDFileSizeEntry> Files { get; set; } = new();
+        }
+
+        private sealed class DDDFileSizeEntry
+        {
+            public DDDFileSizeEntry() { }
+
+            public int UncompressedFileSize { get; set; }
+            public int CompressedFileSize { get; set; }
         }
 
         /// <summary>

@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Text.RegularExpressions;
 
 using log4net;
 
@@ -35,6 +35,7 @@ namespace ACE.Server.Managers
         /// sorted by RentDue times
         /// </summary>
         private static SortedSet<PlayerHouse> RentQueue;
+        private static HashSet<uint> RentQueueHouseInstances;
 
         /// <summary>
         /// HouseManager actions to run when slumlord inventory has completed loading
@@ -48,14 +49,22 @@ namespace ACE.Server.Managers
 
         public static void Initialize()
         {
+            var stopwatch = Stopwatch.StartNew();
+
             TotalOwnedHousingByType[HouseType.Apartment] = 0;
             TotalOwnedHousingByType[HouseType.Cottage] = 0;
             TotalOwnedHousingByType[HouseType.Villa] = 0;
             TotalOwnedHousingByType[HouseType.Mansion] = 0;
 
             BuildHouseIdToGuid();
+            var houseIndexElapsed = stopwatch.Elapsed;
 
             BuildRentQueue();
+
+            stopwatch.Stop();
+            log.Info($"HouseManager loaded {HouseIdToGuid.Count:N0} house IDs and {RentQueue.Count:N0} owned houses in " +
+                     $"{stopwatch.Elapsed.TotalSeconds:N2}s (world index {houseIndexElapsed.TotalSeconds:N2}s, " +
+                     $"rent queue {(stopwatch.Elapsed - houseIndexElapsed).TotalSeconds:N2}s).");
         }
 
         /// <summary>
@@ -68,11 +77,7 @@ namespace ACE.Server.Managers
                 var query = from weenie in ctx.Weenie
                             join inst in ctx.LandblockInstance on weenie.ClassId equals inst.WeenieClassId
                             where weenie.Type == (int)WeenieType.House
-                            select new
-                            {
-                                Weenie = weenie,
-                                Instance = inst
-                            };
+                            select new { weenie.ClassName, inst.Guid };
 
                 var results = query.ToList();
 
@@ -80,10 +85,10 @@ namespace ACE.Server.Managers
 
                 foreach (var result in results)
                 {
-                    var classname = result.Weenie.ClassName;
-                    var guid = result.Instance.Guid;
+                    var classname = result.ClassName;
+                    var guid = result.Guid;
 
-                    if (!uint.TryParse(Regex.Match(classname, @"\d+").Value, out var houseId))
+                    if (!TryParseHouseId(classname, out var houseId))
                     {
                         log.Error($"[HOUSE] HouseManager.BuildHouseIdToGuid(): couldn't parse {classname}");
                         continue;
@@ -100,12 +105,27 @@ namespace ACE.Server.Managers
             }
         }
 
+        private static bool TryParseHouseId(string className, out uint houseId)
+        {
+            houseId = 0;
+            var start = 0;
+            while (start < className.Length && !char.IsDigit(className[start]))
+                start++;
+
+            var end = start;
+            while (end < className.Length && char.IsDigit(className[end]))
+                end++;
+
+            return start < end && uint.TryParse(className.AsSpan(start, end - start), out houseId);
+        }
+
         /// <summary>
         /// Builds a list of all the player-owned houses on the server, sorted by RentDue timestamp
         /// </summary>
         public static void BuildRentQueue()
         {
             RentQueue = new SortedSet<PlayerHouse>();
+            RentQueueHouseInstances = new HashSet<uint>();
 
             //var allPlayers = PlayerManager.GetAllPlayers();
             //var houseOwners = allPlayers.Where(i => i.HouseInstance != null);
@@ -119,7 +139,7 @@ namespace ACE.Server.Managers
                 AddRentQueue(slumlord);
 
             //log.Info($"Loaded {RentQueue.Count} active houses.");
-            QueryMultiHouse();
+            QueryMultiHouse(slumlordBiotas);
         }
 
         /// <summary>
@@ -170,7 +190,7 @@ namespace ACE.Server.Managers
         /// </summary>
         private static bool RentQueueContainsHouse(uint houseInstance)
         {
-            return RentQueue.Any(i => i.House.HouseInstance == houseInstance);
+            return RentQueueHouseInstances.Contains(houseInstance);
         }
 
         /// <summary>
@@ -202,8 +222,11 @@ namespace ACE.Server.Managers
         {
             var playerHouse = new PlayerHouse(player, house);
 
-            RentQueue.Add(playerHouse);
+            if (!RentQueue.Add(playerHouse))
+                return;
 
+            if (playerHouse.House.HouseInstance.HasValue)
+                RentQueueHouseInstances.Add(playerHouse.House.HouseInstance.Value);
             TotalOwnedHousingByType[playerHouse.House.HouseType]++;
         }
 
@@ -212,16 +235,19 @@ namespace ACE.Server.Managers
         /// </summary>
         public static void RemoveRentQueue(uint houseGuid)
         {
-            RentQueue.RemoveWhere(i => i.House.Guid.Full == houseGuid);
+            foreach (var playerHouse in RentQueue.Where(i => i.House.Guid.Full == houseGuid).ToList())
+            {
+                RentQueue.Remove(playerHouse);
+                if (playerHouse.House.HouseInstance.HasValue)
+                    RentQueueHouseInstances.Remove(playerHouse.House.HouseInstance.Value);
+            }
         }
 
         /// <summary>
         /// Queries the status of multi-house owners on the server
         /// </summary>
-        private static void QueryMultiHouse()
+        private static void QueryMultiHouse(IEnumerable<Biota> slumlordBiotas)
         {
-            var slumlordBiotas = DatabaseManager.Shard.BaseDatabase.GetBiotasByType(WeenieType.SlumLord);
-
             var playerHouses = new Dictionary<IPlayer, List<Biota>>();
             var accountHouses = new Dictionary<string, List<Biota>>();
 
@@ -343,6 +369,8 @@ namespace ACE.Server.Managers
             while (currentTime > nextEntry.RentDue)
             {
                 RentQueue.Remove(nextEntry);
+                if (nextEntry.House.HouseInstance.HasValue)
+                    RentQueueHouseInstances.Remove(nextEntry.House.HouseInstance.Value);
                 DecrementTotalOwnedHousingByType(nextEntry.House.HouseType);
 
                 ProcessRent(nextEntry);

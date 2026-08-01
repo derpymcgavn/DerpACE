@@ -18,6 +18,7 @@ namespace ACE.Server.WorldObjects
     public class Game : WorldObject
     {
         public const uint AyanUlgrimChessboardGuid = 0x7113408B;
+        private const uint AyanUlgrimChessboardGfxObj = 0x01002C0C;
 
         public ChessMatch ChessMatch;
 
@@ -45,6 +46,22 @@ namespace ACE.Server.WorldObjects
         private void SetEphemeralValues()
         {
             UseRadius = 6.5f;
+        }
+        public override ObjDesc CalculateObjDesc()
+        {
+            var objDesc = base.CalculateObjDesc();
+
+            if (!IsAyanUlgrimChessboard)
+                return objDesc;
+
+            objDesc.AnimPartChanges.RemoveAll(part => part.Index == 0);
+            objDesc.AnimPartChanges.Add(new PropertiesAnimPart
+            {
+                Index = 0,
+                AnimationId = AyanUlgrimChessboardGfxObj,
+            });
+
+            return objDesc;
         }
 
         /// <summary>
@@ -106,6 +123,8 @@ namespace ACE.Server.WorldObjects
             chessDouble.Name = "The Unpleasant Opponent";
             chessDouble.Location = new Position(ulgrim.Location);
             chessDouble.GeneratorId = Guid.Full;
+            chessDouble.ObjScale = 1.0f;
+            chessDouble.TimeToRot = -1;
             chessDouble.Attackable = false;
             chessDouble.ItemUseable = Usable.No;
             chessDouble.NoCorpse = true;
@@ -125,12 +144,21 @@ namespace ACE.Server.WorldObjects
 
         internal void ReleaseAiOpponent()
         {
-            if (aiOpponent != null && !aiOpponent.IsDestroyed)
-            {
-                aiOpponent.ApplyVisualEffects(PlayScript.Destroy);
-                aiOpponent.Destroy();
-            }
+            var departingOpponent = aiOpponent;
             aiOpponent = null;
+
+            if (departingOpponent == null || departingOpponent.IsDestroyed)
+                return;
+
+            departingOpponent.ApplyVisualEffects(PlayScript.PortalEntry);
+            var departure = new ActionChain();
+            departure.AddDelaySeconds(1.25);
+            departure.AddAction(departingOpponent, () =>
+            {
+                if (!departingOpponent.IsDestroyed)
+                    departingOpponent.Destroy();
+            });
+            departure.EnqueueChain();
         }
 
         public void ActOnJoin_Legacy(Player player)

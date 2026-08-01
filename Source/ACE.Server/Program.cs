@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -354,16 +355,13 @@ namespace ACE.Server
             log.Info("Initializing EventManager...");
             EventManager.Initialize();
 
-            // Free up memory before the server goes online. This can free up 6 GB+ on larger servers.
+            // Free up memory before the server goes online. One blocking generation-2 collection
+            // also performs the requested one-time LOH compaction.
             log.Info("Forcing .net garbage collection...");
-            for (int i = 0; i < 10; i++)
-            {
-                // https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/fundamentals
-                // https://learn.microsoft.com/en-us/dotnet/api/system.runtime.gcsettings.largeobjectheapcompactionmode
-                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-
-                GC.Collect();
-            }
+            var garbageCollectionTimer = Stopwatch.StartNew();
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, true, true);
+            log.Info($"Garbage collection completed in {garbageCollectionTimer.Elapsed.TotalSeconds:N1}s.");
 
             // This should be last
             log.Info("Initializing CommandManager...");

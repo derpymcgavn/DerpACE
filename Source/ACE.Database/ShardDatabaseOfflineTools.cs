@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -254,6 +255,8 @@ namespace ACE.Database
         /// </summary>
         public static void RunStartupCleanup()
         {
+            var cleanupTimer = Stopwatch.StartNew();
+
             try
             {
                 using (var context = new ShardDbContext())
@@ -276,7 +279,8 @@ namespace ACE.Database
                         {
                             try
                             {
-                                PurgeCharacter(id, out var c, out var b, out var p, "Startup cleanup of IsDeleted character");
+                                PurgeCharacter(context, id, out var c, out var b, out var p, "Startup cleanup of IsDeleted character");
+                                context.ChangeTracker.Clear();
                                 totalChars += c;
                                 totalBiotas += b;
                                 totalPossessions += p;
@@ -305,6 +309,7 @@ namespace ACE.Database
             {
                 log.Error($"[STARTUP][ORPHAN-PURGE] orphan sweep failed: {ex}");
             }
+            log.Info($"[STARTUP][PURGE] Startup cleanup completed in {cleanupTimer.Elapsed.TotalSeconds:N1}s.");
         }
 
 

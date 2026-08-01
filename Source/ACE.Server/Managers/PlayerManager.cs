@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,20 +51,24 @@ namespace ACE.Server.Managers
         /// </summary>
         public static void Initialize()
         {
+            var stopwatch = Stopwatch.StartNew();
             var results = DatabaseManager.Shard.BaseDatabase.GetAllPlayerBiotasInParallel();
+            var databaseLoadElapsed = stopwatch.Elapsed;
+            var loadedPlayers = new OfflinePlayer[results.Count];
 
-            Parallel.ForEach(results, ConfigManager.Config.Server.Threading.DatabaseParallelOptions, result =>
+            Parallel.For(0, results.Count, ConfigManager.Config.Server.Threading.DatabaseParallelOptions, index =>
             {
-                var offlinePlayer = new OfflinePlayer(result);
+                loadedPlayers[index] = new OfflinePlayer(results[index]);
+            });
 
-                lock (offlinePlayers)
+            playersLock.EnterWriteLock();
+            try
+            {
+                foreach (var offlinePlayer in loadedPlayers)
+                {
                     offlinePlayers[offlinePlayer.Guid.Full] = offlinePlayer;
-
-                lock (playerNames)
                     playerNames[offlinePlayer.Name] = offlinePlayer;
 
-                lock (playerAccounts)
-                {
                     if (offlinePlayer.Account != null)
                     {
                         if (!playerAccounts.TryGetValue(offlinePlayer.Account.AccountId, out var playerAccountsDict))
@@ -76,7 +81,15 @@ namespace ACE.Server.Managers
                     else
                         log.Error($"PlayerManager.Initialize: couldn't find account for player {offlinePlayer.Name} ({offlinePlayer.Guid})");
                 }
-            });
+            }
+            finally
+            {
+                playersLock.ExitWriteLock();
+            }
+
+            stopwatch.Stop();
+            log.Info($"PlayerManager loaded {loadedPlayers.Length:N0} players in {stopwatch.Elapsed.TotalSeconds:N2}s " +
+                     $"(biotas {databaseLoadElapsed.TotalSeconds:N2}s, player/account index {(stopwatch.Elapsed - databaseLoadElapsed).TotalSeconds:N2}s).");
         }
 
         private static readonly LinkedList<Player> playersPendingLogoff = new LinkedList<Player>();
@@ -241,10 +254,11 @@ namespace ACE.Server.Managers
             playersLock.EnterReadLock();
             try
             {
-                var offlinePlayer = offlinePlayers.Values.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(admin, StringComparison.OrdinalIgnoreCase));
-
-                if (offlinePlayer != null)
+                if (playerNames.TryGetValue(name, out var player) && player is OfflinePlayer offlinePlayer)
                     return offlinePlayer;
+
+                if (playerNames.TryGetValue(admin, out player) && player is OfflinePlayer adminPlayer)
+                    return adminPlayer;
             }
             finally
             {
@@ -362,10 +376,11 @@ namespace ACE.Server.Managers
             playersLock.EnterReadLock();
             try
             {
-                var onlinePlayer = onlinePlayers.Values.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) || p.Name.Equals(admin, StringComparison.OrdinalIgnoreCase));
-
-                if (onlinePlayer != null)
+                if (playerNames.TryGetValue(name, out var player) && player is Player onlinePlayer)
                     return onlinePlayer;
+
+                if (playerNames.TryGetValue(admin, out player) && player is Player adminPlayer)
+                    return adminPlayer;
             }
             finally
             {
