@@ -134,9 +134,23 @@ namespace ACE.Server.Managers
                 //AddRentQueue(houseOwner);
 
             var slumlordBiotas = DatabaseManager.Shard.BaseDatabase.GetBiotasByType(WeenieType.SlumLord);
+            var ownedHouseGuids = new List<uint>(slumlordBiotas.Count);
+            foreach (var slumlord in slumlordBiotas)
+            {
+                var houseId = slumlord.BiotaPropertiesDID.FirstOrDefault(i => i.Type == (ushort)PropertyDataId.HouseId);
+                if (houseId != null && HouseIdToGuid.TryGetValue(houseId.Value, out var houseGuids))
+                {
+                    var houseGuid = GetHouseGuid(slumlord.Id, houseGuids);
+                    if (houseGuid != 0)
+                        ownedHouseGuids.Add(houseGuid);
+                }
+            }
+
+            var houseBiotas = DatabaseManager.Shard.BaseDatabase.GetBiotas(ownedHouseGuids)
+                .ToDictionary(biota => biota.Id);
 
             foreach (var slumlord in slumlordBiotas)
-                AddRentQueue(slumlord);
+                AddRentQueue(slumlord, houseBiotas);
 
             //log.Info($"Loaded {RentQueue.Count} active houses.");
             QueryMultiHouse(slumlordBiotas);
@@ -145,7 +159,7 @@ namespace ACE.Server.Managers
         /// <summary>
         /// Adds a player-owned house to the rent queue
         /// </summary>
-        private static void AddRentQueue(Biota slumlord)
+        private static void AddRentQueue(Biota slumlord, IReadOnlyDictionary<uint, Biota> houseBiotas)
         {
             var biotaOwner = slumlord.BiotaPropertiesIID.FirstOrDefault(i => i.Type == (ushort)PropertyInstanceId.HouseOwner);
             if (biotaOwner == null)
@@ -182,7 +196,8 @@ namespace ACE.Server.Managers
                 log.Error($"[HOUSE] HouseManager.AddRentQueue(): rent queue already contains house {houseInstance}");
                 return;
             }
-            AddRentQueue(owner, houseInstance);
+            houseBiotas.TryGetValue(houseInstance, out var houseBiota);
+            AddRentQueue(owner, houseInstance, slumlord, houseBiota);
         }
 
         /// <summary>
@@ -196,11 +211,11 @@ namespace ACE.Server.Managers
         /// <summary>
         /// Adds a player-owned house to the rent queue
         /// </summary>
-        public static void AddRentQueue(IPlayer player, uint houseGuid)
+        public static void AddRentQueue(IPlayer player, uint houseGuid, Biota loadedSlumlordBiota = null, Biota loadedHouseBiota = null)
         {
             //Console.WriteLine($"AddRentQueue({player.Name}, {houseGuid:X8})");
 
-            var house = House.Load(houseGuid);
+            var house = House.Load(houseGuid, false, loadedHouseBiota, loadedSlumlordBiota);
             if (house == null)      // this can happen for basement dungeons
                 return;
 

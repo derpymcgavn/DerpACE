@@ -115,11 +115,13 @@ namespace ACE.Server.WorldObjects
             return houseData;
         }
 
-        public static House Load(uint houseGuid, bool isBasement = false)
+        public static House Load(uint houseGuid, bool isBasement = false, ACE.Database.Models.Shard.Biota loadedHouseBiota = null, ACE.Database.Models.Shard.Biota loadedSlumlordBiota = null)
         {
             var landblock = (ushort)((houseGuid >> 12) & 0xFFFF);
 
-            var biota = DatabaseManager.Shard.BaseDatabase.GetBiota(houseGuid);
+            var biota = loadedHouseBiota != null && loadedHouseBiota.Id == houseGuid
+                ? loadedHouseBiota
+                : DatabaseManager.Shard.BaseDatabase.GetBiota(houseGuid);
             var instances = DatabaseManager.World.GetCachedInstancesByLandblock(landblock);
 
             if (biota == null)
@@ -159,7 +161,9 @@ namespace ACE.Server.WorldObjects
             }
 
             var slumlordGuid = house.SlumLord.Guid.Full;
-            var slumlordBiota = DatabaseManager.Shard.BaseDatabase.GetBiota(slumlordGuid);
+            var slumlordBiota = loadedSlumlordBiota != null && loadedSlumlordBiota.Id == slumlordGuid
+                ? loadedSlumlordBiota
+                : DatabaseManager.Shard.BaseDatabase.GetBiota(slumlordGuid);
             if (slumlordBiota != null)
             {
                 var slumlord = WorldObjectFactory.CreateWorldObject(slumlordBiota);

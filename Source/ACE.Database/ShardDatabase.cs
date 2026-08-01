@@ -267,22 +267,69 @@ namespace ACE.Database
                 return GetBiota(context, id, doNotAddToCache);
         }
 
+        /// <summary>
+        /// Loads complete biotas in bounded batches. Split queries avoid a cartesian product
+        /// while replacing the per-biota property query fan-out used by GetBiota.
+        /// </summary>
+        public virtual List<Biota> GetBiotas(IEnumerable<uint> ids)
+        {
+            const int batchSize = 1000;
+            var distinctIds = ids.Distinct().ToArray();
+            var biotas = new List<Biota>(distinctIds.Length);
+
+            for (var offset = 0; offset < distinctIds.Length; offset += batchSize)
+            {
+                var batch = distinctIds.Skip(offset).Take(batchSize).ToArray();
+
+                using (var context = new ShardDbContext())
+                {
+                    var results = context.Biota
+                        .Where(biota => batch.Contains(biota.Id))
+                        .Include(biota => biota.BiotaPropertiesAnimPart)
+                        .Include(biota => biota.BiotaPropertiesAttribute)
+                        .Include(biota => biota.BiotaPropertiesAttribute2nd)
+                        .Include(biota => biota.BiotaPropertiesBodyPart)
+                        .Include(biota => biota.BiotaPropertiesBook)
+                        .Include(biota => biota.BiotaPropertiesBookPageData)
+                        .Include(biota => biota.BiotaPropertiesBool)
+                        .Include(biota => biota.BiotaPropertiesCreateList)
+                        .Include(biota => biota.BiotaPropertiesDID)
+                        .Include(biota => biota.BiotaPropertiesEmote)
+                            .ThenInclude(emote => emote.BiotaPropertiesEmoteAction)
+                        .Include(biota => biota.BiotaPropertiesEnchantmentRegistry)
+                        .Include(biota => biota.BiotaPropertiesEventFilter)
+                        .Include(biota => biota.BiotaPropertiesFloat)
+                        .Include(biota => biota.BiotaPropertiesGenerator)
+                        .Include(biota => biota.BiotaPropertiesIID)
+                        .Include(biota => biota.BiotaPropertiesInt)
+                        .Include(biota => biota.BiotaPropertiesInt64)
+                        .Include(biota => biota.BiotaPropertiesPalette)
+                        .Include(biota => biota.BiotaPropertiesPosition)
+                        .Include(biota => biota.BiotaPropertiesSkill)
+                        .Include(biota => biota.BiotaPropertiesSpellBook)
+                        .Include(biota => biota.BiotaPropertiesString)
+                        .Include(biota => biota.BiotaPropertiesTextureMap)
+                        .Include(biota => biota.HousePermission)
+                        .Include(biota => biota.BiotaPropertiesAllegiance)
+                        .AsSplitQuery()
+                        .AsNoTracking()
+                        .ToList();
+
+                    biotas.AddRange(results);
+                }
+            }
+
+            return biotas;
+        }
+
         public List<Biota> GetBiotasByWcid(uint wcid)
         {
             using (var context = new ShardDbContext())
             {
                 context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
-                var results = context.Biota.Where(r => r.WeenieClassId == wcid);
-
-                var biotas = new List<Biota>();
-                foreach (var result in results)
-                {
-                    var biota = GetBiota(result.Id);
-                    biotas.Add(biota);
-                }
-
-                return biotas;
+                var ids = context.Biota.Where(r => r.WeenieClassId == wcid).Select(r => r.Id).ToList();
+                return GetBiotas(ids);
             }
         }
 
@@ -295,16 +342,8 @@ namespace ACE.Database
 
                 var iType = (int)type;
 
-                var results = context.Biota.Where(r => r.WeenieType == iType);
-
-                var biotas = new List<Biota>();
-                foreach (var result in results)
-                {
-                    var biota = GetBiota(result.Id);
-                    biotas.Add(biota);
-                }
-
-                return biotas;
+                var ids = context.Biota.Where(r => r.WeenieType == iType).Select(r => r.Id).ToList();
+                return GetBiotas(ids);
             }
         }
 
@@ -827,31 +866,29 @@ namespace ACE.Database
         /// </summary>
         public List<ACE.Entity.Models.Biota> GetAllPlayerBiotasInParallel()
         {
-            var biotas = new ConcurrentBag<ACE.Entity.Models.Biota>();
-
+            List<uint> playerIds;
             using (var context = new ShardDbContext())
             {
-                var results = context.Character
+                playerIds = context.Character
                     .Where(r => !r.IsDeleted)
                     .AsNoTracking()
+                    .Select(r => r.Id)
                     .ToList();
-
-                Parallel.ForEach(results, result =>
-                {
-                    var biota = GetBiota(result.Id, true);
-
-                    if (biota != null)
-                    {
-                        var convertedBiota = ACE.Database.Adapter.BiotaConverter.ConvertToEntityBiota(biota);
-
-                        biotas.Add(convertedBiota);
-                    }
-                    else
-                        log.Error($"ShardDatabase.GetAllPlayerBiotasInParallel() - couldn't find biota for character 0x{result.Id:X8}");
-                });
             }
 
-            return biotas.ToList();
+            var databaseBiotas = GetBiotas(playerIds).ToDictionary(biota => biota.Id);
+            var biotas = new ACE.Entity.Models.Biota[playerIds.Count];
+
+            Parallel.For(0, playerIds.Count, index =>
+            {
+                var playerId = playerIds[index];
+                if (databaseBiotas.TryGetValue(playerId, out var biota))
+                    biotas[index] = ACE.Database.Adapter.BiotaConverter.ConvertToEntityBiota(biota);
+                else
+                    log.Error($"ShardDatabase.GetAllPlayerBiotasInParallel() - couldn't find biota for character 0x{playerId:X8}");
+            });
+
+            return biotas.Where(biota => biota != null).ToList();
         }
 
         public uint? GetAllegianceID(uint monarchID)

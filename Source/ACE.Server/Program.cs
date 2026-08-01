@@ -338,7 +338,10 @@ namespace ACE.Server
             NpcPersonaManager.Initialize();
 
             log.Info("Initializing HouseManager...");
+            var houseManagerTimer = Stopwatch.StartNew();
             HouseManager.Initialize();
+            log.Info($"HouseManager.Initialize returned after {houseManagerTimer.Elapsed.TotalSeconds:N1}s; " +
+                     $"managed memory {GC.GetTotalMemory(false) / (1024.0 * 1024.0):N0} MiB.");
 
             log.Info("Initializing InboundMessageManager...");
             InboundMessageManager.Initialize();

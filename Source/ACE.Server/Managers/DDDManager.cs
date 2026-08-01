@@ -93,6 +93,9 @@ namespace ACE.Server.Managers
             }
 
             var precacheCompressedDatFiles = ConfigManager.Config.DDD.PrecacheCompressedDATFiles;
+            if (precacheCompressedDatFiles && datDatabaseType == DatDatabaseType.Portal)
+                log.Warn("DDD eager compressed-DAT precaching is enabled. This increases startup CPU, time, and memory; disable PrecacheCompressedDATFiles to cache payloads on demand.");
+
             var timer = Stopwatch.StartNew();
             if (TryLoadFileSizes(datDatabaseType, datDatabase, fileSizeCache))
             {

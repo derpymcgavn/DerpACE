@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -213,6 +214,41 @@ namespace ACE.Database
             "biota_properties_enchantment_registry",
         };
 
+        private static string OrphanSweepMarkerPath
+        {
+            get
+            {
+                var databaseName = ConfigManager.Config.MySql.Shard.Database;
+                var safeDatabaseName = string.Concat(databaseName.Select(character =>
+                    char.IsLetterOrDigit(character) || character == '-' || character == '_' ? character : '_'));
+                return Path.Combine(AppContext.BaseDirectory, "Data", $"orphan-sweep-{safeDatabaseName}.stamp");
+            }
+        }
+
+        private static bool IsOrphanSweepDue()
+        {
+            var intervalHours = ConfigManager.Config.MySql.StartupOrphanSweepIntervalHours;
+            if (intervalHours < 0)
+                return false;
+            if (intervalHours == 0)
+                return true;
+
+            Directory.CreateDirectory(Path.GetDirectoryName(OrphanSweepMarkerPath));
+            if (!File.Exists(OrphanSweepMarkerPath))
+            {
+                File.WriteAllText(OrphanSweepMarkerPath, DateTime.UtcNow.ToString("O"));
+                log.Info($"[STARTUP][ORPHAN-PURGE] Initialized {intervalHours}h maintenance schedule; full sweep deferred.");
+                return false;
+            }
+
+            return DateTime.UtcNow - File.GetLastWriteTimeUtc(OrphanSweepMarkerPath) >= TimeSpan.FromHours(intervalHours);
+        }
+
+        private static void MarkOrphanSweepCompleted()
+        {
+            File.WriteAllText(OrphanSweepMarkerPath, DateTime.UtcNow.ToString("O"));
+        }
+
         /// <summary>
         /// DerpACE: scans every biota_properties_* table at startup and deletes rows whose
         /// `object_Id` has no matching parent `biota` row. Returns total rows removed.
@@ -302,8 +338,14 @@ namespace ACE.Database
 
             try
             {
-                var orphans = PurgeOrphanedBiotaProperties();
-                log.Info($"[STARTUP][ORPHAN-PURGE] Done. Total orphan rows removed: {orphans}.");
+                if (IsOrphanSweepDue())
+                {
+                    var orphans = PurgeOrphanedBiotaProperties();
+                    MarkOrphanSweepCompleted();
+                    log.Info($"[STARTUP][ORPHAN-PURGE] Done. Total orphan rows removed: {orphans}.");
+                }
+                else
+                    log.Info("[STARTUP][ORPHAN-PURGE] Full sweep is not due; per-biota insert protection remains active.");
             }
             catch (Exception ex)
             {

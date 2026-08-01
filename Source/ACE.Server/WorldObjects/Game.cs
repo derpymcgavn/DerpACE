@@ -46,6 +46,12 @@ namespace ACE.Server.WorldObjects
         private void SetEphemeralValues()
         {
             UseRadius = 6.5f;
+
+            if (IsAyanUlgrimChessboard)
+            {
+                Ethereal = true;
+                GravityStatus = false;
+            }
         }
         public override ObjDesc CalculateObjDesc()
         {
