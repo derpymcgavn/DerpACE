@@ -51,7 +51,8 @@ namespace ACE.Server.Network.Managers
                 //ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.ProcessPacket_1);
                 if (packet.Header.Flags.HasFlag(PacketHeaderFlags.ConnectResponse))
                 {
-                    packetLog.DebugFormat("{0}, {1}", packet, endPoint);
+                    if (packetLog.IsDebugEnabled)
+                        packetLog.DebugFormat("{0}, {1}", packet, endPoint);
                     PacketInboundConnectResponse connectResponse = new PacketInboundConnectResponse(packet);
 
                     // This should be set on the second packet to the server from the client.
@@ -97,7 +98,8 @@ namespace ACE.Server.Network.Managers
                 //ServerPerformanceMonitor.RestartEvent(ServerPerformanceMonitor.MonitorType.ProcessPacket_0);
                 if (packet.Header.HasFlag(PacketHeaderFlags.LoginRequest))
                 {
-                    packetLog.DebugFormat("{0}, {1}", packet, endPoint);
+                    if (packetLog.IsDebugEnabled)
+                        packetLog.DebugFormat("{0}, {1}", packet, endPoint);
                     if (GetAuthenticatedSessionCount() >= ConfigManager.Config.Server.Network.MaximumAllowedSessions)
                     {
                         log.InfoFormat("Login Request from {0} rejected. Server full.", endPoint);

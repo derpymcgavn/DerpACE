@@ -826,7 +826,7 @@ namespace ACE.Server.Network
             }
             finally
             {
-                ArrayPool<byte>.Shared.Return(buffer, true);
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 
