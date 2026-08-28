@@ -49,14 +49,16 @@ namespace ACE.Server.Factories
             ACE.Server.Factories.Enum.WeenieClassName.ace43383_netherstaff,
         };
 
-        public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
+        public static WorldObject CreateCaster(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null, int requestedTier = 0)
         {
             var tierContext = LootTierManager.Resolve(profile);
             profile = tierContext.Profile;
             var treasureRoll = new TreasureRoll(TreasureItemType.Caster);
             treasureRoll.WeaponType = TreasureWeaponType.Caster;
             treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
-            treasureRoll.Wcid = CasterWcids.Roll(profile.Tier);
+            treasureRoll.Wcid = LootWcidWeightManager.Roll("caster", requestedTier > 0 ? requestedTier : tierContext.RequestedTier, CasterWcids.Roll(profile.Tier), out var customMutationType);
+            if (customMutationType.HasValue)
+                treasureRoll.WeaponType = customMutationType.Value;
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
             MutateCaster(wo, profile, isMagical, treasureRoll);

@@ -49,7 +49,15 @@ namespace ACE.Server.WorldObjects
 
             if (IsAyanUlgrimChessboard)
             {
+                var physicsState = (PhysicsState)(GetProperty(PropertyInt.PhysicsState) ?? 0);
+                physicsState |= PhysicsState.Static | PhysicsState.Ethereal | PhysicsState.IgnoreCollisions;
+                physicsState &= ~(PhysicsState.Gravity | PhysicsState.AlignPath | PhysicsState.PathClipped
+                    | PhysicsState.ReportCollisions | PhysicsState.Pushable);
+                SetProperty(PropertyInt.PhysicsState, (int)physicsState);
+
                 Ethereal = true;
+                IgnoreCollisions = true;
+                ReportCollisions = false;
                 GravityStatus = false;
             }
         }

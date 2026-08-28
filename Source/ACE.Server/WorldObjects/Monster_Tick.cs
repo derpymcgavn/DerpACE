@@ -31,6 +31,14 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            // Ayan Ulgrim's authored tavern route owns movement until he has returned
+            // home. Generic home recovery would otherwise teleport him and leave the
+            // ambient waypoint queue trying to continue through the tavern wall.
+            if (IsAyanUlgrimAmbientMovementOwned)
+            {
+                NextMonsterTickTime = currentUnixTime + monsterTickInterval;
+                return;
+            }
             NextMonsterTickTime = currentUnixTime + monsterTickInterval;
 
             // Pathfinding tick: dispatches pending wander/route/emote/passage state transitions.

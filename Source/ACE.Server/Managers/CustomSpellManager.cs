@@ -60,8 +60,8 @@ namespace ACE.Server.Managers
         }
 
         private const string ContentDirectoryEnvVar = "DERPACE_CUSTOM_SPELLS_DIR";
-        private const uint FirstCustomSpellId = 65001;
-        private const uint LastCustomSpellId = ushort.MaxValue;
+        public const uint FirstCustomSpellId = 65001;
+        public const uint LastCustomSpellId = ushort.MaxValue;
         private const string SqlJsonBeginMarker = "-- DERPACE_CUSTOM_SPELL_JSON_BEGIN";
         private const string SqlJsonEndMarker = "-- DERPACE_CUSTOM_SPELL_JSON_END";
 
@@ -315,7 +315,55 @@ namespace ACE.Server.Managers
             return true;
         }
 
-        public static bool TrySaveWorkshopJson(string json, string fileName, out string path, out int loaded, out string error)
+        public static IReadOnlyList<WorkshopSpellInfo> GetWorkshopCatalog(out uint nextUnusedId)
+        {
+            var definitions = ReadWorkshopDefinitions();
+            var spells = DatManager.PortalDat.SpellTable.Spells
+                .Where(entry => entry.Key >= FirstCustomSpellId && entry.Key <= LastCustomSpellId)
+                .OrderBy(entry => entry.Key)
+                .Select(entry =>
+                {
+                    definitions.TryGetValue(entry.Key, out var definition);
+                    return new WorkshopSpellInfo
+                    {
+                        Id = entry.Key,
+                        Name = entry.Value?.Name ?? $"Spell {entry.Key}",
+                        TemplateId = definition?.TemplateId,
+                        SourceFile = definition?.SourceFile,
+                        CanEdit = definition != null
+                    };
+                })
+                .ToList();
+
+            TryGetNextUnusedCustomSpellId(FirstCustomSpellId, out nextUnusedId);
+            return spells;
+        }
+
+        public static bool TryCreateWorkshopEditDraft(uint targetId, out string json, out string error)
+        {
+            json = null;
+            error = null;
+
+            var definitions = ReadWorkshopDefinitions();
+            if (!definitions.TryGetValue(targetId, out var definition))
+            {
+                error = $"Custom spell {targetId} does not have an editable JSON definition in {ContentDir}.";
+                return false;
+            }
+
+            var dbSpell = DatabaseManager.World.GetCachedSpell(targetId);
+            var spellBase = new Spell(targetId)._spellBase;
+            if (dbSpell == null || spellBase == null)
+            {
+                error = $"Custom spell {targetId} is not loaded.";
+                return false;
+            }
+
+            json = "{\n  \"CustomSpells\": [\n" + IndentJson(CreateExportJson(definition.TemplateId, targetId, spellBase, dbSpell), 4) + "\n  ]\n}";
+            return true;
+        }
+
+        public static bool TrySaveWorkshopJson(string json, string fileName, bool allowOverwrite, out string path, out int loaded, out string error)
         {
             path = null;
             loaded = 0;
@@ -333,6 +381,7 @@ namespace ACE.Server.Managers
                 if (entries.Count == 0)
                     throw new InvalidOperationException("Add at least one spell entry or a CustomSpells array.");
 
+                var targetIds = new HashSet<uint>();
                 foreach (var entry in entries)
                 {
                     if (!TryGet(entry, "Template", out var templateElement) || !TryReadSpellId(templateElement, out var templateId) ||
@@ -340,6 +389,10 @@ namespace ACE.Server.Managers
                         throw new InvalidOperationException("Every entry needs a valid existing Template spell.");
                     if (!TryGet(entry, "Id", out var idElement) || !TryReadSpellId(idElement, out var targetId) || targetId < FirstCustomSpellId || targetId > LastCustomSpellId)
                         throw new InvalidOperationException($"Every Id must be between {FirstCustomSpellId} and {LastCustomSpellId}.");
+                    if (!targetIds.Add(targetId))
+                        throw new InvalidOperationException($"Spell ID {targetId} appears more than once in this JSON.");
+                    if (!allowOverwrite && (DatManager.PortalDat.SpellTable.Spells.ContainsKey(targetId) || DatabaseManager.World.GetCachedSpell(targetId) != null))
+                        throw new InvalidOperationException($"Spell ID {targetId} is already in use. Load it from the catalog and explicitly enable overwrite to edit it.");
                 }
 
                 EnsureContentDirectory();
@@ -347,6 +400,19 @@ namespace ACE.Server.Managers
                 if (!safeName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) safeName += ".json";
                 foreach (var c in Path.GetInvalidFileNameChars()) safeName = safeName.Replace(c, '_');
                 path = Path.Combine(ContentDir, safeName);
+                if (File.Exists(path))
+                {
+                    if (!allowOverwrite)
+                        throw new InvalidOperationException($"{safeName} already exists. Choose another filename or explicitly enable overwrite.");
+
+                    using var existingDoc = JsonDocument.Parse(File.ReadAllText(path), JsonOptions);
+                    var existingIds = GetWorkshopEntries(existingDoc.RootElement)
+                        .Select(entry => TryGet(entry, "Id", out var element) && TryReadSpellId(element, out var id) ? id : 0)
+                        .Where(id => id != 0)
+                        .ToHashSet();
+                    if (!existingIds.SetEquals(targetIds))
+                        throw new InvalidOperationException($"Refusing to replace {safeName}: it defines a different set of spell IDs. Use a new override filename instead.");
+                }
                 File.WriteAllText(path, JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true }), new UTF8Encoding(false));
                 loaded = Reload();
                 return true;
@@ -356,6 +422,53 @@ namespace ACE.Server.Managers
                 error = ex.Message;
                 return false;
             }
+        }
+
+        private static Dictionary<uint, WorkshopSpellDefinition> ReadWorkshopDefinitions()
+        {
+            EnsureContentDirectory();
+            var definitions = new Dictionary<uint, WorkshopSpellDefinition>();
+
+            foreach (var path in Directory.GetFiles(ContentDir, "*.json", SearchOption.TopDirectoryOnly).OrderBy(value => value))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(path), JsonOptions);
+                    foreach (var entry in GetWorkshopEntries(doc.RootElement))
+                    {
+                        if (!TryGet(entry, "Id", out var idElement) || !TryReadSpellId(idElement, out var id) ||
+                            !TryGet(entry, "Template", out var templateElement) || !TryReadSpellId(templateElement, out var templateId))
+                            continue;
+
+                        definitions[id] = new WorkshopSpellDefinition
+                        {
+                            TemplateId = templateId,
+                            SourceFile = Path.GetFileName(path)
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.Warn($"CustomSpellManager: Could not catalog '{Path.GetFileName(path)}': {ex.Message}");
+                }
+            }
+
+            return definitions;
+        }
+
+        public sealed class WorkshopSpellInfo
+        {
+            public uint Id { get; set; }
+            public string Name { get; set; }
+            public uint? TemplateId { get; set; }
+            public string SourceFile { get; set; }
+            public bool CanEdit { get; set; }
+        }
+
+        private sealed class WorkshopSpellDefinition
+        {
+            public uint TemplateId { get; set; }
+            public string SourceFile { get; set; }
         }
 
         private static IEnumerable<JsonElement> GetWorkshopEntries(JsonElement root)

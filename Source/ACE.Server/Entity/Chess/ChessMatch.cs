@@ -567,7 +567,10 @@ namespace ACE.Server.Entity.Chess
             heading += color == ChessColor.Black ? 180u : 0u;
             heading %= 360;
 
-            frame.Origin += new Vector3(coord.X - 3.5f, coord.Y - 3.5f, 0.0f);
+            var squareOffset = new Vector3(coord.X - 3.5f, coord.Y - 3.5f, 0.0f);
+            frame.Origin += ChessBoard.IsAyanUlgrimChessboard
+                ? Vector3.Transform(squareOffset, frame.Orientation)
+                : squareOffset;
             frame.set_heading(heading);
         }
 

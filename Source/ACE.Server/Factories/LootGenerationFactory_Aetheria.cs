@@ -10,9 +10,9 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
-        private static WorldObject CreateAetheria(TreasureDeath profile, bool mutate = true)
+        private static WorldObject CreateAetheria(TreasureDeath profile, bool mutate = true, int requestedTier = 0)
         {
-            var wcid = AetheriaWcids.Roll(profile.Tier);
+            var wcid = LootWcidWeightManager.Roll("aetheria", requestedTier > 0 ? requestedTier : profile.Tier, AetheriaWcids.Roll(profile.Tier));
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)wcid);
 
@@ -29,9 +29,9 @@ namespace ACE.Server.Factories
             wo.IconOverlayId = IconOverlay_ItemMaxLevel[wo.ItemMaxLevel.Value - 1];
         }
 
-        private static WorldObject CreateCoalescedMana(TreasureDeath profile)
+        private static WorldObject CreateCoalescedMana(TreasureDeath profile, int requestedTier = 0)
         {
-            var wcid = CoalescedManaWcids.Roll(profile);
+            var wcid = LootWcidWeightManager.Roll("coalesced_mana", requestedTier > 0 ? requestedTier : profile.Tier, CoalescedManaWcids.Roll(profile));
 
             return WorldObjectFactory.CreateNewWorldObject((uint)wcid);
         }

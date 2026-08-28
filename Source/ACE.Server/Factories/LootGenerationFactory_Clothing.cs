@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using ACE.Common;
 using ACE.Database.Models.World;
@@ -188,7 +188,7 @@ namespace ACE.Server.Factories
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
         /// </summary>
-        private static WorldObject CreateArmor(TreasureDeath profile, bool isMagical, bool isArmor)
+        private static WorldObject CreateArmor(TreasureDeath profile, bool isMagical, bool isArmor, int requestedTier = 0)
         {
             var itemType = isArmor ? TreasureItemType.Armor : TreasureItemType.Clothing;
             var treasureRoll = new TreasureRoll(itemType);
@@ -196,10 +196,10 @@ namespace ACE.Server.Factories
             if (isArmor)
             {
                 treasureRoll.ArmorType = ArmorTypeChance.Roll(profile.Tier);
-                treasureRoll.Wcid = ArmorWcids.Roll(profile, ref treasureRoll.ArmorType);
+                treasureRoll.Wcid = LootWcidWeightManager.Roll("armor", requestedTier > 0 ? requestedTier : profile.Tier, ArmorWcids.Roll(profile, ref treasureRoll.ArmorType));
             }
             else
-                treasureRoll.Wcid = ClothingWcids.Roll(profile);
+                treasureRoll.Wcid = LootWcidWeightManager.Roll("clothing", requestedTier > 0 ? requestedTier : profile.Tier, ClothingWcids.Roll(profile));
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
             treasureRoll.BaseArmorLevel = wo.ArmorLevel ?? 0;
@@ -1151,9 +1151,9 @@ namespace ACE.Server.Factories
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
         /// </summary>
-        private static WorldObject CreateCloak(TreasureDeath profile, bool mutate = true)
+        private static WorldObject CreateCloak(TreasureDeath profile, bool mutate = true, int requestedTier = 0)
         {
-            var cloakWeenie = CloakWcids.Roll();
+            var cloakWeenie = LootWcidWeightManager.Roll("cloak", requestedTier > 0 ? requestedTier : profile.Tier, CloakWcids.Roll());
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)cloakWeenie);
 

@@ -285,14 +285,16 @@ namespace ACE.Server.Factories
             return roll != null && !string.IsNullOrWhiteSpace(roll.ForcedWeaponMutator);
         }
 
-        public static WorldObject CreateMeleeWeapon(TreasureDeath profile, bool isMagical, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null)
+        public static WorldObject CreateMeleeWeapon(TreasureDeath profile, bool isMagical, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null, int requestedTier = 0)
         {
             var tierContext = LootTierManager.Resolve(profile);
             profile = tierContext.Profile;
             var treasureRoll = new TreasureRoll(TreasureItemType.Weapon);
             treasureRoll.WeaponType = forcedWeaponType ?? WeaponTypeChance.MeleeChances.Roll();
             treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
-            treasureRoll.Wcid = WeaponWcids.Roll(profile, ref treasureRoll.WeaponType);
+            treasureRoll.Wcid = LootWcidWeightManager.Roll("melee", requestedTier > 0 ? requestedTier : tierContext.RequestedTier, WeaponWcids.Roll(profile, ref treasureRoll.WeaponType), out var customMutationType);
+            if (customMutationType.HasValue)
+                treasureRoll.WeaponType = customMutationType.Value;
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
             MutateMeleeWeapon(wo, profile, isMagical, treasureRoll);

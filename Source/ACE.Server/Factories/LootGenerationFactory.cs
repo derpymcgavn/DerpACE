@@ -91,7 +91,7 @@ namespace ACE.Server.Factories
                     // extra roll for mundane:
                     // https://asheron.fandom.com/wiki/Announcements_-_2010/04_-_Shedding_Skin :: May 5th, 2010 entry
                     // aetheria and coalesced mana were handled in here
-                    lootWorldObject = LootTierManager.Apply(TryRollMundaneAddon(generationProfile), tierContext);
+                    lootWorldObject = LootTierManager.Apply(TryRollMundaneAddon(generationProfile, tierContext.RequestedTier), tierContext);
 
                     if (lootWorldObject != null)
                         loot.Add(lootWorldObject);
@@ -109,7 +109,7 @@ namespace ACE.Server.Factories
         {
             var tierContext = LootTierManager.Resolve(treasureDeath);
             var effectiveProfile = tierContext.Profile;
-            var treasureRoll = RollWcid(effectiveProfile, category, treasureItemType);
+            var treasureRoll = RollWcid(effectiveProfile, category, treasureItemType, tierContext.RequestedTier);
 
             if (treasureRoll == null)
                 return null;
@@ -133,7 +133,7 @@ namespace ACE.Server.Factories
             // using normal tier-based mutation for all item statistics.
             for (var attempt = 0; attempt < 3; attempt++)
             {
-                var roll = RollWcid(profile, TreasureItemCategory.MagicItem, TreasureItemType.Weapon);
+                var roll = RollWcid(profile, TreasureItemCategory.MagicItem, TreasureItemType.Weapon, tierContext.RequestedTier);
                 if (roll == null)
                     return null;
 
@@ -151,7 +151,7 @@ namespace ACE.Server.Factories
 
             return null;
         }
-        private static TreasureRoll RollWcid(TreasureDeath treasureDeath, TreasureItemCategory category, TreasureItemType treasureItemType = TreasureItemType.Undef)
+        private static TreasureRoll RollWcid(TreasureDeath treasureDeath, TreasureItemCategory category, TreasureItemType treasureItemType = TreasureItemType.Undef, int requestedTier = 0)
         {
             if (treasureItemType == TreasureItemType.Undef)
             {
@@ -280,6 +280,14 @@ namespace ACE.Server.Factories
 
                     treasureRoll.Wcid = WeenieClassName.ace49485_encapsulatedspirit;
                     break;
+            }
+
+            var customPool = LootWcidWeightManager.ResolvePool(treasureItemType, treasureRoll.WeaponType);
+            if (customPool != null)
+            {
+                treasureRoll.Wcid = LootWcidWeightManager.Roll(customPool, requestedTier > 0 ? requestedTier : treasureDeath.Tier, treasureRoll.Wcid, out var customMutationType);
+                if (customMutationType.HasValue)
+                    treasureRoll.WeaponType = customMutationType.Value;
             }
             return treasureRoll;
         }
@@ -459,18 +467,18 @@ namespace ACE.Server.Factories
             return wo;
         }
 
-        private static WorldObject TryRollMundaneAddon(TreasureDeath profile)
+        private static WorldObject TryRollMundaneAddon(TreasureDeath profile, int requestedTier = 0)
         {
             // coalesced mana only dropped in tiers 1-4
             if (profile.Tier <= 4)
-                return TryRollCoalescedMana(profile);
+                return TryRollCoalescedMana(profile, requestedTier);
 
             // aetheria dropped in tiers 5+
             else
-                return TryRollAetheria(profile);
+                return TryRollAetheria(profile, requestedTier);
         }
 
-        private static WorldObject TryRollCoalescedMana(TreasureDeath profile)
+        private static WorldObject TryRollCoalescedMana(TreasureDeath profile, int requestedTier = 0)
         {
             // 2% chance in here, which turns out to be less per corpse w/ MundaneItemChance > 0,
             // when the outer MundaneItemChance roll is factored in
@@ -479,12 +487,12 @@ namespace ACE.Server.Factories
             var rng = ThreadSafeRandom.Next(0.0f, 1.0f);
 
             if (rng < 0.02f)
-                return CreateCoalescedMana(profile);
+                return CreateCoalescedMana(profile, requestedTier);
             else
                 return null;
         }
 
-        private static WorldObject TryRollAetheria(TreasureDeath profile)
+        private static WorldObject TryRollAetheria(TreasureDeath profile, int requestedTier = 0)
         {
             var aetheria_drop_rate = (float)PropertyManager.GetDouble("aetheria_drop_rate").Item;
 
@@ -500,7 +508,7 @@ namespace ACE.Server.Factories
             var rng = ThreadSafeRandom.Next(0.0f, 1.0f * dropRateMod);
 
             if (rng < 0.02f)
-                return CreateAetheria(profile);
+                return CreateAetheria(profile, requestedTier: requestedTier);
             else
                 return null;
         }
@@ -986,23 +994,23 @@ namespace ACE.Server.Factories
                     break;
 
                 case TreasureItemType.Armor:
-                    wo = CreateArmor(profile, isMagical, true);
+                    wo = CreateArmor(profile, isMagical, true, tierContext.RequestedTier);
                     break;
 
                 case TreasureItemType.Clothing:
-                    wo = CreateArmor(profile, isMagical, false);
+                    wo = CreateArmor(profile, isMagical, false, tierContext.RequestedTier);
                     break;
 
                 case TreasureItemType.Cloak:
-                    wo = CreateCloak(profile);
+                    wo = CreateCloak(profile, requestedTier: tierContext.RequestedTier);
                     break;
 
                 case TreasureItemType.Weapon:
-                    wo = CreateWeapon(profile, isMagical);
+                    wo = CreateWeapon(profile, isMagical, requestedTier: tierContext.RequestedTier);
                     break;
 
                 case TreasureItemType.Jewelry:
-                    wo = CreateJewelry(profile, isMagical);
+                    wo = CreateJewelry(profile, isMagical, tierContext.RequestedTier);
                     break;
 
                 case TreasureItemType.ArtObject:

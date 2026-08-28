@@ -22,6 +22,7 @@ namespace ACE.Database
         public readonly ShardDatabase BaseDatabase;
 
         private readonly BlockingCollection<Task> _queue = new BlockingCollection<Task>();
+        private readonly BlockingCollection<Task> _loginQueue = new BlockingCollection<Task>();
 
         private Thread _workerThread;
 
@@ -39,17 +40,25 @@ namespace ACE.Database
 
         public void Stop()
         {
+            _loginQueue.CompleteAdding();
             _queue.CompleteAdding();
             _workerThread.Join();
         }
 
         private void DoWork()
         {
-            while (!_queue.IsAddingCompleted)
+            var queues = new[] { _loginQueue, _queue };
+            while (!_loginQueue.IsCompleted || !_queue.IsCompleted)
             {
                 try
                 {
-                    Task t = _queue.Take();
+                    Task t;
+                    if (!_loginQueue.TryTake(out t))
+                    {
+                        var queueIndex = BlockingCollection<Task>.TakeFromAny(queues, out t);
+                        if (queueIndex < 0 || t == null)
+                            break;
+                    }
 
                     try
                     {
@@ -77,7 +86,7 @@ namespace ACE.Database
         }
 
 
-        public int QueueCount => _queue.Count;
+        public int QueueCount => _loginQueue.Count + _queue.Count;
 
         public void GetCurrentQueueWaitTime(Action<TimeSpan> callback)
         {
@@ -175,7 +184,7 @@ namespace ACE.Database
 
         public void GetPossessedBiotasInParallel(uint id, Action<PossessedBiotas> callback)
         {
-            _queue.Add(new Task(() =>
+            _loginQueue.Add(new Task(() =>
             {
                 var c = BaseDatabase.GetPossessedBiotasInParallel(id);
                 callback?.Invoke(c);

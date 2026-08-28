@@ -51,6 +51,8 @@ namespace ACE.Server.Managers
         public string Type { get; set; }
         public string Text { get; set; }
         public string Effect { get; set; }
+        public string Sound { get; set; }
+        public double Volume { get; set; } = 1.0;
         public string Channel { get; set; }
         public uint WeenieClassId { get; set; }
         public int Count { get; set; }
@@ -136,6 +138,11 @@ namespace ACE.Server.Managers
                     else if (string.Equals(action.Type, "effect", StringComparison.OrdinalIgnoreCase))
                     {
                         if (!Enum.TryParse<PlayScript>(action.Effect, true, out var playScript) || playScript == PlayScript.Invalid || !Enum.IsDefined(typeof(PlayScript), playScript)) errors.Add($"Rule {rule.Id}: unknown effect '{action.Effect}'.");
+                    }
+                    else if (string.Equals(action.Type, "sound", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!Enum.TryParse<Sound>(action.Sound, true, out var sound) || !Enum.IsDefined(typeof(Sound), sound)) errors.Add($"Rule {rule.Id}: unknown sound event '{action.Sound}'.");
+                        if (action.Volume < 0 || action.Volume > 1) errors.Add($"Rule {rule.Id}: sound volume must be 0.0-1.0.");
                     }
                     else if (string.Equals(action.Type, "taunt", StringComparison.OrdinalIgnoreCase))
                     {
@@ -414,6 +421,8 @@ namespace ACE.Server.Managers
                     boss.EnqueueBroadcast(new GameMessageHearSpeech(text, boss.Name, boss.Guid.Full, ChatMessageType.Speech), WorldObject.LocalBroadcastRange);
                 else if (string.Equals(action.Type, "effect", StringComparison.OrdinalIgnoreCase) && Enum.TryParse<PlayScript>(action.Effect, true, out var effect))
                     boss.ApplyVisualEffects(effect);
+                else if (string.Equals(action.Type, "sound", StringComparison.OrdinalIgnoreCase) && Enum.TryParse<Sound>(action.Sound, true, out var sound))
+                    boss.EnqueueBroadcast(new GameMessageSound(boss.Guid, sound, (float)Math.Clamp(action.Volume, 0, 1)), WorldObject.LocalBroadcastRange);
                 else if (string.Equals(action.Type, "maintain_minions", StringComparison.OrdinalIgnoreCase))
                     MaintainMinions(boss, action);
                 else if (string.Equals(action.Type, "mirror_minions", StringComparison.OrdinalIgnoreCase))

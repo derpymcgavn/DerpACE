@@ -104,17 +104,20 @@ namespace ACE.Server.Managers
                 return;
             }
 
-            var start = DateTime.UtcNow;
+            var loginTimer = Stopwatch.StartNew();
+            var shardQueueDepth = DatabaseManager.Shard.QueueCount;
             DatabaseManager.Shard.GetPossessedBiotasInParallel(character.Id, biotas =>
             {
-                log.DebugFormat("GetPossessedBiotasInParallel for {0} took {1:N0} ms", character.Name, (DateTime.UtcNow - start).TotalMilliseconds);
-
-                ActionQueue.EnqueueAction(new ActionEventDelegate(() => DoPlayerEnterWorld(session, character, offlinePlayer.Biota, biotas)));
+                var databaseElapsedMs = loginTimer.Elapsed.TotalMilliseconds;
+                ActionQueue.EnqueueAction(new ActionEventDelegate(() =>
+                    DoPlayerEnterWorld(session, character, offlinePlayer.Biota, biotas, loginTimer, databaseElapsedMs, shardQueueDepth)));
             });
         }
 
-        private static void DoPlayerEnterWorld(Session session, Character character, Biota playerBiota, PossessedBiotas possessedBiotas)
+        private static void DoPlayerEnterWorld(Session session, Character character, Biota playerBiota, PossessedBiotas possessedBiotas, Stopwatch loginTimer, double databaseElapsedMs, int shardQueueDepth)
         {
+            var worldQueueElapsedMs = loginTimer.Elapsed.TotalMilliseconds - databaseElapsedMs;
+            var hydrationStartMs = loginTimer.Elapsed.TotalMilliseconds;
             Player player;
 
             Player.HandleNoLogLandblock(playerBiota, out var playerLoggedInOnNoLogLandblock);
@@ -161,7 +164,7 @@ namespace ACE.Server.Managers
                 player = new Player(playerBiota, possessedBiotas.Inventory, possessedBiotas.WieldedItems, character, session);
 
             session.SetPlayer(player);
-
+            var hydrationElapsedMs = loginTimer.Elapsed.TotalMilliseconds - hydrationStartMs;
             if (stripAdminProperties) // continue stripping properties
             {
                 player.CloakStatus = CloakStatus.Undef;
@@ -221,8 +224,11 @@ namespace ACE.Server.Managers
             if (olthoiPlayerReturnedToLifestone)
                 session.Player.Location = new Position(session.Player.Sanctuary);
 
+            var initializationStartMs = loginTimer.Elapsed.TotalMilliseconds;
             session.Player.PlayerEnterWorld();
+            var initializationElapsedMs = loginTimer.Elapsed.TotalMilliseconds - initializationStartMs;
 
+            var placementStartMs = loginTimer.Elapsed.TotalMilliseconds;
             var success = LandblockManager.AddObject(session.Player, true);
             if (!success)
             {
@@ -243,6 +249,14 @@ namespace ACE.Server.Managers
                 });
                 actionChain.EnqueueChain();
             }
+
+            var placementElapsedMs = loginTimer.Elapsed.TotalMilliseconds - placementStartMs;
+            loginTimer.Stop();
+            var loginTiming = $"[LOGIN PERF] {character.Name}: total {loginTimer.Elapsed.TotalMilliseconds:N0} ms, shard DB {databaseElapsedMs:N0} ms (queue depth {shardQueueDepth}), world queue {worldQueueElapsedMs:N0} ms, hydration {hydrationElapsedMs:N0} ms ({possessedBiotas.Inventory.Count} inventory, {possessedBiotas.WieldedItems.Count} wielded), initialization {initializationElapsedMs:N0} ms, placement {placementElapsedMs:N0} ms.";
+            if (loginTimer.Elapsed.TotalMilliseconds >= 2_000)
+                log.Warn(loginTiming);
+            else
+                log.Debug(loginTiming);
 
             // These warnings are set by DDD_InterrogationResponse
             if ((session.DatWarnCell || session.DatWarnLanguage || session.DatWarnPortal || session.DatWarnHighRes) && PropertyManager.GetBool("show_dat_warning").Item)

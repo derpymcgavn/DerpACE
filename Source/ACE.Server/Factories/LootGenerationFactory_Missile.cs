@@ -14,14 +14,16 @@ namespace ACE.Server.Factories
 {
     public static partial class LootGenerationFactory
     {
-        public static WorldObject CreateMissileWeapon(TreasureDeath profile, bool isMagical, bool mutate = true, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null)
+        public static WorldObject CreateMissileWeapon(TreasureDeath profile, bool isMagical, bool mutate = true, TreasureWeaponType? forcedWeaponType = null, string forcedWeaponMutator = null, int requestedTier = 0)
         {
             var tierContext = LootTierManager.Resolve(profile);
             profile = tierContext.Profile;
             var treasureRoll = new TreasureRoll(TreasureItemType.Weapon);
             treasureRoll.WeaponType = forcedWeaponType ?? WeaponTypeChance.MissileChances.Roll();
             treasureRoll.ForcedWeaponMutator = forcedWeaponMutator;
-            treasureRoll.Wcid = WeaponWcids.Roll(profile, ref treasureRoll.WeaponType);
+            treasureRoll.Wcid = LootWcidWeightManager.Roll("missile", requestedTier > 0 ? requestedTier : tierContext.RequestedTier, WeaponWcids.Roll(profile, ref treasureRoll.WeaponType), out var customMutationType);
+            if (customMutationType.HasValue)
+                treasureRoll.WeaponType = customMutationType.Value;
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
 

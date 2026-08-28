@@ -28,14 +28,14 @@ namespace ACE.Server.Factories.Tables
                 throw new ArgumentNullException(nameof(source));
 
             EnsureLoaded();
-            if (source.Tier <= 8)
-                return new LootTierContext(source, source.Tier, null);
-
             definitions.TryGetValue(source.Tier, out var definition);
             if (definition?.Enabled != true)
                 definition = null;
 
-            var baseTier = Math.Clamp(definition?.BaseTier ?? 8, 1, 8);
+            if (source.Tier <= 8 && definition == null)
+                return new LootTierContext(source, source.Tier, null);
+
+            var baseTier = Math.Clamp(definition?.BaseTier ?? (source.Tier <= 8 ? source.Tier : 8), 1, 8);
             var effective = Clone(source);
             effective.Tier = baseTier;
             effective.LootQualityMod = Math.Max(0.0f, source.LootQualityMod + (definition?.LootQualityBonus ?? 0.0f));
@@ -46,7 +46,11 @@ namespace ACE.Server.Factories.Tables
         public static IReadOnlyList<LootTierDefinition> GetDefinitions()
         {
             EnsureLoaded();
-            return definitions.Values.OrderBy(entry => entry.Tier).Select(Clone).ToList();
+            var result = definitions.Values.ToDictionary(entry => entry.Tier, Clone);
+            for (var tier = 1; tier <= 8; tier++)
+                if (!result.ContainsKey(tier))
+                    result[tier] = new LootTierDefinition { Tier = tier, Name = $"ACE Tier {tier}", Enabled = true, BaseTier = tier };
+            return result.Values.OrderBy(entry => entry.Tier).ToList();
         }
 
         public static int MaximumTier
@@ -71,14 +75,14 @@ namespace ACE.Server.Factories.Tables
         {
             error = null;
             var entries = requested?.Select(Clone).ToList() ?? new List<LootTierDefinition>();
-            if (entries.Count > 92)
+            if (entries.Count > 100)
             {
-                error = "No more than 92 custom loot tiers may be configured.";
+                error = "No more than 100 loot tiers may be configured.";
                 return false;
             }
             if (entries.GroupBy(entry => entry.Tier).Any(group => group.Count() > 1))
             {
-                error = "Each custom tier number must be unique.";
+                error = "Each loot tier number must be unique.";
                 return false;
             }
 
@@ -86,9 +90,9 @@ namespace ACE.Server.Factories.Tables
             {
                 entry.Name = string.IsNullOrWhiteSpace(entry.Name) ? $"Tier {entry.Tier}" : entry.Name.Trim();
                 entry.Description = entry.Description?.Trim() ?? "";
-                if (entry.Tier < 9 || entry.Tier > 100)
+                if (entry.Tier < 1 || entry.Tier > 100)
                 {
-                    error = $"Custom tier {entry.Tier} must be between 9 and 100.";
+                    error = $"Loot tier {entry.Tier} must be between 1 and 100.";
                     return false;
                 }
                 if (entry.BaseTier < 1 || entry.BaseTier > 8)
@@ -161,11 +165,14 @@ namespace ACE.Server.Factories.Tables
                 item.WieldSkillType = 1;
             }
 
-            var label = string.IsNullOrWhiteSpace(tier.Name) ? $"Tier {tier.Tier}" : tier.Name;
-            var note = $"\n\nEndgame Loot: {label} (T{tier.Tier}, inherited from T{tier.BaseTier}).";
-            if (!string.IsNullOrWhiteSpace(tier.Description))
-                note += $" {tier.Description}";
-            item.LongDesc = (item.LongDesc ?? "") + note;
+            if (tier.Tier > 8)
+            {
+                var label = string.IsNullOrWhiteSpace(tier.Name) ? $"Tier {tier.Tier}" : tier.Name;
+                var note = $"\n\nEndgame Loot: {label} (T{tier.Tier}, inherited from T{tier.BaseTier}).";
+                if (!string.IsNullOrWhiteSpace(tier.Description))
+                    note += $" {tier.Description}";
+                item.LongDesc = (item.LongDesc ?? "") + note;
+            }
             return item;
         }
 
@@ -196,7 +203,7 @@ namespace ACE.Server.Factories.Tables
                         var document = JsonSerializer.Deserialize<LootTierDocument>(File.ReadAllText(FilePath), JsonOptions);
                         foreach (var entry in document?.Tiers ?? new List<LootTierDefinition>())
                         {
-                            if (entry.Tier >= 9 && entry.Tier <= 100 && entry.BaseTier >= 1 && entry.BaseTier <= 8)
+                            if (entry.Tier >= 1 && entry.Tier <= 100 && entry.BaseTier >= 1 && entry.BaseTier <= 8)
                                 next[entry.Tier] = Clone(entry);
                         }
                     }

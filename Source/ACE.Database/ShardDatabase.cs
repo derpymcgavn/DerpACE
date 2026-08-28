@@ -533,9 +533,48 @@ namespace ACE.Database
 
         public PossessedBiotas GetPossessedBiotasInParallel(uint id)
         {
-            var inventory = GetInventoryInParallel(id, true);
+            List<uint> inventoryIds;
+            List<uint> wieldedIds;
 
-            var wieldedItems = GetWieldedItemsInParallel(id);
+            using (var context = new ShardDbContext())
+            {
+                context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+                var roots = (from link in context.BiotaPropertiesIID
+                             join biota in context.Biota on link.ObjectId equals biota.Id
+                             where link.Value == id &&
+                                   (link.Type == (ushort)PropertyInstanceId.Container || link.Type == (ushort)PropertyInstanceId.Wielder)
+                             select new { link.ObjectId, link.Type, biota.WeenieType, biota.WeenieClassId })
+                    .ToList();
+
+                inventoryIds = roots
+                    .Where(root => root.Type == (ushort)PropertyInstanceId.Container)
+                    .Select(root => root.ObjectId)
+                    .ToList();
+                wieldedIds = roots
+                    .Where(root => root.Type == (ushort)PropertyInstanceId.Wielder)
+                    .Select(root => root.ObjectId)
+                    .ToList();
+
+                var containerIds = roots
+                    .Where(root => root.Type == (ushort)PropertyInstanceId.Container &&
+                                   (root.WeenieType == (int)WeenieType.Container || IsFoci(root.WeenieClassId)))
+                    .Select(root => root.ObjectId)
+                    .ToArray();
+
+                if (containerIds.Length > 0)
+                {
+                    var nestedIds = context.BiotaPropertiesIID
+                        .Where(link => link.Type == (ushort)PropertyInstanceId.Container && containerIds.Contains(link.Value))
+                        .Select(link => link.ObjectId)
+                        .ToList();
+                    inventoryIds.AddRange(nestedIds);
+                }
+            }
+
+            var biotasById = GetBiotas(inventoryIds.Concat(wieldedIds)).ToDictionary(biota => biota.Id);
+            var inventory = inventoryIds.Distinct().Where(biotasById.ContainsKey).Select(itemId => biotasById[itemId]).ToList();
+            var wieldedItems = wieldedIds.Distinct().Where(biotasById.ContainsKey).Select(itemId => biotasById[itemId]).ToList();
 
             return new PossessedBiotas(inventory, wieldedItems);
         }

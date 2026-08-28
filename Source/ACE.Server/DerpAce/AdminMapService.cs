@@ -290,6 +290,25 @@ namespace ACE.Server.DerpAce
                     return;
                 }
 
+                if (path.Equals("/api/loot/wcid-weights", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+
+                    var pool = context.Request.QueryString["pool"] ?? "melee";
+                    if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, BuildLootWcidWeightSnapshot(pool));
+                    else if (context.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+                        WriteJson(context, HandleLootWcidWeightUpdate(ReadJsonBody<AdminLootWcidWeightRequest>(context), GetValidSession(context)?.AccountName ?? "map-token"));
+                    else
+                        WriteJson(context, new { ok = false, error = "Use GET or POST for loot WCID weights." });
+                    return;
+                }
+
                 if (path.Equals("/api/loot/simulate", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -306,6 +325,26 @@ namespace ACE.Server.DerpAce
                     return;
                 }
 
+                if (path.Equals("/api/spells/catalog", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+
+                    var spells = CustomSpellManager.GetWorkshopCatalog(out var nextUnusedId);
+                    WriteJson(context, new
+                    {
+                        ok = true,
+                        firstCustomId = CustomSpellManager.FirstCustomSpellId,
+                        lastCustomId = CustomSpellManager.LastCustomSpellId,
+                        nextUnusedId,
+                        spells
+                    });
+                    return;
+                }
                 if (path.Equals("/api/spells/draft", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -316,9 +355,13 @@ namespace ACE.Server.DerpAce
                     }
                     string error = null;
                     string json = null;
-                    if (!uint.TryParse(context.Request.QueryString["template"], out var templateId) ||
-                        !uint.TryParse(context.Request.QueryString["id"], out var targetId) ||
-                        !CustomSpellManager.TryCreateWorkshopDraft(templateId, targetId, out json, out error))
+                    var editText = context.Request.QueryString["edit"];
+                    var ok = uint.TryParse(editText, out var editId)
+                        ? CustomSpellManager.TryCreateWorkshopEditDraft(editId, out json, out error)
+                        : uint.TryParse(context.Request.QueryString["template"], out var templateId) &&
+                          uint.TryParse(context.Request.QueryString["id"], out var targetId) &&
+                          CustomSpellManager.TryCreateWorkshopDraft(templateId, targetId, out json, out error);
+                    if (!ok)
                     {
                         context.Response.StatusCode = 400;
                         WriteJson(context, new { ok = false, error = error ?? "Template and custom spell ID are required." });
@@ -345,11 +388,39 @@ namespace ACE.Server.DerpAce
                     string savedPath = null;
                     string saveError = null;
                     var loaded = 0;
-                    var ok = request != null && CustomSpellManager.TrySaveWorkshopJson(request.Json, request.FileName, out savedPath, out loaded, out saveError);
+                    var ok = request != null && CustomSpellManager.TrySaveWorkshopJson(request.Json, request.FileName, request.AllowOverwrite, out savedPath, out loaded, out saveError);
                     if (!ok) context.Response.StatusCode = 400;
                     WriteJson(context, ok
                         ? new { ok = true, message = $"Saved {Path.GetFileName(savedPath)} and reloaded {loaded} custom spell definitions." }
                         : new { ok = false, error = saveError ?? "Invalid spell request." });
+                    return;
+                }
+                if (path.Equals("/api/sounds/table", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+
+                    WriteJson(context, BuildSoundTableSnapshot(context.Request.QueryString["did"], context.Request.QueryString["wcid"]));
+                    return;
+                }
+                if (path.Equals("/api/sounds/wave", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+
+                    if (!TryWriteDatWave(context, context.Request.QueryString["did"]))
+                    {
+                        context.Response.StatusCode = 404;
+                        WriteJson(context, new { ok = false, error = "Wave DID was not found in client_portal.dat." });
+                    }
                     return;
                 }
                 if (path.Equals("/api/boss/draft", StringComparison.OrdinalIgnoreCase))
@@ -892,6 +963,25 @@ namespace ACE.Server.DerpAce
             if (row == null)
                 return new { ok = false, error = "Boss profile not found." };
 
+            if (action == "remove")
+            {
+                if (row.Enabled)
+                    return new { ok = false, error = "Disable this profile before removing it." };
+
+                var hasActiveBoss = LandblockManager.GetLoadedLandblocks()
+                    .Any(landblock => landblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>()
+                        .Any(creature => creature.WeenieClassId == row.WeenieClassId));
+                if (hasActiveBoss)
+                    return new { ok = false, error = "Despawn every active boss using this profile before removing it." };
+
+                var removedWcid = row.WeenieClassId;
+                db.BossMechanicProfile.Remove(row);
+                db.SaveChanges();
+                BossMechanicManager.Invalidate(removedWcid);
+                log.Warn($"[DerpACE AdminMap] {modifiedBy} removed boss profile {profileName} for WCID {removedWcid}.");
+                return new { ok = true, message = $"Removed boss profile '{profileName}'. Its creature weenie was not deleted." };
+            }
+
             switch (action)
             {
                 case "validate":
@@ -952,7 +1042,7 @@ namespace ACE.Server.DerpAce
                     break;
 
                 default:
-                    return new { ok = false, error = "Supported actions are create, validate, save, publish, rollback, set-enabled, and restore-published." };
+                    return new { ok = false, error = "Supported actions are create, validate, save, publish, rollback, set-enabled, restore-published, and remove." };
             }
 
             row.ModifiedBy = modifiedBy;
@@ -2603,6 +2693,97 @@ namespace ACE.Server.DerpAce
             }
         }
 
+        private static object BuildSoundTableSnapshot(string didText, string wcidText)
+        {
+            uint soundTableDid = 0;
+            uint wcid = 0;
+            string source = "SoundTable DID";
+
+            if (!string.IsNullOrWhiteSpace(didText))
+            {
+                if (!TryParseDataId(didText, out soundTableDid))
+                    return new { ok = false, error = "Enter a decimal or hexadecimal SoundTable DID." };
+            }
+            else if (uint.TryParse(wcidText, NumberStyles.Integer, CultureInfo.InvariantCulture, out wcid))
+            {
+                var weenie = DatabaseManager.World.GetCachedWeenie(wcid);
+                if (weenie == null)
+                    return new { ok = false, error = $"Boss WCID {wcid} was not found." };
+                if (weenie.PropertiesDID == null || !weenie.PropertiesDID.TryGetValue(PropertyDataId.SoundTable, out soundTableDid) || soundTableDid == 0)
+                    return new { ok = false, error = $"WCID {wcid} does not define PropertyDataId.SoundTable." };
+                source = $"{weenie.ClassName} (WCID {wcid})";
+            }
+            else
+                return new { ok = false, error = "Enter a boss WCID or SoundTable DID." };
+
+            if ((soundTableDid >> 24) != 0x20 || !DatManager.PortalDat.AllFiles.ContainsKey(soundTableDid))
+                return new { ok = false, error = $"0x{soundTableDid:X8} is not a SoundTable in client_portal.dat." };
+
+            try
+            {
+                var table = DatManager.PortalDat.ReadFromDat<SoundTable>(soundTableDid);
+                var clips = table.Data
+                    .OrderBy(pair => pair.Key)
+                    .SelectMany(pair =>
+                    {
+                        var sound = (Sound)pair.Key;
+                        var supported = Enum.IsDefined(typeof(Sound), sound);
+                        var eventName = supported ? sound.ToString() : $"Sound_{pair.Key:X2}";
+                        return pair.Value.Data.Select((clip, index) => new
+                        {
+                            eventName,
+                            supported,
+                            eventId = pair.Key,
+                            eventIdHex = $"0x{pair.Key:X2}",
+                            clip = index + 1,
+                            waveDid = clip.SoundId,
+                            waveDidHex = $"0x{clip.SoundId:X8}",
+                            clip.Priority,
+                            clip.Probability,
+                            clip.Volume
+                        });
+                    })
+                    .ToArray();
+
+                return new
+                {
+                    ok = true,
+                    source,
+                    wcid,
+                    soundTableDid,
+                    soundTableDidHex = $"0x{soundTableDid:X8}",
+                    eventCount = table.Data.Count,
+                    clipCount = clips.Length,
+                    clips
+                };
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"[DerpACE AdminMap] Failed to read SoundTable 0x{soundTableDid:X8}: {ex.Message}");
+                return new { ok = false, error = $"Unable to read SoundTable 0x{soundTableDid:X8}." };
+            }
+        }
+
+        private static bool TryWriteDatWave(HttpListenerContext context, string didText)
+        {
+            if (!TryParseDataId(didText, out var waveDid) || (waveDid >> 24) != 0x0A || !DatManager.PortalDat.AllFiles.ContainsKey(waveDid))
+                return false;
+
+            try
+            {
+                var wave = DatManager.PortalDat.ReadFromDat<Wave>(waveDid);
+                using var stream = new MemoryStream(wave.Data.Length + 64);
+                wave.ReadData(stream);
+                WriteBytes(context, stream.ToArray(), "audio/wav");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.Warn($"[DerpACE AdminMap] Failed to stream wave 0x{waveDid:X8}: {ex.Message}");
+                return false;
+            }
+        }
+
         private static string BuildBossMechanicsHelpHtml()
         {
             var playScriptOptions = string.Join(string.Empty, Enum.GetNames(typeof(ACE.Entity.Enum.PlayScript))
@@ -2618,11 +2799,11 @@ namespace ACE.Server.DerpAce
 <title>DerpACE Boss Operations</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0f10;--surface:#121719;--surface2:#182023;--line:#354146;--text:#edf2f3;--muted:#99a7ac;--green:#59c58c;--blue:#62aee1;--amber:#e4b95f;--red:#e06e6e}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer;background:#26343a;border:1px solid #45555b;border-radius:4px;padding:7px 10px}button:hover{border-color:var(--green)}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:#215239}.danger{background:#512727}.quiet{background:transparent}.topbar{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:#101517;position:sticky;top:0;z-index:4}.topbar h1{font-size:16px;margin:0}.topbar a{color:var(--blue);text-decoration:none}.topbar .status{margin-left:auto;color:var(--muted);max-width:55vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.layout{display:grid;grid-template-columns:260px minmax(440px,1fr) 340px;min-height:calc(100vh - 52px)}.rail,.ops{background:var(--surface);padding:12px;overflow:auto}.rail{border-right:1px solid var(--line)}.ops{border-left:1px solid var(--line)}.workspace{padding:16px;min-width:0}.toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.toolbar .push{margin-left:auto}.section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}.section:first-child{border-top:0;margin-top:0;padding-top:0}h2{font-size:14px;margin:0 0 10px}h3{font-size:12px;margin:0 0 8px;color:var(--muted);text-transform:uppercase}.field{display:grid;gap:4px;margin-bottom:9px}.field>span{font-size:10px;color:var(--muted);text-transform:uppercase}.field input,.field select,.field textarea{width:100%;background:#090d0e;border:1px solid #3b484d;border-radius:4px;padding:8px}.field textarea{resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.search{width:100%;background:#090d0e;border:1px solid #3b484d;border-radius:4px;padding:8px;margin-bottom:8px}.profileList{display:grid;gap:4px}.profileItem{width:100%;text-align:left;padding:8px;background:transparent;border-color:transparent}.profileItem:hover,.profileItem.active{background:#202a2e;border-color:#405056}.profileItem strong,.profileItem small{display:block}.profileItem small{color:var(--muted);margin-top:2px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:#68757a}.dot.live{background:var(--green)}.meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);margin:-4px 0 12px}.jsonEditor{width:100%;min-height:390px;background:#070a0b;border:1px solid #38464b;border-radius:4px;padding:11px;font:12px/1.5 Consolas,monospace;tab-size:2;resize:vertical}.ruleList{display:grid;gap:6px;margin-top:10px}.ruleCard{border:1px solid var(--line);border-radius:4px;background:var(--surface2)}.ruleCard summary{cursor:pointer;padding:9px;display:flex;gap:8px;align-items:center}.ruleCard summary strong{flex:1}.ruleBody{padding:0 9px 9px}.ruleBody textarea{width:100%;min-height:180px;background:#090d0e;border:1px solid #3b484d;color:var(--text);font:12px/1.45 Consolas,monospace;padding:8px}.ruleActions{display:flex;gap:6px;margin-top:7px}.quick{padding:10px;background:var(--surface2);border:1px solid var(--line);border-radius:4px}.hint,.empty{color:var(--muted)}.warning{color:var(--amber)}.error{color:var(--red)}.spawnBox{border:1px solid var(--line);padding:10px;border-radius:4px;background:#101618}.activeList{display:grid;gap:6px}.bossInstance{border-top:1px solid var(--line);padding-top:8px}.bossInstance:first-child{border-top:0}.bossInstance strong,.bossInstance small{display:block}.bossInstance small{color:var(--muted)}.bossInstance .health{height:5px;background:#293237;margin:6px 0}.bossInstance .health i{display:block;height:100%;background:var(--red)}.badge{font-size:10px;border:1px solid #48585e;padding:2px 5px;border-radius:3px;color:var(--muted)}dialog{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:6px;max-width:520px;width:calc(100% - 30px)}dialog::backdrop{background:rgba(0,0,0,.65)}@media(max-width:1050px){.layout{grid-template-columns:220px 1fr}.ops{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:16px}}@media(max-width:720px){.layout{display:block}.rail,.ops{border:0;border-bottom:1px solid var(--line)}.ops{display:block}.row{grid-template-columns:1fr}.status{display:none}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer;background:#26343a;border:1px solid #45555b;border-radius:4px;padding:7px 10px}button:hover{border-color:var(--green)}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:#215239}.danger{background:#512727}.quiet{background:transparent}.topbar{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:#101517;position:sticky;top:0;z-index:4}.topbar h1{font-size:16px;margin:0}.topbar a{color:var(--blue);text-decoration:none}.topbar .status{margin-left:auto;color:var(--muted);max-width:55vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.layout{display:grid;grid-template-columns:260px minmax(440px,1fr) 340px;min-height:calc(100vh - 52px)}.rail,.ops{background:var(--surface);padding:12px;overflow:auto}.rail{border-right:1px solid var(--line)}.ops{border-left:1px solid var(--line)}.workspace{padding:16px;min-width:0}.toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.toolbar .push{margin-left:auto}.section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}.section:first-child{border-top:0;margin-top:0;padding-top:0}h2{font-size:14px;margin:0 0 10px}h3{font-size:12px;margin:0 0 8px;color:var(--muted);text-transform:uppercase}.field{display:grid;gap:4px;margin-bottom:9px}.field>span{font-size:10px;color:var(--muted);text-transform:uppercase}.field input,.field select,.field textarea{width:100%;background:#090d0e;border:1px solid #3b484d;border-radius:4px;padding:8px}.field textarea{resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.search{width:100%;background:#090d0e;border:1px solid #3b484d;border-radius:4px;padding:8px;margin-bottom:8px}.profileList{display:grid;gap:4px}.profileItem{width:100%;text-align:left;padding:8px;background:transparent;border-color:transparent}.profileItem:hover,.profileItem.active{background:#202a2e;border-color:#405056}.profileItem strong,.profileItem small{display:block}.profileItem small{color:var(--muted);margin-top:2px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:#68757a}.dot.live{background:var(--green)}.meta{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);margin:-4px 0 12px}.jsonEditor{width:100%;min-height:390px;background:#070a0b;border:1px solid #38464b;border-radius:4px;padding:11px;font:12px/1.5 Consolas,monospace;tab-size:2;resize:vertical}.ruleList{display:grid;gap:6px;margin-top:10px}.ruleCard{border:1px solid var(--line);border-radius:4px;background:var(--surface2)}.ruleCard summary{cursor:pointer;padding:9px;display:flex;gap:8px;align-items:center}.ruleCard summary strong{flex:1}.ruleBody{padding:0 9px 9px}.ruleBody textarea{width:100%;min-height:180px;background:#090d0e;border:1px solid #3b484d;color:var(--text);font:12px/1.45 Consolas,monospace;padding:8px}.ruleActions{display:flex;gap:6px;margin-top:7px}.quick{padding:10px;background:var(--surface2);border:1px solid var(--line);border-radius:4px}.hint,.empty{color:var(--muted)}.warning{color:var(--amber)}.error{color:var(--red)}.spawnBox{border:1px solid var(--line);padding:10px;border-radius:4px;background:#101618}.activeList{display:grid;gap:6px}.soundPlayer{width:100%;height:34px;margin:2px 0 8px}.soundList{display:grid;gap:4px;max-height:340px;overflow:auto}.soundClip{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;align-items:center;padding:7px;border:1px solid var(--line);border-radius:4px;background:#0d1214}.soundClip strong,.soundClip small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.soundClip small{color:var(--muted)}.soundClip .clipActions{display:flex;gap:4px;grid-column:2;grid-row:1/3}.soundClip .clipActions button{padding:5px 7px}.bossInstance{border-top:1px solid var(--line);padding-top:8px}.bossInstance:first-child{border-top:0}.bossInstance strong,.bossInstance small{display:block}.bossInstance small{color:var(--muted)}.bossInstance .health{height:5px;background:#293237;margin:6px 0}.bossInstance .health i{display:block;height:100%;background:var(--red)}.badge{font-size:10px;border:1px solid #48585e;padding:2px 5px;border-radius:3px;color:var(--muted)}dialog{background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:6px;max-width:520px;width:calc(100% - 30px)}dialog::backdrop{background:rgba(0,0,0,.65)}@media(max-width:1050px){.layout{grid-template-columns:220px 1fr}.ops{grid-column:1/-1;border-left:0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:16px}}@media(max-width:720px){.layout{display:block}.rail,.ops{border:0;border-bottom:1px solid var(--line)}.ops{display:block}.row{grid-template-columns:1fr}.status{display:none}}
 </style>
 </head>
 <body>
-<header class="topbar"><h1>Boss Operations</h1><a id="mapLink" href="/">Admin Map</a><a id="spellLink" href="/spell-workshop">Spell Workshop</a><span id="globalStatus" class="status">Loading profiles...</span></header>
+<header class="topbar"><h1>Boss Operations</h1><a id="mapLink" href="/">Admin Map</a><a id="spellLink" href="/spell-workshop">Spell Workshop</a><a id="lootLink" href="/loot-lab">Loot Lab</a><span id="globalStatus" class="status">Loading profiles...</span></header>
 <div class="layout">
 <aside class="rail">
   <div class="toolbar"><button id="newProfile">New Profile</button><button id="refreshProfiles" title="Refresh profiles">Refresh</button></div>
@@ -2632,7 +2813,7 @@ namespace ACE.Server.DerpAce
 <main class="workspace">
   <div class="toolbar">
     <button id="validateDraft">Validate</button><button id="saveDraft" class="primary">Save Draft</button><button id="publishDraft">Save + Publish</button><button id="rollbackProfile">Rollback</button><button id="restorePublished">Restore Published</button>
-    <button id="toggleProfile" class="push">Enable / Disable</button>
+    <button id="toggleProfile" class="push">Enable / Disable</button><button id="removeProfile" class="danger" title="Permanently remove the selected mechanics profile; the creature weenie is retained">Remove Profile</button>
   </div>
   <section class="section">
     <div class="row"><label class="field"><span>Profile name</span><input id="profileName" placeholder="hollow_king"></label><label class="field"><span>Boss WCID</span><input id="bossWcid" type="number" min="1" placeholder="42047186"></label></div>
@@ -2641,10 +2822,11 @@ namespace ACE.Server.DerpAce
   <section class="section"><div class="toolbar"><h2>Profile JSON</h2><button id="formatJson" class="push">Format</button><button id="copyJson">Copy</button></div><textarea id="jsonEditor" class="jsonEditor" spellcheck="false"></textarea><p class="hint">This is the authoritative draft. All supported triggers, action arrays, phases, wildcards, mutators, and advanced fields remain editable here.</p></section>
   <section class="section"><div class="toolbar"><h2>Rules</h2><span id="ruleCount" class="badge">0 rules</span></div><div id="ruleList" class="ruleList"></div></section>
   <section class="section"><h2>Quick Add Rule</h2><div class="quick">
-    <div class="row"><label class="field"><span>Trigger</span><select id="quickTrigger"><option value="health_below">Health below</option><option value="combat_start">Combat start</option><option value="timer">Timer</option><option value="spell_resisted">Spell resisted</option><option value="boss_evades">Boss evades</option><option value="critical_hit">Boss receives critical</option><option value="damage_type">Incoming damage type</option><option value="large_hit">Large hit</option><option value="death">Death</option></select></label><label class="field"><span>Action</span><select id="quickAction"><option value="taunt">Taunt</option><option value="say">Say</option><option value="effect">PlayScript effect</option><option value="maintain_minions">Maintain minions</option><option value="mirror_minions">Mirror minions</option><option value="explode_corpse">Exploding corpse</option><option value="push">Push</option><option value="pull">Pull</option><option value="blink">Blink</option><option value="scatter">Scatter</option><option value="knock_up">Knock up</option><option value="frost_rain">Frost rain</option><option value="apply_spell">Apply spell</option><option value="set_phase">Set phase</option></select></label></div>
+    <div class="row"><label class="field"><span>Trigger</span><select id="quickTrigger"><option value="health_below">Health below</option><option value="combat_start">Combat start</option><option value="timer">Timer</option><option value="spell_resisted">Spell resisted</option><option value="boss_evades">Boss evades</option><option value="critical_hit">Boss receives critical</option><option value="damage_type">Incoming damage type</option><option value="large_hit">Large hit</option><option value="death">Death</option></select></label><label class="field"><span>Action</span><select id="quickAction"><option value="taunt">Taunt</option><option value="say">Say</option><option value="effect">PlayScript effect</option><option value="sound">Sound event</option><option value="maintain_minions">Maintain minions</option><option value="mirror_minions">Mirror minions</option><option value="explode_corpse">Exploding corpse</option><option value="push">Push</option><option value="pull">Pull</option><option value="blink">Blink</option><option value="scatter">Scatter</option><option value="knock_up">Knock up</option><option value="frost_rain">Frost rain</option><option value="apply_spell">Apply spell</option><option value="set_phase">Set phase</option></select></label></div>
     <div class="row"><label class="field"><span>Threshold / interval / large-hit %</span><input id="quickAmount" type="number" value="75" min="1" max="3600"></label><label class="field"><span>Chance %</span><input id="quickChance" type="number" value="100" min="1" max="100"></label></div>
     <div class="row"><label class="field"><span>Minimum players</span><input id="quickPlayers" type="number" value="1" min="1" max="40"></label><label class="field"><span>Required phase</span><input id="quickRequiredPhase" placeholder="optional"></label></div>
-    <label class="field"><span>Text / PlayScript / phase / spell ID / minion shell WCID</span><input id="quickValue" list="playScripts" placeholder="Action value"><datalist id="playScripts">{{{{playScriptOptions}}}}</datalist></label>
+    <label class="field"><span>Text / PlayScript / sound event / phase / spell ID / minion shell WCID</span><input id="quickValue" list="playScripts" placeholder="Action value"><datalist id="playScripts">{{{{playScriptOptions}}}}</datalist></label>
+    <div class="row"><label class="field"><span>Sound volume</span><input id="quickSoundVolume" type="number" value="1" min="0" max="1" step="0.05"></label><span></span></div>
     <div class="row"><label class="field"><span>Target</span><select id="quickTarget"><option value="trigger">Triggering player</option><option value="nearest">Nearest</option><option value="farthest">Farthest</option><option value="random">Random</option><option value="all">All nearby</option></select></label><label class="field"><span>Distance / minion count</span><input id="quickActionAmount" type="number" value="10" min="1" max="40"></label></div>
     <label class="field"><span>Damage type (damage_type trigger)</span><select id="quickDamageType"><option>Slash</option><option>Pierce</option><option>Bludgeon</option><option>Fire</option><option>Cold</option><option>Acid</option><option>Electric</option><option>Nether</option></select></label>
     <button id="addRule" class="primary">Add Rule</button>
@@ -2657,12 +2839,20 @@ namespace ACE.Server.DerpAce
     <button id="spawnAtPlayer" class="primary">Spawn At Player</button>
     <label class="field" style="margin-top:12px"><span>Or full LOC</span><textarea id="spawnLoc" rows="3" placeholder="0x7F0401AD [12.3 -28.4 0.0] 1 0 0 0"></textarea></label><button id="spawnAtLoc">Spawn At LOC</button>
   </div></section>
+  <section class="section"><div class="toolbar"><h2>DAT Sound Preview</h2><span id="soundMeta" class="badge">No table</span></div>
+    <div class="row"><label class="field"><span>Boss WCID</span><input id="soundBossWcid" type="number" min="1" placeholder="Uses selected profile"></label><label class="field"><span>SoundTable DID override</span><input id="soundTableDid" placeholder="0x20000014"></label></div>
+    <div class="toolbar"><button id="loadSounds">Load Sound Table</button><input id="soundSearch" class="search push" style="width:auto;margin:0" placeholder="Filter event or wave DID"></div>
+    <audio id="soundPlayer" class="soundPlayer" controls preload="none"></audio>
+    <div id="soundList" class="soundList"><span class="empty">Load a boss sound table to inspect its DAT clips.</span></div>
+    <p class="hint">Play previews the actual portal DAT wave. Use Rule selects the named sound event and its mapped volume for Quick Add Rule.</p>
+  </section>
   <section class="section"><div class="toolbar"><h2>Active Bosses</h2><button id="refreshActive" class="push">Refresh</button></div><div id="activeBosses" class="activeList"><span class="empty">Loading...</span></div></section>
   <section class="section"><h2>Workflow</h2><p class="hint">Create or load a profile, edit and validate its draft, publish it, then spawn it. Publishing invalidates the runtime cache immediately. Existing encounters see enabled profile changes on their next mechanic check.</p><p class="warning">New WCIDs still need their weenie SQL imported and world data reloaded before a profile can be created or spawned.</p></section>
 </aside>
 </div>
 <script>
-const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);const session=params.get('session')||'',mapToken=params.get('token')||'';let profiles=[],current=null,dirty=false;
+const $=id=>document.getElementById(id);const params=new URLSearchParams(location.search);const session=params.get('session')||'',mapToken=params.get('token')||'';let profiles=[],current=null,dirty=false,soundClips=[];
+function linked(path){const q=new URLSearchParams();if(session)q.set('session',session);if(mapToken)q.set('token',mapToken);const query=q.toString();return path+(query?'?'+query:'')}$('mapLink').href=linked('/');$('spellLink').href=linked('/spell-workshop');$('lootLink').href=linked('/loot-lab');
 if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('spellLink').href='/spell-workshop?session='+encodeURIComponent(session)}
 function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(mapToken)h['X-DerpACE-Map-Token']=mapToken;if(json)h['Content-Type']='application/json';return h}
 async function api(url,options={}){options.headers={...headers(!!options.body),...(options.headers||{})};options.cache='no-store';const res=await fetch(url,options);let data;try{data=await res.json()}catch{data={ok:false,error:await res.text()}}if(!res.ok||data.ok===false)throw Object.assign(new Error(data.error||data.message||res.statusText),{data});return data}
@@ -2673,23 +2863,27 @@ function template(wcid=0){return{schemaVersion:1,weenieClassId:+wcid||0,mutators
 function setEditor(doc){$('jsonEditor').value=JSON.stringify(doc,null,2);dirty=false;renderRules()}
 async function loadProfiles(selectName=current?.profile){try{const data=await api('/api/boss/profiles');profiles=data.profiles||[];renderProfiles();if(selectName&&profiles.some(p=>p.profile===selectName))await loadProfile(selectName);status(`${profiles.length} boss profile${profiles.length===1?'':'s'} loaded.`)}catch(e){status(e.message,'error')}}
 function renderProfiles(){const term=$('profileSearch').value.trim().toLowerCase();$('profileList').innerHTML=profiles.filter(p=>!term||`${p.profile} ${p.bossName} ${p.weenieClassId}`.toLowerCase().includes(term)).map(p=>`<button class="profileItem ${current?.profile===p.profile?'active':''}" data-profile="${safe(p.profile)}"><strong><i class="dot ${p.enabled&&!p.isTemplate?'live':''}"></i>${safe(p.profile)} ${p.isTemplate?'<span class="badge">Template</span>':''}</strong><small>${safe(p.bossName)} &middot; ${p.weenieClassId} &middot; ${p.isTemplate?safe(p.templateError||'data file'):('draft r'+p.draftRevision)}</small></button>`).join('')||'<span class="empty">No matching profiles.</span>';$('profileList').querySelectorAll('button').forEach(b=>b.onclick=()=>loadProfile(b.dataset.profile))}
-async function loadProfile(name){if(dirty&&!confirm('Discard unsaved draft changes?'))return;try{const data=await api('/api/boss/profile?profile='+encodeURIComponent(name));current=data;$('profileName').value=data.profile;$('profileName').readOnly=true;$('bossWcid').value=data.weenieClassId;$('bossWcid').readOnly=true;$('profileMeta').innerHTML=data.isTemplate?`<span>${safe(data.bossName)}</span><span class="badge">Data template</span><span>${safe(data.sourceFile)}</span>${data.hasWcidConflict?'<span class="error">WCID already belongs to another database profile</span>':'<span>Save Draft to import</span>'}`:`<span>${safe(data.bossName)}</span><span>Draft r${data.draftRevision}</span><span>Published r${data.publishedRevision}</span><span>${data.enabled?'Enabled':'Disabled'}</span><span>Edited by ${safe(data.modifiedBy||'unknown')}</span>`;$('selectedSpawnProfile').textContent=data.isTemplate?'Template not imported':data.profile;setEditor(JSON.parse(data.draftJson||'{}'));renderProfiles();setControls();status(data.isTemplate?`Loaded template ${data.profile}. Save Draft to import it.`:`Loaded ${data.profile}.`)}catch(e){status(e.message,'error')}}
+async function loadProfile(name){if(dirty&&!confirm('Discard unsaved draft changes?'))return;try{const data=await api('/api/boss/profile?profile='+encodeURIComponent(name));current=data;$('profileName').value=data.profile;$('profileName').readOnly=true;$('bossWcid').value=data.weenieClassId;$('bossWcid').readOnly=true;$('profileMeta').innerHTML=data.isTemplate?`<span>${safe(data.bossName)}</span><span class="badge">Data template</span><span>${safe(data.sourceFile)}</span>${data.hasWcidConflict?'<span class="error">WCID already belongs to another database profile</span>':'<span>Save Draft to import</span>'}`:`<span>${safe(data.bossName)}</span><span>Draft r${data.draftRevision}</span><span>Published r${data.publishedRevision}</span><span>${data.enabled?'Enabled':'Disabled'}</span><span>Edited by ${safe(data.modifiedBy||'unknown')}</span>`;$('selectedSpawnProfile').textContent=data.isTemplate?'Template not imported':data.profile;setEditor(JSON.parse(data.draftJson||'{}'));$('soundBossWcid').value=data.weenieClassId;$('soundTableDid').value='';loadSounds();renderProfiles();setControls();status(data.isTemplate?`Loaded template ${data.profile}. Save Draft to import it.`:`Loaded ${data.profile}.`)}catch(e){status(e.message,'error')}}
 function newProfile(){if(dirty&&!confirm('Discard unsaved draft changes?'))return;current=null;$('profileName').value='';$('profileName').readOnly=false;$('bossWcid').value='';$('bossWcid').readOnly=false;$('profileMeta').innerHTML='<span>New profile for an existing creature WCID.</span>';$('selectedSpawnProfile').textContent='No profile';setEditor(template());renderProfiles();setControls();$('profileName').focus()}
-function setControls(){const has=!!current,isTemplate=!!current?.isTemplate;$('validateDraft').disabled=!has;$('saveDraft').disabled=!has;['publishDraft','rollbackProfile','restorePublished','toggleProfile','spawnAtPlayer','spawnAtLoc'].forEach(id=>$(id).disabled=!has||isTemplate);$('saveDraft').textContent=isTemplate?'Import Template':'Save Draft';$('toggleProfile').textContent=has&&!isTemplate?(current.enabled?'Disable':'Enable'):'Enable / Disable'}
+function setControls(){const has=!!current,isTemplate=!!current?.isTemplate;$('validateDraft').disabled=!has;$('saveDraft').disabled=!has;['publishDraft','rollbackProfile','restorePublished','toggleProfile','removeProfile','spawnAtPlayer','spawnAtLoc'].forEach(id=>$(id).disabled=!has||isTemplate);$('saveDraft').textContent=isTemplate?'Import Template':'Save Draft';$('toggleProfile').textContent=has&&!isTemplate?(current.enabled?'Disable':'Enable'):'Enable / Disable'}
 function renderRules(){let doc;try{doc=parseDraft();$('ruleCount').textContent=`${(doc.rules||[]).length} rules`;$('ruleList').innerHTML=(doc.rules||[]).map((r,i)=>`<details class="ruleCard"><summary><strong>${safe(r.id||'unnamed')}</strong><span class="badge">${safe(r.trigger||'unknown')}</span><span>${(r.actions||[]).length} action${(r.actions||[]).length===1?'':'s'}</span></summary><div class="ruleBody"><textarea data-rule-json="${i}" spellcheck="false">${safe(JSON.stringify(r,null,2))}</textarea><div class="ruleActions"><button data-apply="${i}">Apply Rule JSON</button><button data-up="${i}">Move Up</button><button data-copy-rule="${i}">Duplicate</button><button data-delete="${i}" class="danger">Remove</button></div></div></details>`).join('')||'<span class="empty">No rules yet.</span>';bindRuleButtons()}catch(e){$('ruleCount').textContent='Invalid JSON';$('ruleList').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
 function mutateRules(fn){try{const doc=parseDraft();doc.rules=doc.rules||[];fn(doc.rules);setEditor(doc);dirty=true}catch(e){status(e.message,'error')}}
 function bindRuleButtons(){$('ruleList').querySelectorAll('[data-apply]').forEach(b=>b.onclick=()=>mutateRules(r=>r[+b.dataset.apply]=JSON.parse(document.querySelector(`[data-rule-json="${b.dataset.apply}"]`).value)));$('ruleList').querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>mutateRules(r=>r.splice(+b.dataset.delete,1)));$('ruleList').querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>mutateRules(r=>{const i=+b.dataset.up;if(i>0)[r[i-1],r[i]]=[r[i],r[i-1]]}));$('ruleList').querySelectorAll('[data-copy-rule]').forEach(b=>b.onclick=()=>mutateRules(r=>{const i=+b.dataset.copyRule;const copy=structuredClone(r[i]);copy.id=(copy.id||'rule')+'_copy';r.splice(i+1,0,copy)}))}
-function quickRule(){mutateRules(rules=>{const trigger=$('quickTrigger').value,kind=$('quickAction').value,value=$('quickValue').value.trim(),amount=+$('quickAmount').value;let action={type:kind};if(kind==='taunt')Object.assign(action,{channel:'local',text:value||'%t, face me.'});else if(kind==='say')action.text=value||'The encounter changes.';else if(kind==='effect')action.effect=value||'EnchantUpRed';else if(kind==='maintain_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:100});else if(kind==='mirror_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:1000,source:'nearby',radius:60,durationSeconds:30,noXp:true,dropItems:false,noCorpse:true,translucency:0.35});else if(kind==='explode_corpse')Object.assign(action,{damageType:'Fire',radius:8,damageScale:0.25,delaySeconds:2,effect:value||'Explode',destroyCorpse:false});else if(['push','pull','blink','scatter','knock_up'].includes(kind))Object.assign(action,{target:$('quickTarget').value,distance:+$('quickActionAmount').value||10});else if(kind==='frost_rain')Object.assign(action,{target:$('quickTarget').value,count:Math.min(8,+$('quickActionAmount').value||2),damageScale:0.25});else if(kind==='apply_spell')Object.assign(action,{target:$('quickTarget').value,spellId:+value});else if(kind==='set_phase')action.phase=value||'phase_2';const rule={id:`${trigger}_${Date.now().toString(36)}`,trigger,thresholdPercent:trigger==='health_below'?amount:0,intervalSeconds:trigger==='timer'?amount:0,chancePercent:+$('quickChance').value,minPlayers:+$('quickPlayers').value,damageType:trigger==='damage_type'?$('quickDamageType').value:null,damagePercent:trigger==='large_hit'?amount:0,once:trigger==='timer'?false:true,phase:$('quickRequiredPhase').value.trim()||null,actions:[action]};rules.push(rule)})}
+function quickRule(){mutateRules(rules=>{const trigger=$('quickTrigger').value,kind=$('quickAction').value,value=$('quickValue').value.trim(),amount=+$('quickAmount').value;let action={type:kind};if(kind==='taunt')Object.assign(action,{channel:'local',text:value||'%t, face me.'});else if(kind==='say')action.text=value||'The encounter changes.';else if(kind==='effect')action.effect=value||'EnchantUpRed';else if(kind==='sound')Object.assign(action,{sound:value||'Wound1',volume:Math.max(0,Math.min(1,Number($('quickSoundVolume').value)))});else if(kind==='maintain_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:100});else if(kind==='mirror_minions')Object.assign(action,{weenieClassId:+value,count:Math.min(12,+$('quickActionAmount').value||1),health:1000,source:'nearby',radius:60,durationSeconds:30,noXp:true,dropItems:false,noCorpse:true,translucency:0.35});else if(kind==='explode_corpse')Object.assign(action,{damageType:'Fire',radius:8,damageScale:0.25,delaySeconds:2,effect:value||'Explode',destroyCorpse:false});else if(['push','pull','blink','scatter','knock_up'].includes(kind))Object.assign(action,{target:$('quickTarget').value,distance:+$('quickActionAmount').value||10});else if(kind==='frost_rain')Object.assign(action,{target:$('quickTarget').value,count:Math.min(8,+$('quickActionAmount').value||2),damageScale:0.25});else if(kind==='apply_spell')Object.assign(action,{target:$('quickTarget').value,spellId:+value});else if(kind==='set_phase')action.phase=value||'phase_2';const rule={id:`${trigger}_${Date.now().toString(36)}`,trigger,thresholdPercent:trigger==='health_below'?amount:0,intervalSeconds:trigger==='timer'?amount:0,chancePercent:+$('quickChance').value,minPlayers:+$('quickPlayers').value,damageType:trigger==='damage_type'?$('quickDamageType').value:null,damagePercent:trigger==='large_hit'?amount:0,once:trigger==='timer'?false:true,phase:$('quickRequiredPhase').value.trim()||null,actions:[action]};rules.push(rule)})}
+function soundUrl(did){const q=new URLSearchParams({did});if(session)q.set('session',session);if(mapToken)q.set('token',mapToken);return '/api/sounds/wave?'+q}
+function renderSounds(){const term=$('soundSearch').value.trim().toLowerCase();const rows=soundClips.filter(c=>!term||`${c.eventName} ${c.eventIdHex} ${c.waveDidHex}`.toLowerCase().includes(term));$('soundList').innerHTML=rows.map((c,i)=>`<div class="soundClip"><strong>${safe(c.eventName)} <span class="badge">${safe(c.eventIdHex)}</span></strong><small>${safe(c.waveDidHex)} &middot; clip ${c.clip} &middot; chance ${Math.round(c.probability*100)}% &middot; volume ${Number(c.volume).toFixed(2)}</small><span class="clipActions"><button data-play-sound="${i}" title="Preview DAT wave">Play</button><button data-use-sound="${i}" class="primary" title="Use this event in Quick Add Rule" ${c.supported?'':'disabled'}>Use Rule</button></span></div>`).join('')||'<span class="empty">No matching sound clips.</span>';$('soundList').querySelectorAll('[data-play-sound]').forEach(b=>b.onclick=()=>{const c=rows[+b.dataset.playSound];const player=$('soundPlayer');player.src=soundUrl(c.waveDidHex);player.play().catch(e=>status('Audio preview: '+e.message,'error'))});$('soundList').querySelectorAll('[data-use-sound]').forEach(b=>b.onclick=()=>{const c=rows[+b.dataset.useSound];$('quickAction').value='sound';$('quickValue').value=c.eventName;$('quickSoundVolume').value=Math.max(0,Math.min(1,c.volume));$('quickValue').focus();status(`${c.eventName} selected for the next rule.`)})}
+async function loadSounds(){const did=$('soundTableDid').value.trim(),wcid=$('soundBossWcid').value||$('bossWcid').value;if(!did&&!wcid)return;try{const query=did?'did='+encodeURIComponent(did):'wcid='+encodeURIComponent(wcid);const data=await api('/api/sounds/table?'+query);soundClips=data.clips||[];$('soundTableDid').value=data.soundTableDidHex;$('soundMeta').textContent=`${data.soundTableDidHex} / ${data.eventCount} events / ${data.clipCount} clips`;renderSounds()}catch(e){soundClips=[];$('soundMeta').textContent='Load failed';$('soundList').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
 async function profileAction(action,extra={}){if(!current)throw new Error('Select a profile first.');return api('/api/boss/profile',{method:'POST',body:JSON.stringify({action,profile:current.profile,json:$('jsonEditor').value,...extra})})}
 async function createProfile(){const name=$('profileName').value.trim(),wcid=+$('bossWcid').value;const doc=parseDraft();doc.weenieClassId=wcid;$('jsonEditor').value=JSON.stringify(doc,null,2);const data=await api('/api/boss/profile',{method:'POST',body:JSON.stringify({action:'create',profile:name,weenieClassId:wcid,json:$('jsonEditor').value})});dirty=false;await loadProfiles(data.profile);status(data.message)}
 async function saveProfile(){if(!current||current.isTemplate)return createProfile();const data=await profileAction('save');dirty=false;await loadProfile(current.profile);status(data.message);return data}
 async function validateProfile(){try{const data=current?await profileAction('validate'):await createProfile();status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
 async function publishProfile(){if(!current)return status('Create the profile first.','error');if(!confirm(`Publish ${current.profile}? New spawns will use this revision immediately.`))return;try{await saveProfile();const data=await profileAction('publish');await loadProfiles(current.profile);status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
 async function simpleAction(action,extra={},confirmText=''){if(confirmText&&!confirm(confirmText))return;try{const data=await profileAction(action,extra);await loadProfiles(current.profile);status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
+async function removeSelectedProfile(){if(!current||current.isTemplate)return;const name=current.profile;if(current.enabled)return status('Disable this profile before removing it.','error');const typed=prompt(`Removing ${name} deletes its saved mechanics profile but keeps the creature weenie. Type the profile name to confirm.`,'');if(typed!==name)return status('Profile removal cancelled.');try{const data=await profileAction('remove');current=null;await loadProfiles();newProfile();status(data.message)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
 async function loadPlayers(){try{const data=await api('/api/players');$('spawnPlayer').innerHTML='<option value="">Select player...</option>'+(data.players||[]).sort((a,b)=>a.name.localeCompare(b.name)).map(p=>`<option value="${safe(p.guid)}">${safe(p.name)} &middot; ${safe(p.loc||p.landblock)}</option>`).join('')}catch(e){status(e.message,'error')}}
 async function spawn(usePlayer){if(!current)return status('Select a published profile first.','error');const body={profile:current.profile,count:+$('spawnCount').value,distance:+$('spawnDistance').value};if(usePlayer)body.playerGuid=$('spawnPlayer').value;else body.loc=$('spawnLoc').value.trim();try{const data=await api('/api/boss/spawn',{method:'POST',body:JSON.stringify(body)});status(data.message);setTimeout(loadActive,800)}catch(e){status((e.data?.errors||[e.message]).join(' | '),'error')}}
 async function loadActive(){try{const data=await api('/api/boss/active');$('activeBosses').innerHTML=(data.bosses||[]).map(b=>{const pct=b.maxHealth?Math.max(0,Math.min(100,b.health*100/b.maxHealth)):0;return `<div class="bossInstance"><strong>${safe(b.name)} <span class="badge">${safe(b.profile)}</span></strong><small>${safe(b.guid)} &middot; WCID ${b.weenieClassId}</small><div class="health"><i style="width:${pct}%"></i></div><small>${b.health.toLocaleString()} / ${b.maxHealth.toLocaleString()} &middot; ${safe(b.loc||b.landblock)}</small><button data-despawn="${safe(b.guid)}" class="danger" style="margin-top:6px">Despawn</button></div>`}).join('')||'<span class="empty">No loaded boss-profile creatures.</span>';$('activeBosses').querySelectorAll('[data-despawn]').forEach(b=>b.onclick=async()=>{if(!confirm(`Despawn ${b.dataset.despawn}?`))return;try{const data=await api('/api/boss/despawn',{method:'POST',body:JSON.stringify({guid:b.dataset.despawn})});status(data.message);setTimeout(loadActive,800)}catch(e){status(e.message,'error')}})}catch(e){$('activeBosses').innerHTML=`<span class="error">${safe(e.message)}</span>`}}
-$('profileSearch').oninput=renderProfiles;$('newProfile').onclick=newProfile;$('refreshProfiles').onclick=()=>loadProfiles();$('jsonEditor').oninput=()=>{dirty=true;renderRules()};$('bossWcid').oninput=()=>{try{const d=parseDraft();d.weenieClassId=+$('bossWcid').value;$('jsonEditor').value=JSON.stringify(d,null,2);dirty=true;renderRules()}catch{}};$('formatJson').onclick=()=>{try{setEditor(parseDraft());dirty=true}catch(e){status(e.message,'error')}};$('copyJson').onclick=()=>navigator.clipboard.writeText($('jsonEditor').value);$('addRule').onclick=quickRule;$('saveDraft').onclick=()=>saveProfile().catch(e=>status((e.data?.errors||[e.message]).join(' | '),'error'));$('validateDraft').onclick=validateProfile;$('publishDraft').onclick=publishProfile;$('rollbackProfile').onclick=()=>simpleAction('rollback',{},`Roll ${current?.profile} back to its previous published revision?`);$('restorePublished').onclick=()=>simpleAction('restore-published',{},'Discard the current draft and restore the published revision?');$('toggleProfile').onclick=()=>simpleAction('set-enabled',{enabled:!current.enabled},`${current?.enabled?'Disable':'Enable'} ${current?.profile}?`);$('spawnAtPlayer').onclick=()=>spawn(true);$('spawnAtLoc').onclick=()=>spawn(false);$('refreshActive').onclick=loadActive;
+$('profileSearch').oninput=renderProfiles;$('newProfile').onclick=newProfile;$('refreshProfiles').onclick=()=>loadProfiles();$('jsonEditor').oninput=()=>{dirty=true;renderRules()};$('bossWcid').oninput=()=>{try{const d=parseDraft();d.weenieClassId=+$('bossWcid').value;$('jsonEditor').value=JSON.stringify(d,null,2);dirty=true;renderRules()}catch{}};$('formatJson').onclick=()=>{try{setEditor(parseDraft());dirty=true}catch(e){status(e.message,'error')}};$('copyJson').onclick=()=>navigator.clipboard.writeText($('jsonEditor').value);$('addRule').onclick=quickRule;$('saveDraft').onclick=()=>saveProfile().catch(e=>status((e.data?.errors||[e.message]).join(' | '),'error'));$('validateDraft').onclick=validateProfile;$('publishDraft').onclick=publishProfile;$('rollbackProfile').onclick=()=>simpleAction('rollback',{},`Roll ${current?.profile} back to its previous published revision?`);$('restorePublished').onclick=()=>simpleAction('restore-published',{},'Discard the current draft and restore the published revision?');$('toggleProfile').onclick=()=>simpleAction('set-enabled',{enabled:!current.enabled},`${current?.enabled?'Disable':'Enable'} ${current?.profile}?`);$('removeProfile').onclick=removeSelectedProfile;$('spawnAtPlayer').onclick=()=>spawn(true);$('spawnAtLoc').onclick=()=>spawn(false);$('refreshActive').onclick=loadActive;$('loadSounds').onclick=loadSounds;$('soundSearch').oninput=renderSounds;
 newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterval(()=>{if(!document.hidden)loadActive()},30000);
 </script>
 </body>
@@ -2848,6 +3042,10 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             {
                 ok = true,
                 pools = LootSpellWeightManager.PoolNames,
+                spellOptions = Enum.GetValues(typeof(SpellId)).Cast<SpellId>()
+                    .Where(spell => SpellLevelProgression.GetSpellLevels(spell)?.Count == 4)
+                    .Select(spell => new { spellId = (uint)spell, name = spell.ToString() })
+                    .OrderBy(spell => spell.name).ToList(),
                 data = LootSpellWeightManager.GetSnapshot(pool, defaults)
             };
         }
@@ -2873,6 +3071,55 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             return new { ok = true, message = $"Saved and hot-applied {request.Entries.Count} {pool} spell weights." };
         }
 
+        private static object BuildLootWcidWeightSnapshot(string pool)
+        {
+            pool = string.IsNullOrWhiteSpace(pool) ? "melee" : pool.Trim().ToLowerInvariant();
+            if (!LootWcidWeightManager.PoolNames.Contains(pool, StringComparer.OrdinalIgnoreCase))
+                return new { ok = false, error = $"Unknown loot WCID pool '{pool}'." };
+
+            var definition = LootWcidWeightManager.GetSnapshot(pool);
+            return new
+            {
+                ok = true,
+                pools = LootWcidWeightManager.PoolNames,
+                data = new
+                {
+                    pool,
+                    builtInWeight = definition.BuiltInWeight,
+                    entries = definition.Entries.Select(entry =>
+                    {
+                        var weenie = DatabaseManager.World.GetCachedWeenie(entry.Wcid);
+                        var tsysMutationData = weenie?.PropertiesInt != null && weenie.PropertiesInt.TryGetValue(PropertyInt.TsysMutationData, out var tsysValue) ? tsysValue : (int?)null;
+                        return new { entry.Wcid, name = weenie?.ClassName ?? $"Unknown WCID {entry.Wcid}", entry.Weight, entry.MinTier, entry.MaxTier, entry.Enabled, entry.MutationType, tsysMutationData };
+                    }).OrderBy(entry => entry.MinTier).ThenByDescending(entry => entry.Weight).ThenBy(entry => entry.name).ToList()
+                }
+            };
+        }
+
+        private static object HandleLootWcidWeightUpdate(AdminLootWcidWeightRequest request, string adminName)
+        {
+            var pool = request?.Pool?.Trim().ToLowerInvariant() ?? "";
+            if (!LootWcidWeightManager.PoolNames.Contains(pool, StringComparer.OrdinalIgnoreCase))
+                return new { ok = false, error = $"Unknown loot WCID pool '{pool}'." };
+            if (request.Reset)
+            {
+                LootWcidWeightManager.Reset(pool);
+                log.Warn($"[DerpACE AdminMap] {adminName} reset the {pool} loot WCID overlay.");
+                return new { ok = true, message = $"Reset {pool} to the built-in ACE WCID table." };
+            }
+
+            foreach (var entry in request.Entries ?? new List<LootWcidWeight>())
+                if (DatabaseManager.World.GetCachedWeenie(entry.Wcid) == null)
+                    return new { ok = false, error = $"WCID {entry.Wcid} does not exist in the loaded world database." };
+
+            if (!LootWcidWeightManager.TryUpdate(pool, request.BuiltInWeight, request.Entries, out var error))
+                return new { ok = false, error };
+
+            var count = request.Entries?.Count ?? 0;
+            log.Warn($"[DerpACE AdminMap] {adminName} updated {count} {pool} loot WCID weight(s).");
+            return new { ok = true, message = $"Saved and hot-applied {count} {pool} WCID weight(s)." };
+        }
+
         private static ChanceTable<SpellId> GetLootSpellDefaults(string pool)
         {
             return pool?.ToLowerInvariant() switch
@@ -2895,8 +3142,8 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DerpACE Loot Lab</title>
 <style>
-:root{color-scheme:dark;--bg:#0c1011;--panel:#121819;--line:#2c3b3f;--text:#edf4f2;--muted:#9bacaa;--blue:#5eb8df;--green:#60c58f;--amber:#d8b768;--red:#e17d7d}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select{font:inherit;color:inherit}.top{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;background:#111719;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}.top h1{font-size:16px;margin:0 8px 0 0}.top a{color:var(--blue);text-decoration:none}.top button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:8px 11px;cursor:pointer}.top button:hover{border-color:var(--green)}.status{margin-left:auto;color:var(--muted)}main{display:grid;grid-template-columns:250px minmax(0,1fr) 360px;gap:14px;padding:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;min-width:0;overflow:hidden}.panel h2{font-size:13px;margin:0;padding:10px 12px;color:#9ee4bf;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.03em}.groups{display:flex;flex-direction:column;padding:8px}.groups button{text-align:left;background:transparent;border:0;border-radius:4px;padding:9px 10px;color:var(--text);cursor:pointer}.groups button:hover,.groups button.active{background:#21434b}.groups small{float:right;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:10px;padding:12px}.setting{display:grid;gap:8px;background:#172022;border:1px solid #2b3d42;border-radius:6px;padding:10px}.setting.dirty{border-color:var(--amber);box-shadow:0 0 0 1px rgba(216,183,104,.25)}.setting header{display:flex;align-items:center;gap:9px}.setting strong{font-size:13px}.setting small{color:var(--muted);line-height:1.35}.setting input{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.setting input[type=checkbox]{width:auto;transform:scale(1.2)}.tools{padding:12px;display:grid;gap:10px}.tools h2{margin:-12px -12px 0}.tools button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:9px;cursor:pointer}.tools input,.tools select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.hint{color:var(--muted)}pre{white-space:pre-wrap;max-height:390px;overflow:auto;background:#07090a;border:1px solid var(--line);border-radius:4px;padding:10px;color:#dbe8e5}.pill{display:inline-block;margin-left:6px;color:var(--muted)}.tierProfiles{grid-column:1/-1}.tierHead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}.tierHead .hint{flex:1}.tierCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px;padding:12px}.tierCard{background:#172022;border:1px solid #2b3d42;border-radius:6px;padding:10px;display:grid;gap:9px}.tierCard.dirty{border-color:var(--amber)}.tierTitle{display:grid;grid-template-columns:76px minmax(160px,1fr) auto auto;gap:8px;align-items:center}.tierTitle input,.tierFields input,.tierFields select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:7px}.tierTitle input[type=checkbox]{width:auto}.tierFields{display:grid;grid-template-columns:repeat(3,minmax(110px,1fr));gap:8px}.tierFields label{display:grid;gap:3px;color:var(--muted);font-size:11px}.tierFields .wide{grid-column:1/-1}.tierCard button{background:#34272a;border:1px solid #68464b;border-radius:4px;padding:7px 9px;cursor:pointer}.spellWeights{grid-column:1/3}.weightToolbar{display:grid;grid-template-columns:160px minmax(180px,1fr) 120px 110px auto;gap:8px;padding:12px;border-bottom:1px solid var(--line)}.weightToolbar input,.weightToolbar select,.weightRow input{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.weightActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.weightActions button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:8px 11px;cursor:pointer}.weightSummary{padding:10px 12px;color:var(--muted)}.weightRows{padding:0 12px 12px;display:grid;gap:5px;max-height:520px;overflow:auto}.weightRow{display:grid;grid-template-columns:minmax(230px,1fr) 100px 85px 44px 54px;gap:10px;align-items:center;background:#172022;border:1px solid #293a3e;border-radius:4px;padding:7px 9px}.weightRow.disabled{opacity:.55}.weightName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.weightName small{display:block;color:var(--muted)}.chance{text-align:right;color:#9ee4bf;font-variant-numeric:tabular-nums}.weightRow a{color:var(--blue);text-decoration:none}
-@media(max-width:1050px){main{grid-template-columns:210px 1fr}.tools,.spellWeights{grid-column:1/-1}.weightToolbar{grid-template-columns:1fr 1fr 110px 110px}}@media(max-width:700px){main{display:block}.panel{margin:10px}.tierCards{grid-template-columns:1fr}.tierFields,.tierTitle{grid-template-columns:1fr}}
+:root{color-scheme:dark;--bg:#0c1011;--panel:#121819;--line:#2c3b3f;--text:#edf4f2;--muted:#9bacaa;--blue:#5eb8df;--green:#60c58f;--amber:#d8b768;--red:#e17d7d}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select{font:inherit;color:inherit}.top{height:52px;display:flex;align-items:center;gap:12px;padding:0 16px;background:#111719;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}.top h1{font-size:16px;margin:0 8px 0 0}.top a{color:var(--blue);text-decoration:none}.top button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:8px 11px;cursor:pointer}.top button:hover{border-color:var(--green)}.status{margin-left:auto;color:var(--muted)}main{display:grid;grid-template-columns:250px minmax(0,1fr) 360px;gap:14px;padding:14px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;min-width:0;overflow:hidden}.panel h2{font-size:13px;margin:0;padding:10px 12px;color:#9ee4bf;border-bottom:1px solid var(--line);text-transform:uppercase;letter-spacing:.03em}.groups{display:flex;flex-direction:column;padding:8px}.groups button{text-align:left;background:transparent;border:0;border-radius:4px;padding:9px 10px;color:var(--text);cursor:pointer}.groups button:hover,.groups button.active{background:#21434b}.groups small{float:right;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:10px;padding:12px}.setting{display:grid;gap:8px;background:#172022;border:1px solid #2b3d42;border-radius:6px;padding:10px}.setting.dirty{border-color:var(--amber);box-shadow:0 0 0 1px rgba(216,183,104,.25)}.setting header{display:flex;align-items:center;gap:9px}.setting strong{font-size:13px}.setting small{color:var(--muted);line-height:1.35}.setting input{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.setting input[type=checkbox]{width:auto;transform:scale(1.2)}.tools{padding:12px;display:grid;gap:10px}.tools h2{margin:-12px -12px 0}.tools button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:9px;cursor:pointer}.tools input,.tools select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.hint{color:var(--muted)}pre{white-space:pre-wrap;max-height:390px;overflow:auto;background:#07090a;border:1px solid var(--line);border-radius:4px;padding:10px;color:#dbe8e5}.pill{display:inline-block;margin-left:6px;color:var(--muted)}.tierProfiles{grid-column:1/-1}.tierHead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}.tierHead .hint{flex:1}.tierCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px;padding:12px}.tierCard{background:#172022;border:1px solid #2b3d42;border-radius:6px;padding:10px;display:grid;gap:9px}.tierCard.dirty{border-color:var(--amber)}.tierTitle{display:grid;grid-template-columns:76px minmax(160px,1fr) auto auto;gap:8px;align-items:center}.tierTitle input,.tierFields input,.tierFields select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:7px}.tierTitle input[type=checkbox]{width:auto}.tierFields{display:grid;grid-template-columns:repeat(3,minmax(110px,1fr));gap:8px}.tierFields label{display:grid;gap:3px;color:var(--muted);font-size:11px}.tierFields .wide{grid-column:1/-1}.tierCard button{background:#34272a;border:1px solid #68464b;border-radius:4px;padding:7px 9px;cursor:pointer}.spellWeights{grid-column:1/3}.weightToolbar{display:grid;grid-template-columns:160px minmax(180px,1fr) 120px 110px auto;gap:8px;padding:12px;border-bottom:1px solid var(--line)}.weightToolbar input,.weightToolbar select,.weightRow input{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.weightActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.weightActions button{background:#214d5b;border:1px solid #397487;border-radius:4px;padding:8px 11px;cursor:pointer}.weightSummary{padding:10px 12px;color:var(--muted)}.weightRows{padding:0 12px 12px;display:grid;gap:5px;max-height:520px;overflow:auto}.weightRow{display:grid;grid-template-columns:minmax(230px,1fr) 100px 85px 44px 54px;gap:10px;align-items:center;background:#172022;border:1px solid #293a3e;border-radius:4px;padding:7px 9px}.weightRow.disabled{opacity:.55}.weightName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.weightName small{display:block;color:var(--muted)}.chance{text-align:right;color:#9ee4bf;font-variant-numeric:tabular-nums}.weightRow a{color:var(--blue);text-decoration:none}.wcidWeights{grid-column:1/-1}.wcidToolbar{display:grid;grid-template-columns:170px minmax(180px,1fr) 130px 130px;gap:8px;padding:12px;border-bottom:1px solid var(--line)}.wcidAdd{display:grid;grid-template-columns:minmax(180px,1fr) 150px 100px 90px 90px auto;gap:8px;padding:0 12px 10px}.wcidToolbar input,.wcidToolbar select,.wcidAdd input,.wcidAdd select,.wcidRow input,.wcidRow select{width:100%;background:#080c0d;border:1px solid #394b50;border-radius:4px;padding:8px}.wcidColumns{display:grid;grid-template-columns:minmax(230px,1fr) 150px 130px 100px 80px 80px 80px 72px 42px;gap:8px;padding:0 21px 5px;color:var(--muted);font-size:11px}.wcidRows{padding:0 12px 12px;display:grid;gap:5px;max-height:520px;overflow:auto}.wcidRow{display:grid;grid-template-columns:minmax(230px,1fr) 150px 130px 100px 80px 80px 80px 72px 42px;gap:8px;align-items:center;background:#172022;border:1px solid #293a3e;border-radius:4px;padding:7px 9px}.wcidRow.disabled{opacity:.55}.wcidRow label{display:flex;align-items:center;justify-content:center}.wcidRow input[type=checkbox]{width:auto}.wcidChance{text-align:right;color:#9ee4bf;font-variant-numeric:tabular-nums}
+@media(max-width:1050px){main{grid-template-columns:210px 1fr}.tools,.spellWeights{grid-column:1/-1}.weightToolbar,.wcidToolbar{grid-template-columns:1fr 1fr}.wcidAdd{grid-template-columns:1fr 130px 90px 80px 80px auto}.wcidColumns,.wcidRow{grid-template-columns:minmax(190px,1fr) 130px 115px 90px 70px 70px 70px 65px 38px}}@media(max-width:700px){main{display:block}.panel{margin:10px}.tierCards{grid-template-columns:1fr}.tierFields,.tierTitle,.wcidToolbar,.wcidAdd,.wcidRow{grid-template-columns:1fr}.wcidColumns{display:none}}
 </style>
 </head>
 <body>
@@ -2904,15 +3151,22 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
 <main>
   <section class="panel"><h2>Config Groups</h2><div id="groups" class="groups"></div></section>
   <section class="panel"><h2 id="groupTitle">Settings</h2><div id="settings" class="grid"></div></section>
-  <aside class="panel tools"><h2>Simulator</h2><p class="hint">Save config and spell weights first, then test the live loot tables.</p><label>Tier<input id="simTier" type="number" min="1" max="8" value="8"></label><label>Items<input id="simCount" type="number" min="1" max="5000" value="250"></label><label>Table<select id="simTable"><option>all</option><option>melee</option><option>missile</option><option>caster</option><option>jewelry</option><option>armor</option><option>aetheria</option></select></label><button id="simulate">Run Simulation</button><pre id="simOut">No simulation yet.</pre></aside>
+  <aside class="panel tools"><h2>Simulator</h2><p class="hint">Save config, spell weights, WCID pools, and tiers first, then test the live loot tables.</p><label>Tier<input id="simTier" type="number" min="1" max="8" value="8"></label><label>Items<input id="simCount" type="number" min="1" max="5000" value="250"></label><label>Table<select id="simTable"><option>all</option><option>melee</option><option>missile</option><option>caster</option><option>jewelry</option><option>armor</option><option>aetheria</option></select></label><button id="simulate">Run Simulation</button><pre id="simOut">No simulation yet.</pre></aside>
   <section class="panel spellWeights"><h2>Loot Spell Weights</h2>
-    <div class="weightToolbar"><select id="weightPool"><option value="armor">Armor / Clothing</option><option value="melee">Melee Weapons</option><option value="missile">Missile Weapons</option><option value="caster">Casters</option><option value="jewelry">Jewelry</option></select><input id="weightSearch" placeholder="Filter spell name or ID"><input id="addSpellId" type="number" min="1" placeholder="Base spell ID"><input id="addWeight" type="number" min="0" step="0.001" value="0.01"><div class="weightActions"><button id="addWeightRow">Add</button></div></div>
+    <div class="weightToolbar"><select id="weightPool"><option value="armor">Armor / Clothing</option><option value="melee">Melee Weapons</option><option value="missile">Missile Weapons</option><option value="caster">Casters</option><option value="jewelry">Jewelry</option></select><input id="weightSearch" placeholder="Filter spell name or ID"><input id="addSpellId" type="number" min="1" list="spellChoices" placeholder="Base spell ID"><datalist id="spellChoices"></datalist><input id="addWeight" type="number" min="0" step="0.001" value="0.01"><div class="weightActions"><button id="addWeightRow">Add</button></div></div>
     <div class="weightSummary"><span id="weightStatus">Loading spell weights...</span> Weights are relative and normalize automatically. Use 0 to disable a spell. Only base spells with four cantrip levels are accepted.</div>
     <div class="weightActions" style="padding:0 12px 10px"><button id="saveWeights">Save + Hot Apply</button><button id="resetWeights">Reset Pool</button><a id="openSpellEditor" href="/spell-workshop">Open Spell Definition Editor</a></div>
     <div id="weightRows" class="weightRows"></div>
   </section>
-  <section class="panel tierProfiles"><h2>Endgame Tier Profiles</h2>
-    <div class="tierHead"><span class="hint">Add T9+ by inheriting safe ACE tables, then layer explicit endgame scaling. Disabled tiers cannot be generated or simulated.</span><button id="addTier">Add Tier</button><button id="saveTiers">Save + Hot Apply</button></div>
+  <section class="panel wcidWeights"><h2>Loot WCID Weights</h2>
+    <div class="wcidToolbar"><select id="wcidPool"><option value="melee">Melee weapons</option><option value="missile">Missile weapons</option><option value="caster">Casters</option><option value="armor">Armor</option><option value="clothing">Clothing</option><option value="jewelry">Jewelry</option><option value="generic">Art objects</option><option value="scroll">Scrolls</option><option value="mana_stone">Mana stones</option><option value="consumable">Consumables</option><option value="heal_kit">Healing kits</option><option value="lockpick">Lockpicks</option><option value="spell_component">Spell components</option><option value="society_armor">Society armor</option><option value="cloak">Cloaks</option><option value="pet">Pet devices</option><option value="aetheria">Aetheria</option><option value="coalesced_mana">Coalesced mana</option></select><input id="wcidSearch" placeholder="Filter name or WCID"><label>Built-in ACE weight<input id="wcidBuiltInWeight" type="number" min="0" step="0.1" value="100"></label><label>Chance preview tier<input id="wcidPreviewTier" type="number" min="1" max="100" value="8"></label></div>
+    <div class="weightSummary"><span id="wcidStatus">Loading WCID pool...</span> The existing ACE table is one weighted choice; custom entries compete with it only inside their tier range.</div>
+    <div class="wcidAdd"><input id="addWcid" type="number" min="1" placeholder="New WCID"><select id="addWcidMutation" title="Weapon mutation family"></select><input id="addWcidWeight" type="number" min="0" step="0.1" value="1"><input id="addWcidMinTier" type="number" min="1" max="100" value="1"><input id="addWcidMaxTier" type="number" min="1" max="100" value="100"><button id="addWcidRow">Add WCID</button></div>
+    <div class="weightActions" style="padding:0 12px 10px"><button id="saveWcids">Save + Hot Apply</button><button id="resetWcids">Reset Pool To ACE</button></div>
+    <div class="wcidColumns"><span>Item</span><span>Weapon mutation</span><span>TsysMutationData</span><span>Weight</span><span>Min tier</span><span>Max tier</span><span>Chance</span><span>Enabled</span><span></span></div><div id="wcidRows" class="wcidRows"></div>
+  </section>
+  <section class="panel tierProfiles"><h2>All Loot Tier Profiles</h2>
+    <div class="tierHead"><span class="hint">T1-T8 begin as neutral ACE profiles and can now be tuned directly. Add T9+ by inheriting one of those base tables.</span><button id="addTier">Add Tier</button><button id="saveTiers">Save + Hot Apply</button></div>
     <div id="tierCards" class="tierCards"></div>
   </section>
 </main>
@@ -2923,32 +3177,43 @@ if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('bossLi
 function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(token)h['X-DerpACE-Map-Token']=token;if(json)h['Content-Type']='application/json';return h}
 async function api(url,opt={}){const r=await fetch(url,{...opt,headers:{...headers(false),...(opt.headers||{})},cache:'no-store'});const text=await r.text();let d;try{d=JSON.parse(text)}catch{d={ok:false,error:text}}if(!r.ok||d.ok===false)throw new Error(d.error||r.statusText);return d}
 function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-let entries=[],currentGroup='',dirty=new Map(),spellEntries=[],spellCustomized=false,spellDirty=false,tierEntries=[],tierDirty=false;
+let entries=[],currentGroup='',dirty=new Map(),spellEntries=[],spellOptions=[],spellCustomized=false,spellDirty=false,wcidEntries=[],wcidBuiltInWeight=100,wcidDirty=false,tierEntries=[],tierDirty=false;
 function setStatus(text){$('status').textContent=text}
 function displayValue(e){return e.value ?? 0}
 function storeValue(e,input){if(e.kind==='toggle')return input.checked;if(e.type==='Int32'||e.type==='UInt32')return parseInt(input.value||0,10);return Number(input.value||0)}
 function renderGroups(){const groups=[...new Set(entries.map(e=>e.group))];if(!currentGroup)currentGroup=groups[0]||'';$('groups').innerHTML=groups.map(g=>`<button class="${g===currentGroup?'active':''}" data-group="${safe(g)}">${safe(g)}<small>${entries.filter(e=>e.group===g).length}</small></button>`).join('');$('groups').querySelectorAll('button').forEach(b=>b.onclick=()=>{currentGroup=b.dataset.group;render()})}
 function render(){renderGroups();$('groupTitle').textContent=currentGroup||'Settings';const list=entries.filter(e=>e.group===currentGroup);$('settings').innerHTML=list.map(e=>{const changed=dirty.has(e.key);if(e.kind==='toggle')return `<article class="setting ${changed?'dirty':''}"><header><input data-key="${safe(e.key)}" type="checkbox" ${e.value?'checked':''}><strong>${safe(e.label)}</strong><span class="pill">${safe(e.key)}</span></header><small>${safe(e.help)}</small></article>`;return `<article class="setting ${changed?'dirty':''}"><header><strong>${safe(e.label)}</strong><span class="pill">${safe(e.key)}</span></header><input data-key="${safe(e.key)}" type="number" min="${e.min}" max="${e.max}" step="${e.step}" value="${displayValue(e)}"><small>${safe(e.help)}</small></article>`}).join('');$('settings').querySelectorAll('input').forEach(input=>input.oninput=()=>{const e=entries.find(x=>x.key===input.dataset.key);dirty.set(e.key,storeValue(e,input));setStatus(`${dirty.size} unsaved change${dirty.size===1?'':'s'}.`)})}
 async function load(){const d=await api('/api/loot/config');entries=d.entries||[];dirty.clear();currentGroup=currentGroup||((d.groups||[])[0]||'');render();setStatus(`${entries.length} loot settings loaded.`)}
+const weaponMutationFamilies={melee:['','Axe','Dagger','DaggerMS','Mace','MaceJitte','Spear','Staff','Sword','SwordMS','Unarmed','TwoHandedAxe','TwoHandedMace','TwoHandedSpear','TwoHandedSword'],missile:['','Bow','Crossbow','Atlatl','ThrownDinnerware','Discus','Platter'],caster:['Caster']};
+function mutationOptions(selected){const list=weaponMutationFamilies[$('wcidPool').value]||[];return list.map(value=>'<option value="'+safe(value)+'" '+(value===(selected||'')?'selected':'')+'>'+(value||'Auto / rolled family')+'</option>').join('')}
+function defaultMutationType(){return $('wcidPool').value==='melee'?'Sword':$('wcidPool').value==='missile'?'Bow':$('wcidPool').value==='caster'?'Caster':''}
+function syncAddMutation(){const select=$('addWcidMutation'),list=weaponMutationFamilies[$('wcidPool').value]||[];select.disabled=!list.length;select.innerHTML=list.length?mutationOptions(defaultMutationType()):'<option value="">Not applicable</option>'}
+function showWcidStatus(message){const tier=Math.max(1,Math.min(100,+$('wcidPreviewTier').value||1)),eligible=wcidEntries.filter(e=>e.enabled&&tier>=e.minTier&&tier<=e.maxTier&&e.weight>0),total=Math.max(0,+wcidBuiltInWeight||0)+eligible.reduce((n,e)=>n+Math.max(0,+e.weight||0),0),baseChance=total>0?Math.max(0,+wcidBuiltInWeight||0)/total*100:0;$('wcidStatus').textContent=message||`${wcidEntries.length} custom WCIDs; ACE table chance at T${tier}: ${baseChance.toFixed(2)}%${wcidDirty?' (unsaved)':''}.`}
+function renderWcids(){const filter=$('wcidSearch').value.trim().toLowerCase(),tier=Math.max(1,Math.min(100,+$('wcidPreviewTier').value||1)),families=weaponMutationFamilies[$('wcidPool').value]||[],eligible=wcidEntries.filter(e=>e.enabled&&tier>=e.minTier&&tier<=e.maxTier&&e.weight>0),total=Math.max(0,+wcidBuiltInWeight||0)+eligible.reduce((n,e)=>n+Math.max(0,+e.weight||0),0),shown=wcidEntries.filter(e=>!filter||String(e.name||'').toLowerCase().includes(filter)||String(e.wcid).includes(filter));$('wcidRows').innerHTML=shown.map(e=>{const active=e.enabled&&tier>=e.minTier&&tier<=e.maxTier&&e.weight>0,chance=active&&total>0?e.weight/total*100:0,tsys=e.tsysMutationData==null?'<span class="hint" title="Add PropertyInt.TsysMutationData to this weenie SQL">Missing</span>':'<span title="Decimal: '+e.tsysMutationData+'">0x'+(e.tsysMutationData>>>0).toString(16).toUpperCase().padStart(8,'0')+'</span>',mutation=families.length?'<select data-key="mutationType" title="Mutation script used for this WCID">'+mutationOptions(e.mutationType)+'</select>':'<span class="hint">Not applicable</span>';return '<div class="wcidRow '+(e.enabled?'':'disabled')+'" data-wcid="'+e.wcid+'"><div class="weightName">'+safe(e.name||('WCID '+e.wcid))+'<small>WCID '+e.wcid+'</small></div>'+mutation+tsys+'<input data-key="weight" type="number" min="0" step="0.1" value="'+e.weight+'" title="Relative weight"><input data-key="minTier" type="number" min="1" max="100" value="'+e.minTier+'" title="Minimum tier"><input data-key="maxTier" type="number" min="1" max="100" value="'+e.maxTier+'" title="Maximum tier"><div class="wcidChance" title="Chance at preview tier">'+chance.toFixed(2)+'%</div><label title="Enabled"><input data-key="enabled" type="checkbox" '+(e.enabled?'checked':'')+'> On</label><button class="removeWcid" title="Remove WCID">x</button></div>'}).join('')||'<p class="hint">No custom WCIDs in this pool. The built-in ACE table remains at 100%.</p>';$('wcidRows').querySelectorAll('input[data-key]').forEach(input=>input.oninput=()=>{const row=input.closest('.wcidRow'),entry=wcidEntries.find(e=>String(e.wcid)===row.dataset.wcid),key=input.dataset.key;entry[key]=input.type==='checkbox'?input.checked:key==='weight'?Math.max(0,+input.value||0):Math.max(1,Math.min(100,parseInt(input.value||1,10)));wcidDirty=true;renderWcids()});$('wcidRows').querySelectorAll('select[data-key]').forEach(select=>select.onchange=()=>{const row=select.closest('.wcidRow'),entry=wcidEntries.find(e=>String(e.wcid)===row.dataset.wcid);entry.mutationType=select.value;wcidDirty=true;renderWcids()});$('wcidRows').querySelectorAll('.removeWcid').forEach(button=>button.onclick=()=>{const id=button.closest('.wcidRow').dataset.wcid;wcidEntries=wcidEntries.filter(e=>String(e.wcid)!==id);wcidDirty=true;renderWcids()});showWcidStatus()}
+async function loadWcids(){syncAddMutation();const d=await api('/api/loot/wcid-weights?pool='+encodeURIComponent($('wcidPool').value));wcidEntries=d.data.entries||[];wcidBuiltInWeight=d.data.builtInWeight??100;$('wcidBuiltInWeight').value=wcidBuiltInWeight;wcidDirty=false;renderWcids()}
+$('wcidPool').onchange=()=>{syncAddMutation();loadWcids().catch(e=>showWcidStatus(e.message))};$('wcidSearch').oninput=renderWcids;$('wcidPreviewTier').oninput=renderWcids;$('wcidBuiltInWeight').oninput=()=>{wcidBuiltInWeight=Math.max(0,+$('wcidBuiltInWeight').value||0);wcidDirty=true;renderWcids()};
+$('addWcidRow').onclick=()=>{const wcid=+$('addWcid').value,mutationType=$('addWcidMutation').disabled?'':$('addWcidMutation').value,weight=Math.max(0,+$('addWcidWeight').value||0),minTier=Math.max(1,Math.min(100,+$('addWcidMinTier').value||1)),maxTier=Math.max(1,Math.min(100,+$('addWcidMaxTier').value||100));if(!wcid)return showWcidStatus('Enter a WCID.');if(minTier>maxTier)return showWcidStatus('Minimum tier cannot exceed maximum tier.');if(wcidEntries.some(e=>e.wcid===wcid))return showWcidStatus('That WCID is already in this pool.');wcidEntries.push({wcid,name:'WCID '+wcid,mutationType,weight,minTier,maxTier,enabled:true});wcidDirty=true;$('addWcid').value='';renderWcids()};
+$('saveWcids').onclick=async()=>{try{const d=await api('/api/loot/wcid-weights',{method:'POST',headers:headers(true),body:JSON.stringify({pool:$('wcidPool').value,builtInWeight:wcidBuiltInWeight,entries:wcidEntries})});await loadWcids();showWcidStatus(d.message);setStatus(d.message)}catch(e){showWcidStatus(e.message);setStatus(e.message)}};
+$('resetWcids').onclick=async()=>{if(!confirm('Remove every custom WCID from this pool and restore the built-in ACE table?'))return;try{const d=await api('/api/loot/wcid-weights',{method:'POST',headers:headers(true),body:JSON.stringify({pool:$('wcidPool').value,reset:true,builtInWeight:100,entries:[]})});await loadWcids();showWcidStatus(d.message);setStatus(d.message)}catch(e){showWcidStatus(e.message);setStatus(e.message)}};
 function tierValue(entry,key,input){if(input.type==='checkbox')return input.checked;if(['tier','baseTier','workmanshipBonus','spellcraftBonus','wieldLevelRequirement'].includes(key))return parseInt(input.value||0,10);if(key==='name'||key==='description')return input.value;return Number(input.value||0)}
-function renderTiers(){const fields=[['baseTier','Base ACE tier','number',1,8,1],['lootQualityBonus','Loot quality bonus','number',0,1,.01],['dropCountMultiplier','Drop count x','number',.1,10,.05],['valueMultiplier','Value x','number',.1,100,.05],['workmanshipBonus','Workmanship +','number',0,20,1],['spellcraftBonus','Spellcraft +','number',0,500,1],['armorMultiplier','Armor level x','number',.1,10,.05],['weaponDamageMultiplier','Weapon damage x','number',.1,10,.05],['maxManaMultiplier','Max mana x','number',.1,10,.05],['wieldLevelRequirement','Min wield level','number',0,10000,1]];$('tierCards').innerHTML=tierEntries.length?tierEntries.map((e,i)=>'<article class="tierCard '+(tierDirty?'dirty':'')+'" data-index="'+i+'"><div class="tierTitle"><input data-key="tier" type="number" min="9" max="100" value="'+e.tier+'" title="Custom tier number"><input data-key="name" value="'+safe(e.name||('Tier '+e.tier))+'" placeholder="Tier name"><label><input data-key="enabled" type="checkbox" '+(e.enabled?'checked':'')+'> Enabled</label><button class="removeTier">Remove</button></div><div class="tierFields">'+fields.map(f=>'<label>'+f[1]+'<input data-key="'+f[0]+'" type="'+f[2]+'" min="'+f[3]+'" max="'+f[4]+'" step="'+f[5]+'" value="'+(e[f[0]]??0)+'"></label>').join('')+'<label class="wide">Description<input data-key="description" value="'+safe(e.description||'')+'" placeholder="What makes this tier distinct?"></label></div></article>').join(''):'<p class="hint">No custom tiers yet. Add T9 when you are ready; tiers 1-8 continue using ACE unchanged.</p>';$('tierCards').querySelectorAll('input').forEach(input=>input.oninput=()=>{const card=input.closest('.tierCard'),entry=tierEntries[+card.dataset.index],key=input.dataset.key;entry[key]=tierValue(entry,key,input);tierDirty=true;card.classList.add('dirty')});$('tierCards').querySelectorAll('.removeTier').forEach(button=>button.onclick=()=>{tierEntries.splice(+button.closest('.tierCard').dataset.index,1);tierDirty=true;renderTiers()})}
+function renderTiers(){const fields=[['baseTier','Base ACE tier','number',1,8,1],['lootQualityBonus','Loot quality bonus','number',0,1,.01],['dropCountMultiplier','Drop count x','number',.1,10,.05],['valueMultiplier','Value x','number',.1,100,.05],['workmanshipBonus','Workmanship +','number',0,20,1],['spellcraftBonus','Spellcraft +','number',0,500,1],['armorMultiplier','Armor level x','number',.1,10,.05],['weaponDamageMultiplier','Weapon damage x','number',.1,10,.05],['maxManaMultiplier','Max mana x','number',.1,10,.05],['wieldLevelRequirement','Min wield level','number',0,10000,1]];$('tierCards').innerHTML=tierEntries.length?tierEntries.map((e,i)=>'<article class="tierCard '+(tierDirty?'dirty':'')+'" data-index="'+i+'"><div class="tierTitle"><input data-key="tier" type="number" min="1" max="100" value="'+e.tier+'" title="Loot tier number"><input data-key="name" value="'+safe(e.name||('Tier '+e.tier))+'" placeholder="Tier name"><label><input data-key="enabled" type="checkbox" '+(e.enabled?'checked':'')+'> Enabled</label><button class="removeTier">'+(e.tier<=8?'Reset':'Remove')+'</button></div><div class="tierFields">'+fields.map(f=>'<label>'+f[1]+'<input data-key="'+f[0]+'" type="'+f[2]+'" min="'+f[3]+'" max="'+f[4]+'" step="'+f[5]+'" value="'+(e[f[0]]??0)+'"></label>').join('')+'<label class="wide">Description<input data-key="description" value="'+safe(e.description||'')+'" placeholder="What makes this tier distinct?"></label></div></article>').join(''):'<p class="hint">No tier profiles loaded.</p>';$('tierCards').querySelectorAll('input').forEach(input=>input.oninput=()=>{const card=input.closest('.tierCard'),entry=tierEntries[+card.dataset.index],key=input.dataset.key;entry[key]=tierValue(entry,key,input);tierDirty=true;card.classList.add('dirty')});$('tierCards').querySelectorAll('.removeTier').forEach(button=>button.onclick=()=>{tierEntries.splice(+button.closest('.tierCard').dataset.index,1);tierDirty=true;renderTiers()})}
 async function loadTiers(){const d=await api('/api/loot/tiers');tierEntries=d.tiers||[];tierDirty=false;$('simTier').max=Math.max(8,d.maximumTier||8);renderTiers()}
 $('addTier').onclick=()=>{const ordered=[...tierEntries].sort((a,b)=>(+a.tier||0)-(+b.tier||0)),seed=ordered.length?ordered[ordered.length-1]:null,next=Math.max(8,...tierEntries.map(e=>+e.tier||8))+1;tierEntries.push(seed?{...seed,tier:next,name:'Tier '+next}:{tier:next,name:'Tier '+next,enabled:true,baseTier:8,lootQualityBonus:0.05,dropCountMultiplier:1,valueMultiplier:1.1,workmanshipBonus:0,spellcraftBonus:0,armorMultiplier:1,weaponDamageMultiplier:1,maxManaMultiplier:1,wieldLevelRequirement:0,description:''});tierDirty=true;renderTiers()};
 $('saveTiers').onclick=async()=>{try{const d=await api('/api/loot/tiers',{method:'POST',headers:headers(true),body:JSON.stringify({tiers:tierEntries})});await loadTiers();setStatus(d.message)}catch(e){setStatus(e.message)}};
 function spellEditorUrl(id){const base=$('spellLink').href;return base+(base.includes('?')?'&':'?')+'template='+encodeURIComponent(id)}
 function showWeightStatus(message){$('weightStatus').textContent=message||spellEntries.length+' spells; '+(spellCustomized?'custom pool':'ACE defaults')+(spellDirty?', unsaved changes':'')+'.'}
 function renderWeights(){const filter=$('weightSearch').value.trim().toLowerCase(),total=spellEntries.reduce((n,e)=>n+Math.max(0,+e.weight||0),0);const shown=spellEntries.filter(e=>!filter||String(e.name).toLowerCase().includes(filter)||String(e.spellId).includes(filter));$('weightRows').innerHTML=shown.map(e=>'<div class="weightRow '+(+e.weight===0?'disabled':'')+'" data-id="'+e.spellId+'"><div class="weightName">'+safe(e.name)+'<small>Spell ID '+e.spellId+'</small></div><input class="spellWeight" type="number" min="0" step="0.001" value="'+e.weight+'"><div class="chance">'+(total>0?(Math.max(0,+e.weight||0)/total*100).toFixed(2):'0.00')+'%</div><a href="'+spellEditorUrl(e.spellId)+'" target="_blank">Edit</a><button class="removeWeight" title="Remove spell">x</button></div>').join('');$('weightRows').querySelectorAll('.spellWeight').forEach(input=>input.onchange=()=>{const row=input.closest('.weightRow'),entry=spellEntries.find(e=>String(e.spellId)===row.dataset.id);entry.weight=Math.max(0,Number(input.value)||0);spellDirty=true;renderWeights()});$('weightRows').querySelectorAll('.removeWeight').forEach(button=>button.onclick=()=>{const id=button.closest('.weightRow').dataset.id;spellEntries=spellEntries.filter(e=>String(e.spellId)!==id);spellDirty=true;renderWeights()});showWeightStatus()}
-async function loadWeights(){const d=await api('/api/loot/spell-weights?pool='+encodeURIComponent($('weightPool').value));spellEntries=d.data.entries||[];spellCustomized=!!d.data.customized;spellDirty=false;renderWeights()}
+async function loadWeights(){const d=await api('/api/loot/spell-weights?pool='+encodeURIComponent($('weightPool').value));spellEntries=d.data.entries||[];spellOptions=d.spellOptions||[];$('spellChoices').innerHTML=spellOptions.map(e=>`<option value="${e.spellId}">${safe(e.name)}</option>`).join('');spellCustomized=!!d.data.customized;spellDirty=false;renderWeights()}
 $('weightPool').onchange=()=>loadWeights().catch(e=>showWeightStatus(e.message));
 $('weightSearch').oninput=renderWeights;
 $('openSpellEditor').href=$('spellLink').href;
-$('addWeightRow').onclick=()=>{const id=+$('addSpellId').value,weight=Math.max(0,+$('addWeight').value||0);if(!id)return showWeightStatus('Enter a base cantrip spell ID.');if(spellEntries.some(e=>e.spellId===id))return showWeightStatus('That spell is already in this pool.');spellEntries.push({spellId:id,name:'Spell '+id,weight:weight,chance:0});spellDirty=true;$('addSpellId').value='';renderWeights()};
+$('addWeightRow').onclick=()=>{const id=+$('addSpellId').value,weight=Math.max(0,+$('addWeight').value||0);if(!id)return showWeightStatus('Enter a base cantrip spell ID.');if(spellEntries.some(e=>e.spellId===id))return showWeightStatus('That spell is already in this pool.');const option=spellOptions.find(e=>e.spellId===id);spellEntries.push({spellId:id,name:option?.name||('Spell '+id),weight:weight,chance:0});spellDirty=true;$('addSpellId').value='';renderWeights()};
 $('saveWeights').onclick=async()=>{try{const d=await api('/api/loot/spell-weights',{method:'POST',headers:headers(true),body:JSON.stringify({pool:$('weightPool').value,entries:spellEntries})});await loadWeights();showWeightStatus(d.message);setStatus(d.message)}catch(e){showWeightStatus(e.message);setStatus(e.message)}};
 $('resetWeights').onclick=async()=>{if(!confirm('Reset this spell pool to ACE defaults?'))return;try{const d=await api('/api/loot/spell-weights',{method:'POST',headers:headers(true),body:JSON.stringify({pool:$('weightPool').value,reset:true,entries:[]})});await loadWeights();showWeightStatus(d.message);setStatus(d.message)}catch(e){showWeightStatus(e.message)}};
-$('reload').onclick=()=>Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
+$('reload').onclick=()=>Promise.all([load(),loadWeights(),loadWcids(),loadTiers()]).catch(e=>setStatus(e.message));
 $('save').onclick=async()=>{if(!dirty.size)return setStatus('No changes to save.');const d=await api('/api/loot/config',{method:'POST',headers:headers(true),body:JSON.stringify({values:Object.fromEntries(dirty)})});setStatus(d.message||'Saved.');await load()};
 $('simulate').onclick=async()=>{try{$('simOut').textContent='Running...';const d=await api('/api/loot/simulate',{method:'POST',headers:headers(true),body:JSON.stringify({tier:+$('simTier').value,count:+$('simCount').value,table:$('simTable').value})});$('simOut').textContent=d.summary||'Simulation complete.';setStatus(`Simulated ${d.count} T${d.tier} item rolls.`)}catch(e){$('simOut').textContent=e.message;setStatus(e.message)}};
-Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
+Promise.all([load(),loadWeights(),loadWcids(),loadTiers()]).catch(e=>setStatus(e.message));
 </script>
 </body>
 </html>
@@ -2961,13 +3226,17 @@ Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DerpACE Spell Workshop</title>
 <style>
-:root{color-scheme:dark;--bg:#0b0f10;--panel:#121719;--line:#354146;--text:#edf2f3;--muted:#9ba8ad;--blue:#65b6e8;--green:#5bc78f;--red:#e47777}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select,textarea{font:inherit;color:inherit}.top{height:52px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:#101517}.top h1{font-size:16px;margin:0}.top a{color:var(--blue);text-decoration:none}.top span{margin-left:auto;color:var(--muted)}main{display:grid;grid-template-columns:260px minmax(420px,1fr) 390px;min-height:calc(100vh - 52px)}aside,.guide{padding:16px;background:var(--panel);overflow:auto}aside{border-right:1px solid var(--line)}.guide{border-left:1px solid var(--line)}.editor{padding:16px;min-width:0}.field{display:grid;gap:4px;margin-bottom:11px}.field span{font-size:10px;color:var(--muted);text-transform:uppercase}.field input,.field select,.field textarea{width:100%;background:#080c0d;border:1px solid #3a474c;border-radius:4px;padding:8px}.actions{display:flex;gap:7px;flex-wrap:wrap}button{cursor:pointer;border:1px solid #46565c;border-radius:4px;background:#27353a;padding:8px 11px}button:hover{border-color:var(--green)}button.primary{background:#20533a}.spellAssist{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}.spellAssist h3{font-size:12px;margin:0 0 9px;color:var(--muted);text-transform:uppercase}.miniGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.assistHint{margin:8px 0;color:var(--muted)}button.wide{width:100%}.note,.status{color:var(--muted)}.status.ok{color:var(--green)}.status.error{color:var(--red)}#spellJson{width:100%;height:calc(100vh - 145px);min-height:520px;resize:vertical;background:#070a0b;border:1px solid #38464b;border-radius:4px;padding:12px;color:#e9eff0;font:12px/1.5 Consolas,monospace;tab-size:2}.editorHead{display:flex;align-items:center;gap:8px;margin-bottom:10px}.editorHead h2{font-size:14px;margin:0}.editorHead .actions{margin-left:auto}details{border-top:1px solid var(--line);padding:9px 0}details:first-of-type{border-top:0}summary{cursor:pointer;font-weight:650}.vars{display:grid;gap:8px;margin-top:9px}.var{display:grid;grid-template-columns:145px 1fr;gap:8px}.var code{color:#b8dcf2}.var span{color:var(--muted)}h2{font-size:14px;margin:0 0 10px}.warning{margin-top:14px;color:#e3bd69}@media(max-width:1050px){main{grid-template-columns:220px 1fr}.guide{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}}@media(max-width:700px){main{display:block}aside,.guide{border:0;border-bottom:1px solid var(--line)}#spellJson{height:65vh}.top span{display:none}}
+:root{color-scheme:dark;--bg:#0b0f10;--panel:#121719;--line:#354146;--text:#edf2f3;--muted:#9ba8ad;--blue:#65b6e8;--green:#5bc78f;--red:#e47777}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 Segoe UI,Arial,sans-serif}button,input,select,textarea{font:inherit;color:inherit}.top{height:52px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:#101517}.top h1{font-size:16px;margin:0}.top a{color:var(--blue);text-decoration:none}.top span{margin-left:auto;color:var(--muted)}main{display:grid;grid-template-columns:320px minmax(420px,1fr) 390px;min-height:calc(100vh - 52px)}aside,.guide{padding:16px;background:var(--panel);overflow:auto}aside{border-right:1px solid var(--line)}.guide{border-left:1px solid var(--line)}.editor{padding:16px;min-width:0}.field{display:grid;gap:4px;margin-bottom:11px}.field span{font-size:10px;color:var(--muted);text-transform:uppercase}.field input,.field select,.field textarea{width:100%;background:#080c0d;border:1px solid #3a474c;border-radius:4px;padding:8px}.actions{display:flex;gap:7px;flex-wrap:wrap}button{cursor:pointer;border:1px solid #46565c;border-radius:4px;background:#27353a;padding:8px 11px}button:hover{border-color:var(--green)}button.primary{background:#20533a}.spellAssist{border-top:1px solid var(--line);margin-top:16px;padding-top:14px}.catalogTools{display:grid;grid-template-columns:1fr auto;gap:7px}.catalogTools input{min-width:0;background:#080c0d;border:1px solid #3a474c;border-radius:4px;padding:8px}.catalogList{display:grid;gap:5px;max-height:250px;overflow:auto;margin:9px 0 16px}.catalogItem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;text-align:left;background:#182023;border:1px solid #304046;border-radius:4px;padding:7px}.catalogItem strong,.catalogItem small{display:block}.catalogItem small{color:var(--muted)}.catalogItem button{padding:5px 8px}.idState{display:block;margin:-6px 0 10px;color:var(--muted)}.idState.used{color:var(--red)}.mode{display:inline-block;border:1px solid var(--line);border-radius:3px;padding:2px 6px;color:var(--muted);margin-bottom:10px}.checkField{display:flex;gap:8px;align-items:flex-start;margin:9px 0}.checkField input{margin-top:3px}.checkField small{color:var(--muted)}.spellAssist h3{font-size:12px;margin:0 0 9px;color:var(--muted);text-transform:uppercase}.miniGrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.assistHint{margin:8px 0;color:var(--muted)}button.wide{width:100%}.note,.status{color:var(--muted)}.status.ok{color:var(--green)}.status.error{color:var(--red)}#spellJson{width:100%;height:calc(100vh - 145px);min-height:520px;resize:vertical;background:#070a0b;border:1px solid #38464b;border-radius:4px;padding:12px;color:#e9eff0;font:12px/1.5 Consolas,monospace;tab-size:2}.editorHead{display:flex;align-items:center;gap:8px;margin-bottom:10px}.editorHead h2{font-size:14px;margin:0}.editorHead .actions{margin-left:auto}details{border-top:1px solid var(--line);padding:9px 0}details:first-of-type{border-top:0}summary{cursor:pointer;font-weight:650}.vars{display:grid;gap:8px;margin-top:9px}.var{display:grid;grid-template-columns:145px 1fr;gap:8px}.var code{color:#b8dcf2}.var span{color:var(--muted)}h2{font-size:14px;margin:0 0 10px}.warning{margin-top:14px;color:#e3bd69}@media(max-width:1050px){main{grid-template-columns:220px 1fr}.guide{grid-column:1/-1;border-left:0;border-top:1px solid var(--line)}}@media(max-width:700px){main{display:block}aside,.guide{border:0;border-bottom:1px solid var(--line)}#spellJson{height:65vh}.top span{display:none}}
 </style></head><body>
-<header class="top"><h1>Spell Workshop</h1><a id="mapLink" href="/">Admin Map</a><a id="bossLink" href="/boss-mechanics">Boss Operations</a><span>Admin only</span></header>
-<main><aside><h2>Clone A Spell</h2><p class="note">Start from a working spell. The template supplies every field you do not override.</p>
-<label class="field"><span>Template spell ID</span><input id="templateId" type="number" min="1" value="2659"></label>
-<label class="field"><span>New custom ID</span><input id="targetId" type="number" min="65001" max="65535" value="65019"></label>
-<button id="clone" class="primary wide">Load Template</button>
+<header class="top"><h1>Spell Workshop</h1><a id="mapLink" href="/">Admin Map</a><a id="bossLink" href="/boss-mechanics">Boss Operations</a><a id="lootLink" href="/loot-lab">Loot Lab</a><span>Admin only</span></header>
+<main><aside><h2>Custom Spell Catalog</h2><p class="note">Every currently loaded custom spell is listed here. Search by name, ID, template, or source file.</p>
+<div class="catalogTools"><input id="catalogSearch" placeholder="Search custom spells"><button id="nextId" title="Select the next unused custom spell ID">Next Free ID</button></div>
+<div id="catalogList" class="catalogList"><span class="note">Loading custom spells...</span></div>
+<h2>Create From Template</h2><p class="note">A template is an existing spell whose behavior and hidden fields are copied. Your custom ID is the new spell's permanent identity.</p>
+<label class="field"><span>Template spell ID</span><input id="templateId" type="number" min="1" value="2659" title="Existing ACE or custom spell to copy"></label>
+<label class="field"><span>New custom spell ID</span><input id="targetId" type="number" min="65001" max="65535" value="65019" title="Reserved server-side spell ID; it must be unused for creation"></label>
+<small id="idState" class="idState">Checking ID...</small><span id="editMode" class="mode">Create mode</span>
+<button id="clone" class="primary wide">Create Draft From Template</button>
 <section class="spellAssist">
 <h3>Common Spell Fields</h3>
 <p class="assistHint">Load a template, adjust the common fields, then apply them to the JSON.</p>
@@ -2983,8 +3252,9 @@ Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
 <div class="actions"><button id="readGuided" type="button">Read JSON</button><button id="applyGuided" type="button" class="primary">Apply To JSON</button></div>
 </section>
 <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
-<label class="field"><span>JSON filename</span><input id="fileName" value="WorkshopSpell.json"></label>
-<div class="actions"><button id="format">Format JSON</button><button id="save" class="primary">Save + Reload</button></div>
+<label class="field"><span>JSON filename</span><input id="fileName" value="WorkshopSpell.json" title="Stored in Data/CustomSpells; filenames must also be unique"></label>
+<label class="checkField"><input id="allowOverwrite" type="checkbox"><small><strong>Allow intentional overwrite</strong><br>Required when editing an occupied spell ID or replacing an existing JSON filename. Leave this off for new spells.</small></label>
+<div class="actions"><button id="format">Validate + Format</button><button id="save" class="primary">Save + Hot Reload</button></div>
 <p id="status" class="status">No spell loaded.</p><p class="warning">Saving reloads all custom spell JSON immediately. Existing casts are unaffected; future casts use the new definition.</p></aside>
 <section class="editor"><div class="editorHead"><h2>Authoritative JSON</h2><div class="actions"><button id="copy">Copy</button></div></div><textarea id="spellJson" spellcheck="false" placeholder="Load a template or paste CustomSpells JSON here."></textarea></section>
 <section class="guide"><h2>Field Reference</h2><p class="note">Top-level fields are convenient overrides. <code>SpellBase</code> and <code>DbSpell</code> expose the complete underlying records.</p>
@@ -3000,11 +3270,17 @@ Promise.all([load(),loadWeights(),loadTiers()]).catch(e=>setStatus(e.message));
 <div class="var"><code>CasterEffect</code><span>PlayScript enum run on the caster.</span></div><div class="var"><code>TargetEffect</code><span>PlayScript enum run on the target or impact.</span></div><div class="var"><code>Formula</code><span>Array of component IDs controlling the cast formula and gestures.</span></div><div class="var"><code>Wcid</code><span>Object WCID used by spell types that create or summon an object.</span></div><div class="var"><code>SpellBase</code><span>Advanced object containing any writable DAT SpellBase property. Top-level values are applied first.</span></div><div class="var"><code>DbSpell</code><span>Advanced object containing any writable world database spell property, including projectile physics fields.</span></div></div></details>
 </section></main>
 <script>
-const q=new URLSearchParams(location.search),session=q.get('session')||'',token=q.get('token')||'';const $=id=>document.getElementById(id);if(session){$('mapLink').href='/?session='+encodeURIComponent(session);$('bossLink').href='/boss-mechanics?session='+encodeURIComponent(session)}const requestedTemplate=q.get('template');if(requestedTemplate)$('templateId').value=requestedTemplate;
-
+const q=new URLSearchParams(location.search),session=q.get('session')||'',token=q.get('token')||'';const $=id=>document.getElementById(id);function linked(path){const p=new URLSearchParams();if(session)p.set('session',session);if(token)p.set('token',token);const query=p.toString();return path+(query?'?'+query:'')}$('mapLink').href=linked('/');$('bossLink').href=linked('/boss-mechanics');$('lootLink').href=linked('/loot-lab');const requestedTemplate=q.get('template');if(requestedTemplate)$('templateId').value=requestedTemplate;
+let customSpells=[],nextUnusedId=65001,editingId=0;
+function safe(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function headers(json=false){const h={};if(session)h['X-DerpACE-Map-Session']=session;if(token)h['X-DerpACE-Map-Token']=token;if(json)h['Content-Type']='application/json';return h}
 function status(text,type=''){const e=$('status');e.textContent=text;e.className='status '+type}
 async function api(url,opt={}){opt.headers={...headers(!!opt.body),...(opt.headers||{})};const r=await fetch(url,opt),d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||'Request failed');return d}
+function renderCatalog(){const term=$('catalogSearch').value.trim().toLowerCase(),rows=customSpells.filter(s=>!term||`${s.id} ${s.name} ${s.templateId??''} ${s.sourceFile??''}`.toLowerCase().includes(term));$('catalogList').innerHTML=rows.map(s=>`<div class="catalogItem"><span><strong>${safe(s.id+' - '+s.name)}</strong><small>${s.templateId?'Template '+s.templateId:'Template unknown'} &middot; ${safe(s.sourceFile||'runtime only')}</small></span><button data-edit="${s.id}" ${s.canEdit?'':'disabled'} title="${s.canEdit?'Load this spell into intentional edit mode':'No JSON source definition was found'}">Edit</button></div>`).join('')||'<span class="note">No matching custom spells.</span>';$('catalogList').querySelectorAll('[data-edit]').forEach(button=>button.onclick=()=>loadExistingSpell(+button.dataset.edit))}
+function syncIdState(){const id=+$('targetId').value,used=customSpells.find(s=>s.id===id),editing=editingId===id;const state=$('idState');state.className='idState'+(used&&!editing?' used':'');state.textContent=editing?`Editing ${used?.name||('spell '+id)}. Saving requires intentional overwrite.`:used?`ID ${id} is occupied by ${used.name}. Use its Edit button instead.`:id>=65001&&id<=65535?`ID ${id} is available.`:'Custom IDs must be between 65001 and 65535.';$('editMode').textContent=editing?`Editing spell ${id}`:'Create mode'}
+async function loadCatalog(){const data=await api('/api/spells/catalog');customSpells=data.spells||[];nextUnusedId=data.nextUnusedId||0;if(!editingId&&(!$('targetId').value||customSpells.some(s=>s.id===+$('targetId').value)))$('targetId').value=nextUnusedId||'';renderCatalog();syncIdState()}
+async function loadExistingSpell(id){try{const data=await api('/api/spells/draft?edit='+encodeURIComponent(id));$('spellJson').value=data.json;const spell=firstSpell(JSON.parse(data.json));editingId=id;$('targetId').value=id;$('templateId').value=spell.Template??spell.template??'';const catalog=customSpells.find(s=>s.id===id),override=`ZZZ_Workshop_${id}.json`;$('fileName').value=(catalog?.sourceFile||'').startsWith('ZZZ_Workshop_')?catalog.sourceFile:override;$('allowOverwrite').checked=true;readGuidedFromJson();syncIdState();status(`Loaded ${catalog?.name||('spell '+id)} in intentional edit mode.`,'ok')}catch(e){status(e.message,'error')}}
+function beginCreate(){editingId=0;$('allowOverwrite').checked=false;$('targetId').value=nextUnusedId||'';$('fileName').value=$('targetId').value?`WorkshopSpell_${$('targetId').value}.json`:'WorkshopSpell.json';syncIdState();$('targetId').focus()}
 function parseSpellDoc(){try{return JSON.parse($('spellJson').value)}catch(e){throw new Error('JSON: '+e.message)}}
 function firstSpell(doc){if(doc&&Array.isArray(doc.CustomSpells)){doc.CustomSpells[0]=doc.CustomSpells[0]||{};return doc.CustomSpells[0]}return doc}
 function nested(entry,group,key){return entry?.[key]??entry?.[group]?.[key]??''}
@@ -3013,11 +3289,13 @@ function numOrEmpty(value){return value===undefined||value===null?'':value}
 function readGuidedFromJson(){try{const doc=parseSpellDoc(),s=firstSpell(doc);if(!s)throw new Error('No spell entry found. Load or paste a CustomSpells JSON first.');setVal('spellName',nested(s,'SpellBase','Name'));setVal('spellWords',nested(s,'SpellBase','SpellWords'));setVal('spellDesc',nested(s,'SpellBase','Desc'));setVal('spellSchool',nested(s,'SpellBase','School')||'WarMagic');setVal('spellIcon',nested(s,'SpellBase','Icon'));setVal('spellDamageType',nested(s,'DbSpell','DamageType')||nested(s,'DbSpell','EType')||'Fire');setVal('spellBaseIntensity',numOrEmpty(nested(s,'DbSpell','BaseIntensity')));setVal('spellVariance',numOrEmpty(nested(s,'DbSpell','Variance')));setVal('spellMana',numOrEmpty(nested(s,'SpellBase','BaseMana')));setVal('spellPower',numOrEmpty(nested(s,'SpellBase','Power')));setVal('spellDuration',numOrEmpty(nested(s,'SpellBase','Duration')));setVal('spellProjectiles',numOrEmpty(nested(s,'DbSpell','NumProjectiles')));setVal('spellSpread',numOrEmpty(nested(s,'DbSpell','SpreadAngle')));setVal('spellCasterEffect',nested(s,'SpellBase','CasterEffect'));setVal('spellTargetEffect',nested(s,'SpellBase','TargetEffect'));status('Guided fields loaded from JSON.','ok')}catch(e){status(e.message,'error')}}
 function writeIf(entry,key,id,kind='text'){const raw=$(id).value.trim();if(raw==='')return;if(kind==='int')entry[key]=parseInt(raw,10);else if(kind==='float')entry[key]=parseFloat(raw);else entry[key]=raw}
 function applyGuidedToJson(){try{const doc=parseSpellDoc(),s=firstSpell(doc);if(!s)throw new Error('No spell entry found. Load or paste a CustomSpells JSON first.');writeIf(s,'Name','spellName');writeIf(s,'SpellWords','spellWords');writeIf(s,'Desc','spellDesc');writeIf(s,'School','spellSchool');writeIf(s,'Icon','spellIcon');writeIf(s,'BaseMana','spellMana','int');writeIf(s,'Power','spellPower','int');writeIf(s,'Duration','spellDuration','float');writeIf(s,'BaseIntensity','spellBaseIntensity','int');writeIf(s,'Variance','spellVariance','int');writeIf(s,'NumProjectiles','spellProjectiles','int');writeIf(s,'SpreadAngle','spellSpread','float');writeIf(s,'CasterEffect','spellCasterEffect');writeIf(s,'TargetEffect','spellTargetEffect');const damage=$('spellDamageType').value.trim();if(damage){s.DamageType=damage;s.EType=damage}$('spellJson').value=JSON.stringify(doc,null,2);status('Guided fields applied to JSON. Validate/Save when ready.','ok')}catch(e){status(e.message,'error')}}
-$('clone').onclick=async()=>{try{const d=await api(`/api/spells/draft?template=${encodeURIComponent($('templateId').value)}&id=${encodeURIComponent($('targetId').value)}`);$('spellJson').value=d.json;readGuidedFromJson();status('Template loaded. Adjust guided fields or edit JSON directly.','ok')}catch(e){status(e.message,'error')}};
+$('clone').onclick=async()=>{try{const id=+$('targetId').value;if(customSpells.some(s=>s.id===id)&&editingId!==id)throw new Error(`Spell ID ${id} is occupied. Use the catalog Edit button for intentional changes.`);const d=await api(`/api/spells/draft?template=${encodeURIComponent($('templateId').value)}&id=${encodeURIComponent(id)}`);editingId=0;$('allowOverwrite').checked=false;$('spellJson').value=d.json;readGuidedFromJson();syncIdState();status('New draft loaded. Adjust guided fields or edit JSON directly.','ok')}catch(e){status(e.message,'error')}};
 $('readGuided').onclick=readGuidedFromJson;$('applyGuided').onclick=applyGuidedToJson;
 $('format').onclick=()=>{try{$('spellJson').value=JSON.stringify(JSON.parse($('spellJson').value),null,2);readGuidedFromJson();status('JSON is valid.','ok')}catch(e){status(e.message,'error')}};
 $('copy').onclick=()=>navigator.clipboard.writeText($('spellJson').value);
-$('save').onclick=async()=>{try{JSON.parse($('spellJson').value);const d=await api('/api/spells/save',{method:'POST',body:JSON.stringify({fileName:$('fileName').value,json:$('spellJson').value})});status(d.message,'ok')}catch(e){status(e.message,'error')}};</script></body></html>
+$('catalogSearch').oninput=renderCatalog;$('nextId').onclick=beginCreate;$('targetId').oninput=()=>{if(editingId!==+$('targetId').value){editingId=0;$('allowOverwrite').checked=false}syncIdState()};
+$('save').onclick=async()=>{try{const doc=JSON.parse($('spellJson').value),spell=firstSpell(doc),id=+(spell?.Id??spell?.id??0),overwrite=$('allowOverwrite').checked;if(overwrite&&!confirm(`Overwrite the saved definition for custom spell ${id}? This hot-reloads future casts immediately.`))return;const d=await api('/api/spells/save',{method:'POST',body:JSON.stringify({fileName:$('fileName').value,json:$('spellJson').value,allowOverwrite:overwrite})});await loadCatalog();status(d.message,'ok')}catch(e){status(e.message,'error')}};
+loadCatalog().catch(e=>status(e.message,'error'));</script></body></html>
 """;
         }
         private static string BuildIndexHtml()
@@ -3223,6 +3501,17 @@ aside {{ position:relative; z-index:30; pointer-events:auto; }}
 .formGrid {{ padding:10px; border:1px solid rgba(255,255,255,.09); border-radius:5px; background:#111719; }}
 .propertyGroup {{ background:#111719; }}
 #inventorySave {{ background:#2d6650; }}
+/* DAT-style layout roots: gameplay host, floating roots, and independent layouts */
+.layoutRail {{ position:absolute; z-index:12; left:14px; top:76px; display:flex; flex-direction:column; gap:6px; width:42px; padding:5px; border:1px solid rgba(255,255,255,.14); border-radius:6px; background:rgba(10,15,17,.92); box-shadow:0 10px 28px rgba(0,0,0,.34); backdrop-filter:blur(10px); }}
+.layoutRail button,.layoutRail a {{ width:32px; height:32px; display:grid; place-items:center; padding:0; border:1px solid transparent; border-radius:4px; background:transparent; color:#9caaa5; font-size:16px; line-height:1; text-decoration:none; cursor:pointer; }}
+.layoutRail button:hover,.layoutRail a:hover {{ color:#fff; border-color:#3d5055; background:#202d30; }}
+.layoutRail button.active {{ color:#fff3bf; border-color:#64777b; background:#2b3b3f; box-shadow:inset 3px 0 #71b7e8; }}
+.layoutRail button:disabled {{ opacity:.28; cursor:not-allowed; }}
+.layoutRailDivider {{ height:1px; margin:2px 3px; background:rgba(255,255,255,.12); }}
+.mapToolbar {{ left:66px; }}
+.zoomControls {{ left:66px; }}
+.sessionBar {{ grid-template-columns:minmax(0,1fr) auto; }}
+@media(max-width:860px) {{ .layoutRail {{ left:8px; top:64px; width:auto; flex-direction:row; }} .mapToolbar {{ left:8px; }} .zoomControls {{ left:8px; }} }}
 /* Inventory bag layout */
 .inventoryPanel {{ inset:22px; grid-template-columns:minmax(420px,.95fr) minmax(430px,.75fr); max-width:1420px; }}
 .inventoryTable {{ display:grid; gap:10px; align-content:start; }}
@@ -3257,19 +3546,29 @@ aside {{ position:relative; z-index:30; pointer-events:auto; }}
 @media(max-width:640px) {{ .inventoryPanel {{ inset:8px; grid-template-columns:1fr; overflow:auto; }} .inventoryListPane {{ min-height:55vh; }} .inventoryEditPane {{ border-left:0; border-top:1px solid rgba(255,255,255,.12); }} .inventoryForm {{ grid-template-columns:1fr; }} .inventoryForm>* {{ grid-column:1!important; }} }}
 </style>
 </head>
-<body>
-<main id=""map""><div class=""mapToolbar""><h1 id=""mapTitle"">DerpACE Map</h1><div id=""status"" class=""toolbarStatus"">Loading...</div><div class=""toolbarActions""><button id=""worldButton"" title=""Return to overworld"">&#8962;</button><button id=""refreshButton"" title=""Refresh now"">&#8635;</button><button id=""sidebarButton"" title=""Toggle sidebar"">&#9776;</button></div></div>
+<body id=""uiElementManager"" data-dat-root=""UiElementManager"">
+<main id=""map"" data-dat-layout=""0x21000008"" data-dat-element=""0x1000049A"" data-dat-parent=""0x10000495""><nav class=""layoutRail"" aria-label=""Admin layouts"">
+  <button id=""railWorld"" class=""active"" title=""World map"" aria-label=""World map"">&#8962;</button>
+  <button id=""railPlayers"" data-rail-view=""players"" title=""Players"" aria-label=""Players"">&#9776;</button>
+  <button id=""railInspect"" class=""adminOnly"" data-rail-view=""inspect"" title=""Player controls"" aria-label=""Player controls"">&#8982;</button>
+  <button id=""railLegend"" class=""adminOnly"" data-rail-view=""legend"" title=""Map legend"" aria-label=""Map legend"">&#9680;</button>
+  <button id=""railInventory"" title=""Selected player inventory"" aria-label=""Selected player inventory"" disabled>&#9638;</button>
+  <span class=""layoutRailDivider""></span>
+  <a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"" title=""Boss mechanics"" aria-label=""Boss mechanics"">&#9876;</a>
+  <a id=""spellWorkshopLink"" class=""adminOnly"" href=""/spell-workshop"" target=""_blank"" title=""Spell workshop"" aria-label=""Spell workshop"">&#10022;</a>
+  <a id=""lootLabLink"" class=""adminOnly"" href=""/loot-lab"" target=""_blank"" title=""Loot lab"" aria-label=""Loot lab"">&#9670;</a>
+</nav><div class=""mapToolbar"" data-dat-root=""floaty-toolbar""><h1 id=""mapTitle"">DerpACE Map</h1><div id=""status"" class=""toolbarStatus"">Loading...</div><div class=""toolbarActions""><button id=""worldButton"" title=""Return to overworld"">&#8962;</button><button id=""refreshButton"" title=""Refresh now"">&#8635;</button><button id=""sidebarButton"" title=""Toggle sidebar"">&#9776;</button></div></div>
   <div class=""axis north"">102N</div><div class=""axis south"">102S</div><div class=""axis west"">102W</div><div class=""axis east"">102E</div>
   <div class=""zoomControls""><button id=""zoomIn"" title=""Zoom in"">+</button><button id=""zoomOut"" title=""Zoom out"">-</button><button id=""zoomReset"" title=""Reset view"">1</button><button id=""zoomFit"" title=""Fit"">&#9633;</button></div>
-  <div id=""bottomDock"" class=""bottomDock""></div>
+  <div id=""bottomDock"" class=""bottomDock"" data-dat-root=""floating-chat-roots""></div>
 </main>
-<aside><div class=""sidebarHeader"">
+<aside data-dat-root=""independent-gameplay-root""><div class=""sidebarHeader"">
 <div id=""loginPanel"" class=""loginPanel"">
     <input id=""loginAccount"" autocomplete=""username"" placeholder=""account"">
     <input id=""loginPassword"" type=""password"" autocomplete=""current-password"" placeholder=""password"">
     <button id=""loginButton"">Log In</button>
   </div>
-  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><a id=""bossMechanicsLink"" class=""adminOnly"" href=""/boss-mechanics"" target=""_blank"">Boss Mechanics</a><a id=""spellWorkshopLink"" class=""adminOnly"" href=""/spell-workshop"" target=""_blank"">Spells</a><a id=""lootLabLink"" class=""adminOnly"" href=""/loot-lab"" target=""_blank"">Loot Lab</a><button id=""logoutButton"">Log Out</button></div>
+  <div id=""sessionBar"" class=""sessionBar""><span id=""sessionText""></span><button id=""logoutButton"">Log Out</button></div>
   <div class=""controls adminOnly""><input id=""token"" type=""password"" placeholder=""backup token, optional""><button id=""save"">Save</button></div></div><nav class=""sidebarTabs""><button class=""sidebarTab active"" data-side-tab=""players"">Players</button><button class=""sidebarTab adminOnly"" data-side-tab=""inspect"">Inspect</button><button class=""sidebarTab adminOnly"" data-side-tab=""legend"">Legend</button></nav><div class=""sidebarContent""><div class=""sidebarSearch sidePlayers""><input id=""playerSearch"" placeholder=""Search players or locations""><span id=""rosterCount"" class=""rosterCount"">0</span></div>
   <section id=""adminPanel"" class=""adminPanel adminOnly sideInspect"">
     <h2 id=""adminPlayerName"">Player</h2>
@@ -3297,7 +3596,7 @@ aside {{ position:relative; z-index:30; pointer-events:auto; }}
   </div>
   <div id=""players"" class=""sidePlayers""></div></div>
 </aside>
-<section id=""inventoryPanel"" class=""inventoryPanel"" aria-live=""polite"">
+<section id=""inventoryPanel"" class=""inventoryPanel"" data-dat-layout=""0x21000023"" aria-live=""polite"">
   <div class=""inventoryListPane"">
     <div class=""inventoryTop""><h2 id=""inventoryTitle"">Inventory</h2><div class=""inventoryActions""><button id=""inventoryRefresh"" class=""iconButton"" title=""Refresh"">&#8635;</button><button id=""inventoryClose"" class=""iconButton"" title=""Close"">&times;</button></div></div>
     <div class=""inventorySearch""><input id=""inventoryFilter"" placeholder=""search name, type, wcid, container""><button id=""inventoryClear"" class=""smallButton"">Clear</button></div>
@@ -3411,6 +3710,7 @@ function pctY(y) {{ return ((102 - y) / 204) * 100; }}
 function setSideView(view) {{
   document.body.dataset.sideView = view;
   document.querySelectorAll('[data-side-tab]').forEach(button => button.classList.toggle('active', button.dataset.sideTab === view));
+  document.querySelectorAll('[data-rail-view]').forEach(button => button.classList.toggle('active', button.dataset.railView === view));
 }}
 function applyPlayerFilter() {{
   const q = (playerSearch?.value || '').trim().toLowerCase();
@@ -3459,6 +3759,10 @@ function setAuthenticated(value, accountName, isAdmin) {{
     list.innerHTML = '';
     bottomDock.innerHTML = '';
     watchPlayerGuid = null;
+    selectedPlayer = null;
+    document.getElementById('railInventory').disabled = true;
+    document.getElementById('railInventory').classList.remove('active');
+    inventoryPanel.classList.remove('open');
     watchPanel.classList.remove('open');
   }}
 }}
@@ -3660,6 +3964,7 @@ function itemFallback(item) {{
 }}
 function selectPlayer(playerGuid) {{
   selectedPlayer = playerIndex[playerGuid] || null;
+  document.getElementById('railInventory').disabled = !selectedPlayer;
   if (!selectedPlayer || !isAdminSession) return;
   setSideView('inspect');
   adminPanel.classList.add('open');
@@ -3761,6 +4066,7 @@ async function openInventory(playerGuid) {{
   inventoryState.playerGuid = playerGuid;
   inventoryState.selected = null;
   inventoryPanel.classList.add('open');
+  document.getElementById('railInventory').classList.add('active');
   inventoryTitle.textContent = 'Inventory';
   inventoryRows.innerHTML = '<div class=""muted"" style=""padding:10px"">Loading...</div>';
   await loadInventory();
@@ -3967,7 +4273,7 @@ async function deleteInventoryItem() {{
   renderInventoryRows();
   renderInventoryDetails(null);
 }}
-document.getElementById('inventoryClose').onclick = () => inventoryPanel.classList.remove('open');
+document.getElementById('inventoryClose').onclick = () => {{ inventoryPanel.classList.remove('open'); document.getElementById('railInventory').classList.remove('active'); }};
 document.getElementById('inventoryRefresh').onclick = loadInventory;
 document.getElementById('inventoryClear').onclick = () => {{ inventoryFilter.value = ''; renderInventoryRows(); }};
 document.getElementById('inventorySave').onclick = saveInventoryItem;
@@ -4115,6 +4421,9 @@ async function loadDungeon(landblock) {{
 function refresh() {{ currentDungeon ? loadDungeon(currentDungeon) : load(); refreshWatch(); }}
 setSideView('players');
 document.querySelectorAll('[data-side-tab]').forEach(button => button.onclick = () => setSideView(button.dataset.sideTab));
+document.querySelectorAll('[data-rail-view]').forEach(button => button.onclick = () => {{ document.body.classList.remove('sidebarCollapsed'); setSideView(button.dataset.railView); }});
+document.getElementById('railWorld').onclick = () => load();
+document.getElementById('railInventory').onclick = () => selectedPlayer ? openInventory(selectedPlayer.guid) : status.textContent = 'Select a player first.';
 playerSearch?.addEventListener('input', applyPlayerFilter);
 document.getElementById('refreshButton').onclick = refresh;
 document.getElementById('worldButton').onclick = () => load();
@@ -4142,6 +4451,7 @@ checkSession();
         {
             public string FileName { get; set; }
             public string Json { get; set; }
+            public bool AllowOverwrite { get; set; }
         }
         private sealed class AdminBossProfileSummary
         {
@@ -4226,6 +4536,14 @@ checkSession();
             public string Pool { get; set; }
             public bool Reset { get; set; }
             public List<LootSpellWeight> Entries { get; set; } = new List<LootSpellWeight>();
+        }
+
+        private sealed class AdminLootWcidWeightRequest
+        {
+            public string Pool { get; set; }
+            public bool Reset { get; set; }
+            public double BuiltInWeight { get; set; } = 100.0;
+            public List<LootWcidWeight> Entries { get; set; } = new List<LootWcidWeight>();
         }
 
         private sealed class AdminLootSimulationRequest

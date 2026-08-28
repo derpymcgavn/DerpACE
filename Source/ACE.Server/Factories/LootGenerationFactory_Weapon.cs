@@ -12,10 +12,11 @@ namespace ACE.Server.Factories
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
         /// </summary>
-        public static WorldObject CreateWeapon(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null)
+        public static WorldObject CreateWeapon(TreasureDeath profile, bool isMagical, string forcedWeaponMutator = null, int requestedTier = 0)
         {
             var tierContext = LootTierManager.Resolve(profile);
             profile = tierContext.Profile;
+            var rollTier = requestedTier > 0 ? requestedTier : tierContext.RequestedTier;
             var weaponType = WeaponTypeChance.Roll(profile.Tier);
 
             if (TryResolveWeaponMutator(forcedWeaponMutator, out var canonicalMutator)
@@ -24,11 +25,11 @@ namespace ACE.Server.Factories
 
             WorldObject weapon;
             if (weaponType.IsMeleeWeapon())
-                weapon = CreateMeleeWeapon(profile, isMagical, weaponType, forcedWeaponMutator);
+                weapon = CreateMeleeWeapon(profile, isMagical, weaponType, forcedWeaponMutator, rollTier);
             else if (weaponType.IsMissileWeapon())
-                weapon = CreateMissileWeapon(profile, isMagical, forcedWeaponType: weaponType, forcedWeaponMutator: forcedWeaponMutator);
+                weapon = CreateMissileWeapon(profile, isMagical, forcedWeaponType: weaponType, forcedWeaponMutator: forcedWeaponMutator, requestedTier: rollTier);
             else
-                weapon = CreateCaster(profile, isMagical, forcedWeaponMutator);
+                weapon = CreateCaster(profile, isMagical, forcedWeaponMutator, rollTier);
 
             return LootTierManager.Apply(weapon, tierContext);
         }

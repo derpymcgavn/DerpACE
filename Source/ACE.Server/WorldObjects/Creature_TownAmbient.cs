@@ -33,6 +33,15 @@ namespace ACE.Server.WorldObjects
         private Queue<Position> ulgrimAyanRoute;
         private bool ulgrimAyanRouteToBar;
 
+        private bool IsAyanUlgrimAmbientMovementOwned => ulgrimAyanRoute != null || ulgrimAyanAtBar;
+
+        private const float UlgrimAyanInitialTripDelayMin = 120.0f;
+        private const float UlgrimAyanInitialTripDelayMax = 300.0f;
+        private const float UlgrimAyanBarRoundDelayMin = 45.0f;
+        private const float UlgrimAyanBarRoundDelayMax = 90.0f;
+        private const float UlgrimAyanHomeDelayMin = 600.0f;
+        private const float UlgrimAyanHomeDelayMax = 1200.0f;
+
         private const uint UlgrimTheUnpleasantWcid = 6873;
         private const uint AyanBarkeeperWcid = 6856;
         private const uint GenericKegWcid = 157;
@@ -205,7 +214,7 @@ namespace ACE.Server.WorldObjects
 
             if (nextUlgrimAyanActionTime <= 0)
             {
-                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(20.0f, 50.0f);
+                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(UlgrimAyanInitialTripDelayMin, UlgrimAyanInitialTripDelayMax);
                 return;
             }
 
@@ -226,7 +235,7 @@ namespace ACE.Server.WorldObjects
             if (ulgrimAyanRoundsRemaining-- > 0)
             {
                 PerformUlgrimDrinkingRound();
-                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(24.0f, 48.0f);
+                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(UlgrimAyanBarRoundDelayMin, UlgrimAyanBarRoundDelayMax);
                 return;
             }
 
@@ -259,6 +268,13 @@ namespace ACE.Server.WorldObjects
 
         private void StartUlgrimAyanRoute(bool toBar)
         {
+            // Ambient travel owns movement for the entire trip. Clear any generic
+            // home/path action first so it cannot force-home Ulgrim mid-route.
+            if (HasPendingMovement)
+                CancelMoveTo(WeenieError.ActionCancelled);
+            if (IsAwake || MonsterState != State.Idle || IsRouting || IsWandering || IsMovingToHome)
+                Sleep();
+
             ulgrimAyanRoute = new Queue<Position>(UlgrimAyanBarRoute.Length);
             ulgrimAyanRouteToBar = toBar;
 
@@ -269,8 +285,16 @@ namespace ACE.Server.WorldObjects
             }
             else
             {
-                for (var i = UlgrimAyanBarRoute.Length - 1; i >= 0; i--)
+                // Follow the recorded route back through the doorway, then finish at the
+                // live home position. This avoids handing off to a second direct MoveTo
+                // that can cut across the tavern wall or visibly snap Ulgrim home.
+                for (var i = UlgrimAyanBarRoute.Length - 1; i > 0; i--)
                     ulgrimAyanRoute.Enqueue(CreateUlgrimAyanWaypoint(UlgrimAyanBarRoute[i]));
+
+                var home = GetPosition(PositionType.Home);
+                ulgrimAyanRoute.Enqueue(home != null
+                    ? new Position(home)
+                    : CreateUlgrimAyanWaypoint(UlgrimAyanBarRoute[0]));
             }
         }
 
@@ -279,7 +303,7 @@ namespace ACE.Server.WorldObjects
             if (ulgrimAyanRoute == null)
                 return false;
 
-            if (IsBusy || EmoteManager.IsBusy || IsMoving || IsTurning)
+            if (IsBusy || EmoteManager.IsBusy || HasPendingMovement)
                 return true;
 
             if (ulgrimAyanRoute.Count > 0)
@@ -287,6 +311,7 @@ namespace ACE.Server.WorldObjects
                 var destination = ulgrimAyanRoute.Dequeue();
                 var useRecordedFacing = ulgrimAyanRouteToBar && ulgrimAyanRoute.Count == 0;
                 MoveTo(destination, GetRunRate(), useRecordedFacing, 0.5f);
+                IsMoving = true;
                 return true;
             }
 
@@ -294,14 +319,13 @@ namespace ACE.Server.WorldObjects
             if (ulgrimAyanRouteToBar)
             {
                 ulgrimAyanAtBar = true;
-                ulgrimAyanRoundsRemaining = ThreadSafeRandom.Next(2, 5);
-                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(15.0f, 25.0f);
+                ulgrimAyanRoundsRemaining = ThreadSafeRandom.Next(6, 11);
+                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(UlgrimAyanBarRoundDelayMin, UlgrimAyanBarRoundDelayMax);
             }
             else
             {
                 ulgrimAyanAtBar = false;
-                ReturnTownAmbientHome();
-                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(75.0f, 150.0f);
+                nextUlgrimAyanActionTime = currentUnixTime + ThreadSafeRandom.Next(UlgrimAyanHomeDelayMin, UlgrimAyanHomeDelayMax);
             }
             return true;
         }

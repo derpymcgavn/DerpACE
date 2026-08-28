@@ -14,10 +14,10 @@ namespace ACE.Server.Factories
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
         /// </summary>
-        private static WorldObject CreateJewelry(TreasureDeath profile, bool isMagical)
+        private static WorldObject CreateJewelry(TreasureDeath profile, bool isMagical, int requestedTier = 0)
         {
             var treasureRoll = new TreasureRoll(TreasureItemType.Jewelry);
-            treasureRoll.Wcid = JewelryWcids.Roll(profile.Tier);
+            treasureRoll.Wcid = LootWcidWeightManager.Roll("jewelry", requestedTier > 0 ? requestedTier : profile.Tier, JewelryWcids.Roll(profile.Tier));
 
             var wo = WorldObjectFactory.CreateNewWorldObject((uint)treasureRoll.Wcid);
 

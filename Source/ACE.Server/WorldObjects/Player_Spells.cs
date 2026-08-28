@@ -544,6 +544,8 @@ namespace ACE.Server.WorldObjects
             // get active item enchantments
             var enchantments = Biota.PropertiesEnchantmentRegistry.Clone(BiotaDatabaseLock).Where(i => i.Duration == -1 && i.SpellId != (int)SpellId.Vitae).ToList();
 
+            var auditedEquipmentSets = new HashSet<EquipmentSet>();
+
             foreach (var enchantment in enchantments)
             {
                 var table = enchantment.HasSpellSetId ? allPossessions : EquippedObjects;
@@ -558,8 +560,9 @@ namespace ACE.Server.WorldObjects
                     continue;
                 }
 
-                // is this item part of a set?
-                if (!item.HasItemSet)
+                // Each set has the same active/possible spell calculation for every
+                // enchantment it contributes, so audit it once per login.
+                if (!item.HasItemSet || !auditedEquipmentSets.Add(item.EquipmentSetId.Value))
                     continue;
 
                 // get all of the equipped items in this set
