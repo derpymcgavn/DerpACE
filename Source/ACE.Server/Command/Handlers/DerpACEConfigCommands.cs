@@ -17,8 +17,8 @@ namespace ACE.Server.Command.Handlers
         // @lootconfig list|set <key> <value>
         [CommandHandler("lootconfig", AccessLevel.Developer, CommandHandlerFlag.None, 1,
             "View or modify DerpACE loot item variables.",
-            "list                    — print all current values\n" +
-            "set <key> <value>       — change a value at runtime\n" +
+            "list                    - print all current values\n" +
+            "set <key> <value>       - change a value at runtime\n" +
             "\nKeys:\n" +
             "  defender.drop         DefenderShieldDropChance (float 0-1)\n" +
             "  defender.tier         DefenderShieldMinTier (int)\n" +
@@ -113,6 +113,22 @@ namespace ACE.Server.Command.Handlers
             "  ricochet.procmax      RicochetProcMax (int %)\n" +
             "  ricochet.scale        RicochetDamageScale (float 0-1)\n" +
             "  ricochet.radius       RicochetRadius (float meters)\n" +
+            "  lugianhammer.drop      LugianHammerThrowDropChance (float 0-1)\n" +
+            "  lugianhammer.tier      LugianHammerThrowMinTier (int)\n" +
+            "  lugianhammer.proc      LugianHammerThrowProcChance (float 0-1)\n" +
+            "  lugianhammer.scale     LugianHammerThrowDamageScale (float 0-1)\n" +
+            "  lugianhammer.radius    LugianHammerThrowRadius (float yards)\n" +
+            "  lugianhammer.cooldown  LugianHammerThrowCooldownSeconds (float)\n" +
+            "  opportunist.melee     OpportunistMeleeDropChance (float 0-1)\n" +
+            "  opportunist.missile   OpportunistMissileDropChance (float 0-1)\n" +
+            "  opportunist.tier      OpportunistMinTier (int)\n" +
+            "  opportunist.bonus     OpportunistDamageBonus (float, 0.25 = +25%)\n" +
+            "  opportunist.window    OpportunistWindowSeconds (float)\n" +
+            "  executioner.melee     ExecutionerMeleeDropChance (float 0-1)\n" +
+            "  executioner.missile   ExecutionerMissileDropChance (float 0-1)\n" +
+            "  executioner.tier      ExecutionerMinTier (int)\n" +
+            "  executioner.bonus     ExecutionerDamageBonus (float, 0.20 = +20%)\n" +
+            "  executioner.threshold ExecutionerHealthThreshold (float, 0.25 = 25%)\n" +
             "  dinnerware.drop       DinnerwareWeaponDropChance (float 0-1)\n" +
             "  dinnerware.tier       DinnerwareWeaponMinTier (int)\n" +
             "  dinnerware.spin       DinnerwareSpinDropChance (float 0-1)\n" +
@@ -142,6 +158,7 @@ namespace ACE.Server.Command.Handlers
             "  blast.ratemin         WeaponBlastProcRateMin (float, per-hit fire rate min)\n" +
             "  blast.ratemax         WeaponBlastProcRateMax (float, per-hit fire rate max)\n" +
             "  mobmod.enabled        MobModifierEnabled (bool, master switch)\n" +
+            "  mobmod.level          MobModifierMinLevel (int)\n" +
             "  mobmod.tier           MobModifierMinTier (int)\n" +
             "  mobmod.defcap         MobModifierDefenseSkillCap (int, 0=disabled)\n" +
             "  vampiric.chance       VampiricMobChance (float 0-1)\n" +
@@ -155,6 +172,8 @@ namespace ACE.Server.Command.Handlers
             "  thiefmob.chestdespawn ThiefChestDespawnSeconds (float, 0=never)\n" +
             "  simulacrum.chance     SimulacrumMobChance (float 0-1)\n" +
             "  healermob.chance      HealerMobChance (float 0-1)\n" +
+            "  enchantermob.chance   EnchanterMobChance (float 0-1)\n" +
+            "  shamanmob.chance      ShamanMobChance (float 0-1)\n" +
             "  healermob.range       HealerMobRange (float meters)\n" +
             "  healermob.threshold   HealerMobHealThreshold (float 0-1)\n" +
             "  healermob.cooldown    HealerMobCooldownSeconds (float)\n" +
@@ -267,6 +286,22 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  ricochet.procmax     = {DerpACEConfig.RicochetProcMax}%");
                 sb.AppendLine($"  ricochet.scale       = {DerpACEConfig.RicochetDamageScale:P0}  ({DerpACEConfig.RicochetDamageScale})");
                 sb.AppendLine($"  ricochet.radius      = {DerpACEConfig.RicochetRadius}m");
+                sb.AppendLine($"  lugianhammer.drop   = {DerpACEConfig.LugianHammerThrowDropChance:P0}  ({DerpACEConfig.LugianHammerThrowDropChance})");
+                sb.AppendLine($"  lugianhammer.tier   = {DerpACEConfig.LugianHammerThrowMinTier}");
+                sb.AppendLine($"  lugianhammer.proc   = {DerpACEConfig.LugianHammerThrowProcChance:P0}  ({DerpACEConfig.LugianHammerThrowProcChance})");
+                sb.AppendLine($"  lugianhammer.scale  = {DerpACEConfig.LugianHammerThrowDamageScale:P0}  ({DerpACEConfig.LugianHammerThrowDamageScale})");
+                sb.AppendLine($"  lugianhammer.radius = {DerpACEConfig.LugianHammerThrowRadius}y");
+                sb.AppendLine($"  lugianhammer.cooldown = {DerpACEConfig.LugianHammerThrowCooldownSeconds}s");
+                sb.AppendLine($"  opportunist.melee    = {DerpACEConfig.OpportunistMeleeDropChance:P1}  ({DerpACEConfig.OpportunistMeleeDropChance})");
+                sb.AppendLine($"  opportunist.missile  = {DerpACEConfig.OpportunistMissileDropChance:P1}  ({DerpACEConfig.OpportunistMissileDropChance})");
+                sb.AppendLine($"  opportunist.tier     = {DerpACEConfig.OpportunistMinTier}");
+                sb.AppendLine($"  opportunist.bonus    = {DerpACEConfig.OpportunistDamageBonus:P0}  ({DerpACEConfig.OpportunistDamageBonus})");
+                sb.AppendLine($"  opportunist.window   = {DerpACEConfig.OpportunistWindowSeconds}s");
+                sb.AppendLine($"  executioner.melee    = {DerpACEConfig.ExecutionerMeleeDropChance:P1}  ({DerpACEConfig.ExecutionerMeleeDropChance})");
+                sb.AppendLine($"  executioner.missile  = {DerpACEConfig.ExecutionerMissileDropChance:P1}  ({DerpACEConfig.ExecutionerMissileDropChance})");
+                sb.AppendLine($"  executioner.tier     = {DerpACEConfig.ExecutionerMinTier}");
+                sb.AppendLine($"  executioner.bonus    = {DerpACEConfig.ExecutionerDamageBonus:P0}  ({DerpACEConfig.ExecutionerDamageBonus})");
+                sb.AppendLine($"  executioner.threshold= {DerpACEConfig.ExecutionerHealthThreshold:P0}  ({DerpACEConfig.ExecutionerHealthThreshold})");
                 sb.AppendLine($"  dinnerware.drop      = {DerpACEConfig.DinnerwareWeaponDropChance:P0}  ({DerpACEConfig.DinnerwareWeaponDropChance})");
                 sb.AppendLine($"  dinnerware.tier      = {DerpACEConfig.DinnerwareWeaponMinTier}");
                 sb.AppendLine($"  dinnerware.spin      = {DerpACEConfig.DinnerwareSpinDropChance:P0}  ({DerpACEConfig.DinnerwareSpinDropChance})");
@@ -296,6 +331,7 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  blast.ratemin        = {DerpACEConfig.WeaponBlastProcRateMin:G4} per-hit blast fire rate min");
                 sb.AppendLine($"  blast.ratemax        = {DerpACEConfig.WeaponBlastProcRateMax:G4} per-hit blast fire rate max");
                 sb.AppendLine($"  mobmod.enabled       = {DerpACEConfig.MobModifierEnabled}");
+                sb.AppendLine($"  mobmod.level         = {DerpACEConfig.MobModifierMinLevel}");
                 sb.AppendLine($"  mobmod.tier          = {DerpACEConfig.MobModifierMinTier}");
                 sb.AppendLine($"  mobmod.defcap        = {DerpACEConfig.MobModifierDefenseSkillCap} effective defense cap (0=disabled)");
                 sb.AppendLine($"  vampiric.chance      = {DerpACEConfig.VampiricMobChance:P1}  ({DerpACEConfig.VampiricMobChance})");
@@ -309,6 +345,8 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  thiefmob.chestdespawn= {DerpACEConfig.ThiefChestDespawnSeconds}s");
                 sb.AppendLine($"  simulacrum.chance    = {DerpACEConfig.SimulacrumMobChance:P1}  ({DerpACEConfig.SimulacrumMobChance})");
                 sb.AppendLine($"  healermob.chance     = {DerpACEConfig.HealerMobChance:P1}  ({DerpACEConfig.HealerMobChance})");
+                sb.AppendLine($"  enchantermob.chance = {DerpACEConfig.EnchanterMobChance:P1}  ({DerpACEConfig.EnchanterMobChance})");
+                sb.AppendLine($"  shamanmob.chance     = {DerpACEConfig.ShamanMobChance:P1}  ({DerpACEConfig.ShamanMobChance})");
                 sb.AppendLine($"  healermob.range      = {DerpACEConfig.HealerMobRange}m");
                 sb.AppendLine($"  healermob.threshold  = {DerpACEConfig.HealerMobHealThreshold:P0}  ({DerpACEConfig.HealerMobHealThreshold})");
                 sb.AppendLine($"  healermob.cooldown   = {DerpACEConfig.HealerMobCooldownSeconds}s");
@@ -727,6 +765,72 @@ namespace ACE.Server.Command.Handlers
                         DerpACEConfig.RicochetRadius = Math.Max(1f, ricradius);
                         break;
 
+                    case "lugianhammer.drop":
+                        if (!TryFloat(out var lhdrop)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.LugianHammerThrowDropChance = Math.Clamp(lhdrop, 0f, 1f);
+                        break;
+                    case "lugianhammer.tier":
+                        if (!TryInt(out var lhtier)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.LugianHammerThrowMinTier = Math.Max(1, lhtier);
+                        break;
+                    case "lugianhammer.proc":
+                        if (!TryFloat(out var lhproc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.LugianHammerThrowProcChance = Math.Clamp(lhproc, 0f, 1f);
+                        break;
+                    case "lugianhammer.scale":
+                        if (!TryFloat(out var lhscale)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.LugianHammerThrowDamageScale = Math.Clamp(lhscale, 0.05f, 1f);
+                        break;
+                    case "lugianhammer.radius":
+                        if (!TryFloat(out var lhradius)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.LugianHammerThrowRadius = Math.Max(1f, lhradius);
+                        break;
+                    case "lugianhammer.cooldown":
+                        if (!TryFloat(out var lhcooldown)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.LugianHammerThrowCooldownSeconds = Math.Max(1f, lhcooldown);
+                        break;
+
+                    case "opportunist.melee":
+                        if (!TryFloat(out var opm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.OpportunistMeleeDropChance = Math.Clamp(opm, 0f, 1f);
+                        break;
+                    case "opportunist.missile":
+                        if (!TryFloat(out var opmi)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.OpportunistMissileDropChance = Math.Clamp(opmi, 0f, 1f);
+                        break;
+                    case "opportunist.tier":
+                        if (!TryInt(out var opt)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.OpportunistMinTier = Math.Max(1, opt);
+                        break;
+                    case "opportunist.bonus":
+                        if (!TryFloat(out var opb)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.OpportunistDamageBonus = Math.Clamp(opb, 0f, 5f);
+                        break;
+                    case "opportunist.window":
+                        if (!TryFloat(out var opw)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.OpportunistWindowSeconds = Math.Max(1f, opw);
+                        break;
+                    case "executioner.melee":
+                        if (!TryFloat(out var exm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ExecutionerMeleeDropChance = Math.Clamp(exm, 0f, 1f);
+                        break;
+                    case "executioner.missile":
+                        if (!TryFloat(out var exmi)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ExecutionerMissileDropChance = Math.Clamp(exmi, 0f, 1f);
+                        break;
+                    case "executioner.tier":
+                        if (!TryInt(out var ext)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.ExecutionerMinTier = Math.Max(1, ext);
+                        break;
+                    case "executioner.bonus":
+                        if (!TryFloat(out var exb)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ExecutionerDamageBonus = Math.Clamp(exb, 0f, 5f);
+                        break;
+                    case "executioner.threshold":
+                        if (!TryFloat(out var exth)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ExecutionerHealthThreshold = Math.Clamp(exth, 0.01f, 1f);
+                        break;
+
                     case "dinnerware.drop":
                         if (!TryFloat(out var dwdrop)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.DinnerwareWeaponDropChance = dwdrop;
@@ -848,6 +952,10 @@ namespace ACE.Server.Command.Handlers
                         if (!bool.TryParse(raw, out var mme)) { BadValue(session, key, "bool"); return; }
                         DerpACEConfig.MobModifierEnabled = mme;
                         break;
+                    case "mobmod.level":
+                        if (!TryInt(out var mml)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.MobModifierMinLevel = Math.Max(1, mml);
+                        break;
                     case "mobmod.tier":
                         if (!TryInt(out var mmt)) { BadValue(session, key, "int"); return; }
                         DerpACEConfig.MobModifierMinTier = mmt;
@@ -899,6 +1007,14 @@ namespace ACE.Server.Command.Handlers
                     case "healermob.chance":
                         if (!TryFloat(out var hmc)) { BadValue(session, key, "float"); return; }
                         DerpACEConfig.HealerMobChance = hmc;
+                        break;
+                    case "enchantermob.chance":
+                        if (!TryFloat(out var emc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.EnchanterMobChance = Math.Clamp(emc, 0f, 1f);
+                        break;
+                    case "shamanmob.chance":
+                        if (!TryFloat(out var shmc)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.ShamanMobChance = Math.Clamp(shmc, 0f, 1f);
                         break;
                     case "healermob.range":
                         if (!TryFloat(out var hmr)) { BadValue(session, key, "float"); return; }
@@ -988,21 +1104,21 @@ namespace ACE.Server.Command.Handlers
         private static void BadValue(Session session, string key, string type)
         {
             CommandHandlerHelper.WriteOutputInfo(session,
-                $"Invalid value for '{key}' — expected a {type}.",
+                $"Invalid value for '{key}' - expected a {type}.",
                 ChatMessageType.Broadcast);
         }
 
         // ── @vendortier ────────────────────────────────────────────────────────
         // Usage:
-        //   @vendortier              — show tier for the vendor you are targeting
-        //   @vendortier <1-8>        — set explicit tier override on targeted vendor
-        //   @vendortier clear        — remove explicit tier override (revert to auto)
+        //   @vendortier              - show tier for the vendor you are targeting
+        //   @vendortier <1-8>        - set explicit tier override on targeted vendor
+        //   @vendortier clear        - remove explicit tier override (revert to auto)
         // ─────────────────────────────────────────────────────────────────────
         [CommandHandler("vendortier", AccessLevel.Developer, CommandHandlerFlag.None, 0,
             "View or set the random-loot tier on the vendor you are currently targeting.",
-            "<1-8>    — force a specific tier\n" +
-            "clear    — remove the override (vendor will auto-detect from town location)\n" +
-            "(no arg) — report the current tier and auto-detected town")]
+            "<1-8>    - force a specific tier\n" +
+            "clear    - remove the override (vendor will auto-detect from town location)\n" +
+            "(no arg) - report the current tier and auto-detected town")]
         public static void HandleVendorTier(Session session, params string[] parameters)
         {
             var player = session.Player;
@@ -1081,9 +1197,9 @@ namespace ACE.Server.Command.Handlers
 
         [CommandHandler("derpconfig", AccessLevel.Developer, CommandHandlerFlag.None, 0,
             "Manage the DerpAce.json runtime config file.",
-            "reload   — reload DerpAce.json from disk and apply all values\n" +
-            "show     — print the current in-memory config values\n" +
-            "save     — write current in-memory values back to DerpAce.json")]
+            "reload   - reload DerpAce.json from disk and apply all values\n" +
+            "show     - print the current in-memory config values\n" +
+            "save     - write current in-memory values back to DerpAce.json")]
         public static void HandleDerpConfig(Session session, params string[] parameters)
         {
             var cmd = parameters.Length > 0 ? parameters[0].ToLowerInvariant() : "show";
@@ -1128,14 +1244,15 @@ namespace ACE.Server.Command.Handlers
                     sb.AppendLine($"  [Mutator Toggles]");
                     sb.AppendLine($"    nocturnal={c.NocturnalMobEnabled}  exploding={c.ExplodingMobEnabled}  vampiric={c.VampiricMobEnabled}  thief={c.ThiefMobEnabled}");
                     sb.AppendLine($"    scout={c.ScoutMobEnabled}  simulacrum={c.SimulacrumMobEnabled}  healer={c.HealerMobEnabled}  tank={c.TankMobEnabled}");
-                    sb.AppendLine($"    reaper={c.ReaperMobEnabled}  necromancer={c.NecromancerMobEnabled}  warder={c.WarderMobEnabled}");
+                    sb.AppendLine($"    reaper={c.ReaperMobEnabled}  necromancer={c.NecromancerMobEnabled}  warder={c.WarderMobEnabled}  enchanter={c.EnchanterMobEnabled}  shaman={c.ShamanMobEnabled}");
                     sb.AppendLine($"  [Weapon / LootGen Toggles]");
                     sb.AppendLine($"    defender={c.DefenderShieldEnabled}  archmagi={c.ArchmagiEnabled}  hierophant={c.HierophantEnabled}");
-                    sb.AppendLine($"    thievesdagger={c.ThievesDaggerEnabled}  sentinel={c.SentinelSpearEnabled}  unarmedelem={c.UnarmedElemEnabled}");
+                    sb.AppendLine($"    thievesdagger={c.ThievesDaggerEnabled}  sentinel={c.SentinelSpearEnabled}  unarmedelem={c.UnarmedElemEnabled}  pugilist={c.PugilistWeaponEnabled}");
                     sb.AppendLine($"    fencer={c.FencerBladeEnabled}  ravager={c.RavagerAxeEnabled}  warden={c.WardenMaulEnabled}");
                     sb.AppendLine($"    resolute={c.ResoluteBladeEnabled}  polebreaker={c.PolebreakerStaffEnabled}  stalker={c.StalkerBowEnabled}");
                     sb.AppendLine($"    breacher={c.BreacherCrossbowEnabled}  reaperatlatl={c.ReaperAtlatlEnabled}  dartflinger={c.RicochetAtlatlEnabled}");
-                    sb.AppendLine($"    dinnerware={c.DinnerwareWeaponEnabled}  elemblast={c.WeaponElemBlastEnabled}");
+                    sb.AppendLine($"    dinnerware={c.DinnerwareWeaponEnabled}  elemblast={c.WeaponElemBlastEnabled}  stonehand={c.LugianHammerThrowEnabled}");
+                    sb.AppendLine($"    opportunist={c.OpportunistWeaponEnabled}  executioner={c.ExecutionerWeaponEnabled}");
                     sb.AppendLine($"    dinnerware_drop={c.DinnerwareWeaponDropChance:0.###}  dinnerware_mintier={c.DinnerwareWeaponMinTier}");
                     sb.AppendLine($"    dinnerware_spin={c.DinnerwareSpinDropChance:0.###}  dinnerware_spin_min={c.DinnerwareSpinMinTier}  spin_scale={c.DinnerwareSpinDamageScale:0.###}  spin_radius={c.DinnerwareSpinRadius:0.###}");
                     sb.AppendLine($"  [TP]");

@@ -73,6 +73,10 @@ namespace ACE.Server.DerpAce
         public bool SimulacrumMobEnabled { get; set; } = true;
         [JsonPropertyName("mob_healer_enabled")]
         public bool HealerMobEnabled { get; set; } = true;
+        [JsonPropertyName("mob_enchanter_enabled")]
+        public bool EnchanterMobEnabled { get; set; } = true;
+        [JsonPropertyName("mob_shaman_enabled")]
+        public bool ShamanMobEnabled { get; set; } = true;
         [JsonPropertyName("mob_tank_enabled")]
         public bool TankMobEnabled { get; set; } = true;
         [JsonPropertyName("mob_reaper_enabled")]
@@ -97,6 +101,8 @@ namespace ACE.Server.DerpAce
         public bool SentinelSpearEnabled { get; set; } = true;
         [JsonPropertyName("unarmed_elem_enabled")]
         public bool UnarmedElemEnabled { get; set; } = true;
+        [JsonPropertyName("pugilist_weapon_enabled")]
+        public bool PugilistWeaponEnabled { get; set; } = true;
         [JsonPropertyName("fencer_blade_enabled")]
         public bool FencerBladeEnabled { get; set; } = true;
         [JsonPropertyName("ravager_axe_enabled")]
@@ -121,6 +127,12 @@ namespace ACE.Server.DerpAce
         public bool QuickeningDaggerEnabled { get; set; } = true;
         [JsonPropertyName("weapon_elem_blast_enabled")]
         public bool WeaponElemBlastEnabled { get; set; } = true;
+        [JsonPropertyName("lugian_hammer_throw_enabled")]
+        public bool LugianHammerThrowEnabled { get; set; } = true;
+        [JsonPropertyName("opportunist_weapon_enabled")]
+        public bool OpportunistWeaponEnabled { get; set; } = true;
+        [JsonPropertyName("executioner_weapon_enabled")]
+        public bool ExecutionerWeaponEnabled { get; set; } = true;
 
         [JsonPropertyName("dinnerware_weapon_drop_chance")]
         public float DinnerwareWeaponDropChance { get; set; } = 0.02f;
@@ -150,6 +162,26 @@ namespace ACE.Server.DerpAce
         public int QuickeningDaggerDurationMin { get; set; } = 4;
         [JsonPropertyName("quickening_dagger_duration_max")]
         public int QuickeningDaggerDurationMax { get; set; } = 7;
+        [JsonPropertyName("opportunist_melee_drop_chance")]
+        public float OpportunistMeleeDropChance { get; set; } = 0.01f;
+        [JsonPropertyName("opportunist_missile_drop_chance")]
+        public float OpportunistMissileDropChance { get; set; } = 0.008f;
+        [JsonPropertyName("opportunist_min_tier")]
+        public int OpportunistMinTier { get; set; } = 6;
+        [JsonPropertyName("opportunist_damage_bonus")]
+        public float OpportunistDamageBonus { get; set; } = 0.25f;
+        [JsonPropertyName("opportunist_window_seconds")]
+        public float OpportunistWindowSeconds { get; set; } = 8.0f;
+        [JsonPropertyName("executioner_melee_drop_chance")]
+        public float ExecutionerMeleeDropChance { get; set; } = 0.0075f;
+        [JsonPropertyName("executioner_missile_drop_chance")]
+        public float ExecutionerMissileDropChance { get; set; } = 0.006f;
+        [JsonPropertyName("executioner_min_tier")]
+        public int ExecutionerMinTier { get; set; } = 7;
+        [JsonPropertyName("executioner_damage_bonus")]
+        public float ExecutionerDamageBonus { get; set; } = 0.20f;
+        [JsonPropertyName("executioner_health_threshold")]
+        public float ExecutionerHealthThreshold { get; set; } = 0.25f;
 
 
         // Mysterious Stranger
@@ -187,6 +219,8 @@ namespace ACE.Server.DerpAce
         // Mob Modifiers
         [JsonPropertyName("mob_modifier_enabled")]
         public bool MobModifierEnabled { get; set; } = true;
+        [JsonPropertyName("mob_modifier_min_level")]
+        public int MobModifierMinLevel { get; set; } = 101;
         [JsonPropertyName("mob_modifier_min_tier")]
         public int MobModifierMinTier { get; set; } = 2;
         [JsonPropertyName("mob_modifier_defense_skill_cap")]
@@ -221,6 +255,10 @@ namespace ACE.Server.DerpAce
         public float SimulacrumMobChance { get; set; } = 0.0f;
         [JsonPropertyName("mob_healer_chance")]
         public float HealerMobChance { get; set; } = 0.0005f;
+        [JsonPropertyName("mob_enchanter_chance")]
+        public float EnchanterMobChance { get; set; } = 0.00035f;
+        [JsonPropertyName("mob_shaman_chance")]
+        public float ShamanMobChance { get; set; } = 0.00035f;
         [JsonPropertyName("mob_healer_range")]
         public float HealerMobRange { get; set; } = 25.0f;
         [JsonPropertyName("mob_healer_threshold")]
@@ -273,6 +311,18 @@ namespace ACE.Server.DerpAce
         public bool LootModifierInterchangeable { get; set; } = true;
         [JsonPropertyName("loot_modifier_interchangeable_min_tier")]
         public int LootModifierInterchangeableMinTier { get; set; } = 6;
+        [JsonPropertyName("lugian_hammer_throw_drop_chance")]
+        public float LugianHammerThrowDropChance { get; set; } = 0.04f;
+        [JsonPropertyName("lugian_hammer_throw_min_tier")]
+        public int LugianHammerThrowMinTier { get; set; } = 6;
+        [JsonPropertyName("lugian_hammer_throw_proc_chance")]
+        public float LugianHammerThrowProcChance { get; set; } = 0.08f;
+        [JsonPropertyName("lugian_hammer_throw_damage_scale")]
+        public float LugianHammerThrowDamageScale { get; set; } = 0.75f;
+        [JsonPropertyName("lugian_hammer_throw_radius")]
+        public float LugianHammerThrowRadius { get; set; } = 10.0f;
+        [JsonPropertyName("lugian_hammer_throw_cooldown_seconds")]
+        public float LugianHammerThrowCooldownSeconds { get; set; } = 4.0f;
 
         // Armor Enchantments
         [JsonPropertyName("armor_bane_chance_normal")]
@@ -627,4 +677,3 @@ namespace ACE.Server.DerpAce
         public int BankCashProperty { get; set; } = 39999;
     }
 }
-

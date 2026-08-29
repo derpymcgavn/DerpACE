@@ -220,7 +220,7 @@ namespace ACE.Server.Factories
             };
 
             var pctDisplay = (procRate * 100.0).ToString("0.###");
-            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis weapon occasionally releases a burst of {elemName} — each strike carries a {pctDisplay}% chance to discharge a level 3 {elemName} blast.";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis weapon occasionally releases a burst of {elemName} - each strike carries a {pctDisplay}% chance to discharge a level 3 {elemName} blast.";
         }
 
         private static bool TryRollWeaponModifier(TreasureDeath profile, ref bool specialModifierApplied, float baseChance, int minTier, bool primaryEligible)
@@ -378,7 +378,8 @@ namespace ACE.Server.Factories
 
             // Thief's Dagger: configurable chance on any T6+ dagger (see @lootconfig)
             // Equipping grants 50% translucency, -aggro weight, and +10% sneak attack damage.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.ThievesDaggerEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -440,14 +441,15 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = MutatorOverlayQuickening;
                 ApplyLootUiEffect(wo, UiEffects.Lightning | UiEffects.BoostStamina);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} twitches ahead of the hand — each hit has a {procPct}% chance to quicken your attacks by {speedPct}% for {duration} seconds.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} twitches ahead of the hand - each hit has a {procPct}% chance to quicken your attacks by {speedPct}% for {duration} seconds.";
             }
 
             // Fencer's Blade: configurable chance on T6+ épée / rapier / schlager (see @lootconfig)
-            // SwordMS is exclusively these three weapon types — no additional WCID check required.
+            // SwordMS is exclusively these three weapon types - no additional WCID check required.
             // Pierce proc: per-weapon chance to bypass armor (deals mitigated damage × piercePct as bonus).
             // Deflect proc: per-incoming-hit chance to reflect 10% of damage back at the attacker.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.FencerBladeEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -486,7 +488,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = MutatorOverlayFencer;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling — each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is perfectly balanced for dueling - each strike has a {pierceProc}% chance to find a gap in the target's defenses, bypassing {piercePct}% of their armor. There is also a {deflectChance}% chance per incoming hit to turn an attack aside and redirect 10% of its damage back at the assailant.";
             }
 
             if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsFencerBlade) == true)
@@ -500,7 +502,8 @@ namespace ACE.Server.Factories
 
             // Pugilist: unarmed weapons get a family-specific proc.
             // Cestus/knuckles/handwraps punch with Iron Flurry; katars pierce; nekodes/claws rake with slash/pierce.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.PugilistWeaponEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -541,7 +544,8 @@ namespace ACE.Server.Factories
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
             // Bleed total damage = bleedPct% of the triggering hit, spread evenly across RavagerBleedTicks at RavagerBleedInterval seconds.
             // Two-handed axes get the bleed total scaled by RavagerTwoHandMult.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.RavagerAxeEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -584,7 +588,7 @@ namespace ACE.Server.Factories
 
                     var displayCrush = (int)Math.Round(crushBonusPct * 100.0);
                     var displayDrain = (int)Math.Round(stamDrainPct * 100.0);
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis hammer-headed {GetWeaponNoun(roll.WeaponType)} crushes through guard — each strike has a {procPct}% chance to slam for +{displayCrush}% bonus damage and drain {displayDrain}% of the target's current stamina.{(isTwoHanded ? " The two-handed leverage amplifies the impact." : "")}";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis hammer-headed {GetWeaponNoun(roll.WeaponType)} crushes through guard - each strike has a {procPct}% chance to slam for +{displayCrush}% bonus damage and drain {displayDrain}% of the target's current stamina.{(isTwoHanded ? " The two-handed leverage amplifies the impact." : "")}";
                 }
                 else
                 {
@@ -593,13 +597,14 @@ namespace ACE.Server.Factories
                     var displayBleed = (int)Math.Round(bleedFraction * 100.0);
                     var ticks = ACE.Server.Managers.DerpACEConfig.RavagerBleedTicks;
                     var interval = ACE.Server.Managers.DerpACEConfig.RavagerBleedInterval;
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is wickedly serrated — each strike has a {procPct}% chance to inflict a vicious bleed dealing {displayBleed}% of the hit's damage over {ticks} ticks ({interval:0.#}s apart).{(isTwoHanded ? " The two-handed grip drives the wound deeper." : "")}";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is wickedly serrated - each strike has a {procPct}% chance to inflict a vicious bleed dealing {displayBleed}% of the hit's damage over {ticks} ticks ({interval:0.#}s apart).{(isTwoHanded ? " The two-handed grip drives the wound deeper." : "")}";
                 }
             }
 
             // Warden's Maul: configurable chance on T6+ maces (1H, MS, or 2H) to apply a flat defense-skill debuff (see @lootconfig)
             // Two-handed maces get the penalty scaled by WardenTwoHandMult.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.WardenMaulEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -638,23 +643,24 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = MutatorOverlayWarden;
                 ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is forged for crushing guards — each strike has a {procPct}% chance to concuss the target, reducing their effective defense skill by {penalty} for {duration} seconds.{(isTwoHandedMace ? " The two-handed swing rattles bone." : "")}";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is forged for crushing guards - each strike has a {procPct}% chance to concuss the target, reducing their effective defense skill by {penalty} for {duration} seconds.{(isTwoHandedMace ? " The two-handed swing rattles bone." : "")}";
             }
 
             // Lugian Hammer Throw: rare Heavy Weapons Lugian hammer proc to hammer a second foe.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.LugianHammerThrowEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
-                0.04f,
-                6,
+                ACE.Server.Managers.DerpACEConfig.LugianHammerThrowDropChance,
+                ACE.Server.Managers.DerpACEConfig.LugianHammerThrowMinTier,
                 IsLugianHammerThrowEligible(wo),
                 "lugianhammer", "hammerthrow", "thrownhammer"))
             {
-                const float procChance = 0.08f;
-                const float damageScale = 0.75f;
-                const float radius = 10.0f;
-                const float cooldown = 4.0f;
+                var procChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.LugianHammerThrowProcChance, 0.0f, 1.0f);
+                var damageScale = Math.Clamp(ACE.Server.Managers.DerpACEConfig.LugianHammerThrowDamageScale, 0.05f, 1.0f);
+                var radius = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.LugianHammerThrowRadius);
+                var cooldown = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.LugianHammerThrowCooldownSeconds);
 
                 wo.Name = wo.Name + " of the Stonehand";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsLugianHammerThrowWeapon, true);
@@ -671,7 +677,8 @@ namespace ACE.Server.Factories
 
             // Resolute Blade: configurable chance on T6+ swords (1H or 2H, excluding fencer SwordMS) (see @lootconfig)
             // On crit hits, restores % of damage as health. On killing blows, restores % of MaxHealth + MaxStamina.
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.ResoluteBladeEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -705,12 +712,13 @@ namespace ACE.Server.Factories
                 ApplyLootUiEffect(wo, UiEffects.BoostHealth);
 
                 var killBurstPct = (int)Math.Round(killBurst * 100.0);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is honed for the long fight — critical hits have a {procPct}% chance to restore {healPct}% of the damage dealt as health to the wielder. Killing blows surge with {killBurstPct}% of your maximum health and stamina.{(isTwoHandedSword ? " The two-handed grip drinks deeper from the slain." : "")}";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} is honed for the long fight - critical hits have a {procPct}% chance to restore {healPct}% of the damage dealt as health to the wielder. Killing blows surge with {killBurstPct}% of your maximum health and stamina.{(isTwoHandedSword ? " The two-handed grip drinks deeper from the slain." : "")}";
             }
 
             // Polebreaker: configurable chance on T6+ staves to escalate
             // damage on consecutive hits against the same target (see @lootconfig).
-            if (TryRollWeaponModifier(
+            if (ACE.Server.Managers.DerpACEConfig.PolebreakerStaffEnabled
+                && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
@@ -798,7 +806,7 @@ namespace ACE.Server.Factories
                         DamageType.Cold     => "frost",
                         _                   => "elemental"
                     };
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis weapon crackles with {elemName} energy — each strike has a {procPct}% chance to discharge a {elemName} blast.";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis weapon crackles with {elemName} energy - each strike has a {procPct}% chance to discharge a {elemName} blast.";
                 }
             }
 
@@ -830,25 +838,25 @@ namespace ACE.Server.Factories
             }
 
             // Opportunist: an evade exposes the target to an empowered follow-up.
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
-                && TryRollWeaponModifier(profile, roll, ref specialModifierApplied, 0.01f, 6, true, "opportunist"))
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.OpportunistWeaponEnabled
+                && TryRollWeaponModifier(profile, roll, ref specialModifierApplied, ACE.Server.Managers.DerpACEConfig.OpportunistMeleeDropChance, ACE.Server.Managers.DerpACEConfig.OpportunistMinTier, true, "opportunist"))
             {
                 wo.Name += " of Opportunity";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOpportunistWeapon, true);
                 wo.IconOverlayId = MutatorOverlayOpportunist;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOpportunist: when this weapon is evaded, its next successful strike against that target within 8 seconds deals 25% additional damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nOpportunist: when this weapon is evaded, its next successful strike against that target within the configured window deals bonus damage.";
             }
 
             // Executioner: rewards committing to wounded targets.
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
-                && TryRollWeaponModifier(profile, roll, ref specialModifierApplied, 0.0075f, 7, true, "executioner"))
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ExecutionerWeaponEnabled
+                && TryRollWeaponModifier(profile, roll, ref specialModifierApplied, ACE.Server.Managers.DerpACEConfig.ExecutionerMeleeDropChance, ACE.Server.Managers.DerpACEConfig.ExecutionerMinTier, true, "executioner"))
             {
                 wo.Name += " of the Executioner";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsExecutionerWeapon, true);
                 wo.IconOverlayId = MutatorOverlayExecutioner;
                 ApplyLootUiEffect(wo, UiEffects.Slashing);
-                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nExecutioner: strikes against creatures at or below 25% health deal 20% additional damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + "\n\nExecutioner: strikes against wounded creatures deal configured finisher bonus damage.";
             }
             // Second Shadow: rare melee-weapon shadow clone affix.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons

@@ -276,13 +276,13 @@ namespace ACE.Server.Factories
             }
 
             // Opportunist: a missed shot teaches the next one where to land.
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.OpportunistWeaponEnabled
                 && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
-                0.008f,
-                6,
+                ACE.Server.Managers.DerpACEConfig.OpportunistMissileDropChance,
+                ACE.Server.Managers.DerpACEConfig.OpportunistMinTier,
                 roll.WeaponType == TreasureWeaponType.Bow
                     || roll.WeaponType == TreasureWeaponType.Crossbow
                     || roll.WeaponType == TreasureWeaponType.Atlatl,
@@ -292,17 +292,17 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOpportunistWeapon, true);
                 wo.IconOverlayId = MutatorOverlayOpportunist;
                 ApplyLootUiEffect(wo, UiEffects.Piercing);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOpportunist: when this {GetWeaponNoun(roll.WeaponType)} is evaded, its next successful shot against that target within 8 seconds deals 25% additional damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nOpportunist: when this {GetWeaponNoun(roll.WeaponType)} is evaded, its next successful shot against that target within the configured window deals bonus damage.";
             }
 
             // Executioner: low-risk finisher pressure for committed missile builds.
-            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+            if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ExecutionerWeaponEnabled
                 && TryRollWeaponModifier(
                 profile,
                 roll,
                 ref specialModifierApplied,
-                0.006f,
-                7,
+                ACE.Server.Managers.DerpACEConfig.ExecutionerMissileDropChance,
+                ACE.Server.Managers.DerpACEConfig.ExecutionerMinTier,
                 roll.WeaponType == TreasureWeaponType.Bow
                     || roll.WeaponType == TreasureWeaponType.Crossbow
                     || roll.WeaponType == TreasureWeaponType.Atlatl,
@@ -312,7 +312,7 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsExecutionerWeapon, true);
                 wo.IconOverlayId = MutatorOverlayExecutioner;
                 ApplyLootUiEffect(wo, UiEffects.Slashing);
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nExecutioner: shots from this {GetWeaponNoun(roll.WeaponType)} against creatures at or below 25% health deal 20% additional damage.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nExecutioner: shots from this {GetWeaponNoun(roll.WeaponType)} against wounded creatures deal configured finisher bonus damage.";
             }
 
             // Universal blast-on-strike: rare chance for any elemental weapon T5+ to proc a level-3 blast.

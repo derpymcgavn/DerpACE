@@ -35,6 +35,8 @@ namespace ACE.Server.Managers
         public static bool ScoutMobEnabled         { get; set; } = true;
         public static bool SimulacrumMobEnabled    { get; set; } = true;
         public static bool HealerMobEnabled        { get; set; } = true;
+        public static bool EnchanterMobEnabled     { get; set; } = true;
+        public static bool ShamanMobEnabled        { get; set; } = true;
         public static bool TankMobEnabled          { get; set; } = true;
         public static bool ReaperMobEnabled        { get; set; } = true;
         public static bool NecromancerMobEnabled   { get; set; } = true;
@@ -51,6 +53,7 @@ namespace ACE.Server.Managers
         public static bool ThievesDaggerEnabled    { get; set; } = true;
         public static bool SentinelSpearEnabled    { get; set; } = true;
         public static bool UnarmedElemEnabled      { get; set; } = true;
+        public static bool PugilistWeaponEnabled   { get; set; } = true;
         public static bool FencerBladeEnabled      { get; set; } = true;
         public static bool RavagerAxeEnabled       { get; set; } = true;
         public static bool WardenMaulEnabled       { get; set; } = true;
@@ -63,6 +66,9 @@ namespace ACE.Server.Managers
         public static bool DinnerwareWeaponEnabled { get; set; } = true;
         public static bool QuickeningDaggerEnabled { get; set; } = true;
         public static bool WeaponElemBlastEnabled  { get; set; } = true;
+        public static bool LugianHammerThrowEnabled { get; set; } = true;
+        public static bool OpportunistWeaponEnabled { get; set; } = true;
+        public static bool ExecutionerWeaponEnabled { get; set; } = true;
 
         public static float DinnerwareWeaponDropChance { get; set; } = 0.02f;
         public static int DinnerwareWeaponMinTier { get; set; } = 4;
@@ -78,6 +84,18 @@ namespace ACE.Server.Managers
         public static int QuickeningDaggerSpeedMax { get; set; } = 24;
         public static int QuickeningDaggerDurationMin { get; set; } = 4;
         public static int QuickeningDaggerDurationMax { get; set; } = 7;
+
+        public static float OpportunistMeleeDropChance { get; set; } = 0.01f;
+        public static float OpportunistMissileDropChance { get; set; } = 0.008f;
+        public static int OpportunistMinTier { get; set; } = 6;
+        public static float OpportunistDamageBonus { get; set; } = 0.25f;
+        public static float OpportunistWindowSeconds { get; set; } = 8.0f;
+
+        public static float ExecutionerMeleeDropChance { get; set; } = 0.0075f;
+        public static float ExecutionerMissileDropChance { get; set; } = 0.006f;
+        public static int ExecutionerMinTier { get; set; } = 7;
+        public static float ExecutionerDamageBonus { get; set; } = 0.20f;
+        public static float ExecutionerHealthThreshold { get; set; } = 0.25f;
         // ──────────────────────────────────────────────────────────────────────
         // Defender's Shield
         // ──────────────────────────────────────────────────────────────────────
@@ -491,6 +509,25 @@ namespace ACE.Server.Managers
 
         /// <summary>Nearby target search radius in yards. Default 10.</summary>
         public static float RicochetRadius { get; set; } = 10.0f;
+        // ---------- Lugian Hammer Throw ----------
+
+        /// <summary>Chance for eligible Lugian hammers to roll Stonehand Throw. Default 0.04 = 4%.</summary>
+        public static float LugianHammerThrowDropChance { get; set; } = 0.04f;
+
+        /// <summary>Minimum treasure tier for Stonehand Throw. Default 6.</summary>
+        public static int LugianHammerThrowMinTier { get; set; } = 6;
+
+        /// <summary>Per-hit proc chance for Stonehand Throw. Default 0.08 = 8%.</summary>
+        public static float LugianHammerThrowProcChance { get; set; } = 0.08f;
+
+        /// <summary>Secondary hammer damage multiplier. Default 0.75 = 75%.</summary>
+        public static float LugianHammerThrowDamageScale { get; set; } = 0.75f;
+
+        /// <summary>Secondary target search radius in yards. Default 10.</summary>
+        public static float LugianHammerThrowRadius { get; set; } = 10.0f;
+
+        /// <summary>Cooldown after Stonehand Throw fires. Default 4 seconds.</summary>
+        public static float LugianHammerThrowCooldownSeconds { get; set; } = 4.0f;
 
         // ---------- Loot Modifier Balance Controls ----------
 
@@ -573,8 +610,10 @@ namespace ACE.Server.Managers
         /// <summary>Master switch for the mob modifier system. Default true.</summary>
         public static bool MobModifierEnabled { get; set; } = true;
 
-        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 2 (starts at tier 2).</summary>
+        /// <summary>Minimum creature level for a mob to be eligible for any modifier. Default 101.</summary>
         public static int MobModifierMinLevel { get; set; } = 101;
+
+        /// <summary>Minimum DeathTreasure tier (or Level/10) for a mob to be eligible for any modifier. Default 2.</summary>
         public static int MobModifierMinTier { get; set; } = 2;
 
         /// <summary>Effective melee/missile/magic defense cap for mobs with DerpACE mutators. 0 disables. Default 600.</summary>
@@ -624,6 +663,11 @@ namespace ACE.Server.Managers
 
         /// <summary>Per-spawn chance (0-1) for the Healer modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
         public static float HealerMobChance { get; set; } = 0.0005f;
+        /// <summary>Per-spawn chance (0-1) for the Enchanter modifier to land on an eligible mob. Default 0.00035.</summary>
+        public static float EnchanterMobChance { get; set; } = 0.00035f;
+
+        /// <summary>Per-spawn chance (0-1) for the Shaman modifier to land on an eligible mob. Default 0.00035.</summary>
+        public static float ShamanMobChance { get; set; } = 0.00035f;
 
         /// <summary>Maximum range (meters) a Healer mob will look for wounded allies to mend. Default 25.</summary>
         public static float HealerMobRange { get; set; } = 25.0f;
@@ -778,4 +822,3 @@ namespace ACE.Server.Managers
         public static int VendorRestockMaxMinutes { get; set; } = 45;
     }
 }
-

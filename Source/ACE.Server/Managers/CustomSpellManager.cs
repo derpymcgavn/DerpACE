@@ -1620,7 +1620,7 @@ namespace ACE.Server.Managers
 
             SetSpellBase(spellBase, nameof(SpellBase.Name), "Void Confusion");
             SetSpellWords(spellBase, "Void Confusion");
-            SetSpellBase(spellBase, nameof(SpellBase.Desc), "A weak nether bolt that erupts into Bedlam, briefly turning nearby monsters against each other.");
+            SetSpellBase(spellBase, nameof(SpellBase.Desc), "A weak nether bolt that erupts into Bedlam, briefly turning nearby monsters to fight for the caster.");
             SetSpellBase(spellBase, nameof(SpellBase.Icon), 0x06002860u);
             SetSpellBase(spellBase, nameof(SpellBase.CasterEffect), (uint)PlayScript.SpecialStatePurple);
             SetSpellBase(spellBase, nameof(SpellBase.TargetEffect), (uint)PlayScript.BlackMadness);
@@ -1806,7 +1806,7 @@ namespace ACE.Server.Managers
       ""Id"": 65005,
       ""Name"": ""Void Confusion"",
       ""SpellWords"": ""Void Confusion"",
-      ""Desc"": ""A weak nether bolt that briefly turns nearby monsters against each other."",
+      ""Desc"": ""A weak nether bolt that briefly turns nearby monsters to fight for the caster."",
       ""Icon"": ""0x06002860"",
       ""EType"": ""Nether"",
       ""DamageType"": ""Nether"",
@@ -1832,7 +1832,7 @@ namespace ACE.Server.Managers
       ""Id"": 65005,
       ""Name"": ""Void Confusion"",
       ""SpellWords"": ""Void Confusion"",
-      ""Desc"": ""A weak nether bolt that briefly turns nearby monsters against each other."",
+      ""Desc"": ""A weak nether bolt that briefly turns nearby monsters to fight for the caster."",
       ""Icon"": ""0x06002860"",
       ""EType"": ""Nether"",
       ""DamageType"": ""Nether"",

@@ -326,7 +326,7 @@ namespace ACE.Server.Factories
             wo.ProcSpellRate = null;
             wo.ProcSpellSelfTargeted = false;
 
-            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nBedlam: casts Void Confusion. On hit, if the staff is off cooldown, up to {maxTargets} nearby monsters within 12 yards blindly attack other nearby monsters for {duration} seconds. If no blameable monsters are nearby, the effect fizzles. Cooldown: {cooldownSeconds:0} seconds.";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nBedlam: casts Void Confusion. On hit, if the staff is off cooldown, up to {maxTargets} nearby monsters within 12 yards are briefly turned to your side and attack other monsters for {duration} seconds. If no hostile monsters are nearby, the effect fizzles. Cooldown: {cooldownSeconds:0} seconds.";
         }
 
         private static void TryMutateWarMageSpecialCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)

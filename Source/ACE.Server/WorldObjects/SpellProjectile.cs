@@ -738,7 +738,7 @@ namespace ACE.Server.WorldObjects
             if (applied.Count == 0)
             {
                 sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                    "The void twists their thoughts, but finds no nearby monsters for them to blame.",
+                    "The void twists their thoughts, but finds no nearby monsters for them to turn against.",
                     ChatMessageType.Magic));
                 return;
             }
@@ -758,7 +758,7 @@ namespace ACE.Server.WorldObjects
                 chain.AddDelaySeconds(0.12);
                 chain.AddAction(sourcePlayer, () =>
                 {
-                    pair.Mob.ApplyVoidConfusion(pair.Target, duration);
+                    pair.Mob.ApplyVoidConfusion(sourcePlayer, pair.Target, duration);
                     pair.Target.ApplyVisualEffects(PlayScript.BlackMadness);
                     pair.Target.ApplyVisualEffects(PlayScript.SkillDownVoid);
                 });
@@ -766,7 +766,7 @@ namespace ACE.Server.WorldObjects
             chain.EnqueueChain();
 
             sourcePlayer.Session.Network.EnqueueSend(new GameMessageSystemChat(
-                $"Void confusion takes hold for {duration:0.#}s: {string.Join(", ", applied)}.",
+                $"Bedlam takes hold for {duration:0.#}s: {string.Join(", ", applied)}. Afflicted monsters fight for you while it lasts.",
                 ChatMessageType.Magic));
         }
 
@@ -776,7 +776,7 @@ namespace ACE.Server.WorldObjects
                 return null;
 
             var preferred = preferredTargets
-                .Where(c => c != null && c != mob && c.IsAlive && c.Location != null && sourcePlayer.CanDamage(c))
+                .Where(c => c != null && c != mob && c.IsAlive && c.Location != null && (!c.IsVoidConfused || c.VoidConfusionOwnerGuid != sourcePlayer.Guid.Full) && sourcePlayer.CanDamage(c))
                 .OrderBy(c => mob.Location.SquaredDistanceTo(c.Location))
                 .FirstOrDefault();
 

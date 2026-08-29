@@ -207,7 +207,7 @@ namespace ACE.Server.Factories
         {
             if (tier >= 8) return 4;
             if (tier >= 7) return 3;
-            if (tier >= 5) return 2;
+            if (tier >= 6) return 2;
             return 1;
         }
 
@@ -216,8 +216,8 @@ namespace ACE.Server.Factories
             if (tier < 5 || alreadyApplied <= 0)
                 return false;
 
-            var baseChance = tier >= 8 ? 0.55f : tier >= 7 ? 0.40f : tier >= 6 ? 0.30f : 0.20f;
-            var diminishing = (float)Math.Pow(0.55f, alreadyApplied - 1);
+            var baseChance = tier >= 8 ? 0.22f : tier >= 7 ? 0.14f : tier >= 6 ? 0.08f : 0.0f;
+            var diminishing = (float)Math.Pow(0.50f, alreadyApplied - 1);
             return ThreadSafeRandom.Next(0.0f, 1.0f) < baseChance * diminishing;
         }
 

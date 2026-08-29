@@ -192,6 +192,8 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ScoutMobEnabled        = c.ScoutMobEnabled;
             DerpACEConfig.SimulacrumMobEnabled   = c.SimulacrumMobEnabled;
             DerpACEConfig.HealerMobEnabled       = c.HealerMobEnabled;
+            DerpACEConfig.EnchanterMobEnabled    = c.EnchanterMobEnabled;
+            DerpACEConfig.ShamanMobEnabled       = c.ShamanMobEnabled;
             DerpACEConfig.TankMobEnabled         = c.TankMobEnabled;
             DerpACEConfig.ReaperMobEnabled       = c.ReaperMobEnabled;
             DerpACEConfig.NecromancerMobEnabled  = c.NecromancerMobEnabled;
@@ -205,6 +207,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ThievesDaggerEnabled    = c.ThievesDaggerEnabled;
             DerpACEConfig.SentinelSpearEnabled    = c.SentinelSpearEnabled;
             DerpACEConfig.UnarmedElemEnabled      = c.UnarmedElemEnabled;
+            DerpACEConfig.PugilistWeaponEnabled   = c.PugilistWeaponEnabled;
             DerpACEConfig.FencerBladeEnabled      = c.FencerBladeEnabled;
             DerpACEConfig.RavagerAxeEnabled       = c.RavagerAxeEnabled;
             DerpACEConfig.WardenMaulEnabled       = c.WardenMaulEnabled;
@@ -217,6 +220,9 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.DinnerwareWeaponEnabled = c.DinnerwareWeaponEnabled;
             DerpACEConfig.QuickeningDaggerEnabled = c.QuickeningDaggerEnabled;
             DerpACEConfig.WeaponElemBlastEnabled  = c.WeaponElemBlastEnabled;
+            DerpACEConfig.LugianHammerThrowEnabled = c.LugianHammerThrowEnabled;
+            DerpACEConfig.OpportunistWeaponEnabled = c.OpportunistWeaponEnabled;
+            DerpACEConfig.ExecutionerWeaponEnabled = c.ExecutionerWeaponEnabled;
             DerpACEConfig.DinnerwareWeaponDropChance = c.DinnerwareWeaponDropChance;
             DerpACEConfig.DinnerwareWeaponMinTier     = c.DinnerwareWeaponMinTier;
             DerpACEConfig.DinnerwareSpinDropChance    = c.DinnerwareSpinDropChance;
@@ -231,6 +237,16 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.QuickeningDaggerSpeedMax    = c.QuickeningDaggerSpeedMax;
             DerpACEConfig.QuickeningDaggerDurationMin = c.QuickeningDaggerDurationMin;
             DerpACEConfig.QuickeningDaggerDurationMax = c.QuickeningDaggerDurationMax;
+            DerpACEConfig.OpportunistMeleeDropChance = c.OpportunistMeleeDropChance;
+            DerpACEConfig.OpportunistMissileDropChance = c.OpportunistMissileDropChance;
+            DerpACEConfig.OpportunistMinTier = c.OpportunistMinTier;
+            DerpACEConfig.OpportunistDamageBonus = c.OpportunistDamageBonus;
+            DerpACEConfig.OpportunistWindowSeconds = c.OpportunistWindowSeconds;
+            DerpACEConfig.ExecutionerMeleeDropChance = c.ExecutionerMeleeDropChance;
+            DerpACEConfig.ExecutionerMissileDropChance = c.ExecutionerMissileDropChance;
+            DerpACEConfig.ExecutionerMinTier = c.ExecutionerMinTier;
+            DerpACEConfig.ExecutionerDamageBonus = c.ExecutionerDamageBonus;
+            DerpACEConfig.ExecutionerHealthThreshold = c.ExecutionerHealthThreshold;
 
             // ── Teleport ─────────────────────────────────────────────────────
             TpConfig.CostPerMeter = c.TpCostPerMeter;
@@ -256,6 +272,7 @@ namespace ACE.Server.DerpAce
 
             // ── Mob Modifiers ─────────────────────────────────────────────────
             DerpACEConfig.MobModifierEnabled          = c.MobModifierEnabled;
+            DerpACEConfig.MobModifierMinLevel        = c.MobModifierMinLevel;
             DerpACEConfig.MobModifierMinTier          = c.MobModifierMinTier;
             DerpACEConfig.MobModifierDefenseSkillCap  = c.MobModifierDefenseSkillCap;
             DerpACEConfig.NocturnalMobChance          = c.NocturnalMobChance;
@@ -273,6 +290,8 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ScoutMobChance              = c.ScoutMobChance;
             DerpACEConfig.SimulacrumMobChance         = c.SimulacrumMobChance;
             DerpACEConfig.HealerMobChance             = c.HealerMobChance;
+            DerpACEConfig.EnchanterMobChance         = c.EnchanterMobChance;
+            DerpACEConfig.ShamanMobChance            = c.ShamanMobChance;
             DerpACEConfig.HealerMobRange              = c.HealerMobRange;
             DerpACEConfig.HealerMobHealThreshold      = c.HealerMobHealThreshold;
             DerpACEConfig.HealerMobCooldownSeconds    = c.HealerMobCooldownSeconds;
@@ -301,6 +320,12 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.LootModifierExclusivePerItem      = c.LootModifierExclusivePerItem;
             DerpACEConfig.LootModifierInterchangeable       = c.LootModifierInterchangeable;
             DerpACEConfig.LootModifierInterchangeableMinTier = c.LootModifierInterchangeableMinTier;
+            DerpACEConfig.LugianHammerThrowDropChance = c.LugianHammerThrowDropChance;
+            DerpACEConfig.LugianHammerThrowMinTier = c.LugianHammerThrowMinTier;
+            DerpACEConfig.LugianHammerThrowProcChance = c.LugianHammerThrowProcChance;
+            DerpACEConfig.LugianHammerThrowDamageScale = c.LugianHammerThrowDamageScale;
+            DerpACEConfig.LugianHammerThrowRadius = c.LugianHammerThrowRadius;
+            DerpACEConfig.LugianHammerThrowCooldownSeconds = c.LugianHammerThrowCooldownSeconds;
 
             // ── Armor Enchantments ────────────────────────────────────────────
             DerpACEConfig.ArmorBaneChanceNormal            = c.ArmorBaneChanceNormal;
@@ -318,6 +343,9 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ArchmagiMinTier             = c.ArchmagiMinTier;
             DerpACEConfig.ArchmagiProcChance          = c.ArchmagiProcChance;
             DerpACEConfig.ArchmagiAggroPenalty        = c.ArchmagiAggroPenalty;
+            DerpACEConfig.ArchmagiDualCastChance     = c.ArchmagiDualCastChance;
+            DerpACEConfig.ArchmagiDualCastRadius     = c.ArchmagiDualCastRadius;
+            DerpACEConfig.ArchmagiDualCastDamageModifier = c.ArchmagiDualCastDamageModifier;
 
             DerpACEConfig.HierophantDropChance        = c.HierophantDropChance;
             DerpACEConfig.HierophantMinTier           = c.HierophantMinTier;

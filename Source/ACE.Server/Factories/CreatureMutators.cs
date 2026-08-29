@@ -181,14 +181,14 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Nocturnal mob mutator â€” boosts DamageRating + Overpower at spawn.
+    /// DerpACE: Nocturnal mob mutator - boosts DamageRating + Overpower at spawn.
     /// In random spawn flow, only rolls at night; force-apply (admin) bypasses time-of-day.
     /// </summary>
     public class NocturnalMutator : CreatureMutator
     {
         public override string Identifier => "nocturnal";
         public override string Name => "Nocturnal";
-        public override string Description => "Hunts after dark â€” boosted damage and overpower.";
+        public override string Description => "Hunts after dark - boosted damage and overpower.";
         public override PropertyBool? MutatorFlag => PropertyBool.IsNocturnalMob;
         public override string NamePrefix => "Nocturnal";
 
@@ -216,7 +216,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Exploding mob mutator â€” detonates on death casting an elemental ring spell.
+    /// DerpACE: Exploding mob mutator - detonates on death casting an elemental ring spell.
     /// Death-side AoE is handled in Creature_Death.cs by checking PropertyBool.IsExplodingMob.
     /// </summary>
     public class ExplodingMutator : CreatureMutator
@@ -265,7 +265,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Healer mob mutator â€” casts Heal Other on wounded nearby allies,
+    /// DerpACE: Healer mob mutator - casts Heal Other on wounded nearby allies,
     /// spends mana, and shows heal notification/animation on the target.
     /// Heartbeat logic is in Creature_Healer.cs.
     /// </summary>
@@ -315,8 +315,8 @@ namespace ACE.Server.Factories
         public EnchanterMutator()
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
-            Chance = DerpACEConfig.HealerMobChance;
-            Enabled = DerpACEConfig.EnableMobModifiers;
+            Chance = DerpACEConfig.EnchanterMobChance;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.EnchanterMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -348,8 +348,8 @@ namespace ACE.Server.Factories
         public ShamanMutator()
         {
             MinTier = DerpACEConfig.MobModifierMinTier;
-            Chance = DerpACEConfig.NecromancerMobChance;
-            Enabled = DerpACEConfig.EnableMobModifiers;
+            Chance = DerpACEConfig.ShamanMobChance;
+            Enabled = DerpACEConfig.EnableMobModifiers && DerpACEConfig.ShamanMobEnabled;
         }
 
         protected override void Apply(Creature creature, int tier)
@@ -393,7 +393,7 @@ namespace ACE.Server.Factories
         }
     }
     /// <summary>
-    /// DerpACE: Tank mob mutator â€” high HP, physical damage reduction, bonus healing received,
+    /// DerpACE: Tank mob mutator - high HP, physical damage reduction, bonus healing received,
     /// and boosted Light Weapons + Shield skills.
     /// </summary>
     public class TankMutator : CreatureMutator
@@ -455,7 +455,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Reaper affix â€” death-aspected: bonus melee damage and life-drain on hit.
+    /// DerpACE: Reaper affix - death-aspected: bonus melee damage and life-drain on hit.
     /// On-hit lifedrain handled in Player_Combat.TryProcMobModifiers.
     /// </summary>
     public class ReaperMutator : CreatureMutator
@@ -494,7 +494,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Necromancer affix â€” applies a nether damage-over-time on hit.
+    /// DerpACE: Necromancer affix - applies a nether damage-over-time on hit.
     /// DoT roll handled in Player_Combat.TryProcMobModifiers.
     /// </summary>
     public class NecromancerMutator : CreatureMutator
@@ -522,7 +522,7 @@ namespace ACE.Server.Factories
                 creature.Mana.Current = creature.Mana.MaxValue;
             }
 
-            // Improve nether resistance â€” a necromancer shrugs off the same stuff it casts
+            // Improve nether resistance - a necromancer shrugs off the same stuff it casts
             creature.SetProperty(PropertyFloat.ResistNether, 0.5f);
 
             // Visual tell: dark/black tint, slightly larger
@@ -533,7 +533,7 @@ namespace ACE.Server.Factories
     }
 
     /// <summary>
-    /// DerpACE: Warder affix â€” wards nearby creatures, blocking offensive spells cast against them.
+    /// DerpACE: Warder affix - wards nearby creatures, blocking offensive spells cast against them.
     /// Spell-cast block is enforced in Player_Magic.CreatePlayerSpell.
     /// </summary>
     public class WarderMutator : CreatureMutator
@@ -577,7 +577,7 @@ namespace ACE.Server.Factories
                 creature.Mana.Current = creature.Mana.MaxValue;
             }
 
-            // Visual tell: bright blue and slightly larger â€” telegraph that they buff allies
+            // Visual tell: bright blue and slightly larger - telegraph that they buff allies
             creature.ObjScale = (creature.ObjScale ?? 1.0f) + 0.45f;
             creature.PaletteTemplate = (int)PaletteTemplate.Blue;
             creature.Shade = 0.4;
@@ -585,4 +585,3 @@ namespace ACE.Server.Factories
     }
 
 }
-

@@ -109,7 +109,7 @@ namespace ACE.Server.WorldObjects
         private const double ShieldBashingCooldownSeconds = 8.0;
         private const double ShieldProjectileReflectCooldownSeconds = 6.0;
         private const double ShieldSpellMirrorCooldownSeconds = 10.0;
-        private const double LugianHammerThrowCooldownSeconds = 4.0;
+        private static double LugianHammerThrowCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.LugianHammerThrowCooldownSeconds);
         public const double PugilistCooldownSeconds = 6.0;
         public const double HierophantCooldownSeconds = 10.0;
 
@@ -331,7 +331,7 @@ namespace ACE.Server.WorldObjects
             if (damageEvent.Evaded && damageEvent.Weapon?.GetProperty(PropertyBool.IsOpportunistWeapon) == true)
             {
                 _opportunistTargetGuid = target.Guid.Full;
-                _opportunistReadyUntil = DateTime.UtcNow.AddSeconds(8.0);
+                _opportunistReadyUntil = DateTime.UtcNow.AddSeconds(Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.OpportunistWindowSeconds));
             }
 
             if (damageEvent.HasDamage
@@ -339,7 +339,7 @@ namespace ACE.Server.WorldObjects
                 && _opportunistTargetGuid == target.Guid.Full
                 && _opportunistReadyUntil >= DateTime.UtcNow)
             {
-                damageEvent.Damage *= 1.25f;
+                damageEvent.Damage *= 1.0f + Math.Clamp(ACE.Server.Managers.DerpACEConfig.OpportunistDamageBonus, 0.0f, 5.0f);
                 _opportunistTargetGuid = 0;
                 _opportunistReadyUntil = DateTime.MinValue;
             }
@@ -347,9 +347,9 @@ namespace ACE.Server.WorldObjects
             if (damageEvent.HasDamage
                 && damageEvent.Weapon?.GetProperty(PropertyBool.IsExecutionerWeapon) == true
                 && target.Health.MaxValue > 0
-                && target.Health.Current <= target.Health.MaxValue * 0.25f)
+                && target.Health.Current <= target.Health.MaxValue * Math.Clamp(ACE.Server.Managers.DerpACEConfig.ExecutionerHealthThreshold, 0.01f, 1.0f))
             {
-                damageEvent.Damage *= 1.20f;
+                damageEvent.Damage *= 1.0f + Math.Clamp(ACE.Server.Managers.DerpACEConfig.ExecutionerDamageBonus, 0.0f, 5.0f);
             }
             var shadowstepProc = false;
 
@@ -1769,11 +1769,11 @@ namespace ACE.Server.WorldObjects
             if (damageEvent.Weapon.WeaponSkill != Skill.HeavyWeapons)
                 return;
 
-            var procChance = damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowProcChance) ?? 0.0;
+            var procChance = damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowProcChance) ?? ACE.Server.Managers.DerpACEConfig.LugianHammerThrowProcChance;
             if (procChance <= 0.0 || ThreadSafeRandom.Next(0.0f, 1.0f) >= NormalizeMutatorProcChance(damageEvent.Weapon, procChance))
                 return;
 
-            var radius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowRadius) ?? 10.0));
+            var radius = Math.Max(1.0f, (float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowRadius) ?? ACE.Server.Managers.DerpACEConfig.LugianHammerThrowRadius));
             var radiusSq = radius * radius;
             var secondaryTarget = SelectNearestMonsterTargets(primaryTarget.Location, radiusSq, 1, primaryTarget, CanDamage).FirstOrDefault();
 
@@ -1783,7 +1783,7 @@ namespace ACE.Server.WorldObjects
             if (!TryStartMutatorCooldown(damageEvent.Weapon, LugianHammerThrowCooldownId, LugianHammerThrowCooldownSeconds))
                 return;
 
-            var damageScale = Math.Clamp((float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowDamageScale) ?? 0.75), 0.05f, 1.0f);
+            var damageScale = Math.Clamp((float)(damageEvent.Weapon.GetProperty(PropertyFloat.LugianHammerThrowDamageScale) ?? ACE.Server.Managers.DerpACEConfig.LugianHammerThrowDamageScale), 0.05f, 1.0f);
             var throwDamage = Math.Max(1.0f, damageEvent.Damage * damageScale);
 
             var stance = CurrentMotionState?.Stance ?? MotionStance.NonCombat;
@@ -1811,7 +1811,7 @@ namespace ACE.Server.WorldObjects
                         projectile.SetupTableId = damageEvent.Weapon.SetupTableId;
                         projectile.MotionTableId = damageEvent.Weapon.MotionTableId;
                         projectile.PhysicsTableId = damageEvent.Weapon.PhysicsTableId;
-                        projectile.Translucency = 0.2f;
+                        projectile.Translucency = 0.15f;
                         projectile.Biota.PropertiesAnimPart = damageEvent.Weapon.Biota.PropertiesAnimPart.Clone(projectile.BiotaDatabaseLock);
                         projectile.Biota.PropertiesPalette = damageEvent.Weapon.Biota.PropertiesPalette.Clone(projectile.BiotaDatabaseLock);
                         projectile.Biota.PropertiesTextureMap = damageEvent.Weapon.Biota.PropertiesTextureMap.Clone(projectile.BiotaDatabaseLock);

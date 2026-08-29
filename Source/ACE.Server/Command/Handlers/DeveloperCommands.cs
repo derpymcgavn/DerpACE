@@ -2328,6 +2328,54 @@ namespace ACE.Server.Command.Handlers
             log.Info($"Physics ObjMaint Audit Completed. Errors - objectTable: {objectTableErrors}, visibleObjectTable: {visibleObjectTableErrors}, voyeurTable: {voyeurTableErrors}");
         }
 
+        [CommandHandler("mutatorsim", AccessLevel.Developer, CommandHandlerFlag.None, 0,
+            "Run a deterministic DerpACE weapon mutator damage balance simulation.",
+            "[attacks=100000] [base=100] [aps=1.0] [hit=0.75] [evade=0.15] [armor=35]")]
+        public static void HandleMutatorSim(Session session, params string[] parameters)
+        {
+            var attacks = 100000;
+            var baseDamage = 100.0;
+            var attacksPerSecond = 1.0;
+            var hitRate = 0.75;
+            var evadeRate = 0.15;
+            var armorStopped = 35.0;
+
+            foreach (var parameter in parameters ?? Array.Empty<string>())
+            {
+                var separator = parameter.IndexOf('=');
+                if (separator <= 0)
+                    continue;
+
+                var key = parameter.Substring(0, separator).Trim().ToLowerInvariant();
+                var value = parameter.Substring(separator + 1).Trim();
+
+                if (key is "attacks" or "n")
+                    int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out attacks);
+                else if (key is "base" or "damage")
+                    double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out baseDamage);
+                else if (key is "aps" or "speed")
+                    double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out attacksPerSecond);
+                else if (key is "hit" or "hitrate")
+                    double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out hitRate);
+                else if (key is "evade" or "evaderate")
+                    double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out evadeRate);
+                else if (key is "armor" or "stopped")
+                    double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out armorStopped);
+            }
+
+            if (hitRate > 1.0)
+                hitRate /= 100.0;
+            if (evadeRate > 1.0)
+                evadeRate /= 100.0;
+
+            var report = MutatorBalanceSimulator.Run(attacks, baseDamage, attacksPerSecond, hitRate, evadeRate, armorStopped);
+            if (session != null)
+                CommandHandlerHelper.WriteOutputInfo(session, report, ChatMessageType.Broadcast);
+            else
+                Console.WriteLine(report);
+
+            log.Info(report);
+        }
         [CommandHandler("lootgen", AccessLevel.Developer, CommandHandlerFlag.RequiresWorld, 1, "Generate a piece of loot from the LootGenerationFactory.", "<wcid, classname, or weapon> <tier> [luck=0-1] [mutator=name]")]
         public static void HandleLootGen(Session session, params string[] parameters)
         {
