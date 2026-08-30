@@ -134,6 +134,31 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("executioner_weapon_enabled")]
         public bool ExecutionerWeaponEnabled { get; set; } = true;
 
+        [JsonPropertyName("rally_banner_enabled")]
+        public bool RallyBannerEnabled { get; set; } = true;
+        [JsonPropertyName("rally_banner_item_wcid")]
+        public uint RallyBannerItemWcid { get; set; } = 7000020;
+        [JsonPropertyName("rally_banner_visual_wcid")]
+        public uint RallyBannerVisualWcid { get; set; } = 16920;
+        [JsonPropertyName("rally_banner_duration_seconds")]
+        public float RallyBannerDurationSeconds { get; set; } = 180.0f;
+        [JsonPropertyName("rally_banner_pulse_seconds")]
+        public float RallyBannerPulseSeconds { get; set; } = 8.0f;
+        [JsonPropertyName("rally_banner_aura_seconds")]
+        public float RallyBannerAuraSeconds { get; set; } = 12.0f;
+        [JsonPropertyName("rally_banner_cooldown_seconds")]
+        public float RallyBannerCooldownSeconds { get; set; } = 900.0f;
+        [JsonPropertyName("rally_banner_radius")]
+        public float RallyBannerRadius { get; set; } = 20.0f;
+        [JsonPropertyName("rally_banner_damage_rating_bonus")]
+        public int RallyBannerDamageRatingBonus { get; set; } = 5;
+        [JsonPropertyName("rally_banner_damage_resist_rating_bonus")]
+        public int RallyBannerDamageResistRatingBonus { get; set; } = 5;
+        [JsonPropertyName("rally_banner_requires_leadership")]
+        public bool RallyBannerRequiresLeadership { get; set; } = true;
+        [JsonPropertyName("rally_banner_required_level")]
+        public int RallyBannerRequiredLevel { get; set; } = 180;
+
         [JsonPropertyName("dinnerware_weapon_drop_chance")]
         public float DinnerwareWeaponDropChance { get; set; } = 0.02f;
         [JsonPropertyName("dinnerware_weapon_min_tier")]

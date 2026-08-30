@@ -70,6 +70,19 @@ namespace ACE.Server.Managers
         public static bool OpportunistWeaponEnabled { get; set; } = true;
         public static bool ExecutionerWeaponEnabled { get; set; } = true;
 
+        public static bool RallyBannerEnabled { get; set; } = true;
+        public static uint RallyBannerItemWcid { get; set; } = 7000020;
+        public static uint RallyBannerVisualWcid { get; set; } = 16920;
+        public static float RallyBannerDurationSeconds { get; set; } = 180.0f;
+        public static float RallyBannerPulseSeconds { get; set; } = 8.0f;
+        public static float RallyBannerAuraSeconds { get; set; } = 12.0f;
+        public static float RallyBannerCooldownSeconds { get; set; } = 900.0f;
+        public static float RallyBannerRadius { get; set; } = 20.0f;
+        public static int RallyBannerDamageRatingBonus { get; set; } = 5;
+        public static int RallyBannerDamageResistRatingBonus { get; set; } = 5;
+        public static bool RallyBannerRequiresLeadership { get; set; } = true;
+        public static int RallyBannerRequiredLevel { get; set; } = 180;
+
         public static float DinnerwareWeaponDropChance { get; set; } = 0.02f;
         public static int DinnerwareWeaponMinTier { get; set; } = 4;
         public static float DinnerwareSpinDropChance { get; set; } = 0.08f;

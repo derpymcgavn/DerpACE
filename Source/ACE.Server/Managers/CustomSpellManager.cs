@@ -45,6 +45,8 @@ namespace ACE.Server.Managers
         public const uint HexdustSpellIdLast = 65016;
         public const uint RoadrunnerSpellId = 65017;
         public const uint RainfallFrostSpellId = 65018;
+        public const uint RallyBannerMightSpellId = 65019;
+        public const uint RallyBannerGuardSpellId = 65020;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
@@ -84,6 +86,7 @@ namespace ACE.Server.Managers
             EnsureDefaultHexdustSpells();
             EnsureDefaultRoadrunnerSpell();
             EnsureDefaultBossSpells();
+            EnsureDefaultRallyBannerSpells();
 
             var loaded = LoadAll();
             ForceLoadDefaultWellFedSpell();
@@ -92,6 +95,7 @@ namespace ACE.Server.Managers
             ForceLoadDefaultHexdustSpells();
             ForceLoadDefaultRoadrunnerSpell();
             ForceLoadDefaultBossSpells();
+            ForceLoadDefaultRallyBannerSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -107,6 +111,7 @@ namespace ACE.Server.Managers
             ForceLoadDefaultHexdustSpells();
             ForceLoadDefaultRoadrunnerSpell();
             ForceLoadDefaultBossSpells();
+            ForceLoadDefaultRallyBannerSpells();
             EnsureWarMageSpecialTrajectories();
             EnsureFrostWaveShieldVisuals();
             EnsureVoidConfusionVisuals();
@@ -161,6 +166,16 @@ namespace ACE.Server.Managers
             {
                 foreach (var entry in customSpells.EnumerateArray())
                     TryApply(entry, "built-in BossSpells.json");
+            }
+        }
+
+        private static void ForceLoadDefaultRallyBannerSpells()
+        {
+            using var doc = JsonDocument.Parse(GetDefaultRallyBannerJson(), JsonOptions);
+            if (TryGet(doc.RootElement, "CustomSpells", out var customSpells) && customSpells.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in customSpells.EnumerateArray())
+                    TryApply(entry, "built-in RallyBanner.json");
             }
         }
         private static void ForceLoadDefaultFrostWaveShieldSpell()
@@ -1411,6 +1426,12 @@ namespace ACE.Server.Managers
             if (!File.Exists(path) || !File.ReadAllText(path).Contains("\"Id\": 65018"))
                 File.WriteAllText(path, DefaultBossSpellsJson);
         }
+        private static void EnsureDefaultRallyBannerSpells()
+        {
+            var path = Path.Combine(ContentDir, "RallyBanner.json");
+            if (!File.Exists(path))
+                File.WriteAllText(path, GetDefaultRallyBannerJson());
+        }
         private static void EnsureDefaultFrostWaveShieldSpell()
         {
             var path = Path.Combine(ContentDir, "FrostWaveShield.json");
@@ -1967,6 +1988,49 @@ namespace ACE.Server.Managers
   ]
 }
 ";
+
+        private static string GetDefaultRallyBannerJson()
+        {
+            var duration = Math.Max(1, DerpACEConfig.RallyBannerAuraSeconds).ToString(CultureInfo.InvariantCulture);
+            var damage = DerpACEConfig.RallyBannerDamageRatingBonus.ToString(CultureInfo.InvariantCulture);
+            var guard = DerpACEConfig.RallyBannerDamageResistRatingBonus.ToString(CultureInfo.InvariantCulture);
+            return @"{
+  ""CustomSpells"": [
+    {
+      ""Template"": 4616,
+      ""Id"": 65019,
+      ""Name"": ""Rally Banner: Might"",
+      ""SpellWords"": ""Hold the Line"",
+      ""Desc"": ""A rally banner aura that increases Damage Rating while you remain near the banner."",
+      ""Icon"": ""0x060023A8"",
+      ""Category"": 65019,
+      ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
+      ""Duration"": " + duration + @",
+      ""StatModType"": ""Int, Additive"",
+      ""StatModKey"": 307,
+      ""StatModVal"": " + damage + @",
+      ""CasterEffect"": ""EnchantUpYellow"",
+      ""TargetEffect"": ""EnchantUpYellow""
+    },
+    {
+      ""Template"": 4616,
+      ""Id"": 65020,
+      ""Name"": ""Rally Banner: Guard"",
+      ""SpellWords"": ""Stand Together"",
+      ""Desc"": ""A rally banner aura that increases Damage Resist Rating while you remain near the banner."",
+      ""Icon"": ""0x060023A8"",
+      ""Category"": 65020,
+      ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
+      ""Duration"": " + duration + @",
+      ""StatModType"": ""Int, Additive"",
+      ""StatModKey"": 308,
+      ""StatModVal"": " + guard + @",
+      ""CasterEffect"": ""EnchantUpYellow"",
+      ""TargetEffect"": ""EnchantUpYellow""
+    }
+  ]
+}";
+        }
         private const string DefaultFrostWaveShieldJson =
 @"{
   ""CustomSpells"": [

@@ -145,6 +145,8 @@ namespace ACE.Server.WorldObjects
             if (activator is Player player && IsSpellFocus && player.TryBeginSpellFocusAttunement(this))
                 return;
 
+            if (activator is Player rallyPlayer && RallyBannerManager.TryUse(rallyPlayer, this))
+                return;
             // empty base - individual WorldObject types should override
 
             var msg = $"{Name}.ActOnUse({activator.Name}) - undefined for wcid {WeenieClassId} type {WeenieType}";
