@@ -28,6 +28,8 @@ namespace ACE.Server.DerpAce
         public const uint NomadSupplyKeyWeenieClassId = 2000616;
         public const uint DrunkenEventBeerWeenieClassId = 2000617;
         public const uint HorriblyForgedDerpCoinWeenieClassId = 2000618;
+        public const uint RallyBannerItemWeenieClassId = 7000020;
+        public const uint RallyBannerDeployedWeenieClassId = 7000021;
 
         private const uint MortarAndPestleWeenieClassId = 4751;
         private const uint PowderedMalachiteWeenieClassId = 8321;
@@ -63,6 +65,8 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildDrunkenEventBeer());
                 DatabaseManager.World.SetCachedWeenie(BuildHorriblyForgedDerpCoin());
                 DatabaseManager.World.SetCachedWeenie(BuildFlutterStone());
+                DatabaseManager.World.SetCachedWeenie(BuildRallyBannerItem());
+                DatabaseManager.World.SetCachedWeenie(BuildRallyBannerDeployed());
                 DatabaseManager.World.SetCachedWeenie(BuildSausageMcBuffin());
 
                 log.Info("DerpACE: Hardcoded weenies registered.");
@@ -173,6 +177,95 @@ namespace ACE.Server.DerpAce
             return w;
         }
 
+        private static Weenie BuildRallyBannerItem()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = RallyBannerItemWeenieClassId,
+                ClassName = "ace7000020-rallybanner",
+                WeenieType = WeenieType.Generic,
+                PropertiesInt = new Dictionary<PropertyInt, int>(),
+                PropertiesBool = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType] = (int)ItemType.Misc;
+            w.PropertiesInt[PropertyInt.PaletteTemplate] = 61;
+            w.PropertiesInt[PropertyInt.EncumbranceVal] = 50;
+            w.PropertiesInt[PropertyInt.Mass] = 50;
+            w.PropertiesInt[PropertyInt.ItemUseable] = (int)Usable.Contained;
+            w.PropertiesInt[PropertyInt.Value] = 500;
+            w.PropertiesInt[PropertyInt.PhysicsState] = 1044;
+            w.PropertiesInt[PropertyInt.SharedCooldown] = 2060;
+            w.PropertiesInt[PropertyInt.UseRequiresSkill] = (int)Skill.Leadership;
+            w.PropertiesInt[PropertyInt.UseRequiresLevel] = 180;
+
+            w.PropertiesBool[PropertyBool.IgnoreCollisions] = true;
+            w.PropertiesBool[PropertyBool.Ethereal] = true;
+            w.PropertiesBool[PropertyBool.GravityStatus] = true;
+            w.PropertiesBool[PropertyBool.IsSellable] = false;
+
+            w.PropertiesFloat[PropertyFloat.Shade] = 0;
+            w.PropertiesFloat[PropertyFloat.CooldownDuration] = 900;
+
+            w.PropertiesString[PropertyString.Name] = "Rally Banner";
+            w.PropertiesString[PropertyString.Use] = "Plants a temporary rally banner that strengthens nearby fellowship members.";
+            w.PropertiesString[PropertyString.ShortDesc] = "A portable banner for rallying a fellowship. Requires level 180+ and trained Leadership.";
+            w.PropertiesString[PropertyString.LongDesc] = "Requires level 180+ and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain a small Damage Rating and Damage Resist Rating aura while they remain near it.";
+
+            ApplyFlagVisuals(w);
+            return w;
+        }
+
+        private static Weenie BuildRallyBannerDeployed()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = RallyBannerDeployedWeenieClassId,
+                ClassName = "ace7000021-rallybannerdeployed",
+                WeenieType = WeenieType.Generic,
+                PropertiesInt = new Dictionary<PropertyInt, int>(),
+                PropertiesBool = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat = new Dictionary<PropertyFloat, double>(),
+                PropertiesString = new Dictionary<PropertyString, string>(),
+                PropertiesDID = new Dictionary<PropertyDataId, uint>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType] = (int)ItemType.Misc;
+            w.PropertiesInt[PropertyInt.PaletteTemplate] = 61;
+            w.PropertiesInt[PropertyInt.EncumbranceVal] = 0;
+            w.PropertiesInt[PropertyInt.Mass] = 0;
+            w.PropertiesInt[PropertyInt.ItemUseable] = (int)Usable.No;
+            w.PropertiesInt[PropertyInt.Value] = 0;
+            w.PropertiesInt[PropertyInt.PhysicsState] = (int)(PhysicsState.Static | PhysicsState.Ethereal | PhysicsState.IgnoreCollisions);
+
+            w.PropertiesBool[PropertyBool.IgnoreCollisions] = true;
+            w.PropertiesBool[PropertyBool.Ethereal] = true;
+            w.PropertiesBool[PropertyBool.GravityStatus] = false;
+            w.PropertiesBool[PropertyBool.Attackable] = false;
+            w.PropertiesBool[PropertyBool.IsSellable] = false;
+
+            w.PropertiesFloat[PropertyFloat.Shade] = 0;
+
+            w.PropertiesString[PropertyString.Name] = "Rally Banner";
+            w.PropertiesString[PropertyString.ShortDesc] = "A planted rally banner.";
+            w.PropertiesString[PropertyString.LongDesc] = "A temporary planted banner that rallies nearby fellowship members.";
+
+            ApplyFlagVisuals(w);
+            return w;
+        }
+
+        private static void ApplyFlagVisuals(Weenie w)
+        {
+            w.PropertiesDID[PropertyDataId.Setup] = 0x02000CDB;
+            w.PropertiesDID[PropertyDataId.SoundTable] = 0x20000014;
+            w.PropertiesDID[PropertyDataId.PaletteBase] = 0x04001379;
+            w.PropertiesDID[PropertyDataId.ClothingBase] = 0x100003A7;
+            w.PropertiesDID[PropertyDataId.Icon] = 0x060023A8;
+            w.PropertiesDID[PropertyDataId.PhysicsEffectTable] = 0x3400002B;
+        }
         /// <summary>
         /// Sausage McBuffin (WCID 2000500) - the N00B Buffer NPC.
         /// Buff casting behavior is hardcoded in <see cref="WorldObjects.SausageMcBuffin"/>;

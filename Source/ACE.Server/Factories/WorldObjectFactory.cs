@@ -33,6 +33,12 @@ namespace ACE.Server.Factories
             if (weenie.WeenieClassId == 15268 || weenie.WeenieClassId == 15269 || weenie.WeenieClassId == 15270 || weenie.WeenieClassId == 15271 || weenie.WeenieClassId == 43173)
                 return new Container(weenie, guid);
 
+            if (weenie.WeenieClassId == RallyBannerItem.DefaultWeenieClassId || weenie.WeenieClassId == DerpACEConfig.RallyBannerItemWcid)
+                return new RallyBannerItem(weenie, guid);
+
+            if (weenie.WeenieClassId == RallyBannerDeployed.DefaultWeenieClassId || weenie.WeenieClassId == DerpACEConfig.RallyBannerVisualWcid)
+                return new RallyBannerDeployed(weenie, guid);
+
             if (weenie.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
                 return new NomadRunePouch(weenie, guid);
             if (PathwardenRobeWcids.Contains(weenie.WeenieClassId))
@@ -175,6 +181,12 @@ namespace ACE.Server.Factories
             // Foci must be real Container instances for pack slots + put-in-container actions.
             if (biota.WeenieClassId == 15268 || biota.WeenieClassId == 15269 || biota.WeenieClassId == 15270 || biota.WeenieClassId == 15271 || biota.WeenieClassId == 43173)
                 return new Container(biota);
+
+            if (biota.WeenieClassId == RallyBannerItem.DefaultWeenieClassId || biota.WeenieClassId == DerpACEConfig.RallyBannerItemWcid)
+                return new RallyBannerItem(biota);
+
+            if (biota.WeenieClassId == RallyBannerDeployed.DefaultWeenieClassId || biota.WeenieClassId == DerpACEConfig.RallyBannerVisualWcid)
+                return new RallyBannerDeployed(biota);
 
             if (biota.WeenieClassId == NomadRunePouch.NomadRunePouchWeenieClassId)
                 return new NomadRunePouch(biota);

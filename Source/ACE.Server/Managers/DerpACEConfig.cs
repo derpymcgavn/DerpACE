@@ -72,7 +72,7 @@ namespace ACE.Server.Managers
 
         public static bool RallyBannerEnabled { get; set; } = true;
         public static uint RallyBannerItemWcid { get; set; } = 7000020;
-        public static uint RallyBannerVisualWcid { get; set; } = 16920;
+        public static uint RallyBannerVisualWcid { get; set; } = 7000021;
         public static float RallyBannerDurationSeconds { get; set; } = 180.0f;
         public static float RallyBannerPulseSeconds { get; set; } = 8.0f;
         public static float RallyBannerAuraSeconds { get; set; } = 12.0f;

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 using ACE.DatLoader.FileTypes;
+using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
@@ -86,6 +87,7 @@ namespace ACE.Server.Managers
         private static WorldObject CreateBanner(Player player)
         {
             var banner = WorldObjectFactory.CreateNewWorldObject(DerpACEConfig.RallyBannerVisualWcid)
+                ?? WorldObjectFactory.CreateNewWorldObject(RallyBannerDeployed.DefaultWeenieClassId)
                 ?? WorldObjectFactory.CreateNewWorldObject(16920);
 
             if (banner == null)
@@ -93,6 +95,7 @@ namespace ACE.Server.Managers
 
             banner.Name = $"{player.Name}'s Rally Banner";
             banner.Location = player.Location.InFrontOf(1.5f, true);
+            banner.Location.LandblockId = new LandblockId(banner.Location.GetCell());
             banner.GeneratorId = player.Guid.Full;
             banner.TimeToRot = Math.Max(5, DerpACEConfig.RallyBannerDurationSeconds + 5);
             banner.ItemUseable = Usable.No;

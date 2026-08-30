@@ -8,10 +8,10 @@ VALUES (7000020,   1,          128) /* ItemType - Misc */
      , (7000020,   3,           61) /* PaletteTemplate */
      , (7000020,   5,           50) /* EncumbranceVal */
      , (7000020,   8,           50) /* Mass */
-     , (7000020,  16,            1) /* ItemUseable - NoTarget */
+     , (7000020,  16,            8) /* ItemUseable - Contained */
      , (7000020,  19,          500) /* Value */
      , (7000020,  93,         1044) /* PhysicsState - Ethereal, IgnoreCollisions, Gravity */
-     , (7000020, 167,         2060) /* CooldownId */
+     , (7000020, 280,         2060) /* SharedCooldown */
      , (7000020, 366,           35) /* UseRequiresSkill - Leadership */
      , (7000020, 369,          180) /* UseRequiresLevel */;
 
@@ -24,13 +24,13 @@ VALUES (7000020,  11, True ) /* IgnoreCollisions */
 
 INSERT INTO `weenie_properties_float` (`object_Id`, `type`, `value`)
 VALUES (7000020,  12, 0) /* Shade */
-     , (7000020, 171, 900) /* CooldownDuration */;
+     , (7000020, 167, 900) /* CooldownDuration */;
 
 INSERT INTO `weenie_properties_string` (`object_Id`, `type`, `value`)
 VALUES (7000020,   1, 'Rally Banner') /* Name */
      , (7000020,  14, 'Plants a temporary rally banner that strengthens nearby fellowship members.') /* Use */
-     , (7000020,  15, 'A portable banner for rallying a fellowship. Requires level 180 and trained Leadership.') /* ShortDesc */
-     , (7000020,  16, 'Requires level 180 and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain a small Damage Rating and Damage Resist Rating aura while they remain near it.') /* LongDesc */;
+     , (7000020,  15, 'A portable banner for rallying a fellowship. Requires level 180+ and trained Leadership.') /* ShortDesc */
+     , (7000020,  16, 'Requires level 180+ and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain a small Damage Rating and Damage Resist Rating aura while they remain near it.') /* LongDesc */;
 
 INSERT INTO `weenie_properties_d_i_d` (`object_Id`, `type`, `value`)
 VALUES (7000020,   1, 0x02000CDB) /* Setup */

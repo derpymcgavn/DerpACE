@@ -139,7 +139,7 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("rally_banner_item_wcid")]
         public uint RallyBannerItemWcid { get; set; } = 7000020;
         [JsonPropertyName("rally_banner_visual_wcid")]
-        public uint RallyBannerVisualWcid { get; set; } = 16920;
+        public uint RallyBannerVisualWcid { get; set; } = 7000021;
         [JsonPropertyName("rally_banner_duration_seconds")]
         public float RallyBannerDurationSeconds { get; set; } = 180.0f;
         [JsonPropertyName("rally_banner_pulse_seconds")]
