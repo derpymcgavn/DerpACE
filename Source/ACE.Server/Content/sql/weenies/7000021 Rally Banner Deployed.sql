@@ -13,7 +13,8 @@ VALUES (7000021,   1,          128) /* ItemType - Misc */
      , (7000021,  93,           36) /* PhysicsState - Static, Ethereal, IgnoreCollisions */;
 
 INSERT INTO `weenie_properties_bool` (`object_Id`, `type`, `value`)
-VALUES (7000021,  11, True ) /* IgnoreCollisions */
+VALUES (7000021,   1, True ) /* Stuck */
+     , (7000021,  11, True ) /* IgnoreCollisions */
      , (7000021,  13, True ) /* Ethereal */
      , (7000021,  14, False) /* GravityStatus */
      , (7000021,  19, False) /* Attackable */

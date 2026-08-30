@@ -29,6 +29,7 @@ namespace ACE.Server.WorldObjects
             GravityStatus = false;
             Static = true;
             NoDraw = false;
+            Stuck = true;
             SetProperty(PropertyInt.PhysicsState, (int)(PhysicsState.Static | PhysicsState.Ethereal | PhysicsState.IgnoreCollisions));
             SetProperty(PropertyDataId.Setup, 0x02000CDB);
             SetProperty(PropertyDataId.SoundTable, 0x20000014);

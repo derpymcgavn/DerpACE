@@ -105,6 +105,7 @@ namespace ACE.Server.Managers
             banner.ReportCollisions = false;
             banner.GravityStatus = false;
             banner.Static = true;
+            banner.Stuck = true;
             banner.SetProperty(PropertyInt.PhysicsState, (int)(PhysicsState.Static | PhysicsState.Ethereal | PhysicsState.IgnoreCollisions));
             banner.SetProperty(PropertyDataId.Setup, 0x02000CDB);
             banner.SetProperty(PropertyDataId.SoundTable, 0x20000014);
@@ -156,8 +157,28 @@ namespace ACE.Server.Managers
                 return;
             }
 
+            var eligible = new HashSet<uint>();
             foreach (var target in GetEligibleTargets(owner, active.Banner))
+            {
+                eligible.Add(target.Guid.Full);
                 ApplyAura(target, active.Banner);
+                active.AffectedPlayers.Add(target.Guid.Full);
+                RefreshVisibleRatings(target);
+            }
+
+            foreach (var guid in new List<uint>(active.AffectedPlayers))
+            {
+                if (eligible.Contains(guid))
+                    continue;
+
+                active.AffectedPlayers.Remove(guid);
+                var departed = PlayerManager.GetOnlinePlayer(guid);
+                if (departed == null)
+                    continue;
+
+                RemoveAura(departed, active.Banner);
+                RefreshVisibleRatings(departed);
+            }
 
             active.Banner.ApplyVisualEffects(PlayScript.EnchantUpYellow, 0.35f);
         }
@@ -195,6 +216,32 @@ namespace ACE.Server.Managers
             player.ApplyVisualEffects(PlayScript.EnchantUpYellow, 0.2f);
         }
 
+        private static void RemoveAura(Player player, WorldObject banner)
+        {
+            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerMightSpellId);
+            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerGuardSpellId);
+        }
+
+        private static void RemoveAuraSpell(Player player, WorldObject banner, uint spellId)
+        {
+            if (player == null || banner == null)
+                return;
+
+            var enchantment = player.EnchantmentManager.GetEnchantment(spellId, banner.Guid.Full);
+            if (enchantment != null)
+                player.EnchantmentManager.Remove(enchantment, false);
+        }
+
+        private static void RefreshVisibleRatings(Player player)
+        {
+            if (player?.Session == null)
+                return;
+
+            player.Session.Network.EnqueueSend(
+                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.DamageRating, player.GetDamageRating()),
+                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.DamageResistRating, player.GetDamageResistRating()));
+        }
+
         private static void ApplyAuraSpell(Player player, WorldObject banner, uint spellId)
         {
             var spell = new Spell(spellId);
@@ -212,6 +259,17 @@ namespace ACE.Server.Managers
                 return;
 
             ActiveByOwner.TryRemove(active.OwnerGuid, out _);
+            foreach (var guid in new List<uint>(active.AffectedPlayers))
+            {
+                var player = PlayerManager.GetOnlinePlayer(guid);
+                if (player == null)
+                    continue;
+
+                RemoveAura(player, active.Banner);
+                RefreshVisibleRatings(player);
+            }
+            active.AffectedPlayers.Clear();
+
             if (active.Banner == null || active.Banner.IsDestroyed)
                 return;
 
@@ -238,6 +296,7 @@ namespace ACE.Server.Managers
             public uint OwnerGuid { get; }
             public WorldObject Banner { get; }
             public DateTime ExpiresUtc { get; }
+            public HashSet<uint> AffectedPlayers { get; } = new HashSet<uint>();
         }
     }
 }
