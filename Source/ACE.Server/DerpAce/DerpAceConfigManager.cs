@@ -178,6 +178,10 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.EnableTeleport           = c.EnableTeleport;
             DerpACEConfig.EnableMysteriousStranger = c.EnableMysteriousStranger;
             DerpACEConfig.EnableMobModifiers       = c.EnableMobModifiers;
+            DerpACEConfig.ModernMobAiEnabled      = c.ModernMobAiEnabled;
+            DerpACEConfig.ModernMobAiSwitchThreshold = c.ModernMobAiSwitchThreshold;
+            DerpACEConfig.MobMovementSyncIntervalSeconds = c.MobMovementSyncIntervalSeconds;
+            DerpACEConfig.MobOutdoorChaseRange    = c.MobOutdoorChaseRange;
             DerpACEConfig.EnableDerpcoin           = c.EnableDerpcoin;
             DerpACEConfig.EnableCustomWeapons      = c.EnableCustomWeapons;
             DerpACEConfig.EnableArmorEnchants      = c.EnableArmorEnchants;
@@ -204,6 +208,10 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ArchmagiEnabled         = c.ArchmagiEnabled;
             DerpACEConfig.LifeCasterEnabled       = c.LifeCasterEnabled;
             DerpACEConfig.HierophantEnabled       = c.HierophantEnabled;
+            DerpACEConfig.CasterShadowCloneEnabled = c.CasterShadowCloneEnabled;
+            DerpACEConfig.GravecallerCasterEnabled = c.GravecallerCasterEnabled;
+            DerpACEConfig.VoidConfusionCasterEnabled = c.VoidConfusionCasterEnabled;
+            DerpACEConfig.WarCasterSpecialEnabled = c.WarCasterSpecialEnabled;
             DerpACEConfig.ThievesDaggerEnabled    = c.ThievesDaggerEnabled;
             DerpACEConfig.SentinelSpearEnabled    = c.SentinelSpearEnabled;
             DerpACEConfig.UnarmedElemEnabled      = c.UnarmedElemEnabled;
@@ -233,6 +241,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.RallyBannerRadius = c.RallyBannerRadius;
             DerpACEConfig.RallyBannerDamageRatingBonus = c.RallyBannerDamageRatingBonus;
             DerpACEConfig.RallyBannerDamageResistRatingBonus = c.RallyBannerDamageResistRatingBonus;
+            DerpACEConfig.RallyBannerRegenMultiplier = c.RallyBannerRegenMultiplier;
             DerpACEConfig.RallyBannerRequiresLeadership = c.RallyBannerRequiresLeadership;
             DerpACEConfig.RallyBannerRequiredLevel = c.RallyBannerRequiredLevel;
             DerpACEConfig.DinnerwareWeaponDropChance = c.DinnerwareWeaponDropChance;
@@ -241,6 +250,13 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.DinnerwareSpinMinTier       = c.DinnerwareSpinMinTier;
             DerpACEConfig.DinnerwareSpinDamageScale   = c.DinnerwareSpinDamageScale;
             DerpACEConfig.DinnerwareSpinRadius        = c.DinnerwareSpinRadius;
+            DerpACEConfig.WarriorPrincessCallDropChance = c.WarriorPrincessCallDropChance;
+            DerpACEConfig.WarriorPrincessCallProcMin  = c.WarriorPrincessCallProcMin;
+            DerpACEConfig.WarriorPrincessCallProcMax  = c.WarriorPrincessCallProcMax;
+            DerpACEConfig.FlyingBuffetDropChance      = c.FlyingBuffetDropChance;
+            DerpACEConfig.FlyingBuffetProcMin         = c.FlyingBuffetProcMin;
+            DerpACEConfig.FlyingBuffetProcMax         = c.FlyingBuffetProcMax;
+            DerpACEConfig.FlyingBuffetFirstBounceDamageScale = c.FlyingBuffetFirstBounceDamageScale;
             DerpACEConfig.QuickeningDaggerDropChance  = c.QuickeningDaggerDropChance;
             DerpACEConfig.QuickeningDaggerMinTier     = c.QuickeningDaggerMinTier;
             DerpACEConfig.QuickeningDaggerProcMin     = c.QuickeningDaggerProcMin;
@@ -249,6 +265,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.QuickeningDaggerSpeedMax    = c.QuickeningDaggerSpeedMax;
             DerpACEConfig.QuickeningDaggerDurationMin = c.QuickeningDaggerDurationMin;
             DerpACEConfig.QuickeningDaggerDurationMax = c.QuickeningDaggerDurationMax;
+            DerpACEConfig.QuickeningDaggerCooldownSeconds = c.QuickeningDaggerCooldownSeconds;
             DerpACEConfig.OpportunistMeleeDropChance = c.OpportunistMeleeDropChance;
             DerpACEConfig.OpportunistMissileDropChance = c.OpportunistMissileDropChance;
             DerpACEConfig.OpportunistMinTier = c.OpportunistMinTier;
@@ -350,7 +367,44 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.DefenderShieldDropChance    = c.DefenderShieldDropChance;
             DerpACEConfig.DefenderShieldMinTier       = c.DefenderShieldMinTier;
             DerpACEConfig.DefenderAggroBonus          = c.DefenderAggroBonus;
+            DerpACEConfig.ShieldThornsRollChance      = c.ShieldThornsRollChance;
+            DerpACEConfig.ShieldBashingRollChance     = c.ShieldBashingRollChance;
+            DerpACEConfig.ShieldReflectionRollChance  = c.ShieldReflectionRollChance;
+            DerpACEConfig.ShieldSpellMirrorRollChance = c.ShieldSpellMirrorRollChance;
+            DerpACEConfig.ShieldTier8TripleAffixChance = c.ShieldTier8TripleAffixChance;
+            DerpACEConfig.ShieldBashingProcChance     = c.ShieldBashingProcChance;
+            DerpACEConfig.ShieldBashingHealthPct      = c.ShieldBashingHealthPct;
+            DerpACEConfig.ShieldBashingCooldownSeconds = c.ShieldBashingCooldownSeconds;
+            DerpACEConfig.ShieldBashKnockbackDistance  = c.ShieldBashKnockbackDistance;
+            DerpACEConfig.ShieldSpellMirrorCooldownSeconds = c.ShieldSpellMirrorCooldownSeconds;
+            DerpACEConfig.BattlemageHelmMinTier       = c.BattlemageHelmMinTier;
+            DerpACEConfig.BattlemageHelmChanceT5      = c.BattlemageHelmChanceT5;
+            DerpACEConfig.BattlemageHelmChanceT7      = c.BattlemageHelmChanceT7;
+            DerpACEConfig.BattlemageHelmChanceT8      = c.BattlemageHelmChanceT8;
+            DerpACEConfig.ArmorSortMinTier            = c.ArmorSortMinTier;
+            DerpACEConfig.ArmorSortChanceT4           = c.ArmorSortChanceT4;
+            DerpACEConfig.ArmorSortChanceT6           = c.ArmorSortChanceT6;
+            DerpACEConfig.ArmorSortChanceT7           = c.ArmorSortChanceT7;
+            DerpACEConfig.ArmorSortChanceT8           = c.ArmorSortChanceT8;
+            DerpACEConfig.CulinarianMinTier           = c.CulinarianMinTier;
+            DerpACEConfig.CulinarianRollChance        = c.CulinarianRollChance;
+            DerpACEConfig.AlchemistGloveMinTier       = c.AlchemistGloveMinTier;
+            DerpACEConfig.AlchemistGloveRollChance    = c.AlchemistGloveRollChance;
+            DerpACEConfig.CulinarianTier8SuperiorBonusChance = c.CulinarianTier8SuperiorBonusChance;
+            DerpACEConfig.AlchemicalInstabilityChanceT6 = c.AlchemicalInstabilityChanceT6;
+            DerpACEConfig.AlchemicalInstabilityChanceT8 = c.AlchemicalInstabilityChanceT8;
+            DerpACEConfig.DanceBootMinTier            = c.DanceBootMinTier;
+            DerpACEConfig.DanceBootRollChance         = c.DanceBootRollChance;
+            DerpACEConfig.UnarmedArmorMinTier         = c.UnarmedArmorMinTier;
+            DerpACEConfig.UnarmedArmorRollChance      = c.UnarmedArmorRollChance;
+            DerpACEConfig.UnarmedArmorOffAxisDefenseChance = c.UnarmedArmorOffAxisDefenseChance;
 
+            DerpACEConfig.MutatedMobWeaponDropBaseChance = c.MutatedMobWeaponDropBaseChance;
+            DerpACEConfig.MutatedMobWeaponDropTierBonus = c.MutatedMobWeaponDropTierBonus;
+            DerpACEConfig.MutatedMobWeaponDropMutatorBonus = c.MutatedMobWeaponDropMutatorBonus;
+            DerpACEConfig.MutatedMobWeaponDropMinChance = c.MutatedMobWeaponDropMinChance;
+            DerpACEConfig.MutatedMobWeaponDropMaxChance = c.MutatedMobWeaponDropMaxChance;
+            DerpACEConfig.MutatedMobWeaponDropAttempts = c.MutatedMobWeaponDropAttempts;
             DerpACEConfig.ArchmagiDropChance          = c.ArchmagiDropChance;
             DerpACEConfig.ArchmagiMinTier             = c.ArchmagiMinTier;
             DerpACEConfig.ArchmagiProcChance          = c.ArchmagiProcChance;
@@ -359,6 +413,8 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ArchmagiDualCastRadius     = c.ArchmagiDualCastRadius;
             DerpACEConfig.ArchmagiDualCastDamageModifier = c.ArchmagiDualCastDamageModifier;
 
+            DerpACEConfig.LifeCasterDropChance       = c.LifeCasterDropChance;
+            DerpACEConfig.LifeCasterMinTier          = c.LifeCasterMinTier;
             DerpACEConfig.HierophantDropChance        = c.HierophantDropChance;
             DerpACEConfig.HierophantMinTier           = c.HierophantMinTier;
             DerpACEConfig.HierophantHealBoostMin      = c.HierophantHealBoostMin;
@@ -371,6 +427,26 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.HierophantFellowEchoPct     = c.HierophantFellowEchoPct;
             DerpACEConfig.HierophantFellowEchoRange   = c.HierophantFellowEchoRange;
             DerpACEConfig.HierophantAggroBonus        = c.HierophantAggroBonus;
+            DerpACEConfig.HierophantCooldownSeconds    = c.HierophantCooldownSeconds;
+            DerpACEConfig.CasterShadowCloneDropChance = c.CasterShadowCloneDropChance;
+            DerpACEConfig.CasterShadowCloneMinTier = c.CasterShadowCloneMinTier;
+            DerpACEConfig.CasterShadowCloneProcChance = c.CasterShadowCloneProcChance;
+            DerpACEConfig.CasterShadowCloneCooldownSeconds = c.CasterShadowCloneCooldownSeconds;
+            DerpACEConfig.CasterShadowCloneDurationSeconds = c.CasterShadowCloneDurationSeconds;
+            DerpACEConfig.CasterShadowCloneDamageScale = c.CasterShadowCloneDamageScale;
+            DerpACEConfig.GravecallerDropChance = c.GravecallerDropChance;
+            DerpACEConfig.GravecallerMinTier = c.GravecallerMinTier;
+            DerpACEConfig.GravecallerCooldownSeconds = c.GravecallerCooldownSeconds;
+            DerpACEConfig.GravecallerDurationSeconds = c.GravecallerDurationSeconds;
+            DerpACEConfig.VoidConfusionDropChance = c.VoidConfusionDropChance;
+            DerpACEConfig.VoidConfusionMinTier = c.VoidConfusionMinTier;
+            DerpACEConfig.VoidConfusionCooldownSeconds = c.VoidConfusionCooldownSeconds;
+            DerpACEConfig.VoidConfusionTargetMin = c.VoidConfusionTargetMin;
+            DerpACEConfig.VoidConfusionTargetMax = c.VoidConfusionTargetMax;
+            DerpACEConfig.VoidConfusionDurationMin = c.VoidConfusionDurationMin;
+            DerpACEConfig.VoidConfusionDurationMax = c.VoidConfusionDurationMax;
+            DerpACEConfig.WarCasterSpecialDropChance = c.WarCasterSpecialDropChance;
+            DerpACEConfig.WarCasterSpecialMinTier = c.WarCasterSpecialMinTier;
 
             DerpACEConfig.SneakAttackBonusPct         = c.SneakAttackBonusPct;
             DerpACEConfig.ThievesDaggerDropChance     = c.ThievesDaggerDropChance;
@@ -396,6 +472,15 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.UnarmedElemDropChance       = c.UnarmedElemDropChance;
             DerpACEConfig.UnarmedElemProcMin          = c.UnarmedElemProcMin;
             DerpACEConfig.UnarmedElemProcMax          = c.UnarmedElemProcMax;
+
+            DerpACEConfig.PugilistWeaponDropChance    = c.PugilistWeaponDropChance;
+            DerpACEConfig.PugilistWeaponMinTier       = c.PugilistWeaponMinTier;
+            DerpACEConfig.PugilistProcMin             = c.PugilistProcMin;
+            DerpACEConfig.PugilistProcMax             = c.PugilistProcMax;
+            DerpACEConfig.PugilistFlurryDamageScale   = c.PugilistFlurryDamageScale;
+            DerpACEConfig.PugilistRakeDamageScale     = c.PugilistRakeDamageScale;
+            DerpACEConfig.PugilistRakeDurationSeconds = c.PugilistRakeDurationSeconds;
+            DerpACEConfig.PugilistCooldownSeconds     = c.PugilistCooldownSeconds;
 
             DerpACEConfig.FencerBladeDropChance       = c.FencerBladeDropChance;
             DerpACEConfig.FencerBladeMinTier          = c.FencerBladeMinTier;
@@ -440,6 +525,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ResoluteHealMax             = c.ResoluteHealMax;
             DerpACEConfig.ResoluteKillBurstPct        = c.ResoluteKillBurstPct;
             DerpACEConfig.ResoluteTwoHandMult         = c.ResoluteTwoHandMult;
+            DerpACEConfig.ResoluteKillCooldownSeconds  = c.ResoluteKillCooldownSeconds;
 
             DerpACEConfig.PolebreakerDropChance       = c.PolebreakerDropChance;
             DerpACEConfig.PolebreakerMinTier          = c.PolebreakerMinTier;
@@ -475,6 +561,15 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.RicochetProcMax             = c.RicochetProcMax;
             DerpACEConfig.RicochetDamageScale         = c.RicochetDamageScale;
             DerpACEConfig.RicochetRadius              = c.RicochetRadius;
+
+            DerpACEConfig.ShadowVolleyDropChance      = c.ShadowVolleyDropChance;
+            DerpACEConfig.SecondShadowDropChance      = c.SecondShadowDropChance;
+            DerpACEConfig.ShadowWeaponMinTier         = c.ShadowWeaponMinTier;
+            DerpACEConfig.ShadowWeaponProcChance      = c.ShadowWeaponProcChance;
+            DerpACEConfig.ShadowWeaponCooldownSeconds = c.ShadowWeaponCooldownSeconds;
+            DerpACEConfig.ShadowVolleyDurationSeconds = c.ShadowVolleyDurationSeconds;
+            DerpACEConfig.SecondShadowDurationSeconds = c.SecondShadowDurationSeconds;
+            DerpACEConfig.ShadowWeaponDamageScale     = c.ShadowWeaponDamageScale;
 
             DerpACEConfig.WeaponBlastProcMinTier      = c.WeaponBlastProcMinTier;
             DerpACEConfig.WeaponBlastProcChanceMin    = c.WeaponBlastProcChanceMin;

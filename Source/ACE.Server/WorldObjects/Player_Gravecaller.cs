@@ -36,7 +36,9 @@ namespace ACE.Server.WorldObjects
                 SendUseDoneEvent();
                 return true;
             }
-            if (!TryStartMutatorCooldown(caster, GravecallerCooldownId, 45.0))
+            var cooldownSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.GravecallerCooldownSeconds);
+            var durationSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.GravecallerDurationSeconds);
+            if (!TryStartMutatorCooldown(caster, GravecallerCooldownId, cooldownSeconds))
             {
                 SendMessage("The Gravecaller has not yet gathered another soul-echo.", ChatMessageType.Magic);
                 SendUseDoneEvent();
@@ -44,7 +46,7 @@ namespace ACE.Server.WorldObjects
             }
 
             var revenant = CreateShadowClonePetShell();
-            if (revenant == null || !revenant.InitGravecallerRevenant(this, corpse, caster, 20.0f))
+            if (revenant == null || !revenant.InitGravecallerRevenant(this, corpse, caster, durationSeconds))
             {
                 revenant?.Destroy();
                 SendMessage("The corpse shudders, but its echo cannot take shape.", ChatMessageType.Magic);
@@ -64,9 +66,9 @@ namespace ACE.Server.WorldObjects
             }
             _activeGravecallerPet = revenant;
             caster.CooldownId = GravecallerCooldownId;
-            caster.CooldownDuration = 45.0;
+            caster.CooldownDuration = cooldownSeconds;
             EnchantmentManager.StartCooldown(caster);
-            SendMessage($"You call {revenant.Name} back to battle for twenty seconds.", ChatMessageType.Magic);
+            SendMessage($"You call {revenant.Name} back to battle for {durationSeconds:0.#} seconds.", ChatMessageType.Magic);
             SendUseDoneEvent();
             return true;
         }

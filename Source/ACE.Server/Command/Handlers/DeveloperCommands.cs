@@ -2328,7 +2328,7 @@ namespace ACE.Server.Command.Handlers
             log.Info($"Physics ObjMaint Audit Completed. Errors - objectTable: {objectTableErrors}, visibleObjectTable: {visibleObjectTableErrors}, voyeurTable: {voyeurTableErrors}");
         }
 
-        [CommandHandler("mutatorsim", AccessLevel.Developer, CommandHandlerFlag.None, 0,
+        [CommandHandler("mutatorsim", AccessLevel.Admin, CommandHandlerFlag.None, 0,
             "Run a deterministic DerpACE weapon mutator damage balance simulation.",
             "[attacks=100000] [base=100] [aps=1.0] [hit=0.75] [evade=0.15] [armor=35]")]
         public static void HandleMutatorSim(Session session, params string[] parameters)

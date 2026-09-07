@@ -380,9 +380,10 @@ namespace ACE.Server.Factories
                                  || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
                 "shadowshot"  => wo.GetProperty(PropertyBool.IsShadowVolleyWeapon) == true
                                  || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true
-                                    && wo.GetProperty(PropertyBool.IsSecondShadowWeapon) != true,
+                                    && wo.GetProperty(PropertyBool.IsSecondShadowWeapon) != true
+                                    && IsLegacyShadowCloneWeapon(wo, "Second Shadow") != true,
                 "secondshadow"=> wo.GetProperty(PropertyBool.IsSecondShadowWeapon) == true
-                                 || wo.GetProperty(PropertyBool.IsShadowCloneWeapon) == true,
+                                 || IsLegacyShadowCloneWeapon(wo, "Second Shadow") == true,
                 "opportunist" => wo.GetProperty(PropertyBool.IsOpportunistWeapon) == true,
                 "executioner" => wo.GetProperty(PropertyBool.IsExecutionerWeapon) == true,
                 "hierophant"  => wo.GetProperty(PropertyBool.IsHierophantCaster) == true,
@@ -433,6 +434,15 @@ namespace ACE.Server.Factories
         private static string NormalizeWeaponMutatorName(string name)
         {
             return name.Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+        }
+
+        private static bool? IsLegacyShadowCloneWeapon(WorldObject wo, string nameFragment)
+        {
+            if (wo?.GetProperty(PropertyBool.IsShadowCloneWeapon) != true)
+                return null;
+
+            var name = wo.Name ?? string.Empty;
+            return name.IndexOf(nameFragment, StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

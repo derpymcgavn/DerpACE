@@ -213,7 +213,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesString[PropertyString.Name] = "Rally Banner";
             w.PropertiesString[PropertyString.Use] = "Plants a temporary rally banner that strengthens nearby fellowship members.";
             w.PropertiesString[PropertyString.ShortDesc] = "A portable banner for rallying a fellowship. Requires level 180+ and trained Leadership.";
-            w.PropertiesString[PropertyString.LongDesc] = "Requires level 180+ and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain a small Damage Rating and Damage Resist Rating aura while they remain near it.";
+            w.PropertiesString[PropertyString.LongDesc] = "Requires level 180+ and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain greatly increased Health, Stamina, and Mana regeneration while they remain near it.";
 
             ApplyFlagVisuals(w);
             return w;
@@ -242,6 +242,7 @@ namespace ACE.Server.DerpAce
             w.PropertiesInt[PropertyInt.PhysicsState] = (int)(PhysicsState.Static | PhysicsState.Ethereal | PhysicsState.IgnoreCollisions);
 
             w.PropertiesBool[PropertyBool.IgnoreCollisions] = true;
+            w.PropertiesBool[PropertyBool.Stuck] = true;
             w.PropertiesBool[PropertyBool.Ethereal] = true;
             w.PropertiesBool[PropertyBool.GravityStatus] = false;
             w.PropertiesBool[PropertyBool.Attackable] = false;

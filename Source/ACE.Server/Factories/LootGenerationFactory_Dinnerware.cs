@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using ACE.Common;
@@ -48,14 +49,6 @@ namespace ACE.Server.Factories
             DamageType.Acid,
             DamageType.Electric,
         };
-
-        private const float WarriorPrincessCallDropChance = 0.01f;
-        private const float WarriorPrincessCallProcMin = 0.05f;
-        private const float WarriorPrincessCallProcMax = 0.08f;
-        private const float FlyingBuffetDropChance = 0.01f;
-        private const float FlyingBuffetProcMin = 0.03f;
-        private const float FlyingBuffetProcMax = 0.05f;
-        private const float FlyingBuffetFirstBounceDamageScale = 0.60f;
 
         /// <summary>
         /// This is only called by /testlootgen command
@@ -149,9 +142,9 @@ namespace ACE.Server.Factories
                     roll,
                     ref specialModifierApplied,
                     isPlatter
-                        ? FlyingBuffetDropChance
+                        ? Math.Clamp(ACE.Server.Managers.DerpACEConfig.FlyingBuffetDropChance, 0.0f, 1.0f)
                         : isDiscus
-                            ? WarriorPrincessCallDropChance
+                            ? Math.Clamp(ACE.Server.Managers.DerpACEConfig.WarriorPrincessCallDropChance, 0.0f, 1.0f)
                             : ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponDropChance,
                     ACE.Server.Managers.DerpACEConfig.DinnerwareWeaponMinTier,
                     true,
@@ -159,14 +152,18 @@ namespace ACE.Server.Factories
 
             if (applyDinnerwareMutator)
             {
+                var discusProcMin = Math.Clamp(Math.Min(ACE.Server.Managers.DerpACEConfig.WarriorPrincessCallProcMin, ACE.Server.Managers.DerpACEConfig.WarriorPrincessCallProcMax), 0.0f, 1.0f);
+                var discusProcMax = Math.Clamp(Math.Max(ACE.Server.Managers.DerpACEConfig.WarriorPrincessCallProcMin, ACE.Server.Managers.DerpACEConfig.WarriorPrincessCallProcMax), discusProcMin, 1.0f);
+                var platterProcMin = Math.Clamp(Math.Min(ACE.Server.Managers.DerpACEConfig.FlyingBuffetProcMin, ACE.Server.Managers.DerpACEConfig.FlyingBuffetProcMax), 0.0f, 1.0f);
+                var platterProcMax = Math.Clamp(Math.Max(ACE.Server.Managers.DerpACEConfig.FlyingBuffetProcMin, ACE.Server.Managers.DerpACEConfig.FlyingBuffetProcMax), platterProcMin, 1.0f);
                 var spinProcChance = isDiscus
-                    ? ThreadSafeRandom.Next(WarriorPrincessCallProcMin, WarriorPrincessCallProcMax)
+                    ? ThreadSafeRandom.Next(discusProcMin, discusProcMax)
                     : isPlatter
-                        ? ThreadSafeRandom.Next(FlyingBuffetProcMin, FlyingBuffetProcMax)
-                    : ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance;
+                        ? ThreadSafeRandom.Next(platterProcMin, platterProcMax)
+                    : Math.Clamp(ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDropChance, 0.0f, 1.0f);
                 var spinDamageScale = isPlatter
-                    ? FlyingBuffetFirstBounceDamageScale
-                    : ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale;
+                    ? Math.Clamp(ACE.Server.Managers.DerpACEConfig.FlyingBuffetFirstBounceDamageScale, 0.05f, 1.0f)
+                    : Math.Clamp(ACE.Server.Managers.DerpACEConfig.DinnerwareSpinDamageScale, 0.05f, 1.0f);
 
                 wo.Name = isPlatter
                     ? "Platter of the Flying Buffet"

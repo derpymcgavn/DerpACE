@@ -404,7 +404,7 @@ namespace ACE.Server.WorldObjects
             if (targetPlayer == null)
                 return true;
 
-            var sourcePlayer = (this as Player) ?? (caster as Player) ?? (caster?.Wielder as Player);
+            var sourcePlayer = (caster as Player) ?? (caster?.Wielder as Player) ?? (this as Player);
             return targetPlayer.CanReceiveChallengeMagicAidFrom(sourcePlayer, spell.Name);
         }
 

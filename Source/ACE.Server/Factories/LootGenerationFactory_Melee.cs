@@ -507,8 +507,8 @@ namespace ACE.Server.Factories
                 profile,
                 roll,
                 ref specialModifierApplied,
-                0.05f,
-                5,
+                ACE.Server.Managers.DerpACEConfig.PugilistWeaponDropChance,
+                ACE.Server.Managers.DerpACEConfig.PugilistWeaponMinTier,
                 roll.WeaponType == TreasureWeaponType.Unarmed,
                 "pugilist", "combo", "flurry", "rake"))
             {
@@ -518,10 +518,11 @@ namespace ACE.Server.Factories
                 var isClaw = name.IndexOf("claw", StringComparison.OrdinalIgnoreCase) >= 0;
                 var isRake = isKatar || isNekode || isClaw;
 
-                var procPct = RollTierScaledInt(6, 10, profile.Tier, 5);
+                var procPct = Math.Clamp(RollTierScaledInt(ACE.Server.Managers.DerpACEConfig.PugilistProcMin, ACE.Server.Managers.DerpACEConfig.PugilistProcMax, profile.Tier, ACE.Server.Managers.DerpACEConfig.PugilistWeaponMinTier), 0, 100);
                 var style = isKatar ? 3 : isNekode && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.5f ? 3 : isRake ? 2 : 1;
-                var scale = isRake ? 0.45 : 0.35;
-                var duration = isRake ? 6.0 : 0.0;
+                var scale = Math.Clamp(isRake ? ACE.Server.Managers.DerpACEConfig.PugilistRakeDamageScale : ACE.Server.Managers.DerpACEConfig.PugilistFlurryDamageScale, 0.05f, 1.0f);
+                var duration = isRake ? Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.PugilistRakeDurationSeconds) : 0.0;
+                var cooldown = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.PugilistCooldownSeconds);
                 var rakeDamageType = style == 3 ? "piercing" : "slashing";
 
                 wo.Name = wo.Name + (isRake ? " of the Raking Hand" : " of the Iron Flurry");
@@ -531,14 +532,14 @@ namespace ACE.Server.Factories
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistDamageScale, scale);
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyFloat.PugilistDurationSeconds, duration);
                 wo.CooldownId = Player.PugilistCooldownId;
-                wo.CooldownDuration = Player.PugilistCooldownSeconds;
+                wo.CooldownDuration = cooldown;
                 wo.IconOverlayId = isRake ? 0x06002886u : 0x06002867u;
                 ApplyLootUiEffect(wo, isRake ? (style == 3 ? UiEffects.Piercing : UiEffects.Slashing) : UiEffects.Bludgeoning);
 
                 if (isRake)
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRaking Hand: successful strikes have a {procPct}% chance to tear the target for {scale:P0} of the hit's damage as {rakeDamageType} trauma over {duration:0.#} seconds. Cooldown: {Player.PugilistCooldownSeconds:0.#} seconds.";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nRaking Hand: successful strikes have a {procPct}% chance to tear the target for {scale:P0} of the hit's damage as {rakeDamageType} trauma over {duration:0.#} seconds. Cooldown: {cooldown:0.#} seconds.";
                 else
-                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nIron Flurry: successful strikes have a {procPct}% chance to snap in a second short-range blow for {scale:P0} of the original hit as bludgeoning damage. Cooldown: {Player.PugilistCooldownSeconds:0.#} seconds.";
+                    wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nIron Flurry: successful strikes have a {procPct}% chance to snap in a second short-range blow for {scale:P0} of the original hit as bludgeoning damage. Cooldown: {cooldown:0.#} seconds.";
             }
 
             // Ravager's Axe: configurable chance on T6+ axes (1H or 2H) to apply a bleed DoT (see @lootconfig)
@@ -737,8 +738,8 @@ namespace ACE.Server.Factories
                     ACE.Server.Managers.DerpACEConfig.PolebreakerMaxStackMax,
                     profile.Tier,
                     ACE.Server.Managers.DerpACEConfig.PolebreakerMinTier);
-                if (stackPct < 1) stackPct = 1;
-                if (maxStacks < 1) maxStacks = 1;
+                stackPct = Math.Clamp(stackPct, 1, 25);
+                maxStacks = Math.Clamp(maxStacks, 1, 10);
 
                 wo.Name = wo.Name + " of the Polebreaker";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsPolebreakerStaff, true);
@@ -864,15 +865,15 @@ namespace ACE.Server.Factories
                 profile,
                 roll,
                 ref specialModifierApplied,
-                0.0125f,
-                7,
+                ACE.Server.Managers.DerpACEConfig.SecondShadowDropChance,
+                ACE.Server.Managers.DerpACEConfig.ShadowWeaponMinTier,
                 true,
                 "shadowclone", "secondshadow", "shadowblade"))
             {
-                const float procChance = 0.03f;
-                const float cooldownSeconds = 150.0f;
-                const float durationSeconds = 16.0f;
-                const float damageScale = 0.25f;
+                var procChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShadowWeaponProcChance, 0.0f, 1.0f);
+                var cooldownSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.ShadowWeaponCooldownSeconds);
+                var durationSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.SecondShadowDurationSeconds);
+                var damageScale = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShadowWeaponDamageScale, 0.05f, 1.0f);
 
                 wo.Name = wo.Name + " of the Second Shadow";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneWeapon, true);

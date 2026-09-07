@@ -30,7 +30,7 @@ INSERT INTO `weenie_properties_string` (`object_Id`, `type`, `value`)
 VALUES (7000020,   1, 'Rally Banner') /* Name */
      , (7000020,  14, 'Plants a temporary rally banner that strengthens nearby fellowship members.') /* Use */
      , (7000020,  15, 'A portable banner for rallying a fellowship. Requires level 180+ and trained Leadership.') /* ShortDesc */
-     , (7000020,  16, 'Requires level 180+ and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain a small Damage Rating and Damage Resist Rating aura while they remain near it.') /* LongDesc */;
+     , (7000020,  16, 'Requires level 180+ and trained Leadership. Plants a temporary flag using the old Dereth banner style. Nearby fellowship members gain greatly increased Health, Stamina, and Mana regeneration while they remain near it.') /* LongDesc */;
 
 INSERT INTO `weenie_properties_d_i_d` (`object_Id`, `type`, `value`)
 VALUES (7000020,   1, 0x02000CDB) /* Setup */

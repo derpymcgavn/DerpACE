@@ -45,8 +45,9 @@ namespace ACE.Server.Managers
         public const uint HexdustSpellIdLast = 65016;
         public const uint RoadrunnerSpellId = 65017;
         public const uint RainfallFrostSpellId = 65018;
-        public const uint RallyBannerMightSpellId = 65019;
-        public const uint RallyBannerGuardSpellId = 65020;
+        public const uint RallyBannerHealthRenewalSpellId = 65019;
+        public const uint RallyBannerStaminaRenewalSpellId = 65020;
+        public const uint RallyBannerManaRenewalSpellId = 65021;
 
         public static bool IsCustomWarProjectileSpell(uint spellId)
         {
@@ -1992,45 +1993,61 @@ namespace ACE.Server.Managers
         private static string GetDefaultRallyBannerJson()
         {
             var duration = Math.Max(1, DerpACEConfig.RallyBannerAuraSeconds).ToString(CultureInfo.InvariantCulture);
-            var damage = DerpACEConfig.RallyBannerDamageRatingBonus.ToString(CultureInfo.InvariantCulture);
-            var guard = DerpACEConfig.RallyBannerDamageResistRatingBonus.ToString(CultureInfo.InvariantCulture);
+            var multiplier = Math.Clamp(DerpACEConfig.RallyBannerRegenMultiplier, 1.0f, 25.0f).ToString(CultureInfo.InvariantCulture);
             return @"{
   ""CustomSpells"": [
     {
       ""Template"": 4616,
       ""Id"": 65019,
-      ""Name"": ""Rally Banner: Might"",
+      ""Name"": ""Rally Banner: Renewal"",
       ""SpellWords"": ""Hold the Line"",
-      ""Desc"": ""A rally banner aura that increases Damage Rating while you remain near the banner."",
+      ""Desc"": ""A rally banner aura that greatly increases Health regeneration while you remain near the banner."",
       ""Icon"": ""0x060023A8"",
       ""Category"": 65019,
       ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
       ""Duration"": " + duration + @",
-      ""StatModType"": ""Int, Additive"",
-      ""StatModKey"": 307,
-      ""StatModVal"": " + damage + @",
-      ""CasterEffect"": ""EnchantUpYellow"",
-      ""TargetEffect"": ""EnchantUpYellow""
+      ""StatModType"": ""Float, SingleStat, Multiplicative"",
+      ""StatModKey"": 3,
+      ""StatModVal"": " + multiplier + @",
+      ""CasterEffect"": ""RegenUpYellow"",
+      ""TargetEffect"": ""RegenUpYellow""
     },
     {
       ""Template"": 4616,
       ""Id"": 65020,
-      ""Name"": ""Rally Banner: Guard"",
+      ""Name"": ""Rally Banner: Endurance"",
       ""SpellWords"": ""Stand Together"",
-      ""Desc"": ""A rally banner aura that increases Damage Resist Rating while you remain near the banner."",
+      ""Desc"": ""A rally banner aura that greatly increases Stamina regeneration while you remain near the banner."",
       ""Icon"": ""0x060023A8"",
       ""Category"": 65020,
       ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
       ""Duration"": " + duration + @",
-      ""StatModType"": ""Int, Additive"",
-      ""StatModKey"": 308,
-      ""StatModVal"": " + guard + @",
-      ""CasterEffect"": ""EnchantUpYellow"",
-      ""TargetEffect"": ""EnchantUpYellow""
+      ""StatModType"": ""Float, SingleStat, Multiplicative"",
+      ""StatModKey"": 4,
+      ""StatModVal"": " + multiplier + @",
+      ""CasterEffect"": ""RegenUpYellow"",
+      ""TargetEffect"": ""RegenUpYellow""
+    },
+    {
+      ""Template"": 4616,
+      ""Id"": 65021,
+      ""Name"": ""Rally Banner: Focus"",
+      ""SpellWords"": ""Breathe as One"",
+      ""Desc"": ""A rally banner aura that greatly increases Mana regeneration while you remain near the banner."",
+      ""Icon"": ""0x060023A8"",
+      ""Category"": 65021,
+      ""Bitfield"": ""Beneficial, SelfTargeted, NotResearchable"",
+      ""Duration"": " + duration + @",
+      ""StatModType"": ""Float, SingleStat, Multiplicative"",
+      ""StatModKey"": 5,
+      ""StatModVal"": " + multiplier + @",
+      ""CasterEffect"": ""RegenUpYellow"",
+      ""TargetEffect"": ""RegenUpYellow""
     }
   ]
 }";
         }
+
         private const string DefaultFrostWaveShieldJson =
 @"{
   ""CustomSpells"": [

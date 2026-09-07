@@ -50,6 +50,10 @@ namespace ACE.Server.Managers
         public static bool ArchmagiEnabled         { get; set; } = true;
         public static bool LifeCasterEnabled       { get; set; } = true;
         public static bool HierophantEnabled       { get; set; } = true;
+        public static bool CasterShadowCloneEnabled { get; set; } = true;
+        public static bool GravecallerCasterEnabled { get; set; } = true;
+        public static bool VoidConfusionCasterEnabled { get; set; } = true;
+        public static bool WarCasterSpecialEnabled { get; set; } = true;
         public static bool ThievesDaggerEnabled    { get; set; } = true;
         public static bool SentinelSpearEnabled    { get; set; } = true;
         public static bool UnarmedElemEnabled      { get; set; } = true;
@@ -80,6 +84,7 @@ namespace ACE.Server.Managers
         public static float RallyBannerRadius { get; set; } = 20.0f;
         public static int RallyBannerDamageRatingBonus { get; set; } = 5;
         public static int RallyBannerDamageResistRatingBonus { get; set; } = 5;
+        public static float RallyBannerRegenMultiplier { get; set; } = 5.0f;
         public static bool RallyBannerRequiresLeadership { get; set; } = true;
         public static int RallyBannerRequiredLevel { get; set; } = 180;
 
@@ -89,6 +94,13 @@ namespace ACE.Server.Managers
         public static int DinnerwareSpinMinTier { get; set; } = 3;
         public static float DinnerwareSpinDamageScale { get; set; } = 0.20f;
         public static float DinnerwareSpinRadius { get; set; } = 5.0f;
+        public static float WarriorPrincessCallDropChance { get; set; } = 0.01f;
+        public static float WarriorPrincessCallProcMin { get; set; } = 0.05f;
+        public static float WarriorPrincessCallProcMax { get; set; } = 0.08f;
+        public static float FlyingBuffetDropChance { get; set; } = 0.01f;
+        public static float FlyingBuffetProcMin { get; set; } = 0.03f;
+        public static float FlyingBuffetProcMax { get; set; } = 0.05f;
+        public static float FlyingBuffetFirstBounceDamageScale { get; set; } = 0.60f;
         public static float QuickeningDaggerDropChance { get; set; } = 0.02f;
         public static int QuickeningDaggerMinTier { get; set; } = 5;
         public static int QuickeningDaggerProcMin { get; set; } = 8;
@@ -97,6 +109,7 @@ namespace ACE.Server.Managers
         public static int QuickeningDaggerSpeedMax { get; set; } = 24;
         public static int QuickeningDaggerDurationMin { get; set; } = 4;
         public static int QuickeningDaggerDurationMax { get; set; } = 7;
+        public static float QuickeningDaggerCooldownSeconds { get; set; } = 10.0f;
 
         public static float OpportunistMeleeDropChance { get; set; } = 0.01f;
         public static float OpportunistMissileDropChance { get; set; } = 0.008f;
@@ -121,6 +134,99 @@ namespace ACE.Server.Managers
 
         /// <summary>Extra targeting weight added to the shield-bearer. Default 0.5.</summary>
         public static float DefenderAggroBonus { get; set; } = 0.5f;
+
+        /// <summary>Chance for eligible shields to roll Thorns. Default 0.10 = 10%.</summary>
+        public static float ShieldThornsRollChance { get; set; } = 0.10f;
+
+        /// <summary>Chance for eligible shields to roll Bashing. Default 0.10 = 10%.</summary>
+        public static float ShieldBashingRollChance { get; set; } = 0.10f;
+
+        /// <summary>Chance for eligible shields to roll projectile Reflection. Default 0.06 = 6%.</summary>
+        public static float ShieldReflectionRollChance { get; set; } = 0.06f;
+
+        /// <summary>Chance for eligible shields to roll Spell Mirroring. Default 0.04 = 4%.</summary>
+        public static float ShieldSpellMirrorRollChance { get; set; } = 0.04f;
+
+        /// <summary>Chance for T8+ shields to keep three reactive affixes. Default 0.15 = 15%.</summary>
+        public static float ShieldTier8TripleAffixChance { get; set; } = 0.15f;
+
+        /// <summary>Bashing shield proc chance on block or melee evade. Default 0.10 = 10%.</summary>
+        public static float ShieldBashingProcChance { get; set; } = 0.10f;
+
+        /// <summary>Maximum bashing shield damage as current health percent. Default 0.10 = 10%.</summary>
+        public static float ShieldBashingHealthPct { get; set; } = 0.10f;
+
+        /// <summary>Cooldown after Bashing shield fires. Default 8 seconds.</summary>
+        public static float ShieldBashingCooldownSeconds { get; set; } = 8.0f;
+
+        /// <summary>Maximum pushback distance for Bashing shield. Default 10 feet.</summary>
+        public static float ShieldBashKnockbackDistance { get; set; } = 10.0f;
+
+        /// <summary>Cooldown after Spell Mirror shield fires. Default 10 seconds.</summary>
+        public static float ShieldSpellMirrorCooldownSeconds { get; set; } = 10.0f;
+
+        /// <summary>Minimum treasure tier for Battlemage helms. Default 5.</summary>
+        public static int BattlemageHelmMinTier { get; set; } = 5;
+
+        /// <summary>Base chance for Battlemage helms at T5/T6. Default 0.04 = 4%.</summary>
+        public static float BattlemageHelmChanceT5 { get; set; } = 0.04f;
+
+        /// <summary>Chance for Battlemage helms at T7. Default 0.06 = 6%.</summary>
+        public static float BattlemageHelmChanceT7 { get; set; } = 0.06f;
+
+        /// <summary>Chance for Battlemage helms at T8+. Default 0.08 = 8%.</summary>
+        public static float BattlemageHelmChanceT8 { get; set; } = 0.08f;
+
+        /// <summary>Minimum treasure tier for Resonant Weave armor. Default 4.</summary>
+        public static int ArmorSortMinTier { get; set; } = 4;
+
+        /// <summary>Base chance for Resonant Weave at T4/T5. Default 0.04 = 4%.</summary>
+        public static float ArmorSortChanceT4 { get; set; } = 0.04f;
+
+        /// <summary>Chance for Resonant Weave at T6. Default 0.06 = 6%.</summary>
+        public static float ArmorSortChanceT6 { get; set; } = 0.06f;
+
+        /// <summary>Chance for Resonant Weave at T7. Default 0.08 = 8%.</summary>
+        public static float ArmorSortChanceT7 { get; set; } = 0.08f;
+
+        /// <summary>Chance for Resonant Weave at T8+. Default 0.10 = 10%.</summary>
+        public static float ArmorSortChanceT8 { get; set; } = 0.10f;
+
+        /// <summary>Minimum treasure tier for Culinarian gloves. Default 4.</summary>
+        public static int CulinarianMinTier { get; set; } = 4;
+
+        /// <summary>Chance for Culinarian gloves. Default 0.08 = 8%.</summary>
+        public static float CulinarianRollChance { get; set; } = 0.08f;
+
+        /// <summary>Minimum treasure tier for Alchemist gloves. Default 4.</summary>
+        public static int AlchemistGloveMinTier { get; set; } = 4;
+
+        /// <summary>Chance for Alchemist gloves. Default 0.08 = 8%.</summary>
+        public static float AlchemistGloveRollChance { get; set; } = 0.08f;
+
+        /// <summary>Chance for T8 Culinarian gloves to roll the superior 25% restore bonus. Default 0.10 = 10%.</summary>
+        public static float CulinarianTier8SuperiorBonusChance { get; set; } = 0.10f;
+
+        /// <summary>Chance for T6/T7 Alchemist gloves to roll Instability. Default 0.15 = 15%.</summary>
+        public static float AlchemicalInstabilityChanceT6 { get; set; } = 0.15f;
+
+        /// <summary>Chance for T8+ Alchemist gloves to roll Instability. Default 0.25 = 25%.</summary>
+        public static float AlchemicalInstabilityChanceT8 { get; set; } = 0.25f;
+
+        /// <summary>Minimum treasure tier for dance boots. Default 4.</summary>
+        public static int DanceBootMinTier { get; set; } = 4;
+
+        /// <summary>Chance for dance boots. Default 0.06 = 6%.</summary>
+        public static float DanceBootRollChance { get; set; } = 0.06f;
+
+        /// <summary>Minimum treasure tier for unarmed armor damage pieces. Default 5.</summary>
+        public static int UnarmedArmorMinTier { get; set; } = 5;
+
+        /// <summary>Chance for gauntlets/boots to roll unarmed armor damage. Default 0.15 = 15%.</summary>
+        public static float UnarmedArmorRollChance { get; set; } = 0.15f;
+
+        /// <summary>Chance for unarmed armor pieces to roll missile or magic defense. Default 0.10 = 10%.</summary>
+        public static float UnarmedArmorOffAxisDefenseChance { get; set; } = 0.10f;
 
         // ──────────────────────────────────────────────────────────────────────
         // Archmagi Caster
@@ -192,6 +298,9 @@ namespace ACE.Server.Managers
 
         /// <summary>Targeting weight added to the hierophant-bearer (healer pull). Default 0.35.</summary>
         public static float HierophantAggroBonus { get; set; } = 0.35f;
+
+        /// <summary>Cooldown after Hierophant fellowship echo fires. Default 10 seconds.</summary>
+        public static float HierophantCooldownSeconds { get; set; } = 10.0f;
 
         // ──────────────────────────────────────────────────────────────────────
         // Sneak Attack (global)
@@ -279,6 +388,31 @@ namespace ACE.Server.Managers
         /// <summary>Maximum proc rate (integer %) rolled at loot time. Default 5.</summary>
         public static int UnarmedElemProcMax { get; set; } = 5;
 
+        // ---------- Pugilist Unarmed Weapons ----------
+
+        /// <summary>Loot drop chance (0-1). Default 0.05 = 5%.</summary>
+        public static float PugilistWeaponDropChance { get; set; } = 0.05f;
+
+        /// <summary>Minimum treasure tier required. Default 5.</summary>
+        public static int PugilistWeaponMinTier { get; set; } = 5;
+
+        /// <summary>Minimum strike proc chance % rolled at loot time. Default 6.</summary>
+        public static int PugilistProcMin { get; set; } = 6;
+
+        /// <summary>Maximum strike proc chance % rolled at loot time. Default 10.</summary>
+        public static int PugilistProcMax { get; set; } = 10;
+
+        /// <summary>Iron Flurry bonus hit damage scale. Default 0.35 = 35%.</summary>
+        public static float PugilistFlurryDamageScale { get; set; } = 0.35f;
+
+        /// <summary>Raking Hand trauma damage scale. Default 0.45 = 45%.</summary>
+        public static float PugilistRakeDamageScale { get; set; } = 0.45f;
+
+        /// <summary>Raking Hand trauma duration in seconds. Default 6.</summary>
+        public static float PugilistRakeDurationSeconds { get; set; } = 6.0f;
+
+        /// <summary>Cooldown after a Pugilist proc fires. Default 6 seconds.</summary>
+        public static float PugilistCooldownSeconds { get; set; } = 6.0f;
         // ──────────────────────────────────────────────────────────────────────
         // Fencer's Blade (Épée / Rapier / Schlager)
         // ──────────────────────────────────────────────────────────────────────
@@ -415,6 +549,9 @@ namespace ACE.Server.Managers
         /// <summary>Multiplier applied to the kill burst when the weapon is two-handed. Default 1.5.</summary>
         public static float ResoluteTwoHandMult { get; set; } = 1.25f;
 
+        /// <summary>Cooldown after Resolute killing-blow burst fires. Default 10 seconds.</summary>
+        public static float ResoluteKillCooldownSeconds { get; set; } = 10.0f;
+
         // ──────────────────────────────────────────────────────────────────────
         // Polebreaker Staff (Staff)
         // ──────────────────────────────────────────────────────────────────────
@@ -428,8 +565,8 @@ namespace ACE.Server.Managers
         /// <summary>Minimum per-stack damage bonus % rolled at loot time (integer). Default 3.</summary>
         public static int PolebreakerStackMin { get; set; } = 3;
 
-        /// <summary>Maximum per-stack damage bonus % rolled at loot time (integer). Default 5.</summary>
-        public static int PolebreakerStackMax { get; set; } = 5;
+        /// <summary>Maximum per-stack damage bonus % rolled at loot time (integer). Default 4.</summary>
+        public static int PolebreakerStackMax { get; set; } = 4;
 
         /// <summary>Minimum max-stack count rolled at loot time (integer). Default 4.</summary>
         public static int PolebreakerMaxStackMin { get; set; } = 4;
@@ -522,6 +659,89 @@ namespace ACE.Server.Managers
 
         /// <summary>Nearby target search radius in yards. Default 10.</summary>
         public static float RicochetRadius { get; set; } = 10.0f;
+
+        // ---------- Shadow Clone Weapon Affixes ----------
+
+        /// <summary>Shadow Volley drop chance (0-1). Default 0.015 = 1.5%.</summary>
+        public static float ShadowVolleyDropChance { get; set; } = 0.015f;
+
+        /// <summary>Second Shadow drop chance (0-1). Default 0.0125 = 1.25%.</summary>
+        public static float SecondShadowDropChance { get; set; } = 0.0125f;
+
+        /// <summary>Minimum treasure tier for shadow weapon affixes. Default 7.</summary>
+        public static int ShadowWeaponMinTier { get; set; } = 7;
+
+        /// <summary>Shadow weapon proc chance. Default 0.03 = 3%.</summary>
+        public static float ShadowWeaponProcChance { get; set; } = 0.03f;
+
+        /// <summary>Shadow weapon cooldown in seconds. Default 150.</summary>
+        public static float ShadowWeaponCooldownSeconds { get; set; } = 150.0f;
+
+        /// <summary>Shadow Volley summon duration in seconds. Default 18.</summary>
+        public static float ShadowVolleyDurationSeconds { get; set; } = 18.0f;
+
+        /// <summary>Second Shadow summon duration in seconds. Default 16.</summary>
+        public static float SecondShadowDurationSeconds { get; set; } = 16.0f;
+
+        /// <summary>Shadow clone damage scale. Default 0.25 = 25%.</summary>
+        public static float ShadowWeaponDamageScale { get; set; } = 0.25f;
+        /// <summary>Umbral Mirror caster drop chance (0-1). Default 0.03 = 3%.</summary>
+        public static float CasterShadowCloneDropChance { get; set; } = 0.03f;
+
+        /// <summary>Minimum treasure tier for Umbral Mirror caster affixes. Default 6.</summary>
+        public static int CasterShadowCloneMinTier { get; set; } = 6;
+
+        /// <summary>Umbral Mirror caster proc chance. Default 0.04 = 4%.</summary>
+        public static float CasterShadowCloneProcChance { get; set; } = 0.04f;
+
+        /// <summary>Umbral Mirror caster cooldown in seconds. Default 120.</summary>
+        public static float CasterShadowCloneCooldownSeconds { get; set; } = 120.0f;
+
+        /// <summary>Umbral Mirror caster summon duration in seconds. Default 25.</summary>
+        public static float CasterShadowCloneDurationSeconds { get; set; } = 25.0f;
+
+        /// <summary>Umbral Mirror caster clone damage scale. Default 0.35 = 35%.</summary>
+        public static float CasterShadowCloneDamageScale { get; set; } = 0.35f;
+
+        /// <summary>Gravecaller caster drop chance (0-1). Default 0.02 = 2%.</summary>
+        public static float GravecallerDropChance { get; set; } = 0.02f;
+
+        /// <summary>Minimum treasure tier for Gravecaller caster affixes. Default 6.</summary>
+        public static int GravecallerMinTier { get; set; } = 6;
+
+        /// <summary>Gravecaller cooldown in seconds. Default 45.</summary>
+        public static float GravecallerCooldownSeconds { get; set; } = 45.0f;
+
+        /// <summary>Gravecaller revenant duration in seconds. Default 20.</summary>
+        public static float GravecallerDurationSeconds { get; set; } = 20.0f;
+
+        /// <summary>Bedlam caster drop chance (0-1). Default 0.025 = 2.5%.</summary>
+        public static float VoidConfusionDropChance { get; set; } = 0.025f;
+
+        /// <summary>Minimum treasure tier for Bedlam caster affixes. Default 6.</summary>
+        public static int VoidConfusionMinTier { get; set; } = 6;
+
+        /// <summary>Bedlam cooldown in seconds. Default 45.</summary>
+        public static float VoidConfusionCooldownSeconds { get; set; } = 45.0f;
+
+        /// <summary>Minimum confused target count rolled at loot time. Default 1.</summary>
+        public static int VoidConfusionTargetMin { get; set; } = 1;
+
+        /// <summary>Maximum confused target count rolled at loot time. Default 4.</summary>
+        public static int VoidConfusionTargetMax { get; set; } = 4;
+
+        /// <summary>Minimum Bedlam duration rolled at loot time. Default 1.</summary>
+        public static int VoidConfusionDurationMin { get; set; } = 1;
+
+        /// <summary>Maximum Bedlam duration rolled at loot time. Default 10.</summary>
+        public static int VoidConfusionDurationMax { get; set; } = 10;
+
+        /// <summary>War-caster special drop chance (0-1). Default 0.025 = 2.5%.</summary>
+        public static float WarCasterSpecialDropChance { get; set; } = 0.025f;
+
+        /// <summary>Minimum treasure tier for Skybreaker, Stormcaller, and Orbitweaver. Default 6.</summary>
+        public static int WarCasterSpecialMinTier { get; set; } = 6;
+
         // ---------- Lugian Hammer Throw ----------
 
         /// <summary>Chance for eligible Lugian hammers to roll Stonehand Throw. Default 0.04 = 4%.</summary>
@@ -745,6 +965,24 @@ namespace ACE.Server.Managers
 
         /// <summary>Multiplier applied per additional mutator stacked beyond the first. Default 1.5 (50% increase per stack).</summary>
         public static float DerpcoinStackMultiplier { get; set; } = 1.5f;
+
+        /// <summary>Base chance for mutated mobs to drop a forced mutated weapon. Default 0.05 = 5%.</summary>
+        public static float MutatedMobWeaponDropBaseChance { get; set; } = 0.05f;
+
+        /// <summary>Chance added per loot tier for mutated mob weapon drops. Default 0.02 = 2% per tier.</summary>
+        public static float MutatedMobWeaponDropTierBonus { get; set; } = 0.02f;
+
+        /// <summary>Chance added per creature mutator for mutated mob weapon drops. Default 0.08 = 8% per mutator.</summary>
+        public static float MutatedMobWeaponDropMutatorBonus { get; set; } = 0.08f;
+
+        /// <summary>Minimum mutated mob weapon drop chance after scaling. Default 0.10 = 10%.</summary>
+        public static float MutatedMobWeaponDropMinChance { get; set; } = 0.10f;
+
+        /// <summary>Maximum mutated mob weapon drop chance after scaling. Default 0.65 = 65%.</summary>
+        public static float MutatedMobWeaponDropMaxChance { get; set; } = 0.65f;
+
+        /// <summary>Attempts to find a compatible forced weapon mutator when the drop roll succeeds. Default 3.</summary>
+        public static int MutatedMobWeaponDropAttempts { get; set; } = 3;
 
         // ---------- Ironman Mode (irreversible solo / hardcore character) ----------
 

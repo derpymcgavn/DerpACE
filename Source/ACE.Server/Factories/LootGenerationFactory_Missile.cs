@@ -248,17 +248,17 @@ namespace ACE.Server.Factories
                 profile,
                 roll,
                 ref specialModifierApplied,
-                0.015f,
-                7,
+                ACE.Server.Managers.DerpACEConfig.ShadowVolleyDropChance,
+                ACE.Server.Managers.DerpACEConfig.ShadowWeaponMinTier,
                 roll.WeaponType == TreasureWeaponType.Bow
                     || roll.WeaponType == TreasureWeaponType.Crossbow
                     || roll.WeaponType == TreasureWeaponType.Atlatl,
                 "shadowclone", "shadowshot", "shadowvolley"))
             {
-                const float procChance = 0.03f;
-                const float cooldownSeconds = 150.0f;
-                const float durationSeconds = 18.0f;
-                const float damageScale = 0.25f;
+                var procChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShadowWeaponProcChance, 0.0f, 1.0f);
+                var cooldownSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.ShadowWeaponCooldownSeconds);
+                var durationSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.ShadowVolleyDurationSeconds);
+                var damageScale = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShadowWeaponDamageScale, 0.05f, 1.0f);
 
                 wo.Name = wo.Name + " of the Shadow Volley";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneWeapon, true);

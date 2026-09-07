@@ -164,5 +164,26 @@ namespace ACE.Server.Command.Handlers
 
             Console.WriteLine(results);
         }
+
+        [CommandHandler("testmutators", AccessLevel.Admin, CommandHandlerFlag.ConsoleInvoke, 0, "Force-generates each DerpACE mutator and reports whether the expected flags/properties landed.", "<loot tier optional> <attempts optional>")]
+        public static void TestMutators(Session session, params string[] parameters)
+        {
+            var tier = 8;
+            var attempts = 100;
+
+            if (parameters.Length > 0 && !int.TryParse(parameters[0], out tier))
+            {
+                Console.WriteLine("Usage: testmutators <loot tier optional> <attempts optional>");
+                return;
+            }
+
+            if (parameters.Length > 1 && !int.TryParse(parameters[1], out attempts))
+            {
+                Console.WriteLine("Usage: testmutators <loot tier optional> <attempts optional>");
+                return;
+            }
+
+            Console.WriteLine(LootGenerationFactory.BuildMutatorAuditReport(tier, attempts));
+        }
     }
 }

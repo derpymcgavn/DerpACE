@@ -49,14 +49,27 @@ namespace ACE.Server.WorldObjects
             var now = DateTime.UtcNow;
             if (now < _shadowCloneCasterCooldownUntil)
                 return;
+            var isCasterClone = sourceItem.GetProperty(PropertyBool.IsShadowCloneCaster) == true;
+            var defaultProcChance = isCasterClone
+                ? ACE.Server.Managers.DerpACEConfig.CasterShadowCloneProcChance
+                : ACE.Server.Managers.DerpACEConfig.ShadowWeaponProcChance;
+            var defaultCooldownSeconds = isCasterClone
+                ? ACE.Server.Managers.DerpACEConfig.CasterShadowCloneCooldownSeconds
+                : ACE.Server.Managers.DerpACEConfig.ShadowWeaponCooldownSeconds;
+            var defaultDurationSeconds = isCasterClone
+                ? ACE.Server.Managers.DerpACEConfig.CasterShadowCloneDurationSeconds
+                : ACE.Server.Managers.DerpACEConfig.ShadowVolleyDurationSeconds;
+            var defaultDamageScale = isCasterClone
+                ? ACE.Server.Managers.DerpACEConfig.CasterShadowCloneDamageScale
+                : ACE.Server.Managers.DerpACEConfig.ShadowWeaponDamageScale;
 
-            var procChance = (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneProcChance) ?? 0.04);
+            var procChance = Math.Clamp((float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneProcChance) ?? defaultProcChance), 0.0f, 1.0f);
             if (procChance <= 0.0f || ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
                 return;
 
-            var cooldownSeconds = Math.Max(1.0f, (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneCooldownSeconds) ?? 120.0));
-            var durationSeconds = Math.Max(1.0f, (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneDurationSeconds) ?? 25.0));
-            var damageScale = Math.Clamp((float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneDamageScale) ?? 0.35), 0.05f, 1.0f);
+            var cooldownSeconds = Math.Max(1.0f, (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneCooldownSeconds) ?? defaultCooldownSeconds));
+            var durationSeconds = Math.Max(1.0f, (float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneDurationSeconds) ?? defaultDurationSeconds));
+            var damageScale = Math.Clamp((float)(sourceItem.GetProperty(PropertyFloat.ShadowCloneDamageScale) ?? defaultDamageScale), 0.05f, 1.0f);
 
             var clone = CreateShadowClonePetShell();
             if (clone == null)

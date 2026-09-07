@@ -714,9 +714,9 @@ namespace ACE.Server.WorldObjects
             if (confusionCaster?.GetProperty(PropertyBool.IsConfusionCaster) != true)
                 return;
 
-            var cooldownSeconds = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionCooldownSeconds) ?? 45.0, 10.0, 120.0);
-            var duration = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionDurationSeconds) ?? 4.0, 1.0, 10.0);
-            var maxTargets = Math.Clamp((int)Math.Round(confusionCaster.GetProperty(PropertyFloat.VoidConfusionTargetCount) ?? 1.0), 1, 4);
+            var cooldownSeconds = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionCooldownSeconds) ?? 45.0, 1.0, 600.0);
+            var duration = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionDurationSeconds) ?? 4.0, 1.0, 60.0);
+            var maxTargets = Math.Clamp((int)Math.Round(confusionCaster.GetProperty(PropertyFloat.VoidConfusionTargetCount) ?? 1.0), 1, 12);
 
             var confused = GetNearbyMonsterTargets(sourcePlayer, firstTarget, firstTarget, 12.0f, maxTargets, null);
             if (!confused.Contains(firstTarget))
@@ -857,7 +857,7 @@ namespace ACE.Server.WorldObjects
             var radiusSq = radius * radius;
             var baseLandblock = center.Location.Cell & 0xFFFF0000;
 
-            results = landblock.GetAllWorldObjectsForDiagnostics()
+            results = landblock.GetWorldObjectsForLocalQuery()
                 .OfType<Creature>()
                 .Where(c => c != null
                             && c != sourcePlayer

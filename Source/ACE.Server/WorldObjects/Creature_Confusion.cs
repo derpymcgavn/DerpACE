@@ -92,7 +92,7 @@ namespace ACE.Server.WorldObjects
             var radiusSq = VoidConfusionAssistRadius * VoidConfusionAssistRadius;
             var baseLandblock = Location.Cell & 0xFFFF0000;
 
-            return landblock.GetAllWorldObjectsForDiagnostics()
+            return landblock.GetWorldObjectsForLocalQuery()
                 .OfType<Creature>()
                 .Where(c => IsValidVoidConfusionTarget(owner, c)
                             && (c.Location.Cell & 0xFFFF0000) == baseLandblock

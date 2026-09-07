@@ -124,14 +124,20 @@ namespace ACE.Server.Factories
 
             var tierContext = LootTierManager.Resolve(profile);
             profile = tierContext.Profile;
-            var tier = Math.Clamp(profile.Tier, 1, 8);
-            var dropChance = Math.Clamp(0.05f + tier * 0.02f + mutatorCount * 0.08f, 0.10f, 0.65f);
+            var tier = Math.Clamp(profile.Tier, 1, 100);
+            var minChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.MutatedMobWeaponDropMinChance, 0.0f, 1.0f);
+            var maxChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.MutatedMobWeaponDropMaxChance, minChance, 1.0f);
+            var dropChance = ACE.Server.Managers.DerpACEConfig.MutatedMobWeaponDropBaseChance
+                + tier * ACE.Server.Managers.DerpACEConfig.MutatedMobWeaponDropTierBonus
+                + mutatorCount * ACE.Server.Managers.DerpACEConfig.MutatedMobWeaponDropMutatorBonus;
+            dropChance = Math.Clamp(dropChance, minChance, maxChance);
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= dropChance)
                 return null;
 
             // Forced compatible rolls avoid expensive unbounded retries while still
             // using normal tier-based mutation for all item statistics.
-            for (var attempt = 0; attempt < 3; attempt++)
+            var attempts = Math.Clamp(ACE.Server.Managers.DerpACEConfig.MutatedMobWeaponDropAttempts, 1, 20);
+            for (var attempt = 0; attempt < attempts; attempt++)
             {
                 var roll = RollWcid(profile, TreasureItemCategory.MagicItem, TreasureItemType.Weapon, tierContext.RequestedTier);
                 if (roll == null)

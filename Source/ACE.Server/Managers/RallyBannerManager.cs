@@ -163,7 +163,6 @@ namespace ACE.Server.Managers
                 eligible.Add(target.Guid.Full);
                 ApplyAura(target, active.Banner);
                 active.AffectedPlayers.Add(target.Guid.Full);
-                RefreshVisibleRatings(target);
             }
 
             foreach (var guid in new List<uint>(active.AffectedPlayers))
@@ -177,7 +176,6 @@ namespace ACE.Server.Managers
                     continue;
 
                 RemoveAura(departed, active.Banner);
-                RefreshVisibleRatings(departed);
             }
 
             active.Banner.ApplyVisualEffects(PlayScript.EnchantUpYellow, 0.35f);
@@ -211,15 +209,17 @@ namespace ACE.Server.Managers
 
         private static void ApplyAura(Player player, WorldObject banner)
         {
-            ApplyAuraSpell(player, banner, CustomSpellManager.RallyBannerMightSpellId);
-            ApplyAuraSpell(player, banner, CustomSpellManager.RallyBannerGuardSpellId);
+            ApplyAuraSpell(player, banner, CustomSpellManager.RallyBannerHealthRenewalSpellId);
+            ApplyAuraSpell(player, banner, CustomSpellManager.RallyBannerStaminaRenewalSpellId);
+            ApplyAuraSpell(player, banner, CustomSpellManager.RallyBannerManaRenewalSpellId);
             player.ApplyVisualEffects(PlayScript.EnchantUpYellow, 0.2f);
         }
 
         private static void RemoveAura(Player player, WorldObject banner)
         {
-            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerMightSpellId);
-            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerGuardSpellId);
+            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerHealthRenewalSpellId);
+            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerStaminaRenewalSpellId);
+            RemoveAuraSpell(player, banner, CustomSpellManager.RallyBannerManaRenewalSpellId);
         }
 
         private static void RemoveAuraSpell(Player player, WorldObject banner, uint spellId)
@@ -230,16 +230,6 @@ namespace ACE.Server.Managers
             var enchantment = player.EnchantmentManager.GetEnchantment(spellId, banner.Guid.Full);
             if (enchantment != null)
                 player.EnchantmentManager.Remove(enchantment, false);
-        }
-
-        private static void RefreshVisibleRatings(Player player)
-        {
-            if (player?.Session == null)
-                return;
-
-            player.Session.Network.EnqueueSend(
-                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.DamageRating, player.GetDamageRating()),
-                new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.DamageResistRating, player.GetDamageResistRating()));
         }
 
         private static void ApplyAuraSpell(Player player, WorldObject banner, uint spellId)
@@ -266,7 +256,6 @@ namespace ACE.Server.Managers
                     continue;
 
                 RemoveAura(player, active.Banner);
-                RefreshVisibleRatings(player);
             }
             active.AffectedPlayers.Clear();
 

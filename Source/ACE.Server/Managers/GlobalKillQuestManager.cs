@@ -690,7 +690,7 @@ namespace ACE.Server.Managers
 
             foreach (var landblock in LandblockManager.GetLoadedLandblocks())
             {
-                var drunkenMobs = landblock.GetAllWorldObjectsForDiagnostics()
+                var drunkenMobs = landblock.GetWorldObjectsForLocalQuery()
                     .OfType<Creature>()
                     .Where(creature => creature is not Player
                         && creature.GetProperty(PropertyBool.IsDrunkenMob) == true

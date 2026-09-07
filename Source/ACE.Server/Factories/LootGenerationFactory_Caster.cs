@@ -1,3 +1,4 @@
+using System;
 using ACE.Common;
 using ACE.Database.Models.World;
 using ACE.Entity.Enum;
@@ -170,14 +171,14 @@ namespace ACE.Server.Factories
                 wo.LongDesc = $"Life Spells\r\n\r\n{wo.LongDesc}";
 
             // Archmagi: 5% chance on any T6+ magical caster with a bound spell.
-            // Runtime rolls this item's 4-8% ProcSpellRate to echo the same valid
+            // Runtime uses this item's configured ProcSpellRate to echo the same valid
             // harmful single-target spell onto another nearby target, or the original target.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons && ACE.Server.Managers.DerpACEConfig.ArchmagiEnabled
                 && isMagical && wo.SpellDID.HasValue
                 && (IsForcedWeaponModifier(roll, "archmagi")
                     || (!HasForcedWeaponModifier(roll) && profile.Tier >= ACE.Server.Managers.DerpACEConfig.ArchmagiMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.ArchmagiDropChance)))
             {
-                var procChance = ThreadSafeRandom.Next(0.04f, 0.08f);
+                var procChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance, 0.0f, 1.0f);
 
                 wo.Name = wo.Name + " of the Archmagi";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster, true);
@@ -225,17 +226,18 @@ namespace ACE.Server.Factories
             // Shadow Clone: nether-caster utility affix. It summons a short-lived additional
             // combat pet that mirrors harmful void projectile/ring casts at reduced damage.
             if (ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons
+                && ACE.Server.Managers.DerpACEConfig.CasterShadowCloneEnabled
                 && isMagical
                 && wo.W_DamageType == DamageType.Nether
                 && wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) != true
                 && !forcedConfusionCaster
                 && (forcedShadowCloneCaster
-                    || (!HasForcedWeaponModifier(roll) && profile.Tier >= 6 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.03f)))
+                    || (!HasForcedWeaponModifier(roll) && profile.Tier >= ACE.Server.Managers.DerpACEConfig.CasterShadowCloneMinTier && ThreadSafeRandom.Next(0.0f, 1.0f) < ACE.Server.Managers.DerpACEConfig.CasterShadowCloneDropChance)))
             {
-                var procChance = forcedShadowCloneCaster ? 1.0f : 0.04f;
-                const float cooldownSeconds = 120.0f;
-                const float durationSeconds = 25.0f;
-                const float damageScale = 0.35f;
+                var procChance = forcedShadowCloneCaster ? 1.0f : Math.Clamp(ACE.Server.Managers.DerpACEConfig.CasterShadowCloneProcChance, 0.0f, 1.0f);
+                var cooldownSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.CasterShadowCloneCooldownSeconds);
+                var durationSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.CasterShadowCloneDurationSeconds);
+                var damageScale = Math.Clamp(ACE.Server.Managers.DerpACEConfig.CasterShadowCloneDamageScale, 0.05f, 1.0f);
 
                 wo.Name = wo.Name + " of the Umbral Mirror";
                 wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsShadowCloneCaster, true);
@@ -265,7 +267,7 @@ namespace ACE.Server.Factories
 
         private static void TryMutateGravecallerCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical, bool forced)
         {
-            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || !ACE.Server.Managers.DerpACEConfig.GravecallerCasterEnabled || wo == null || profile == null || !isMagical)
                 return;
 
             if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true
@@ -277,7 +279,7 @@ namespace ACE.Server.Factories
                 || wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsOrbitweaverCaster) == true)
                 return;
 
-            if (!forced && (HasForcedWeaponModifier(roll) || profile.Tier < 6 || ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.02f))
+            if (!forced && (HasForcedWeaponModifier(roll) || profile.Tier < ACE.Server.Managers.DerpACEConfig.GravecallerMinTier || ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.GravecallerDropChance))
                 return;
 
             var title = wo.W_DamageType == DamageType.Health ? "of the Pale Shepherd"
@@ -286,16 +288,16 @@ namespace ACE.Server.Factories
             wo.Name += " " + title;
             wo.SetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsGravecallerCaster, true);
             wo.CooldownId = Player.GravecallerCooldownId;
-            wo.CooldownDuration = 45.0;
+            wo.CooldownDuration = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.GravecallerCooldownSeconds);
             wo.IconOverlayId = MutatorOverlayGravecaller;
             ApplyLootUiEffects(wo, wo.W_DamageType, true);
             wo.LongDesc = (wo.LongDesc ?? "")
-                + "\n\nGravecaller: cast any valid targeted spell on a corpse you may loot to raise its echo as a combat pet for 20 seconds."
-                + "\nThe revenant preserves the corpse's form, motion, sounds, and combat style. One revenant may serve at a time; each corpse answers only once. Cooldown: 45 seconds.";
+                + $"\n\nGravecaller: cast any valid targeted spell on a corpse you may loot to raise its echo as a combat pet for {Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.GravecallerDurationSeconds):0.#} seconds."
+                + $"\nThe revenant preserves the corpse's form, motion, sounds, and combat style. One revenant may serve at a time; each corpse answers only once. Cooldown: {Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.GravecallerCooldownSeconds):0.#} seconds.";
         }
         private static void TryMutateVoidConfusionCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)
         {
-            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || !ACE.Server.Managers.DerpACEConfig.VoidConfusionCasterEnabled || wo == null || profile == null || !isMagical)
                 return;
 
             if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true
@@ -304,12 +306,16 @@ namespace ACE.Server.Factories
                 return;
 
             var forced = IsForcedWeaponModifier(roll, "confusion");
-            if (!forced && (HasForcedWeaponModifier(roll) || profile.Tier < 6 || wo.W_DamageType != DamageType.Nether || ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.025f))
+            if (!forced && (HasForcedWeaponModifier(roll) || profile.Tier < ACE.Server.Managers.DerpACEConfig.VoidConfusionMinTier || wo.W_DamageType != DamageType.Nether || ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.VoidConfusionDropChance))
                 return;
 
-            const double cooldownSeconds = 45.0;
-            var maxTargets = ThreadSafeRandom.Next(1, 4);
-            var duration = ThreadSafeRandom.Next(1, 10);
+            var cooldownSeconds = Math.Max(1.0f, ACE.Server.Managers.DerpACEConfig.VoidConfusionCooldownSeconds);
+            var targetMin = Math.Clamp(Math.Min(ACE.Server.Managers.DerpACEConfig.VoidConfusionTargetMin, ACE.Server.Managers.DerpACEConfig.VoidConfusionTargetMax), 1, 12);
+            var targetMax = Math.Clamp(Math.Max(ACE.Server.Managers.DerpACEConfig.VoidConfusionTargetMin, ACE.Server.Managers.DerpACEConfig.VoidConfusionTargetMax), targetMin, 12);
+            var durationMin = Math.Clamp(Math.Min(ACE.Server.Managers.DerpACEConfig.VoidConfusionDurationMin, ACE.Server.Managers.DerpACEConfig.VoidConfusionDurationMax), 1, 60);
+            var durationMax = Math.Clamp(Math.Max(ACE.Server.Managers.DerpACEConfig.VoidConfusionDurationMin, ACE.Server.Managers.DerpACEConfig.VoidConfusionDurationMax), durationMin, 60);
+            var maxTargets = ThreadSafeRandom.Next(targetMin, targetMax);
+            var duration = ThreadSafeRandom.Next(durationMin, durationMax);
 
             wo.Name = wo.Name + " of Bedlam";
             wo.W_DamageType = DamageType.Nether;
@@ -331,7 +337,7 @@ namespace ACE.Server.Factories
 
         private static void TryMutateWarMageSpecialCaster(WorldObject wo, TreasureDeath profile, TreasureRoll roll, bool isMagical)
         {
-            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null || !isMagical)
+            if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || !ACE.Server.Managers.DerpACEConfig.WarCasterSpecialEnabled || wo == null || profile == null || !isMagical)
                 return;
 
             if (wo.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsArchmagiCaster) == true
@@ -359,7 +365,7 @@ namespace ACE.Server.Factories
                 mutator = "orbitweaver";
             else
             {
-                if (HasForcedWeaponModifier(roll) || profile.Tier < 6 || ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.025f)
+                if (HasForcedWeaponModifier(roll) || profile.Tier < ACE.Server.Managers.DerpACEConfig.WarCasterSpecialMinTier || ThreadSafeRandom.Next(0.0f, 1.0f) >= ACE.Server.Managers.DerpACEConfig.WarCasterSpecialDropChance)
                     return;
 
                 mutator = ThreadSafeRandom.Next(0, 2) switch

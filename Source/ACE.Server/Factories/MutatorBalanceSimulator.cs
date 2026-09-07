@@ -33,8 +33,8 @@ namespace ACE.Server.Factories
             AddDamageProc(rows, "Thief dagger", DerpACEConfig.ThievesDaggerProcChance, DerpACEConfig.ThievesDaggerProcBonus, 0.0, attacks, hitRate, attacksPerSecond, seed++, "also shadowsteps and applies seam penalty");
             AddSpeedProc(rows, "Quickening dagger", AvgPct(DerpACEConfig.QuickeningDaggerProcMin, DerpACEConfig.QuickeningDaggerProcMax), AvgPct(DerpACEConfig.QuickeningDaggerSpeedMin, DerpACEConfig.QuickeningDaggerSpeedMax), Avg(DerpACEConfig.QuickeningDaggerDurationMin, DerpACEConfig.QuickeningDaggerDurationMax), 10.0, attacks, hitRate, attacksPerSecond, seed++);
             AddArmorPierce(rows, "Fencer blade", AvgPct(DerpACEConfig.FencerPierceProcMin, DerpACEConfig.FencerPierceProcMax), AvgPct(DerpACEConfig.FencerPierceMin, DerpACEConfig.FencerPierceMax), 0.0, attacks, baseDamage, hitRate, armorStopped, attacksPerSecond, seed++, "riposte/parry utility is not included in DPS");
-            AddDamageProc(rows, "Pugilist flurry", 0.08, 0.35, Player.PugilistCooldownSeconds, attacks, hitRate, attacksPerSecond, seed++, "hardcoded 6-10% roll, 35% extra hit");
-            AddDamageProc(rows, "Pugilist rake", 0.08, 0.45, Player.PugilistCooldownSeconds, attacks, hitRate, attacksPerSecond, seed++, "hardcoded 6-10% roll, 45% trauma over time");
+            AddDamageProc(rows, "Pugilist flurry", AvgPct(DerpACEConfig.PugilistProcMin, DerpACEConfig.PugilistProcMax), DerpACEConfig.PugilistFlurryDamageScale, DerpACEConfig.PugilistCooldownSeconds, attacks, hitRate, attacksPerSecond, seed++, "configured proc range and extra hit scale");
+            AddDamageProc(rows, "Pugilist rake", AvgPct(DerpACEConfig.PugilistProcMin, DerpACEConfig.PugilistProcMax), DerpACEConfig.PugilistRakeDamageScale, DerpACEConfig.PugilistCooldownSeconds, attacks, hitRate, attacksPerSecond, seed++, "configured proc range and trauma scale");
             AddDamageProc(rows, "Ravager axe", AvgPct(DerpACEConfig.RavagerProcMin, DerpACEConfig.RavagerProcMax), AvgPct(DerpACEConfig.RavagerBleedMin, DerpACEConfig.RavagerBleedMax), 0.0, attacks, hitRate, attacksPerSecond, seed++, "two-handed axes scale by configured two-hand multiplier");
             AddDamageProc(rows, "Ravager hammer cleave", DerpACEConfig.RavagerHammerCleaveChance, DerpACEConfig.RavagerHammerCleaveDamageScale, 0.0, attacks, hitRate, attacksPerSecond, seed++, "multi-target only, up to configured secondary target count", true);
             AddUtility(rows, "Warden maul", AvgPct(DerpACEConfig.WardenProcMin, DerpACEConfig.WardenProcMax), "defense debuff, cooldown-limited; direct damage neutral");
@@ -49,14 +49,14 @@ namespace ACE.Server.Factories
             AddArmorPierce(rows, "Breacher crossbow", AvgPct(DerpACEConfig.BreacherArmorIgnoreMin, DerpACEConfig.BreacherArmorIgnoreMax), 1.0, 0.0, attacks, baseDamage, hitRate, armorStopped, attacksPerSecond, seed++, "recovers full armor stopped on proc");
             AddUtility(rows, "Reaper atlatl", AvgPct(DerpACEConfig.ReaperProcMin, DerpACEConfig.ReaperProcMax), "kill-fed heal; direct damage neutral");
             AddDamageProc(rows, "Dartflinger atlatl", AvgPct(DerpACEConfig.RicochetProcMin, DerpACEConfig.RicochetProcMax), DerpACEConfig.RicochetDamageScale, Player.RicochetCooldownSeconds, attacks, hitRate, attacksPerSecond, seed++, "secondary target only", true);
-            AddDamageProc(rows, "Shadow volley", 0.03, 0.25 * 18.0 / 150.0, 0.0, attacks, hitRate, attacksPerSecond, seed++, "hardcoded shadow uptime approximation; very low sustained value");
-            AddDamageProc(rows, "Second shadow", 0.03, 0.25 * 16.0 / 150.0, 0.0, attacks, hitRate, attacksPerSecond, seed++, "hardcoded shadow uptime approximation; very low sustained value");
+            AddDamageProc(rows, "Shadow volley", DerpACEConfig.ShadowWeaponProcChance, DerpACEConfig.ShadowWeaponDamageScale * DerpACEConfig.ShadowVolleyDurationSeconds / Math.Max(1.0, DerpACEConfig.ShadowWeaponCooldownSeconds), 0.0, attacks, hitRate, attacksPerSecond, seed++, "configured shadow uptime approximation; very low sustained value");
+            AddDamageProc(rows, "Second shadow", DerpACEConfig.ShadowWeaponProcChance, DerpACEConfig.ShadowWeaponDamageScale * DerpACEConfig.SecondShadowDurationSeconds / Math.Max(1.0, DerpACEConfig.ShadowWeaponCooldownSeconds), 0.0, attacks, hitRate, attacksPerSecond, seed++, "configured shadow uptime approximation; very low sustained value");
 
             AddDamageProc(rows, "Archmagi caster", DerpACEConfig.ArchmagiProcChance, DerpACEConfig.ArchmagiDualCastDamageModifier, 0.0, attacks, hitRate, attacksPerSecond, seed++, "chains to another target when possible, otherwise same target");
             AddUtility(rows, "Hierophant caster", DerpACEConfig.HierophantHotProcChance, "healing amp/HoT/fellow echo; not offensive DPS");
-            AddUtility(rows, "Gravecaller caster", 0.02, "corpse-raised pet, cooldown-limited; encounter utility");
-            AddUtility(rows, "Bedlam caster", 0.025, "temporary monster charm; damage depends on nearby mobs");
-            AddDamageProc(rows, "Umbral mirror caster", 0.04, 0.35 * 25.0 / 120.0, 0.0, attacks, hitRate, attacksPerSecond, seed++, "hardcoded shadow uptime approximation");
+            AddUtility(rows, "Gravecaller caster", DerpACEConfig.GravecallerDropChance, "corpse-raised pet, cooldown-limited; encounter utility");
+            AddUtility(rows, "Bedlam caster", DerpACEConfig.VoidConfusionDropChance, "temporary monster charm; damage depends on nearby mobs");
+            AddDamageProc(rows, "Umbral mirror caster", DerpACEConfig.CasterShadowCloneProcChance, DerpACEConfig.CasterShadowCloneDamageScale * DerpACEConfig.CasterShadowCloneDurationSeconds / Math.Max(1.0, DerpACEConfig.CasterShadowCloneCooldownSeconds), 0.0, attacks, hitRate, attacksPerSecond, seed++, "configured shadow uptime approximation");
 
             AddArmorPierce(rows, "Thorns shield", 1.0, 0.10, 1.0, attacks, baseDamage, 1.0, baseDamage, attacksPerSecond, seed++, "defensive reflected damage, assumes one incoming hit per second");
             AddDamageProc(rows, "Bashing shield", 0.10, 0.10, 8.0, attacks, 1.0, attacksPerSecond, seed++, "defensive proc, assumes one incoming hit per second");
@@ -85,7 +85,7 @@ namespace ACE.Server.Factories
                     sb.AppendLine($"- {row.Name}: watch item; keep it conditional or rare.");
             }
 
-            sb.AppendLine("- Pugilist and shadow-clone family still use some hardcoded proc/uptime values; move those into Loot Lab if you want live tuning.");
+            sb.AppendLine("- Pugilist and shadow-clone weapon families are config-backed; tune them from Loot Lab when live balance needs a nudge.");
             sb.AppendLine("- Splash values assume valid nearby targets. For boss-only fights, read the Direct column first.");
             return sb.ToString();
         }

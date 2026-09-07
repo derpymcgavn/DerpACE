@@ -1295,7 +1295,7 @@ namespace ACE.Server.WorldObjects
                 spell.School != MagicSchool.LifeMagic)
                 return;
 
-            var procChance = Math.Clamp((float)(caster.ProcSpellRate ?? ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance), 0.04f, 0.08f);
+            var procChance = Math.Clamp((float)(caster.ProcSpellRate ?? ACE.Server.Managers.DerpACEConfig.ArchmagiProcChance), 0.0f, 1.0f);
             if (ThreadSafeRandom.Next(0.0f, 1.0f) >= procChance)
                 return;
 

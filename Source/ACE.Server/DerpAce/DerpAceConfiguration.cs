@@ -23,6 +23,14 @@ namespace ACE.Server.DerpAce
         public bool EnableMysteriousStranger { get; set; } = true;
         [JsonPropertyName("enable_mob_modifiers")]
         public bool EnableMobModifiers { get; set; } = true;
+        [JsonPropertyName("modern_mob_ai_enabled")]
+        public bool ModernMobAiEnabled { get; set; } = true;
+        [JsonPropertyName("modern_mob_ai_switch_threshold")]
+        public float ModernMobAiSwitchThreshold { get; set; } = 1.20f;
+        [JsonPropertyName("mob_movement_sync_interval_seconds")]
+        public float MobMovementSyncIntervalSeconds { get; set; } = 0.20f;
+        [JsonPropertyName("mob_outdoor_chase_range")]
+        public float MobOutdoorChaseRange { get; set; } = 576.0f;
         [JsonPropertyName("enable_derpcoin")]
         public bool EnableDerpcoin { get; set; } = true;
         [JsonPropertyName("enable_custom_weapons")]
@@ -95,6 +103,14 @@ namespace ACE.Server.DerpAce
         public bool LifeCasterEnabled { get; set; } = true;
         [JsonPropertyName("hierophant_enabled")]
         public bool HierophantEnabled { get; set; } = true;
+        [JsonPropertyName("caster_shadow_clone_enabled")]
+        public bool CasterShadowCloneEnabled { get; set; } = true;
+        [JsonPropertyName("gravecaller_caster_enabled")]
+        public bool GravecallerCasterEnabled { get; set; } = true;
+        [JsonPropertyName("void_confusion_caster_enabled")]
+        public bool VoidConfusionCasterEnabled { get; set; } = true;
+        [JsonPropertyName("war_caster_special_enabled")]
+        public bool WarCasterSpecialEnabled { get; set; } = true;
         [JsonPropertyName("thief_dagger_enabled")]
         public bool ThievesDaggerEnabled { get; set; } = true;
         [JsonPropertyName("sentinel_spear_enabled")]
@@ -154,6 +170,8 @@ namespace ACE.Server.DerpAce
         public int RallyBannerDamageRatingBonus { get; set; } = 5;
         [JsonPropertyName("rally_banner_damage_resist_rating_bonus")]
         public int RallyBannerDamageResistRatingBonus { get; set; } = 5;
+        [JsonPropertyName("rally_banner_regen_multiplier")]
+        public float RallyBannerRegenMultiplier { get; set; } = 5.0f;
         [JsonPropertyName("rally_banner_requires_leadership")]
         public bool RallyBannerRequiresLeadership { get; set; } = true;
         [JsonPropertyName("rally_banner_required_level")]
@@ -171,6 +189,20 @@ namespace ACE.Server.DerpAce
         public float DinnerwareSpinDamageScale { get; set; } = 0.20f;
         [JsonPropertyName("dinnerware_spin_radius")]
         public float DinnerwareSpinRadius { get; set; } = 5.0f;
+        [JsonPropertyName("warrior_princess_call_drop_chance")]
+        public float WarriorPrincessCallDropChance { get; set; } = 0.01f;
+        [JsonPropertyName("warrior_princess_call_proc_min")]
+        public float WarriorPrincessCallProcMin { get; set; } = 0.05f;
+        [JsonPropertyName("warrior_princess_call_proc_max")]
+        public float WarriorPrincessCallProcMax { get; set; } = 0.08f;
+        [JsonPropertyName("flying_buffet_drop_chance")]
+        public float FlyingBuffetDropChance { get; set; } = 0.01f;
+        [JsonPropertyName("flying_buffet_proc_min")]
+        public float FlyingBuffetProcMin { get; set; } = 0.03f;
+        [JsonPropertyName("flying_buffet_proc_max")]
+        public float FlyingBuffetProcMax { get; set; } = 0.05f;
+        [JsonPropertyName("flying_buffet_first_bounce_damage_scale")]
+        public float FlyingBuffetFirstBounceDamageScale { get; set; } = 0.60f;
         [JsonPropertyName("quickening_dagger_drop_chance")]
         public float QuickeningDaggerDropChance { get; set; } = 0.02f;
         [JsonPropertyName("quickening_dagger_min_tier")]
@@ -187,6 +219,8 @@ namespace ACE.Server.DerpAce
         public int QuickeningDaggerDurationMin { get; set; } = 4;
         [JsonPropertyName("quickening_dagger_duration_max")]
         public int QuickeningDaggerDurationMax { get; set; } = 7;
+        [JsonPropertyName("quickening_dagger_cooldown_seconds")]
+        public float QuickeningDaggerCooldownSeconds { get; set; } = 10.0f;
         [JsonPropertyName("opportunist_melee_drop_chance")]
         public float OpportunistMeleeDropChance { get; set; } = 0.01f;
         [JsonPropertyName("opportunist_missile_drop_chance")]
@@ -326,6 +360,18 @@ namespace ACE.Server.DerpAce
         public float DerpcoinMaxChance { get; set; } = 0.06f;
         [JsonPropertyName("derpcoin_stack_multiplier")]
         public float DerpcoinStackMultiplier { get; set; } = 1.5f;
+        [JsonPropertyName("mutated_mob_weapon_drop_base_chance")]
+        public float MutatedMobWeaponDropBaseChance { get; set; } = 0.05f;
+        [JsonPropertyName("mutated_mob_weapon_drop_tier_bonus")]
+        public float MutatedMobWeaponDropTierBonus { get; set; } = 0.02f;
+        [JsonPropertyName("mutated_mob_weapon_drop_mutator_bonus")]
+        public float MutatedMobWeaponDropMutatorBonus { get; set; } = 0.08f;
+        [JsonPropertyName("mutated_mob_weapon_drop_min_chance")]
+        public float MutatedMobWeaponDropMinChance { get; set; } = 0.10f;
+        [JsonPropertyName("mutated_mob_weapon_drop_max_chance")]
+        public float MutatedMobWeaponDropMaxChance { get; set; } = 0.65f;
+        [JsonPropertyName("mutated_mob_weapon_drop_attempts")]
+        public int MutatedMobWeaponDropAttempts { get; set; } = 3;
 
         // Loot Modifier Balance Controls
         [JsonPropertyName("loot_modifier_global_drop_multiplier")]
@@ -368,6 +414,68 @@ namespace ACE.Server.DerpAce
         public int DefenderShieldMinTier { get; set; } = 2;
         [JsonPropertyName("defender_aggro_bonus")]
         public float DefenderAggroBonus { get; set; } = 0.5f;
+        [JsonPropertyName("shield_thorns_roll_chance")]
+        public float ShieldThornsRollChance { get; set; } = 0.10f;
+        [JsonPropertyName("shield_bashing_roll_chance")]
+        public float ShieldBashingRollChance { get; set; } = 0.10f;
+        [JsonPropertyName("shield_reflection_roll_chance")]
+        public float ShieldReflectionRollChance { get; set; } = 0.06f;
+        [JsonPropertyName("shield_spell_mirror_roll_chance")]
+        public float ShieldSpellMirrorRollChance { get; set; } = 0.04f;
+        [JsonPropertyName("shield_tier8_triple_affix_chance")]
+        public float ShieldTier8TripleAffixChance { get; set; } = 0.15f;
+        [JsonPropertyName("shield_bashing_proc_chance")]
+        public float ShieldBashingProcChance { get; set; } = 0.10f;
+        [JsonPropertyName("shield_bashing_health_pct")]
+        public float ShieldBashingHealthPct { get; set; } = 0.10f;
+        [JsonPropertyName("shield_bashing_cooldown_seconds")]
+        public float ShieldBashingCooldownSeconds { get; set; } = 8.0f;
+        [JsonPropertyName("shield_bash_knockback_distance")]
+        public float ShieldBashKnockbackDistance { get; set; } = 10.0f;
+        [JsonPropertyName("shield_spell_mirror_cooldown_seconds")]
+        public float ShieldSpellMirrorCooldownSeconds { get; set; } = 10.0f;
+        [JsonPropertyName("battlemage_helm_min_tier")]
+        public int BattlemageHelmMinTier { get; set; } = 5;
+        [JsonPropertyName("battlemage_helm_chance_t5")]
+        public float BattlemageHelmChanceT5 { get; set; } = 0.04f;
+        [JsonPropertyName("battlemage_helm_chance_t7")]
+        public float BattlemageHelmChanceT7 { get; set; } = 0.06f;
+        [JsonPropertyName("battlemage_helm_chance_t8")]
+        public float BattlemageHelmChanceT8 { get; set; } = 0.08f;
+        [JsonPropertyName("armor_sort_min_tier")]
+        public int ArmorSortMinTier { get; set; } = 4;
+        [JsonPropertyName("armor_sort_chance_t4")]
+        public float ArmorSortChanceT4 { get; set; } = 0.04f;
+        [JsonPropertyName("armor_sort_chance_t6")]
+        public float ArmorSortChanceT6 { get; set; } = 0.06f;
+        [JsonPropertyName("armor_sort_chance_t7")]
+        public float ArmorSortChanceT7 { get; set; } = 0.08f;
+        [JsonPropertyName("armor_sort_chance_t8")]
+        public float ArmorSortChanceT8 { get; set; } = 0.10f;
+        [JsonPropertyName("culinarian_min_tier")]
+        public int CulinarianMinTier { get; set; } = 4;
+        [JsonPropertyName("culinarian_roll_chance")]
+        public float CulinarianRollChance { get; set; } = 0.08f;
+        [JsonPropertyName("alchemist_glove_min_tier")]
+        public int AlchemistGloveMinTier { get; set; } = 4;
+        [JsonPropertyName("alchemist_glove_roll_chance")]
+        public float AlchemistGloveRollChance { get; set; } = 0.08f;
+        [JsonPropertyName("culinarian_tier8_superior_bonus_chance")]
+        public float CulinarianTier8SuperiorBonusChance { get; set; } = 0.10f;
+        [JsonPropertyName("alchemical_instability_chance_t6")]
+        public float AlchemicalInstabilityChanceT6 { get; set; } = 0.15f;
+        [JsonPropertyName("alchemical_instability_chance_t8")]
+        public float AlchemicalInstabilityChanceT8 { get; set; } = 0.25f;
+        [JsonPropertyName("dance_boot_min_tier")]
+        public int DanceBootMinTier { get; set; } = 4;
+        [JsonPropertyName("dance_boot_roll_chance")]
+        public float DanceBootRollChance { get; set; } = 0.06f;
+        [JsonPropertyName("unarmed_armor_min_tier")]
+        public int UnarmedArmorMinTier { get; set; } = 5;
+        [JsonPropertyName("unarmed_armor_roll_chance")]
+        public float UnarmedArmorRollChance { get; set; } = 0.15f;
+        [JsonPropertyName("unarmed_armor_off_axis_defense_chance")]
+        public float UnarmedArmorOffAxisDefenseChance { get; set; } = 0.10f;
 
         // Archmagi Caster
         [JsonPropertyName("archmagi_drop_chance")]
@@ -385,6 +493,12 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("archmagi_dual_cast_damage_modifier")]
         public float ArchmagiDualCastDamageModifier { get; set; } = 0.75f;
 
+
+        // Life Caster
+        [JsonPropertyName("life_caster_drop_chance")]
+        public float LifeCasterDropChance { get; set; } = 0.03f;
+        [JsonPropertyName("life_caster_min_tier")]
+        public int LifeCasterMinTier { get; set; } = 4;
         // Hierophant
         [JsonPropertyName("hierophant_drop_chance")]
         public float HierophantDropChance { get; set; } = 0.04f;
@@ -410,6 +524,47 @@ namespace ACE.Server.DerpAce
         public float HierophantFellowEchoRange { get; set; } = 30.0f;
         [JsonPropertyName("hierophant_aggro_bonus")]
         public float HierophantAggroBonus { get; set; } = 0.35f;
+        [JsonPropertyName("hierophant_cooldown_seconds")]
+        public float HierophantCooldownSeconds { get; set; } = 10.0f;
+        // Caster Mutators
+        [JsonPropertyName("caster_shadow_clone_drop_chance")]
+        public float CasterShadowCloneDropChance { get; set; } = 0.03f;
+        [JsonPropertyName("caster_shadow_clone_min_tier")]
+        public int CasterShadowCloneMinTier { get; set; } = 6;
+        [JsonPropertyName("caster_shadow_clone_proc_chance")]
+        public float CasterShadowCloneProcChance { get; set; } = 0.04f;
+        [JsonPropertyName("caster_shadow_clone_cooldown_seconds")]
+        public float CasterShadowCloneCooldownSeconds { get; set; } = 120.0f;
+        [JsonPropertyName("caster_shadow_clone_duration_seconds")]
+        public float CasterShadowCloneDurationSeconds { get; set; } = 25.0f;
+        [JsonPropertyName("caster_shadow_clone_damage_scale")]
+        public float CasterShadowCloneDamageScale { get; set; } = 0.35f;
+        [JsonPropertyName("gravecaller_drop_chance")]
+        public float GravecallerDropChance { get; set; } = 0.02f;
+        [JsonPropertyName("gravecaller_min_tier")]
+        public int GravecallerMinTier { get; set; } = 6;
+        [JsonPropertyName("gravecaller_cooldown_seconds")]
+        public float GravecallerCooldownSeconds { get; set; } = 45.0f;
+        [JsonPropertyName("gravecaller_duration_seconds")]
+        public float GravecallerDurationSeconds { get; set; } = 20.0f;
+        [JsonPropertyName("void_confusion_drop_chance")]
+        public float VoidConfusionDropChance { get; set; } = 0.025f;
+        [JsonPropertyName("void_confusion_min_tier")]
+        public int VoidConfusionMinTier { get; set; } = 6;
+        [JsonPropertyName("void_confusion_cooldown_seconds")]
+        public float VoidConfusionCooldownSeconds { get; set; } = 45.0f;
+        [JsonPropertyName("void_confusion_target_min")]
+        public int VoidConfusionTargetMin { get; set; } = 1;
+        [JsonPropertyName("void_confusion_target_max")]
+        public int VoidConfusionTargetMax { get; set; } = 4;
+        [JsonPropertyName("void_confusion_duration_min")]
+        public int VoidConfusionDurationMin { get; set; } = 1;
+        [JsonPropertyName("void_confusion_duration_max")]
+        public int VoidConfusionDurationMax { get; set; } = 10;
+        [JsonPropertyName("war_caster_special_drop_chance")]
+        public float WarCasterSpecialDropChance { get; set; } = 0.025f;
+        [JsonPropertyName("war_caster_special_min_tier")]
+        public int WarCasterSpecialMinTier { get; set; } = 6;
 
         // Thief Dagger
         [JsonPropertyName("sneak_attack_bonus_pct")]
@@ -460,6 +615,24 @@ namespace ACE.Server.DerpAce
         public int UnarmedElemProcMin { get; set; } = 1;
         [JsonPropertyName("unarmed_elem_proc_max")]
         public int UnarmedElemProcMax { get; set; } = 5;
+
+        // Pugilist Unarmed Weapons
+        [JsonPropertyName("pugilist_weapon_drop_chance")]
+        public float PugilistWeaponDropChance { get; set; } = 0.05f;
+        [JsonPropertyName("pugilist_weapon_min_tier")]
+        public int PugilistWeaponMinTier { get; set; } = 5;
+        [JsonPropertyName("pugilist_proc_min")]
+        public int PugilistProcMin { get; set; } = 6;
+        [JsonPropertyName("pugilist_proc_max")]
+        public int PugilistProcMax { get; set; } = 10;
+        [JsonPropertyName("pugilist_flurry_damage_scale")]
+        public float PugilistFlurryDamageScale { get; set; } = 0.35f;
+        [JsonPropertyName("pugilist_rake_damage_scale")]
+        public float PugilistRakeDamageScale { get; set; } = 0.45f;
+        [JsonPropertyName("pugilist_rake_duration_seconds")]
+        public float PugilistRakeDurationSeconds { get; set; } = 6.0f;
+        [JsonPropertyName("pugilist_cooldown_seconds")]
+        public float PugilistCooldownSeconds { get; set; } = 6.0f;
 
         // Fencer Blade
         [JsonPropertyName("fencer_blade_drop_chance")]
@@ -548,6 +721,8 @@ namespace ACE.Server.DerpAce
         public float ResoluteKillBurstPct { get; set; } = 0.06f;
         [JsonPropertyName("resolute_two_hand_mult")]
         public float ResoluteTwoHandMult { get; set; } = 1.25f;
+        [JsonPropertyName("resolute_kill_cooldown_seconds")]
+        public float ResoluteKillCooldownSeconds { get; set; } = 10.0f;
 
         // Polebreaker Staff
         [JsonPropertyName("polebreaker_drop_chance")]
@@ -557,7 +732,7 @@ namespace ACE.Server.DerpAce
         [JsonPropertyName("polebreaker_stack_min")]
         public int PolebreakerStackMin { get; set; } = 3;
         [JsonPropertyName("polebreaker_stack_max")]
-        public int PolebreakerStackMax { get; set; } = 5;
+        public int PolebreakerStackMax { get; set; } = 4;
         [JsonPropertyName("polebreaker_max_stack_min")]
         public int PolebreakerMaxStackMin { get; set; } = 4;
         [JsonPropertyName("polebreaker_max_stack_max")]
@@ -618,6 +793,24 @@ namespace ACE.Server.DerpAce
         public float RicochetDamageScale { get; set; } = 0.50f;
         [JsonPropertyName("ricochet_radius")]
         public float RicochetRadius { get; set; } = 10.0f;
+
+        // Shadow Clone Weapon Affixes
+        [JsonPropertyName("shadow_volley_drop_chance")]
+        public float ShadowVolleyDropChance { get; set; } = 0.015f;
+        [JsonPropertyName("second_shadow_drop_chance")]
+        public float SecondShadowDropChance { get; set; } = 0.0125f;
+        [JsonPropertyName("shadow_weapon_min_tier")]
+        public int ShadowWeaponMinTier { get; set; } = 7;
+        [JsonPropertyName("shadow_weapon_proc_chance")]
+        public float ShadowWeaponProcChance { get; set; } = 0.03f;
+        [JsonPropertyName("shadow_weapon_cooldown_seconds")]
+        public float ShadowWeaponCooldownSeconds { get; set; } = 150.0f;
+        [JsonPropertyName("shadow_volley_duration_seconds")]
+        public float ShadowVolleyDurationSeconds { get; set; } = 18.0f;
+        [JsonPropertyName("second_shadow_duration_seconds")]
+        public float SecondShadowDurationSeconds { get; set; } = 16.0f;
+        [JsonPropertyName("shadow_weapon_damage_scale")]
+        public float ShadowWeaponDamageScale { get; set; } = 0.25f;
 
         // Weapon Elemental Blast-on-Strike
         [JsonPropertyName("weapon_blast_proc_min_tier")]

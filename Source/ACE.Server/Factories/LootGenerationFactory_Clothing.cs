@@ -65,23 +65,23 @@ namespace ACE.Server.Factories
 
             var reactiveAffixes = new System.Collections.Generic.List<string>();
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldThornsRollChance, 0.0f, 1.0f))
                 reactiveAffixes.Add("thorns");
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldBashingRollChance, 0.0f, 1.0f))
                 reactiveAffixes.Add("bashing");
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.06f)
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldReflectionRollChance, 0.0f, 1.0f))
                 reactiveAffixes.Add("reflection");
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.04f)
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldSpellMirrorRollChance, 0.0f, 1.0f))
                 reactiveAffixes.Add("spellmirror");
 
             if (reactiveAffixes.Count == 0)
                 return;
 
             var maxReactiveAffixes = profile.Tier >= 6 ? 2 : 1;
-            if (profile.Tier >= 8 && ThreadSafeRandom.Next(0.0f, 1.0f) < 0.15f)
+            if (profile.Tier >= 8 && ThreadSafeRandom.Next(0.0f, 1.0f) < Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldTier8TripleAffixChance, 0.0f, 1.0f))
                 maxReactiveAffixes = 3;
 
             while (reactiveAffixes.Count > maxReactiveAffixes)
@@ -146,12 +146,15 @@ namespace ACE.Server.Factories
         private static void ApplyBashingShield(WorldObject wo)
         {
             wo.SetProperty(PropertyBool.IsBashingShield, true);
-            wo.SetProperty(PropertyFloat.ShieldBashingProcChance, 0.10);
-            wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, 0.10);
+            var procChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldBashingProcChance, 0.0f, 1.0f);
+            var healthPct = Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldBashingHealthPct, 0.01f, 1.0f);
+
+            wo.SetProperty(PropertyFloat.ShieldBashingProcChance, procChance);
+            wo.SetProperty(PropertyFloat.ShieldBashingHealthPct, healthPct);
             wo.IconOverlayId = MutatorOverlayBashing;
             ApplyLootUiEffect(wo, UiEffects.Bludgeoning);
 
-            wo.LongDesc = (wo.LongDesc ?? "") + "\n\nWith specialized Shield, this shield has a 10% chance on block or melee evade to bash the attacker. A bash deals bludgeoning damage based on shield armor level, capped at 10% of your current health, pushes monsters back 10 feet, and can interrupt monster spell windups. Cooldown: 8 seconds.";
+            wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nWith specialized Shield, this shield has a {procChance:P0} chance on block or melee evade to bash the attacker. A bash deals bludgeoning damage based on shield armor level, capped at {healthPct:P0} of your current health, pushes monsters back 10 feet, and can interrupt monster spell windups. Cooldown: 8 seconds.";
         }
 
         private static void ApplyProjectileReflectShield(WorldObject wo)
@@ -188,10 +191,11 @@ namespace ACE.Server.Factories
         /// This is only called by /testlootgen command
         /// The actual lootgen system doesn't use this.
         /// </summary>
-        private static WorldObject CreateArmor(TreasureDeath profile, bool isMagical, bool isArmor, int requestedTier = 0)
+        private static WorldObject CreateArmor(TreasureDeath profile, bool isMagical, bool isArmor, int requestedTier = 0, string forcedArmorMutator = null)
         {
             var itemType = isArmor ? TreasureItemType.Armor : TreasureItemType.Clothing;
             var treasureRoll = new TreasureRoll(itemType);
+            treasureRoll.ForcedWeaponMutator = forcedArmorMutator;
 
             if (isArmor)
             {
@@ -284,6 +288,11 @@ namespace ACE.Server.Factories
             TryMutateShieldAffixes(wo, profile, roll);
         }
 
+        private static float GetConfiguredTierChance(int tier, float baseChance, float tier6Chance, float tier7Chance, float tier8Chance)
+        {
+            var chance = tier >= 8 ? tier8Chance : tier >= 7 ? tier7Chance : tier >= 6 ? tier6Chance : baseChance;
+            return Math.Clamp(chance, 0.0f, 1.0f);
+        }
         private static void TryMutateBattlemageHelm(WorldObject wo, TreasureDeath profile, TreasureRoll roll)
         {
             if (!ACE.Server.Managers.DerpACEConfig.EnableCustomWeapons || wo == null || profile == null)
@@ -295,10 +304,10 @@ namespace ACE.Server.Factories
             if (!validLocs.HasFlag(EquipMask.HeadWear))
                 return;
 
-            if (!forced && profile.Tier < 5)
+            if (!forced && profile.Tier < ACE.Server.Managers.DerpACEConfig.BattlemageHelmMinTier)
                 return;
 
-            var rollChance = profile.Tier >= 8 ? 0.08f : profile.Tier >= 7 ? 0.06f : 0.04f;
+            var rollChance = GetConfiguredTierChance(profile.Tier, ACE.Server.Managers.DerpACEConfig.BattlemageHelmChanceT5, ACE.Server.Managers.DerpACEConfig.BattlemageHelmChanceT5, ACE.Server.Managers.DerpACEConfig.BattlemageHelmChanceT7, ACE.Server.Managers.DerpACEConfig.BattlemageHelmChanceT8);
             if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
                 return;
 
@@ -339,10 +348,10 @@ namespace ACE.Server.Factories
 
             var forced = IsForcedArmorMutator(roll, "armorsort");
 
-            if (!forced && profile.Tier < 4)
+            if (!forced && profile.Tier < ACE.Server.Managers.DerpACEConfig.ArmorSortMinTier)
                 return;
 
-            var rollChance = profile.Tier >= 8 ? 0.10f : profile.Tier >= 7 ? 0.08f : profile.Tier >= 6 ? 0.06f : 0.04f;
+            var rollChance = GetConfiguredTierChance(profile.Tier, ACE.Server.Managers.DerpACEConfig.ArmorSortChanceT4, ACE.Server.Managers.DerpACEConfig.ArmorSortChanceT6, ACE.Server.Managers.DerpACEConfig.ArmorSortChanceT7, ACE.Server.Managers.DerpACEConfig.ArmorSortChanceT8);
             if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
                 return;
 
@@ -422,10 +431,10 @@ namespace ACE.Server.Factories
             if (!validLocs.HasFlag(EquipMask.HandWear))
                 return;
 
-            if (!forced && profile.Tier < 4)
+            if (!forced && profile.Tier < ACE.Server.Managers.DerpACEConfig.CulinarianMinTier)
                 return;
 
-            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.08f)
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= Math.Clamp(ACE.Server.Managers.DerpACEConfig.CulinarianRollChance, 0.0f, 1.0f))
                 return;
 
             var restoreBonus = GetCulinarianRestoreBonus(profile);
@@ -448,7 +457,7 @@ namespace ACE.Server.Factories
             var tier = profile?.Tier ?? 1;
 
             if (tier >= 8)
-                return ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f ? 0.25 : 0.20;
+                return ThreadSafeRandom.Next(0.0f, 1.0f) < Math.Clamp(ACE.Server.Managers.DerpACEConfig.CulinarianTier8SuperiorBonusChance, 0.0f, 1.0f) ? 0.25 : 0.20;
 
             if (tier >= 6)
                 return 0.15;
@@ -472,10 +481,10 @@ namespace ACE.Server.Factories
             if (!validLocs.HasFlag(EquipMask.HandWear))
                 return;
 
-            if (!forced && profile.Tier < 4)
+            if (!forced && profile.Tier < ACE.Server.Managers.DerpACEConfig.AlchemistGloveMinTier)
                 return;
 
-            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.08f)
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= Math.Clamp(ACE.Server.Managers.DerpACEConfig.AlchemistGloveRollChance, 0.0f, 1.0f))
                 return;
 
             var potionBonus = GetAlchemistPotionBonus(profile);
@@ -549,7 +558,8 @@ namespace ACE.Server.Factories
             if (tier < 6)
                 return false;
 
-            var chance = tier >= 8 ? 0.25f : 0.15f;
+            var chance = tier >= 8 ? ACE.Server.Managers.DerpACEConfig.AlchemicalInstabilityChanceT8 : ACE.Server.Managers.DerpACEConfig.AlchemicalInstabilityChanceT6;
+            chance = Math.Clamp(chance, 0.0f, 1.0f);
             return ThreadSafeRandom.Next(0.0f, 1.0f) < chance;
         }
 
@@ -661,10 +671,10 @@ namespace ACE.Server.Factories
 
             var forced = TryResolveArmorMutator(roll?.ForcedWeaponMutator, out var forcedName) && IsDanceBootMutator(forcedName);
 
-            if (!forced && profile.Tier < 4)
+            if (!forced && profile.Tier < ACE.Server.Managers.DerpACEConfig.DanceBootMinTier)
                 return;
 
-            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= 0.06f)
+            if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= Math.Clamp(ACE.Server.Managers.DerpACEConfig.DanceBootRollChance, 0.0f, 1.0f))
                 return;
 
             var mutator = forced ? forcedName : RollDanceBootMutator();
@@ -782,11 +792,11 @@ namespace ACE.Server.Factories
                 return;
 
             // Only T5+ can roll unarmed damage (keep it rare/high-tier)
-            if (!forced && profile.Tier < 5)
+            if (!forced && profile.Tier < ACE.Server.Managers.DerpACEConfig.UnarmedArmorMinTier)
                 return;
 
             // 15% chance to roll unarmed damage properties
-            var rollChance = 0.15f;
+            var rollChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.UnarmedArmorRollChance, 0.0f, 1.0f);
             if (!forced && ThreadSafeRandom.Next(0.0f, 1.0f) >= rollChance)
                 return;
 
@@ -902,10 +912,11 @@ namespace ACE.Server.Factories
 
             // Rare off-axis defenses. The item's main value is unarmed damage,
             // offense, and melee defense; missile/magic defense should be a bonus roll.
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            var offAxisDefenseChance = Math.Clamp(ACE.Server.Managers.DerpACEConfig.UnarmedArmorOffAxisDefenseChance, 0.0f, 1.0f);
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < offAxisDefenseChance)
                 wo.WeaponMissileDefense = MissileMagicDefense.Roll(profile.Tier);
 
-            if (ThreadSafeRandom.Next(0.0f, 1.0f) < 0.10f)
+            if (ThreadSafeRandom.Next(0.0f, 1.0f) < offAxisDefenseChance)
                 wo.WeaponMagicDefense = MissileMagicDefense.Roll(profile.Tier);
 
             // Update item name and description

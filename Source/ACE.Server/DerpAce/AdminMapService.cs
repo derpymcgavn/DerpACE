@@ -12,10 +12,8 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Drawing.Imaging;
-
 using log4net;
 using Microsoft.EntityFrameworkCore;
-
 using ACE.DatLoader;
 using ACE.DatLoader.FileTypes;
 using ACE.Database;
@@ -35,19 +33,16 @@ using ACE.Server.Network.Enum;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.Network.Managers;
 using ACE.Server.WorldObjects;
-
 namespace ACE.Server.DerpAce
 {
     public static class AdminMapService
     {
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
-
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = false
         };
-
         private static HttpListener listener;
         private static CancellationTokenSource cancelSource;
         private static readonly ConcurrentDictionary<uint, AdminDungeonMap> DungeonMapCache = new ConcurrentDictionary<uint, AdminDungeonMap>();
@@ -62,12 +57,10 @@ namespace ACE.Server.DerpAce
         private const int SnapshotFeedEntries = 18;
         private const string SessionCookieName = "DerpACEAdminMapSession";
         private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
-
         public static void RecordGeneralChat(string sender, string message)
         {
             if (string.IsNullOrWhiteSpace(sender) || string.IsNullOrWhiteSpace(message))
                 return;
-
             lock (FeedLock)
             {
                 ChatFeed.Add(new AdminChatFeedEntry
@@ -77,16 +70,13 @@ namespace ACE.Server.DerpAce
                     Sender = sender.TrimStart('+'),
                     Message = message.Trim()
                 });
-
                 TrimFeed(ChatFeed);
             }
         }
-
         public static void RecordRareFind(string playerName, string itemName, uint weenieClassId, int tier, int chance, int luck, string corpseName, string location, string landblock)
         {
             if (string.IsNullOrWhiteSpace(playerName) || string.IsNullOrWhiteSpace(itemName))
                 return;
-
             lock (FeedLock)
             {
                 RareFeed.Add(new AdminRareFeedEntry
@@ -102,25 +92,19 @@ namespace ACE.Server.DerpAce
                     Location = location,
                     Landblock = landblock
                 });
-
                 TrimFeed(RareFeed);
             }
         }
-
         public static void Start()
         {
             var config = DerpAceConfigManager.Config;
-
             if (!config.AdminMapEnabled)
                 return;
-
             if (listener != null)
                 return;
-
             var host = string.IsNullOrWhiteSpace(config.AdminMapHost) ? "127.0.0.1" : config.AdminMapHost.Trim();
             var port = Math.Clamp(config.AdminMapPort, 1, 65535);
             var prefix = $"http://{host}:{port}/";
-
             try
             {
                 cancelSource = new CancellationTokenSource();
@@ -128,7 +112,6 @@ namespace ACE.Server.DerpAce
                 listener.Prefixes.Add(prefix);
                 listener.Start();
                 _ = Task.Run(() => ListenLoop(cancelSource.Token));
-
                 log.Info($"[DerpACE AdminMap] Listening on {prefix}");
             }
             catch (Exception ex)
@@ -137,7 +120,6 @@ namespace ACE.Server.DerpAce
                 Stop();
             }
         }
-
         public static void Stop()
         {
             try
@@ -157,19 +139,16 @@ namespace ACE.Server.DerpAce
                 cancelSource = null;
             }
         }
-
         public static void Restart()
         {
             Stop();
             Start();
         }
-
         private static async Task ListenLoop(CancellationToken token)
         {
             while (!token.IsCancellationRequested && listener?.IsListening == true)
             {
                 HttpListenerContext context = null;
-
                 try
                 {
                     context = await listener.GetContextAsync();
@@ -190,19 +169,16 @@ namespace ACE.Server.DerpAce
                 }
             }
         }
-
         private static void HandleRequest(HttpListenerContext context)
         {
             try
             {
                 var path = context.Request.Url?.AbsolutePath?.TrimEnd('/') ?? "";
-
                 if (path.Length == 0 || path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
                 {
                     WriteText(context, BuildIndexHtml(), "text/html; charset=utf-8");
                     return;
                 }
-
                 if (path.Equals("/boss-mechanics", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -211,7 +187,6 @@ namespace ACE.Server.DerpAce
                         WriteText(context, "Admin map login required.", "text/plain; charset=utf-8");
                         return;
                     }
-
                     WriteText(context, BuildBossMechanicsHelpHtml(), "text/html; charset=utf-8");
                     return;
                 }
@@ -252,7 +227,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Use GET or POST for loot config." });
                     return;
                 }
-
                 if (path.Equals("/api/loot/tiers", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -261,7 +235,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Admin map login required." });
                         return;
                     }
-
                     if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
                         WriteJson(context, BuildLootTierSnapshot());
                     else if (context.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
@@ -270,7 +243,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Use GET or POST for loot tiers." });
                     return;
                 }
-
                 if (path.Equals("/api/loot/spell-weights", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -279,7 +251,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Admin map login required." });
                         return;
                     }
-
                     var pool = context.Request.QueryString["pool"] ?? "armor";
                     if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
                         WriteJson(context, BuildLootSpellWeightSnapshot(pool));
@@ -289,7 +260,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Use GET or POST for loot spell weights." });
                     return;
                 }
-
                 if (path.Equals("/api/loot/wcid-weights", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -298,7 +268,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Admin map login required." });
                         return;
                     }
-
                     var pool = context.Request.QueryString["pool"] ?? "melee";
                     if (context.Request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase))
                         WriteJson(context, BuildLootWcidWeightSnapshot(pool));
@@ -308,7 +277,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Use GET or POST for loot WCID weights." });
                     return;
                 }
-
                 if (path.Equals("/api/loot/simulate", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -324,7 +292,6 @@ namespace ACE.Server.DerpAce
                     WriteJson(context, HandleLootSimulation(ReadJsonBody<AdminLootSimulationRequest>(context)));
                     return;
                 }
-
                 if (path.Equals("/api/spells/catalog", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -333,7 +300,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Admin map login required." });
                         return;
                     }
-
                     var spells = CustomSpellManager.GetWorkshopCatalog(out var nextUnusedId);
                     WriteJson(context, new
                     {
@@ -403,7 +369,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Admin map login required." });
                         return;
                     }
-
                     WriteJson(context, BuildSoundTableSnapshot(context.Request.QueryString["did"], context.Request.QueryString["wcid"]));
                     return;
                 }
@@ -415,7 +380,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Admin map login required." });
                         return;
                     }
-
                     if (!TryWriteDatWave(context, context.Request.QueryString["did"]))
                     {
                         context.Response.StatusCode = 404;
@@ -515,7 +479,6 @@ namespace ACE.Server.DerpAce
                     });
                     return;
                 }
-
                 if (path.Equals("/api/login", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
@@ -524,18 +487,15 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { ok = false, error = "Use POST for login." });
                         return;
                     }
-
                     WriteJson(context, HandleLogin(context, ReadJsonBody<AdminMapLoginRequest>(context)));
                     return;
                 }
-
                 if (path.Equals("/api/logout", StringComparison.OrdinalIgnoreCase))
                 {
                     HandleLogout(context);
                     WriteJson(context, new { ok = true });
                     return;
                 }
-
                 if (path.Equals("/api/players", StringComparison.OrdinalIgnoreCase))
                 {
                     var session = GetValidSession(context);
@@ -546,7 +506,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Map login required." });
                         return;
                     }
-
                     WriteJson(context, BuildPlayerSnapshot(session, isAdmin));
                     return;
                 }
@@ -558,18 +517,15 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Admin map login required." });
                         return;
                     }
-
                     if (!TryGetLandblock(context.Request.QueryString["landblock"], out var landblock))
                     {
                         context.Response.StatusCode = 400;
                         WriteJson(context, new { error = "Missing or invalid landblock." });
                         return;
                     }
-
                     WriteJson(context, BuildDungeonSnapshot(landblock));
                     return;
                 }
-
                 if (path.Equals("/api/inventory", StringComparison.OrdinalIgnoreCase))
                 {
                     var session = GetValidSession(context);
@@ -580,14 +536,12 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Map login required." });
                         return;
                     }
-
                     if (!TryGetPlayerGuid(context.Request.QueryString["player"], out var playerGuid))
                     {
                         context.Response.StatusCode = 400;
                         WriteJson(context, new { error = "Missing or invalid player." });
                         return;
                     }
-
                     var player = PlayerManager.GetOnlinePlayer(playerGuid);
                     if (!isAdmin && player?.Account?.AccountId != session.AccountId)
                     {
@@ -595,7 +549,6 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Players may only view inventory belonging to their own account." });
                         return;
                     }
-
                     WriteJson(context, BuildInventorySnapshot(playerGuid, isAdmin));
                     return;
                 }
@@ -607,18 +560,15 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Admin map login required." });
                         return;
                     }
-
                     if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = 405;
                         WriteJson(context, new { error = "Use POST for inventory edits." });
                         return;
                     }
-
                     WriteJson(context, HandleInventoryItemEdit(ReadJsonBody<AdminInventoryItemEditRequest>(context)));
                     return;
                 }
-
                 if (path.Equals("/api/inventory/property", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -644,18 +594,15 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Admin map login required." });
                         return;
                     }
-
                     if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = 405;
                         WriteJson(context, new { error = "Use POST for inventory edits." });
                         return;
                     }
-
                     WriteJson(context, HandleInventoryItemDelete(ReadJsonBody<AdminInventoryItemDeleteRequest>(context)));
                     return;
                 }
-
                 if (path.Equals("/api/player/action", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -664,18 +611,15 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Admin map login required." });
                         return;
                     }
-
                     if (!string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = 405;
                         WriteJson(context, new { error = "Use POST for player actions." });
                         return;
                     }
-
                     WriteJson(context, HandlePlayerAction(ReadJsonBody<AdminPlayerActionRequest>(context)));
                     return;
                 }
-
                 if (path.Equals("/api/loc", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -684,11 +628,9 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Admin map login required." });
                         return;
                     }
-
                     WriteJson(context, HandleMapLoc(context));
                     return;
                 }
-
                 if (path.Equals("/api/watch", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -697,11 +639,9 @@ namespace ACE.Server.DerpAce
                         WriteJson(context, new { error = "Admin map login required." });
                         return;
                     }
-
                     WriteJson(context, BuildWatchSnapshot(context.Request.QueryString["player"]));
                     return;
                 }
-
                 if (path.Equals("/assets/dereth-map", StringComparison.OrdinalIgnoreCase))
                 {
                     if (GetValidSession(context) == null && !IsAuthorized(context))
@@ -710,7 +650,6 @@ namespace ACE.Server.DerpAce
                         WriteText(context, "Map login required.", "text/plain; charset=utf-8");
                         return;
                     }
-
                     if (!TryWriteMapImage(context))
                     {
                         context.Response.StatusCode = 404;
@@ -718,7 +657,6 @@ namespace ACE.Server.DerpAce
                     }
                     return;
                 }
-
                 if (path.Equals("/assets/icon", StringComparison.OrdinalIgnoreCase))
                 {
                     // Icons are static game assets; native image requests do not need map authorization.
@@ -729,7 +667,6 @@ namespace ACE.Server.DerpAce
                     }
                     return;
                 }
-
                 context.Response.StatusCode = 404;
                 WriteText(context, "Not found", "text/plain; charset=utf-8");
             }
@@ -743,7 +680,6 @@ namespace ACE.Server.DerpAce
                 }
             }
         }
-
         private static object BuildBossProfileList()
         {
             using var db = new ShardDbContext();
@@ -761,7 +697,6 @@ namespace ACE.Server.DerpAce
                 ModifiedAt = row.ModifiedAt,
                 IsTemplate = false
             }).ToList();
-
             var databaseNames = rows.Select(x => x.ProfileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var databaseWcids = rows.Select(x => x.WeenieClassId).ToHashSet();
             foreach (var template in LoadBossFileTemplates().Where(x => !databaseNames.Contains(x.ProfileName)))
@@ -782,15 +717,12 @@ namespace ACE.Server.DerpAce
                     TemplateError = template.Error
                 });
             }
-
             return new { ok = true, profiles = profiles.OrderBy(x => x.Profile).ToList() };
         }
-
         private static object GetBossProfile(string profileValue)
         {
             if (!TryNormalizeBossProfileName(profileValue, out var profileName, out var error))
                 return new { ok = false, error };
-
             using var db = new ShardDbContext();
             var row = db.BossMechanicProfile.AsNoTracking().FirstOrDefault(x => x.ProfileName == profileName);
             if (row != null)
@@ -816,13 +748,11 @@ namespace ACE.Server.DerpAce
                     sourceFile = (string)null
                 };
             }
-
             var template = LoadBossFileTemplates().FirstOrDefault(x => string.Equals(x.ProfileName, profileName, StringComparison.OrdinalIgnoreCase));
             if (template == null)
                 return new { ok = false, error = "Boss profile not found." };
             if (!string.IsNullOrWhiteSpace(template.Error))
                 return new { ok = false, error = $"Template '{profileName}' is invalid: {template.Error}" };
-
             var conflict = db.BossMechanicProfile.Any(x => x.WeenieClassId == template.WeenieClassId);
             return new
             {
@@ -844,14 +774,12 @@ namespace ACE.Server.DerpAce
                 sourceFile = template.SourceFile
             };
         }
-
         private static List<AdminBossFileTemplate> LoadBossFileTemplates()
         {
             var templates = new List<AdminBossFileTemplate>();
             var folder = Path.Combine(AppContext.BaseDirectory, "Data", "DerpACE", "BossMechanics");
             if (!Directory.Exists(folder))
                 return templates;
-
             foreach (var path in Directory.EnumerateFiles(folder, "*.json"))
             {
                 var item = new AdminBossFileTemplate
@@ -891,7 +819,6 @@ namespace ACE.Server.DerpAce
                         item.DraftJson = json;
                         item.PublishedJson = json;
                     }
-
                     var draft = BossMechanicManager.Deserialize(item.DraftJson ?? item.PublishedJson);
                     var errors = BossMechanicManager.Validate(draft);
                     if (errors.Count > 0)
@@ -918,11 +845,9 @@ namespace ACE.Server.DerpAce
                 return new { ok = false, error = "Boss profile request is required." };
             if (!TryNormalizeBossProfileName(request.Profile, out var profileName, out var nameError))
                 return new { ok = false, error = nameError };
-
             var action = request.Action?.Trim().ToLowerInvariant();
             using var db = new ShardDbContext();
             var row = db.BossMechanicProfile.FirstOrDefault(x => x.ProfileName == profileName);
-
             if (action == "create")
             {
                 if (row != null)
@@ -934,7 +859,6 @@ namespace ACE.Server.DerpAce
                 var weenie = DatabaseManager.World.GetWeenie(request.WeenieClassId);
                 if (weenie == null || (WeenieType)weenie.Type != WeenieType.Creature)
                     return new { ok = false, error = $"WCID {request.WeenieClassId} is not an existing creature." };
-
                 var document = string.IsNullOrWhiteSpace(request.Json)
                     ? BossMechanicManager.NewDocument(request.WeenieClassId)
                     : BossMechanicManager.Deserialize(request.Json);
@@ -943,7 +867,6 @@ namespace ACE.Server.DerpAce
                 var errors = BossMechanicManager.Validate(document);
                 if (errors.Count > 0)
                     return new { ok = false, error = string.Join(" ", errors), errors };
-
                 row = new BossMechanicProfile
                 {
                     ProfileName = profileName,
@@ -959,21 +882,17 @@ namespace ACE.Server.DerpAce
                 log.Warn($"[DerpACE AdminMap] {modifiedBy} created boss profile {profileName} for WCID {row.WeenieClassId}.");
                 return new { ok = true, message = $"Created draft '{profileName}' for {GetBossWeenieName(weenie, row.WeenieClassId)} ({row.WeenieClassId}).", profile = profileName };
             }
-
             if (row == null)
                 return new { ok = false, error = "Boss profile not found." };
-
             if (action == "remove")
             {
                 if (row.Enabled)
                     return new { ok = false, error = "Disable this profile before removing it." };
-
                 var hasActiveBoss = LandblockManager.GetLoadedLandblocks()
                     .Any(landblock => landblock.GetAllWorldObjectsForDiagnostics().OfType<Creature>()
                         .Any(creature => creature.WeenieClassId == row.WeenieClassId));
                 if (hasActiveBoss)
                     return new { ok = false, error = "Despawn every active boss using this profile before removing it." };
-
                 var removedWcid = row.WeenieClassId;
                 db.BossMechanicProfile.Remove(row);
                 db.SaveChanges();
@@ -981,7 +900,6 @@ namespace ACE.Server.DerpAce
                 log.Warn($"[DerpACE AdminMap] {modifiedBy} removed boss profile {profileName} for WCID {removedWcid}.");
                 return new { ok = true, message = $"Removed boss profile '{profileName}'. Its creature weenie was not deleted." };
             }
-
             switch (action)
             {
                 case "validate":
@@ -992,7 +910,6 @@ namespace ACE.Server.DerpAce
                     return validateErrors.Count == 0
                         ? new { ok = true, message = "Draft is valid and ready to publish.", errors = validateErrors }
                         : new { ok = false, message = "Draft has validation errors.", errors = validateErrors };
-
                 case "save":
                     if (string.IsNullOrWhiteSpace(request.Json))
                         return new { ok = false, error = "Draft JSON is required." };
@@ -1005,7 +922,6 @@ namespace ACE.Server.DerpAce
                     row.DraftJson = BossMechanicManager.Serialize(document);
                     row.DraftRevision++;
                     break;
-
                 case "publish":
                     var publishDocument = BossMechanicManager.Deserialize(row.DraftJson);
                     var publishErrors = BossMechanicManager.Validate(publishDocument);
@@ -1019,7 +935,6 @@ namespace ACE.Server.DerpAce
                     row.PublishedRevision = row.DraftRevision;
                     row.Enabled = true;
                     break;
-
                 case "rollback":
                     if (string.IsNullOrWhiteSpace(row.PreviousJson))
                         return new { ok = false, error = "No previous published revision exists." };
@@ -1027,24 +942,20 @@ namespace ACE.Server.DerpAce
                     (row.PublishedRevision, row.PreviousRevision) = (row.PreviousRevision, row.PublishedRevision);
                     row.Enabled = true;
                     break;
-
                 case "set-enabled":
                     row.Enabled = request.Enabled;
                     if (row.Enabled && string.IsNullOrWhiteSpace(row.PublishedJson))
                         return new { ok = false, error = "Publish a valid revision before enabling this profile." };
                     break;
-
                 case "restore-published":
                     if (string.IsNullOrWhiteSpace(row.PublishedJson))
                         return new { ok = false, error = "This profile has no published revision." };
                     row.DraftJson = row.PublishedJson;
                     row.DraftRevision++;
                     break;
-
                 default:
                     return new { ok = false, error = "Supported actions are create, validate, save, publish, rollback, set-enabled, restore-published, and remove." };
             }
-
             row.ModifiedBy = modifiedBy;
             row.ModifiedAt = DateTime.UtcNow;
             db.SaveChanges();
@@ -1063,7 +974,6 @@ namespace ACE.Server.DerpAce
                 }
             };
         }
-
         private static object BuildActiveBossList()
         {
             using var db = new ShardDbContext();
@@ -1091,14 +1001,12 @@ namespace ACE.Server.DerpAce
             }
             return new { ok = true, bosses };
         }
-
         private static object QueueBossSpawn(AdminBossSpawnRequest request, string adminName)
         {
             if (request == null)
                 return new { ok = false, error = "Boss spawn request is required." };
             if (!TryNormalizeBossProfileName(request.Profile, out var profileName, out var profileError))
                 return new { ok = false, error = profileError };
-
             using var db = new ShardDbContext();
             var row = db.BossMechanicProfile.AsNoTracking().FirstOrDefault(x => x.ProfileName == profileName);
             if (row == null)
@@ -1112,7 +1020,6 @@ namespace ACE.Server.DerpAce
             var weenie = DatabaseManager.World.GetWeenie(row.WeenieClassId);
             if (weenie == null || (WeenieType)weenie.Type != WeenieType.Creature)
                 return new { ok = false, error = $"Boss WCID {row.WeenieClassId} is not a loaded creature." };
-
             Position spawnPosition;
             string destination;
             if (!string.IsNullOrWhiteSpace(request.PlayerGuid))
@@ -1133,7 +1040,6 @@ namespace ACE.Server.DerpAce
             }
             else
                 return new { ok = false, error = "Choose an online player or provide a full LOC string." };
-
             spawnPosition = new Position(spawnPosition);
             spawnPosition.LandblockId = new LandblockId(spawnPosition.GetCell());
             var count = Math.Clamp(request.Count <= 0 ? 1 : request.Count, 1, 10);
@@ -1162,15 +1068,12 @@ namespace ACE.Server.DerpAce
                 }
                 log.Warn($"[DerpACE AdminMap] {adminName} spawned {spawned}/{count} '{profileName}' boss creature(s) {destination}.");
             }));
-
             return new { ok = true, message = $"Queued {count} x {profileName} ({row.WeenieClassId}) {destination}." };
         }
-
         private static object QueueBossDespawn(AdminBossDespawnRequest request, string adminName)
         {
             if (!TryGetPlayerGuid(request?.Guid, out var guid))
                 return new { ok = false, error = "Boss GUID is missing or invalid." };
-
             Creature boss = null;
             foreach (var landblock in LandblockManager.GetLoadedLandblocks())
             {
@@ -1180,11 +1083,9 @@ namespace ACE.Server.DerpAce
             }
             if (boss == null)
                 return new { ok = false, error = "That boss is no longer active." };
-
             using var db = new ShardDbContext();
             if (!db.BossMechanicProfile.Any(x => x.WeenieClassId == boss.WeenieClassId))
                 return new { ok = false, error = "The selected creature is not assigned to a boss profile." };
-
             var captured = boss;
             var bossName = boss.Name;
             WorldManager.EnqueueAction(new ActionEventDelegate(() =>
@@ -1198,7 +1099,6 @@ namespace ACE.Server.DerpAce
             }));
             return new { ok = true, message = $"Queued despawn for {bossName} (0x{guid:X8})." };
         }
-
         private static string GetBossWeenieName(ACE.Database.Models.World.Weenie weenie, uint wcid)
         {
             return weenie?.WeeniePropertiesString?.FirstOrDefault(x => x.Type == (int)PropertyString.Name)?.Value
@@ -1242,19 +1142,14 @@ namespace ACE.Server.DerpAce
             var session = GetValidSession(context);
             if (session?.AccessLevel >= AccessLevel.Admin)
                 return true;
-
             var token = DerpAceConfigManager.Config.AdminMapToken;
-
             if (string.IsNullOrWhiteSpace(token))
                 return false;
-
             var provided = context.Request.Headers["X-DerpACE-Map-Token"];
             if (string.IsNullOrWhiteSpace(provided))
                 provided = context.Request.QueryString["token"];
-
             return string.Equals(provided, token, StringComparison.Ordinal);
         }
-
         private static object HandleLogin(HttpListenerContext context, AdminMapLoginRequest request)
         {
             if (request == null || string.IsNullOrWhiteSpace(request.Account) || string.IsNullOrWhiteSpace(request.Password))
@@ -1262,7 +1157,6 @@ namespace ACE.Server.DerpAce
                 context.Response.StatusCode = 400;
                 return new { ok = false, error = "Account and password are required." };
             }
-
             var accountName = request.Account.Trim().ToLowerInvariant();
             var account = DatabaseManager.Authentication.GetAccountByName(accountName);
             if (account == null || !account.PasswordMatches(request.Password))
@@ -1270,20 +1164,17 @@ namespace ACE.Server.DerpAce
                 context.Response.StatusCode = 401;
                 return new { ok = false, error = "Invalid account or password." };
             }
-
             var accessLevel = (AccessLevel)account.AccessLevel;
             if (account.BanExpireTime.HasValue && DateTime.UtcNow < account.BanExpireTime.Value)
             {
                 context.Response.StatusCode = 403;
                 return new { ok = false, error = "That account is banned." };
             }
-
             if (accessLevel >= AccessLevel.Admin && (NetworkManager.Find(account.AccountName) != null || NetworkManager.Find(account.AccountId) != null))
             {
                 context.Response.StatusCode = 409;
                 return new { ok = false, error = "Log out of the game client before using that account for the admin map." };
             }
-
             var token = CreateSessionToken();
             var session = new AdminMapSession
             {
@@ -1292,12 +1183,9 @@ namespace ACE.Server.DerpAce
                 AccessLevel = accessLevel,
                 ExpiresUtc = DateTime.UtcNow.Add(SessionLifetime)
             };
-
             Sessions[token] = session;
             SetSessionCookie(context, token, session.ExpiresUtc);
-
             log.Info($"[DerpACE AdminMap] {account.AccountName} logged in from {context.Request.RemoteEndPoint?.Address}");
-
             return new
             {
                 ok = true,
@@ -1308,52 +1196,42 @@ namespace ACE.Server.DerpAce
                 sessionToken = token
             };
         }
-
         private static void HandleLogout(HttpListenerContext context)
         {
             var token = GetSessionToken(context);
             if (!string.IsNullOrWhiteSpace(token))
                 Sessions.TryRemove(token, out _);
-
             ClearSessionCookie(context);
         }
-
         private static AdminMapSession GetValidSession(HttpListenerContext context)
         {
             var token = GetSessionToken(context);
             if (string.IsNullOrWhiteSpace(token))
                 return null;
-
             if (!Sessions.TryGetValue(token, out var session))
                 return null;
-
             if (session.ExpiresUtc <= DateTime.UtcNow)
             {
                 Sessions.TryRemove(token, out _);
                 return null;
             }
-
             if (session.AccessLevel >= AccessLevel.Admin && (NetworkManager.Find(session.AccountName) != null || NetworkManager.Find(session.AccountId) != null))
             {
                 Sessions.TryRemove(token, out _);
                 return null;
             }
-
             session.ExpiresUtc = DateTime.UtcNow.Add(SessionLifetime);
             return session;
         }
-
         private static string GetSessionToken(HttpListenerContext context)
         {
             // Explicit session tokens from links/fetch calls should win over stale browser cookies.
             var token = context?.Request?.Headers["X-DerpACE-Map-Session"];
             if (!string.IsNullOrWhiteSpace(token))
                 return token;
-
             token = context?.Request?.QueryString["session"];
             if (!string.IsNullOrWhiteSpace(token))
                 return token;
-
             return context?.Request?.Cookies?[SessionCookieName]?.Value;
         }
         private static string CreateSessionToken()
@@ -1361,10 +1239,8 @@ namespace ACE.Server.DerpAce
             var bytes = new byte[32];
             using (var rng = RandomNumberGenerator.Create())
                 rng.GetBytes(bytes);
-
             return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
-
         private static void SetSessionCookie(HttpListenerContext context, string token, DateTime expiresUtc)
         {
             var cookie = new Cookie(SessionCookieName, token)
@@ -1373,10 +1249,8 @@ namespace ACE.Server.DerpAce
                 Path = "/",
                 Expires = expiresUtc
             };
-
             context.Response.Cookies.Add(cookie);
         }
-
         private static void ClearSessionCookie(HttpListenerContext context)
         {
             context.Response.Cookies.Add(new Cookie(SessionCookieName, "")
@@ -1386,7 +1260,6 @@ namespace ACE.Server.DerpAce
                 Expires = DateTime.UtcNow.AddDays(-1)
             });
         }
-
         private static AdminMapSnapshot BuildPlayerSnapshot(AdminMapSession session, bool isAdmin)
         {
             var config = DerpAceConfigManager.Config;
@@ -1394,7 +1267,6 @@ namespace ACE.Server.DerpAce
             var players = new List<AdminMapPlayer>();
             var allOnline = PlayerManager.GetAllOnline();
             HashSet<uint> playerVisibleGuids = null;
-
             if (!isAdmin)
             {
                 playerVisibleGuids = new HashSet<uint>();
@@ -1403,30 +1275,24 @@ namespace ACE.Server.DerpAce
                     playerVisibleGuids.Add(accountPlayer.Guid.Full);
                     if (accountPlayer.Fellowship?.FellowshipMembers == null)
                         continue;
-
                     foreach (var member in accountPlayer.Fellowship.FellowshipMembers.Values)
                         if (member.TryGetTarget(out var fellow) && fellow != null)
                             playerVisibleGuids.Add(fellow.Guid.Full);
                 }
             }
-
             foreach (var player in allOnline)
             {
                 if (player?.Location == null)
                     continue;
-
                 if (!isAdmin && !playerVisibleGuids.Contains(player.Guid.Full))
                     continue;
-
                 if (isAdmin && !config.AdminMapShowAdmins && (player.IsAdmin || player.IsSentinel || player.IsEnvoy || player.IsArch || player.IsPsr))
                     continue;
-
                 visiblePlayers.Add(player);
                 var mapPlayer = BuildPlayer(player);
                 mapPlayer.IsOwnedBySession = !isAdmin && player.Account?.AccountId == session.AccountId;
                 players.Add(mapPlayer);
             }
-
             return new AdminMapSnapshot
             {
                 ServerTimeUtc = DateTime.UtcNow,
@@ -1463,35 +1329,28 @@ namespace ACE.Server.DerpAce
                 };
             }
         }
-
         private static void TrimFeed<T>(List<T> feed)
         {
             if (feed.Count > MaxFeedEntries)
                 feed.RemoveRange(0, feed.Count - MaxFeedEntries);
         }
-
         private static AdminDungeonSnapshot BuildDungeonSnapshot(uint landblock)
         {
             var config = DerpAceConfigManager.Config;
             var map = DungeonMapCache.GetOrAdd(landblock & 0xFFFF0000, BuildDungeonMap);
             var visiblePlayers = new List<Player>();
             var players = new List<AdminDungeonPlayer>();
-
             foreach (var player in PlayerManager.GetAllOnline())
             {
                 if (player?.Location == null)
                     continue;
-
                 if ((player.Location.Cell & 0xFFFF0000) != (landblock & 0xFFFF0000))
                     continue;
-
                 if (!config.AdminMapShowAdmins && (player.IsAdmin || player.IsSentinel || player.IsEnvoy || player.IsArch || player.IsPsr))
                     continue;
-
                 visiblePlayers.Add(player);
                 players.Add(BuildDungeonPlayer(player));
             }
-
             return new AdminDungeonSnapshot
             {
                 Landblock = $"0x{landblock & 0xFFFF0000:X8}",
@@ -1508,16 +1367,13 @@ namespace ACE.Server.DerpAce
                 Blips = BuildNearbyMapBlips(visiblePlayers, true, landblock)
             };
         }
-
         private static object BuildWatchSnapshot(string playerGuidValue)
         {
             if (!TryGetPlayerGuid(playerGuidValue, out var playerGuid))
                 return new { ok = false, error = "Missing or invalid player." };
-
             var target = PlayerManager.GetOnlinePlayer(playerGuid);
             if (target?.Location == null)
                 return new { ok = false, error = "Player is not online." };
-
             var radius = CreatureBlipRadius;
             var radiusSq = radius * radius;
             var blips = new List<AdminWatchBlip>
@@ -1526,45 +1382,34 @@ namespace ACE.Server.DerpAce
             };
             var seen = new HashSet<uint> { target.Guid.Full };
             var config = DerpAceConfigManager.Config;
-
             foreach (var player in PlayerManager.GetAllOnline())
             {
                 if (player?.Location == null || player == target)
                     continue;
-
                 if (!config.AdminMapShowAdmins && (player.IsAdmin || player.IsSentinel || player.IsEnvoy || player.IsArch || player.IsPsr))
                     continue;
-
                 if (target.Location.Distance2DSquared(player.Location) > radiusSq)
                     continue;
-
                 if (seen.Add(player.Guid.Full))
                     blips.Add(BuildWatchBlip(player, target, "player", "White"));
             }
-
             if (target.CurrentLandblock != null)
             {
                 foreach (var worldObject in target.CurrentLandblock.GetAllWorldObjectsForDiagnostics())
                 {
                     if (worldObject == null || worldObject == target || worldObject is Player || worldObject.Location == null)
                         continue;
-
                     if (!TryGetMapBlipKind(worldObject, out var kind, out var radarColor))
                         continue;
-
                     if (worldObject is Creature creature && (!creature.IsAlive || creature.Teleporting))
                         continue;
-
                     if (target.Location.Distance2DSquared(worldObject.Location) > radiusSq)
                         continue;
-
                     if (!seen.Add(worldObject.Guid.Full))
                         continue;
-
                     blips.Add(BuildWatchBlip(worldObject, target, kind, radarColor.ToString()));
                 }
             }
-
             return new AdminWatchSnapshot
             {
                 Ok = true,
@@ -1578,20 +1423,15 @@ namespace ACE.Server.DerpAce
                     .ToList()
             };
         }
-
         private static AdminInventorySnapshot BuildInventorySnapshot(uint playerGuid, bool editable = true)
         {
             var player = PlayerManager.GetOnlinePlayer(playerGuid);
             if (player == null)
                 return AdminInventorySnapshot.Fail("Player is not online.");
-
             var items = new List<AdminInventoryItem>();
-
             foreach (var item in player.EquippedObjects.Values.OrderBy(i => i.CurrentWieldedLocation ?? 0).ThenBy(i => i.Name))
                 items.Add(BuildInventoryItem(item, "Equipped", null, true));
-
             AddInventoryItems(items, player, player.Inventory.Values, "Main Pack", 0);
-
             return new AdminInventorySnapshot
             {
                 PlayerName = player.Name,
@@ -1602,18 +1442,15 @@ namespace ACE.Server.DerpAce
                 Items = items
             };
         }
-
         private static void AddInventoryItems(List<AdminInventoryItem> items, Player player, IEnumerable<WorldObject> inventory, string containerName, int depth)
         {
             foreach (var item in inventory.OrderBy(i => i.PlacementPosition ?? 0).ThenBy(i => i.Name))
             {
                 items.Add(BuildInventoryItem(item, containerName, item.ContainerId, false, depth));
-
                 if (item is Container container)
                     AddInventoryItems(items, player, container.Inventory.Values, item.Name, depth + 1);
             }
         }
-
         private static AdminInventoryItem BuildInventoryItem(WorldObject item, string containerName, uint? containerId, bool equipped, int depth = 0)
         {
             return new AdminInventoryItem
@@ -1668,7 +1505,6 @@ namespace ACE.Server.DerpAce
                 Properties = BuildItemProperties(item)
             };
         }
-
         private static Dictionary<string, List<AdminItemProperty>> BuildItemProperties(WorldObject item)
         {
             var result = new Dictionary<string, List<AdminItemProperty>>(StringComparer.OrdinalIgnoreCase);
@@ -1681,7 +1517,6 @@ namespace ACE.Server.DerpAce
             AddItemProperties(result, "string", item.GetAllPropertyString());
             return result;
         }
-
         private static void AddItemProperties<TKey, TValue>(Dictionary<string, List<AdminItemProperty>> result, string family, Dictionary<TKey, TValue> values) where TKey : Enum
         {
             result[family] = values
@@ -1698,62 +1533,52 @@ namespace ACE.Server.DerpAce
         {
             if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out var foundInContainer, out var rootOwner, out _, out var error))
                 return new { ok = false, error };
-
             var oldEncumbrance = item.EncumbranceVal ?? 0;
             var oldValue = item.Value ?? 0;
             var changed = false;
-
             if (request.StackSize.HasValue)
             {
                 if (!(item is Stackable))
                     return new { ok = false, error = "This item is not stackable." };
-
                 var max = item.MaxStackSize ?? ushort.MaxValue;
                 var next = Math.Clamp(request.StackSize.Value, 1, max);
                 item.SetStackSize(next);
                 player.Session.Network.EnqueueSend(new GameMessageSetStackSize(item));
                 changed = true;
             }
-
             if (request.Value.HasValue)
             {
                 item.Value = Math.Max(0, request.Value.Value);
                 player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.Value, item.Value ?? 0));
                 changed = true;
             }
-
             if (request.Encumbrance.HasValue)
             {
                 item.EncumbranceVal = Math.Max(0, request.Encumbrance.Value);
                 player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.EncumbranceVal, item.EncumbranceVal ?? 0));
                 changed = true;
             }
-
             if (request.Workmanship.HasValue)
             {
                 item.ItemWorkmanship = Math.Max(0, request.Workmanship.Value);
                 player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, PropertyInt.ItemWorkmanship, item.ItemWorkmanship ?? 0));
                 changed = true;
             }
-
             if (request.Name != null)
             {
                 var name = request.Name.Trim();
                 if (name.Length == 0)
                     return new { ok = false, error = "Item name cannot be blank." };
-
                 item.Name = name.Length > 120 ? name.Substring(0, 120) : name;
                 player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyString(item, PropertyString.Name, item.Name));
                 changed = true;
             }
-
             if (request.LongDesc != null)
             {
                 item.LongDesc = string.IsNullOrWhiteSpace(request.LongDesc) ? null : request.LongDesc.Trim();
                 player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyString(item, PropertyString.LongDesc, item.LongDesc ?? ""));
                 changed = true;
             }
-
             changed |= ApplyIntEdit(player, item, request.Damage, PropertyInt.Damage, value => item.Damage = Math.Max(0, value));
             changed |= ApplyFloatEdit(player, item, request.DamageMod, PropertyFloat.DamageMod, value => item.DamageMod = Math.Max(0.0, value));
             changed |= ApplyFloatEdit(player, item, request.DamageVariance, PropertyFloat.DamageVariance, value => item.DamageVariance = Math.Clamp(value, 0.0, 1.0));
@@ -1775,25 +1600,20 @@ namespace ACE.Server.DerpAce
             changed |= ApplyIntEdit(player, item, request.GearDamageResist, PropertyInt.GearDamageResist, value => item.GearDamageResist = value);
             changed |= ApplyIntEdit(player, item, request.GearCritDamage, PropertyInt.GearCritDamage, value => item.GearCritDamage = value);
             changed |= ApplyIntEdit(player, item, request.GearCritDamageResist, PropertyInt.GearCritDamageResist, value => item.GearCritDamageResist = value);
-
             if (!changed)
                 return new { ok = false, error = "No supported item changes were provided." };
-
             ApplyInventoryDelta(rootOwner, foundInContainer, item, oldEncumbrance, oldValue);
             item.SaveBiotaToDatabase();
             player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.EncumbranceVal, player.EncumbranceVal ?? 0));
-
             log.Info($"[DerpACE AdminMap] Edited item {item.Name} ({item.Guid}) for {player.Name} ({player.Guid})");
             return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
         }
-
         private static object HandleInventoryPropertyEdit(AdminInventoryPropertyEditRequest request)
         {
             if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out _, out _, out _, out var error))
                 return new { ok = false, error };
             if (string.IsNullOrWhiteSpace(request.Family) || request.Value == null)
                 return new { ok = false, error = "Property family and value are required." };
-
             try
             {
                 switch (request.Family.Trim().ToLowerInvariant())
@@ -1846,7 +1666,6 @@ namespace ACE.Server.DerpAce
                     default:
                         throw new ArgumentException("Supported families: bool, did, float, iid, int, int64, string.");
                 }
-
                 item.SaveBiotaToDatabase();
                 log.Warn($"[DerpACE AdminMap] {player.Name}'s item {item.Guid} property {request.Family}:{request.Key} was changed by an admin map session.");
                 return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
@@ -1856,7 +1675,6 @@ namespace ACE.Server.DerpAce
                 return new { ok = false, error = ex.Message };
             }
         }
-
         private static bool TryParseUIntValue(string value, out uint result)
         {
             var text = value?.Trim() ?? "";
@@ -1868,76 +1686,60 @@ namespace ACE.Server.DerpAce
         {
             if (!requestValue.HasValue)
                 return false;
-
             setter(requestValue.Value);
             player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(item, property, item.GetProperty(property) ?? 0));
             return true;
         }
-
         private static bool ApplyFloatEdit(Player player, WorldObject item, double? requestValue, PropertyFloat property, Action<double> setter)
         {
             if (!requestValue.HasValue)
                 return false;
-
             setter(requestValue.Value);
             player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyFloat(item, property, item.GetProperty(property) ?? 0.0));
             return true;
         }
-
         private static object HandleInventoryItemDelete(AdminInventoryItemDeleteRequest request)
         {
             if (!TryGetEditableItem(request?.PlayerGuid, request?.ItemGuid, out var player, out var item, out _, out _, out var wasEquipped, out var error))
                 return new { ok = false, error };
-
             var itemName = item.Name;
             var itemGuid = item.Guid;
             var removed = wasEquipped
                 ? player.TryDequipObjectWithNetworking(item.Guid, out item, Player.DequipObjectAction.ConsumeItem)
                 : player.TryRemoveFromInventoryWithNetworking(item.Guid, out item, Player.RemoveFromInventoryAction.ConsumeItem);
-
             if (!removed)
                 return new { ok = false, error = "Could not remove item from player." };
-
             if (!wasEquipped)
                 item.Destroy();
-
             log.Warn($"[DerpACE AdminMap] Deleted item {itemName} ({itemGuid}) from {player.Name} ({player.Guid})");
-
             return new { ok = true, inventory = BuildInventorySnapshot(player.Guid.Full) };
         }
-
         private static object HandlePlayerAction(AdminPlayerActionRequest request)
         {
             if (!TryGetPlayerGuid(request?.PlayerGuid, out var playerGuid))
                 return new { ok = false, error = "Missing or invalid player." };
-
             var player = PlayerManager.GetOnlinePlayer(playerGuid);
             if (player == null)
                 return new { ok = false, error = "Player is not online." };
-
             var action = request.Action?.Trim().ToLowerInvariant();
             switch (action)
             {
                 case "teleport":
                     if (!TryBuildTeleportPosition(request, player, out var position, out var error))
                         return new { ok = false, error };
-
                     WorldManager.ThreadSafeTeleport(player, position);
                     log.Warn($"[DerpACE AdminMap] Teleporting {player.Name} ({player.Guid}) to {position.ToLOCString()} from admin map.");
                     return new { ok = true, message = $"Teleporting {player.Name} to {position.ToLOCString()}." };
-
                 case "boot":
                 case "kick":
                     var reason = string.IsNullOrWhiteSpace(request.Reason) ? "Admin map action" : request.Reason.Trim();
                     player.Session?.Terminate(SessionTerminationReason.AccountBooted, new GameMessageBootAccount($" - {reason}"), null, reason);
                     log.Warn($"[DerpACE AdminMap] Booted {player.Name} ({player.Guid}) from admin map. Reason: {reason}");
                     return new { ok = true, message = $"Booted {player.Name}." };
-
                 default:
                     return new { ok = false, error = "Unsupported player action." };
             }
         }
-
         private static object HandleMapLoc(HttpListenerContext context)
         {
             if (!float.TryParse(context.Request.QueryString["x"], NumberStyles.Float, CultureInfo.InvariantCulture, out var x) ||
@@ -1946,18 +1748,15 @@ namespace ACE.Server.DerpAce
                 context.Response.StatusCode = 400;
                 return new { ok = false, error = "Map x and y are required." };
             }
-
             if (x < -102.0f || x > 102.0f || y < -102.0f || y > 102.0f)
             {
                 context.Response.StatusCode = 400;
                 return new { ok = false, error = "Map coordinates are outside Dereth bounds." };
             }
-
             try
             {
                 var position = new Position(new Vector2(x, y));
                 position.AdjustMapCoords();
-
                 return new
                 {
                     ok = true,
@@ -1976,15 +1775,12 @@ namespace ACE.Server.DerpAce
                 return new { ok = false, error = "Could not convert that map point to a landloc." };
             }
         }
-
         private static bool TryBuildTeleportPosition(AdminPlayerActionRequest request, Player player, out Position position, out string error)
         {
             position = null;
             error = null;
-
             if (!string.IsNullOrWhiteSpace(request.Loc) && TryParseLoc(request.Loc, out position, out error))
                 return true;
-
             if (!string.IsNullOrWhiteSpace(request.Cell))
             {
                 if (!TryParseCell(request.Cell, out var cell))
@@ -1992,13 +1788,11 @@ namespace ACE.Server.DerpAce
                     error = "Cell must be a hex value like 0x7F0401AD.";
                     return false;
                 }
-
                 if (!request.X.HasValue || !request.Y.HasValue || !request.Z.HasValue)
                 {
                     error = "Cell teleport requires x, y, and z.";
                     return false;
                 }
-
                 var qw = request.Qw ?? player?.Location?.RotationW ?? 1.0f;
                 var qx = request.Qx ?? player?.Location?.RotationX ?? 0.0f;
                 var qy = request.Qy ?? player?.Location?.RotationY ?? 0.0f;
@@ -2006,33 +1800,27 @@ namespace ACE.Server.DerpAce
                 position = new Position(cell, request.X.Value, request.Y.Value, request.Z.Value, qx, qy, qz, qw);
                 return true;
             }
-
             error = "Provide a pasted LOC string or cell/x/y/z.";
             return false;
         }
-
         private static bool TryParseLoc(string loc, out Position position, out string error)
         {
             position = null;
             error = null;
-
             var tokens = loc
                 .Replace("[", " ")
                 .Replace("]", " ")
                 .Split(new[] { ' ', '\t', '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries);
-
             if (tokens.Length != 4 && tokens.Length != 8)
             {
                 error = "LOC must look like: 0x7F0401AD [12.3 -28.4 0.0] qw qx qy qz.";
                 return false;
             }
-
             if (!TryParseCell(tokens[0], out var cell))
             {
                 error = "LOC cell must be a hex value like 0x7F0401AD.";
                 return false;
             }
-
             var values = new float[7];
             for (var i = 0; i < values.Length; i++)
             {
@@ -2044,31 +1832,25 @@ namespace ACE.Server.DerpAce
                     values[6] = 0.0f;
                     break;
                 }
-
                 if (!float.TryParse(tokens[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out values[i]))
                 {
                     error = "LOC contains a non-numeric position or rotation value.";
                     return false;
                 }
             }
-
             position = new Position(cell, values[0], values[1], values[2], values[4], values[5], values[6], values[3]);
             return true;
         }
-
         private static bool TryParseCell(string cellValue, out uint cell)
         {
             cell = 0;
             if (string.IsNullOrWhiteSpace(cellValue))
                 return false;
-
             var value = cellValue.Trim();
             if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 value = value.Substring(2);
-
             return uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out cell);
         }
-
         private static bool TryGetEditableItem(string playerGuidValue, string itemGuidValue, out Player player, out WorldObject item, out Container foundInContainer, out Container rootOwner, out bool wasEquipped, out string error)
         {
             player = null;
@@ -2077,48 +1859,40 @@ namespace ACE.Server.DerpAce
             rootOwner = null;
             wasEquipped = false;
             error = null;
-
             if (!TryGetPlayerGuid(playerGuidValue, out var playerGuid))
             {
                 error = "Missing or invalid player.";
                 return false;
             }
-
             if (!TryGetPlayerGuid(itemGuidValue, out var itemGuid))
             {
                 error = "Missing or invalid item.";
                 return false;
             }
-
             player = PlayerManager.GetOnlinePlayer(playerGuid);
             if (player == null)
             {
                 error = "Player is not online.";
                 return false;
             }
-
             item = player.FindObject(new ObjectGuid(itemGuid), Player.SearchLocations.MyInventory | Player.SearchLocations.MyEquippedItems, out foundInContainer, out rootOwner, out wasEquipped);
             if (item == null)
             {
                 error = "Item is not in this player's inventory or equipment.";
                 return false;
             }
-
             return true;
         }
-
         private static void ApplyInventoryDelta(Container rootOwner, Container foundInContainer, WorldObject item, int oldEncumbrance, int oldValue)
         {
             var encumbranceDelta = (item.EncumbranceVal ?? 0) - oldEncumbrance;
             var valueDelta = (item.Value ?? 0) - oldValue;
-
             if (foundInContainer != null)
             {
                 foundInContainer.EncumbranceVal += encumbranceDelta;
                 foundInContainer.Value += valueDelta;
                 foundInContainer.SaveBiotaToDatabase();
             }
-
             if (rootOwner != null && rootOwner != foundInContainer)
             {
                 rootOwner.EncumbranceVal += encumbranceDelta;
@@ -2126,23 +1900,18 @@ namespace ACE.Server.DerpAce
                 rootOwner.SaveBiotaToDatabase();
             }
         }
-
         private static AdminDungeonMap BuildDungeonMap(uint landblock)
         {
             try
             {
                 var geometry = new LandblockGeometry(landblock);
                 var cells = geometry.DungeonCells.Values.Where(c => c.HasWalkablePolys).ToList();
-
                 if (cells.Count == 0)
                     return AdminDungeonMap.Fail("No dungeon geometry found for this landblock.");
-
                 var exporter = new LandblockGeometryExporter(geometry, cells);
                 exporter.LoadLandblockInfo();
-
                 if (exporter.Vertices.Count == 0 || exporter.Polygons.Count == 0)
                     return AdminDungeonMap.Fail("Dungeon geometry produced no drawable polygons.");
-
                 var points = exporter.Vertices;
                 var minX = points.Min(v => v.X);
                 var maxX = points.Max(v => v.X);
@@ -2156,27 +1925,22 @@ namespace ACE.Server.DerpAce
                 var paddedMaxY = maxY + 8;
                 var width = Math.Max(1.0f, paddedMaxX - paddedMinX);
                 var height = Math.Max(1.0f, paddedMaxY - paddedMinY);
-
                 var svg = new StringBuilder();
                 svg.Append(CultureInfo.InvariantCulture,
                     $"<svg viewBox=\"{paddedMinX:0.###} {-paddedMaxY:0.###} {width:0.###} {height:0.###}\" preserveAspectRatio=\"none\" xmlns=\"http://www.w3.org/2000/svg\">");
                 svg.Append(CultureInfo.InvariantCulture,
                     $"<rect x=\"{paddedMinX:0.###}\" y=\"{-paddedMaxY:0.###}\" width=\"{width:0.###}\" height=\"{height:0.###}\" fill=\"#0c1114\"/>");
                 svg.Append("<g stroke=\"#6da59f\" stroke-width=\"0.35\" opacity=\"0.94\">");
-
                 foreach (var poly in exporter.Polygons)
                 {
                     if (poly.Count < 3)
                         continue;
-
                     var validVertices = poly
                         .Where(index => index > 0 && index <= exporter.Vertices.Count)
                         .Select(index => exporter.Vertices[index - 1])
                         .ToList();
-
                     if (validVertices.Count < 3)
                         continue;
-
                     var avgZ = validVertices.Average(v => v.Y);
                     svg.Append(CultureInfo.InvariantCulture, $"<polygon fill=\"{GetDepthFill(avgZ, minZ, maxZ)}\" points=\"");
                     foreach (var vertex in validVertices)
@@ -2185,9 +1949,7 @@ namespace ACE.Server.DerpAce
                     }
                     svg.Append("\"/>");
                 }
-
                 svg.Append("</g></svg>");
-
                 return new AdminDungeonMap
                 {
                     Generated = true,
@@ -2206,11 +1968,9 @@ namespace ACE.Server.DerpAce
                 return AdminDungeonMap.Fail("Dungeon map generation failed.");
             }
         }
-
         private static AdminDungeonPlayer BuildDungeonPlayer(Player player)
         {
             var loc = player.Location;
-
             return new AdminDungeonPlayer
             {
                 Name = player.Name,
@@ -2229,7 +1989,6 @@ namespace ACE.Server.DerpAce
                 MaxMana = player.Mana?.MaxValue ?? 0
             };
         }
-
         private static AdminMapStats BuildMapStats(List<Player> visiblePlayers)
         {
             var online = visiblePlayers ?? new List<Player>();
@@ -2238,7 +1997,6 @@ namespace ACE.Server.DerpAce
                 .Where(ip => !string.IsNullOrWhiteSpace(ip))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Count();
-
             return new AdminMapStats
             {
                 OnlineCount = online.Count,
@@ -2252,12 +2010,10 @@ namespace ACE.Server.DerpAce
                 DeadliestIronman = ToLeaderboardEntry(LeaderboardCache.GetDeadliest(PlayerKillerTracker.Category.Ironman).FirstOrDefault())
             };
         }
-
         private static AdminLeaderboardEntry ToLeaderboardEntry(PlayerLeaderboardEntry entry)
         {
             if (entry == null)
                 return null;
-
             return new AdminLeaderboardEntry
             {
                 Name = entry.Name,
@@ -2266,32 +2022,25 @@ namespace ACE.Server.DerpAce
                 Lives = entry.Lives
             };
         }
-
         private static AdminLeaderboardEntry ToLeaderboardEntry(KillerLeaderboardEntry entry)
         {
             if (entry == null || string.IsNullOrWhiteSpace(entry.Name))
                 return null;
-
             return new AdminLeaderboardEntry
             {
                 Name = entry.Name,
                 Kills = entry.Kills
             };
         }
-
         private static string GetDepthFill(double z, double minZ, double maxZ)
         {
             if (Math.Abs(maxZ - minZ) < 0.001)
                 return "#264348";
-
             var t = Math.Clamp((z - minZ) / (maxZ - minZ), 0.0, 1.0);
-
             if (t < 0.5)
                 return LerpColor("#1d2f52", "#28544f", t * 2.0);
-
             return LerpColor("#28544f", "#766a3a", (t - 0.5) * 2.0);
         }
-
         private static string LerpColor(string from, string to, double amount)
         {
             amount = Math.Clamp(amount, 0.0, 1.0);
@@ -2304,33 +2053,26 @@ namespace ACE.Server.DerpAce
             var r = (int)Math.Round(r1 + (r2 - r1) * amount);
             var g = (int)Math.Round(g1 + (g2 - g1) * amount);
             var b = (int)Math.Round(b1 + (b2 - b1) * amount);
-
             return $"#{r:X2}{g:X2}{b:X2}";
         }
-
         private static List<AdminMapBlip> BuildNearbyMapBlips(List<Player> players, bool dungeon, uint landblock)
         {
             var blips = new List<AdminMapBlip>();
             var seen = new HashSet<uint>();
             var radiusSq = CreatureBlipRadius * CreatureBlipRadius;
             var normalizedLandblock = landblock & 0xFFFF0000;
-
             foreach (var player in players)
             {
                 if (player?.Location == null || player.CurrentLandblock == null)
                     continue;
-
                 foreach (var worldObject in player.CurrentLandblock.GetAllWorldObjectsForDiagnostics())
                 {
                     if (worldObject == null || worldObject == player || worldObject is Player || worldObject.Location == null)
                         continue;
-
                     if (!TryGetMapBlipKind(worldObject, out var kind, out var radarColor))
                         continue;
-
                     if (worldObject is Creature creature && (!creature.IsAlive || creature.Teleporting))
                         continue;
-
                     if (dungeon)
                     {
                         if ((worldObject.Location.Cell & 0xFFFF0000) != normalizedLandblock)
@@ -2338,28 +2080,21 @@ namespace ACE.Server.DerpAce
                     }
                     else if (worldObject.Location.Indoors)
                         continue;
-
                     if (player.Location.SquaredDistanceTo(worldObject.Location) > radiusSq)
                         continue;
-
                     if (!seen.Add(worldObject.Guid.Full))
                         continue;
-
                     blips.Add(BuildMapBlip(worldObject, kind, radarColor));
-
                     if (blips.Count >= MaxCreatureBlips)
                         return blips;
                 }
             }
-
             return blips;
         }
-
         private static bool TryGetMapBlipKind(WorldObject worldObject, out string kind, out RadarColor radarColor)
         {
             kind = null;
             radarColor = RadarColor.Default;
-
             switch (worldObject.WeenieType)
             {
                 case WeenieType.Portal:
@@ -2367,45 +2102,37 @@ namespace ACE.Server.DerpAce
                     kind = "portal";
                     radarColor = RadarColor.Portal;
                     return true;
-
                 case WeenieType.LifeStone:
                     kind = "lifestone";
                     radarColor = RadarColor.LifeStone;
                     return true;
-
                 case WeenieType.LightSource:
                     kind = "light";
                     radarColor = RadarColor.Gold;
                     return true;
-
                 case WeenieType.Door:
                     kind = "door";
                     radarColor = RadarColor.Default;
                     return true;
             }
-
             if (worldObject is Vendor)
             {
                 kind = "vendor";
                 radarColor = RadarColor.Vendor;
                 return true;
             }
-
             if (worldObject is Creature creature)
             {
                 kind = creature.IsMonster ? "creature" : "npc";
                 radarColor = creature.IsMonster ? RadarColor.Creature : RadarColor.NPC;
                 return true;
             }
-
             return false;
         }
-
         private static AdminMapBlip BuildMapBlip(WorldObject worldObject, string kind, RadarColor radarColor)
         {
             var loc = worldObject.Location;
             var mapCoords = loc.GetMapCoords();
-
             return new AdminMapBlip
             {
                 Name = worldObject.Name,
@@ -2423,7 +2150,6 @@ namespace ACE.Server.DerpAce
                 Z = loc.PositionZ
             };
         }
-
         private static AdminWatchBlip BuildWatchBlip(WorldObject worldObject, Player target, string kind, string radarColor)
         {
             var loc = worldObject.Location;
@@ -2431,7 +2157,6 @@ namespace ACE.Server.DerpAce
             var dx = (loc.LandblockId.LandblockX - targetLoc.LandblockId.LandblockX) * Position.BlockLength + loc.PositionX - targetLoc.PositionX;
             var dy = (loc.LandblockId.LandblockY - targetLoc.LandblockId.LandblockY) * Position.BlockLength + loc.PositionY - targetLoc.PositionY;
             var dz = loc.PositionZ - targetLoc.PositionZ;
-
             return new AdminWatchBlip
             {
                 Name = worldObject.Name,
@@ -2449,74 +2174,56 @@ namespace ACE.Server.DerpAce
                 Z = loc.PositionZ
             };
         }
-
         private static bool TryGetLandblock(string value, out uint landblock)
         {
             landblock = 0;
-
             if (string.IsNullOrWhiteSpace(value))
                 return false;
-
             value = value.Trim();
             if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 value = value.Substring(2);
-
             if (!uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsed)
                 && !uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
                 return false;
-
             landblock = parsed & 0xFFFF0000;
             return landblock != 0;
         }
-
         private static bool TryGetPlayerGuid(string value, out uint guid)
         {
             guid = 0;
-
             if (string.IsNullOrWhiteSpace(value))
                 return false;
-
             value = value.Trim();
             if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return uint.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out guid);
-
             return uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out guid);
         }
-
         private static bool TryParseDataId(string value, out uint did)
         {
             did = 0;
-
             if (string.IsNullOrWhiteSpace(value))
                 return false;
-
             value = value.Trim();
             if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return uint.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out did);
-
             // Exported DAT filenames and some API clients use bare 8-digit hexadecimal DIDs.
             if (value.Length == 8 && value.Any(c => char.IsLetter(c)))
                 return uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out did);
-
             return uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out did);
         }
-
         private static bool TryWriteMapImage(HttpListenerContext context)
         {
             var path = ResolveMapImagePath();
             if (path == null || !File.Exists(path))
                 return false;
-
             var bytes = File.ReadAllBytes(path);
             WriteBytes(context, bytes, GetImageContentType(path));
             return true;
         }
-
         private static bool TryWriteIcon(HttpListenerContext context, uint did)
         {
             if (did == 0)
                 return false;
-
             try
             {
                 var configuredRoot = DerpAceConfigManager.Config.AdminMapIconPath?.Trim();
@@ -2534,7 +2241,6 @@ namespace ACE.Server.DerpAce
                     .FirstOrDefault(File.Exists);
                 if (path == null)
                     return false;
-
                 var info = new FileInfo(path);
                 var cacheKey = $"{did:X8}:{info.FullName.ToUpperInvariant()}";
                 var cached = IconPngCache.GetOrAdd(cacheKey, _ => LoadIconCacheEntry(info));
@@ -2543,7 +2249,6 @@ namespace ACE.Server.DerpAce
                     cached = LoadIconCacheEntry(info);
                     IconPngCache[cacheKey] = cached;
                 }
-
                 context.Response.Headers["Cache-Control"] = "public, max-age=86400, immutable";
                 context.Response.Headers["ETag"] = $"\"{did:X8}-{cached.LastWriteUtcTicks:X}-{cached.Length:X}\"";
                 WriteBytes(context, cached.Bytes, "image/png");
@@ -2568,30 +2273,24 @@ namespace ACE.Server.DerpAce
         {
             if (database == null)
                 return null;
-
             if (!database.AllFiles.TryGetValue(did, out var file) || file.GetFileType(DatDatabaseType.Portal) != DatFileType.Texture)
                 return null;
-
             var texture = database.ReadFromDat<Texture>(did);
             return texture != null && texture.Length > 0 ? texture : null;
         }
-
         private static bool HasMapImage()
         {
             var path = ResolveMapImagePath();
             return path != null && File.Exists(path);
         }
-
         private static string ResolveMapImagePath()
         {
             var path = DerpAceConfigManager.Config.AdminMapImagePath;
             if (string.IsNullOrWhiteSpace(path))
                 return null;
-
             path = path.Trim();
             return Path.IsPathRooted(path) ? path : Path.Combine(AppContext.BaseDirectory, path);
         }
-
         private static string GetImageContentType(string path)
         {
             switch (Path.GetExtension(path).ToLowerInvariant())
@@ -2606,20 +2305,16 @@ namespace ACE.Server.DerpAce
                     return "image/jpeg";
             }
         }
-
         private static float ClampPercent(float value)
         {
             if (float.IsNaN(value) || float.IsInfinity(value))
                 return 0;
-
             return Math.Clamp(value, 0, 100);
         }
-
         private static AdminMapPlayer BuildPlayer(Player player)
         {
             var loc = player.Location;
             var mapCoords = loc.GetMapCoords();
-
             return new AdminMapPlayer
             {
                 Name = player.Name,
@@ -2641,7 +2336,6 @@ namespace ACE.Server.DerpAce
                 MaxMana = player.Mana?.MaxValue ?? 0
             };
         }
-
         private static double GetHeadingDegrees(Position loc)
         {
             var dir = loc.GetCurrentDir();
@@ -2649,12 +2343,10 @@ namespace ACE.Server.DerpAce
             var degrees = radians * 180.0 / Math.PI;
             return degrees < 0 ? degrees + 360.0 : degrees;
         }
-
         private static void WriteJson(HttpListenerContext context, object payload)
         {
             WriteText(context, JsonSerializer.Serialize(payload, JsonOptions), "application/json; charset=utf-8");
         }
-
         private static T ReadJsonBody<T>(HttpListenerContext context) where T : class
         {
             using (var reader = new StreamReader(context.Request.InputStream, context.Request.ContentEncoding ?? Encoding.UTF8))
@@ -2662,17 +2354,14 @@ namespace ACE.Server.DerpAce
                 var body = reader.ReadToEnd();
                 if (string.IsNullOrWhiteSpace(body))
                     return null;
-
                 return JsonSerializer.Deserialize<T>(body, JsonOptions);
             }
         }
-
         private static void WriteText(HttpListenerContext context, string text, string contentType)
         {
             var bytes = Encoding.UTF8.GetBytes(text);
             WriteBytes(context, bytes, contentType);
         }
-
         private static void WriteBytes(HttpListenerContext context, byte[] bytes, string contentType)
         {
             context.Response.ContentType = contentType;
@@ -2681,7 +2370,6 @@ namespace ACE.Server.DerpAce
             context.Response.OutputStream.Write(bytes, 0, bytes.Length);
             context.Response.OutputStream.Close();
         }
-
         private static void CloseQuietly(HttpListenerContext context)
         {
             try
@@ -2692,13 +2380,11 @@ namespace ACE.Server.DerpAce
             {
             }
         }
-
         private static object BuildSoundTableSnapshot(string didText, string wcidText)
         {
             uint soundTableDid = 0;
             uint wcid = 0;
             string source = "SoundTable DID";
-
             if (!string.IsNullOrWhiteSpace(didText))
             {
                 if (!TryParseDataId(didText, out soundTableDid))
@@ -2715,10 +2401,8 @@ namespace ACE.Server.DerpAce
             }
             else
                 return new { ok = false, error = "Enter a boss WCID or SoundTable DID." };
-
             if ((soundTableDid >> 24) != 0x20 || !DatManager.PortalDat.AllFiles.ContainsKey(soundTableDid))
                 return new { ok = false, error = $"0x{soundTableDid:X8} is not a SoundTable in client_portal.dat." };
-
             try
             {
                 var table = DatManager.PortalDat.ReadFromDat<SoundTable>(soundTableDid);
@@ -2744,7 +2428,6 @@ namespace ACE.Server.DerpAce
                         });
                     })
                     .ToArray();
-
                 return new
                 {
                     ok = true,
@@ -2763,12 +2446,10 @@ namespace ACE.Server.DerpAce
                 return new { ok = false, error = $"Unable to read SoundTable 0x{soundTableDid:X8}." };
             }
         }
-
         private static bool TryWriteDatWave(HttpListenerContext context, string didText)
         {
             if (!TryParseDataId(didText, out var waveDid) || (waveDid >> 24) != 0x0A || !DatManager.PortalDat.AllFiles.ContainsKey(waveDid))
                 return false;
-
             try
             {
                 var wave = DatManager.PortalDat.ReadFromDat<Wave>(waveDid);
@@ -2783,13 +2464,11 @@ namespace ACE.Server.DerpAce
                 return false;
             }
         }
-
         private static string BuildBossMechanicsHelpHtml()
         {
             var playScriptOptions = string.Join(string.Empty, Enum.GetNames(typeof(ACE.Entity.Enum.PlayScript))
                 .Where(name => name != nameof(ACE.Entity.Enum.PlayScript.Invalid))
                 .Select(name => $"<option value=\"{name}\"></option>"));
-
             return $$$$"""
 <!doctype html>
 <html lang="en">
@@ -2899,6 +2578,10 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             LootEntry("loot_modifier_exclusive_per_item", "Global Balance", "One custom modifier per item", "When enabled, most items stop after one exclusive custom affix.", "toggle"),
             LootEntry("loot_modifier_interchangeable", "Global Balance", "Interchangeable weapon families", "Lets eligible weapon types borrow alternate themed mutators at higher tiers.", "toggle"),
             LootEntry("loot_modifier_interchangeable_min_tier", "Global Balance", "Interchangeable min tier", "Minimum tier before weapon-family borrowing is allowed.", "number", 1, 8, 1),
+            LootEntry("modern_mob_ai_enabled", "Mob AI", "Modern mob AI enabled", "Enables DerpACE threat switching and movement tuning for mobs.", "toggle"),
+            LootEntry("modern_mob_ai_switch_threshold", "Mob AI", "Target switch threshold", "Threat ratio required before a mob swaps targets. Higher values reduce twitchy target switching.", "number", 1, 5, 0.05),
+            LootEntry("mob_movement_sync_interval_seconds", "Mob AI", "Movement sync interval", "Minimum seconds between server movement sync nudges for modern mob navigation.", "number", 0.05, 2, 0.05),
+            LootEntry("mob_outdoor_chase_range", "Mob AI", "Outdoor chase range", "Maximum outdoor chase range used by modern mob navigation.", "number", 50, 2000, 25),
             LootEntry("armor_bane_chance_normal", "Armor", "Normal armor bane chance", "Per-bane roll chance for normal armor.", "percent", 0, 1, 0.01),
             LootEntry("armor_bane_chance_covenant", "Armor", "Covenant armor bane chance", "Per-bane roll chance for Covenant armor.", "percent", 0, 1, 0.01),
             LootEntry("armor_enchantment_chance_bonus", "Armor", "Armor enchant bonus", "Flat bonus added to tier enchantment roll chance.", "percent", 0, 1, 0.01),
@@ -2911,6 +2594,7 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             LootEntry("weapon_blast_proc_rate_max", "Weapon Blast", "Blast proc rate max", "Maximum per-hit proc rate rolled onto the weapon.", "percent", 0, 1, 0.001),
             LootEntry("thief_dagger_enabled", "Weapon Toggles", "Thief dagger enabled", "Allows Thief dagger affixes to roll.", "toggle"),
             LootEntry("quickening_dagger_enabled", "Weapon Toggles", "Quickening dagger enabled", "Allows Quickening dagger affixes to roll.", "toggle"),
+            LootEntry("quickening_dagger_cooldown_seconds", "Weapon Mutators", "Quickening cooldown", "Cooldown after Quickening dagger speed burst fires.", "number", 1, 120, 1),
             LootEntry("fencer_blade_enabled", "Weapon Toggles", "Fencer blade enabled", "Allows Fencer blade affixes to roll.", "toggle"),
             LootEntry("ravager_axe_enabled", "Weapon Toggles", "Ravager axe enabled", "Allows Ravager axe/hammer affixes to roll.", "toggle"),
             LootEntry("warden_maul_enabled", "Weapon Toggles", "Warden maul enabled", "Allows Warden maul affixes to roll.", "toggle"),
@@ -2921,21 +2605,112 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             LootEntry("lugian_hammer_throw_enabled", "Weapon Toggles", "Stonehand enabled", "Allows Lugian Hammer Throw / Stonehand affixes to roll.", "toggle"),
             LootEntry("opportunist_weapon_enabled", "Weapon Toggles", "Opportunist enabled", "Allows Opportunist affixes to roll.", "toggle"),
             LootEntry("executioner_weapon_enabled", "Weapon Toggles", "Executioner enabled", "Allows Executioner affixes to roll.", "toggle"),
-            LootEntry("defender_drop_chance", "Weapon Mutators", "Defender shield chance", "Chance for eligible shields to roll Defender.", "percent", 0, 1, 0.001),
-            LootEntry("archmagi_drop_chance", "Weapon Mutators", "Archmagi caster chance", "Chance for eligible casters to roll Archmagi.", "percent", 0, 1, 0.001),
+            LootEntry("archmagi_enabled", "Caster Toggles", "Archmagi enabled", "Allows Archmagi caster affixes to roll.", "toggle"),
+            LootEntry("life_caster_enabled", "Caster Toggles", "Life caster enabled", "Allows eligible caster templates to become Life Magic casters.", "toggle"),
+            LootEntry("hierophant_enabled", "Caster Toggles", "Hierophant enabled", "Allows Hierophant life-caster affixes to roll.", "toggle"),
+            LootEntry("caster_shadow_clone_enabled", "Caster Toggles", "Umbral Mirror enabled", "Allows Umbral Mirror nether-caster affixes to roll.", "toggle"),
+            LootEntry("gravecaller_caster_enabled", "Caster Toggles", "Gravecaller enabled", "Allows Gravecaller corpse-raising caster affixes to roll.", "toggle"),
+            LootEntry("void_confusion_caster_enabled", "Caster Toggles", "Bedlam enabled", "Allows Bedlam / Void Confusion caster affixes to roll.", "toggle"),
+            LootEntry("war_caster_special_enabled", "Caster Toggles", "War-caster specials enabled", "Allows Skybreaker, Stormcaller, and Orbitweaver caster affixes to roll.", "toggle"),
+            LootEntry("defender_drop_chance", "Shield Mutators", "Defender shield chance", "Chance for eligible shields to roll Defender.", "percent", 0, 1, 0.001),
+            LootEntry("defender_min_tier", "Shield Mutators", "Defender min tier", "Minimum tier before Defender can roll.", "number", 1, 100, 1),
+            LootEntry("defender_aggro_bonus", "Shield Mutators", "Defender aggro bonus", "Threat weight bonus added to Defender shield bearers.", "percent", 0, 5, 0.05),
+            LootEntry("shield_thorns_roll_chance", "Shield Mutators", "Thorns chance", "Chance for eligible shields to roll Thorns.", "percent", 0, 1, 0.001),
+            LootEntry("shield_bashing_roll_chance", "Shield Mutators", "Bashing chance", "Chance for eligible shields to roll Bashing.", "percent", 0, 1, 0.001),
+            LootEntry("shield_reflection_roll_chance", "Shield Mutators", "Reflection chance", "Chance for eligible shields to roll projectile Reflection.", "percent", 0, 1, 0.001),
+            LootEntry("shield_spell_mirror_roll_chance", "Shield Mutators", "Spell mirror chance", "Chance for eligible shields to roll Spell Mirroring.", "percent", 0, 1, 0.001),
+            LootEntry("shield_tier8_triple_affix_chance", "Shield Mutators", "T8 triple-affix chance", "Chance for T8+ shields to keep three reactive affixes.", "percent", 0, 1, 0.001),
+            LootEntry("shield_bashing_proc_chance", "Shield Mutators", "Bashing proc", "Chance on block or melee evade to shield bash.", "percent", 0, 1, 0.001),
+            LootEntry("shield_bashing_health_pct", "Shield Mutators", "Bashing health cap", "Maximum bash damage as a percent of current health.", "percent", 0.01, 1, 0.01),
+            LootEntry("shield_bashing_cooldown_seconds", "Shield Mutators", "Bashing cooldown", "Cooldown after a Bashing shield fires.", "number", 1, 120, 1),
+            LootEntry("shield_bash_knockback_distance", "Shield Mutators", "Bashing push distance", "Maximum pushback distance for Bashing shield. The runtime falls back to shorter distances if blocked.", "number", 0, 30, 0.5),
+            LootEntry("shield_spell_mirror_cooldown_seconds", "Shield Mutators", "Spell mirror cooldown", "Cooldown after Spell Mirror fires.", "number", 1, 120, 1),
+            LootEntry("battlemage_helm_min_tier", "Armor Mutators", "Battlemage min tier", "Minimum tier before Battlemage helms can roll.", "number", 1, 100, 1),
+            LootEntry("battlemage_helm_chance_t5", "Armor Mutators", "Battlemage T5/T6 chance", "Chance for T5/T6 helms to roll Battlemage.", "percent", 0, 1, 0.001),
+            LootEntry("battlemage_helm_chance_t7", "Armor Mutators", "Battlemage T7 chance", "Chance for T7 helms to roll Battlemage.", "percent", 0, 1, 0.001),
+            LootEntry("battlemage_helm_chance_t8", "Armor Mutators", "Battlemage T8+ chance", "Chance for T8+ helms to roll Battlemage.", "percent", 0, 1, 0.001),
+            LootEntry("armor_sort_min_tier", "Armor Mutators", "Resonance min tier", "Minimum tier before Resonant Weave armor can roll.", "number", 1, 100, 1),
+            LootEntry("armor_sort_chance_t4", "Armor Mutators", "Resonance T4/T5 chance", "Chance for T4/T5 armor to roll Resonant Weave.", "percent", 0, 1, 0.001),
+            LootEntry("armor_sort_chance_t6", "Armor Mutators", "Resonance T6 chance", "Chance for T6 armor to roll Resonant Weave.", "percent", 0, 1, 0.001),
+            LootEntry("armor_sort_chance_t7", "Armor Mutators", "Resonance T7 chance", "Chance for T7 armor to roll Resonant Weave.", "percent", 0, 1, 0.001),
+            LootEntry("armor_sort_chance_t8", "Armor Mutators", "Resonance T8+ chance", "Chance for T8+ armor to roll Resonant Weave.", "percent", 0, 1, 0.001),
+            LootEntry("culinarian_min_tier", "Armor Mutators", "Culinarian min tier", "Minimum tier before Culinarian gloves can roll.", "number", 1, 100, 1),
+            LootEntry("culinarian_roll_chance", "Armor Mutators", "Culinarian chance", "Chance for gloves to roll Culinarian.", "percent", 0, 1, 0.001),
+            LootEntry("alchemist_glove_min_tier", "Armor Mutators", "Alchemist min tier", "Minimum tier before Alchemist gloves can roll.", "number", 1, 100, 1),
+            LootEntry("alchemist_glove_roll_chance", "Armor Mutators", "Alchemist chance", "Chance for gloves to roll Alchemist or Alchemical Instability.", "percent", 0, 1, 0.001),
+            LootEntry("culinarian_tier8_superior_bonus_chance", "Armor Mutators", "Culinarian T8 superior chance", "Chance for T8 Culinarian gloves to roll the 25% restore bonus instead of 20%.", "percent", 0, 1, 0.001),
+            LootEntry("alchemical_instability_chance_t6", "Armor Mutators", "Instability T6/T7 chance", "Chance for T6/T7 Alchemist gloves to gain Alchemical Instability.", "percent", 0, 1, 0.001),
+            LootEntry("alchemical_instability_chance_t8", "Armor Mutators", "Instability T8+ chance", "Chance for T8+ Alchemist gloves to gain Alchemical Instability.", "percent", 0, 1, 0.001),
+            LootEntry("dance_boot_min_tier", "Armor Mutators", "Dance boot min tier", "Minimum tier before dance boots can roll.", "number", 1, 100, 1),
+            LootEntry("dance_boot_roll_chance", "Armor Mutators", "Dance boot chance", "Chance for boots to roll Healing/Rejuvenating/Replenishing Dance.", "percent", 0, 1, 0.001),
+            LootEntry("unarmed_armor_min_tier", "Armor Mutators", "Unarmed armor min tier", "Minimum tier before gauntlets/boots can roll unarmed damage.", "number", 1, 100, 1),
+            LootEntry("unarmed_armor_roll_chance", "Armor Mutators", "Unarmed armor chance", "Chance for gauntlets/boots to roll unarmed damage.", "percent", 0, 1, 0.001),
+            LootEntry("unarmed_armor_off_axis_defense_chance", "Armor Mutators", "Unarmed bonus defense chance", "Chance for unarmed armor to roll bonus missile or magic defense.", "percent", 0, 1, 0.001),
+            LootEntry("archmagi_drop_chance", "Caster Mutators", "Archmagi chance", "Chance for eligible casters to roll Archmagi.", "percent", 0, 1, 0.001),
+            LootEntry("archmagi_min_tier", "Caster Mutators", "Archmagi min tier", "Minimum tier before Archmagi can roll.", "number", 1, 100, 1),
+            LootEntry("archmagi_proc_chance", "Caster Mutators", "Archmagi proc", "Per-cast chance for Archmagi echo casting.", "percent", 0, 1, 0.001),
+            LootEntry("archmagi_aggro_penalty", "Caster Mutators", "Archmagi aggro penalty", "Threat weight penalty applied to Archmagi casters.", "percent", 0, 1, 0.01),
+            LootEntry("archmagi_dual_cast_chance", "Caster Mutators", "Archmagi dual-cast chance", "Runtime chance for Archmagi spell echo logic to attempt a dual cast.", "percent", 0, 1, 0.001),
+            LootEntry("archmagi_dual_cast_radius", "Caster Mutators", "Archmagi echo radius", "Nearby target search radius for Archmagi echo casts.", "number", 1, 60, 0.5),
+            LootEntry("archmagi_dual_cast_damage_modifier", "Caster Mutators", "Archmagi echo damage", "Damage multiplier for Archmagi echo casts.", "percent", 0.05, 1, 0.01),
+            LootEntry("life_caster_drop_chance", "Caster Mutators", "Life caster chance", "Chance for eligible caster templates to become Life Magic casters before special caster affixes roll.", "percent", 0, 1, 0.001),
+            LootEntry("life_caster_min_tier", "Caster Mutators", "Life caster min tier", "Minimum tier before caster templates can become Life Magic casters.", "number", 1, 100, 1),
             LootEntry("hierophant_drop_chance", "Weapon Mutators", "Hierophant caster chance", "Chance for eligible life casters to roll Hierophant.", "percent", 0, 1, 0.001),
+            LootEntry("hierophant_cooldown_seconds", "Caster Mutators", "Hierophant cooldown", "Cooldown after Hierophant fellowship echo fires.", "number", 1, 120, 1),
+            LootEntry("caster_shadow_clone_drop_chance", "Caster Mutators", "Umbral Mirror chance", "Chance for nether casters to roll Umbral Mirror.", "percent", 0, 1, 0.001),
+            LootEntry("caster_shadow_clone_min_tier", "Caster Mutators", "Umbral Mirror min tier", "Minimum tier before Umbral Mirror can roll.", "number", 1, 100, 1),
+            LootEntry("caster_shadow_clone_proc_chance", "Caster Mutators", "Umbral Mirror proc", "Per-hit chance for an Umbral Mirror caster to summon its shadow.", "percent", 0, 1, 0.001),
+            LootEntry("caster_shadow_clone_cooldown_seconds", "Caster Mutators", "Umbral Mirror cooldown", "Visible cooldown after an Umbral Mirror summon.", "number", 1, 600, 1),
+            LootEntry("caster_shadow_clone_duration_seconds", "Caster Mutators", "Umbral Mirror duration", "How long Umbral Mirror shadows remain active.", "number", 1, 120, 1),
+            LootEntry("caster_shadow_clone_damage_scale", "Caster Mutators", "Umbral Mirror damage", "Damage multiplier used by Umbral Mirror shadows.", "percent", 0.05, 1, 0.01),
+            LootEntry("gravecaller_drop_chance", "Caster Mutators", "Gravecaller chance", "Chance for casters to roll Gravecaller corpse raising.", "percent", 0, 1, 0.001),
+            LootEntry("gravecaller_min_tier", "Caster Mutators", "Gravecaller min tier", "Minimum tier before Gravecaller can roll.", "number", 1, 100, 1),
+            LootEntry("gravecaller_cooldown_seconds", "Caster Mutators", "Gravecaller cooldown", "Visible cooldown after raising a revenant.", "number", 1, 600, 1),
+            LootEntry("gravecaller_duration_seconds", "Caster Mutators", "Gravecaller duration", "How long raised revenants remain active.", "number", 1, 120, 1),
+            LootEntry("void_confusion_drop_chance", "Caster Mutators", "Bedlam chance", "Chance for nether casters to roll Bedlam.", "percent", 0, 1, 0.001),
+            LootEntry("void_confusion_min_tier", "Caster Mutators", "Bedlam min tier", "Minimum tier before Bedlam can roll.", "number", 1, 100, 1),
+            LootEntry("void_confusion_cooldown_seconds", "Caster Mutators", "Bedlam cooldown", "Visible cooldown after Void Confusion fires.", "number", 1, 600, 1),
+            LootEntry("void_confusion_target_min", "Caster Mutators", "Bedlam targets min", "Minimum confused target count rolled onto Bedlam casters.", "number", 1, 12, 1),
+            LootEntry("void_confusion_target_max", "Caster Mutators", "Bedlam targets max", "Maximum confused target count rolled onto Bedlam casters.", "number", 1, 12, 1),
+            LootEntry("void_confusion_duration_min", "Caster Mutators", "Bedlam duration min", "Minimum confusion duration rolled onto Bedlam casters.", "number", 1, 60, 1),
+            LootEntry("void_confusion_duration_max", "Caster Mutators", "Bedlam duration max", "Maximum confusion duration rolled onto Bedlam casters.", "number", 1, 60, 1),
+            LootEntry("war_caster_special_drop_chance", "Caster Mutators", "War-caster special chance", "Chance for elemental casters to roll Skybreaker, Stormcaller, or Orbitweaver.", "percent", 0, 1, 0.001),
+            LootEntry("war_caster_special_min_tier", "Caster Mutators", "War-caster min tier", "Minimum tier before Skybreaker, Stormcaller, or Orbitweaver can roll.", "number", 1, 100, 1),
             LootEntry("thief_dagger_drop_chance", "Weapon Mutators", "Thief dagger chance", "Chance for daggers to roll the Thief affix.", "percent", 0, 1, 0.001),
             LootEntry("sentinel_spear_drop_chance", "Weapon Mutators", "Sentinel spear chance", "Chance for spears to roll Sentinel.", "percent", 0, 1, 0.001),
             LootEntry("unarmed_elem_drop_chance", "Weapon Mutators", "Elemental unarmed chance", "Chance for unarmed weapons to roll elemental nomad-style effects.", "percent", 0, 1, 0.001),
+            LootEntry("pugilist_weapon_drop_chance", "Pugilist", "Pugilist drop chance", "Chance for unarmed weapons to roll Iron Flurry or Raking Hand.", "percent", 0, 1, 0.001),
+            LootEntry("pugilist_weapon_min_tier", "Pugilist", "Pugilist min tier", "Minimum treasure tier before Pugilist can roll.", "number", 1, 100, 1),
+            LootEntry("pugilist_proc_min", "Pugilist", "Pugilist proc min", "Minimum per-hit proc chance rolled onto Pugilist weapons.", "number", 0, 100, 1),
+            LootEntry("pugilist_proc_max", "Pugilist", "Pugilist proc max", "Maximum per-hit proc chance rolled onto Pugilist weapons.", "number", 0, 100, 1),
+            LootEntry("pugilist_flurry_damage_scale", "Pugilist", "Iron Flurry damage", "Extra hit damage scale for non-rake Pugilist weapons.", "percent", 0.05, 1, 0.01),
+            LootEntry("pugilist_rake_damage_scale", "Pugilist", "Raking Hand damage", "Total trauma damage scale for claw/katar/nekode Pugilist weapons.", "percent", 0.05, 1, 0.01),
+            LootEntry("pugilist_rake_duration_seconds", "Pugilist", "Raking Hand duration", "Seconds over which Raking Hand trauma damage ticks.", "number", 1, 60, 0.5),
+            LootEntry("pugilist_cooldown_seconds", "Pugilist", "Pugilist cooldown", "Visible cooldown after Iron Flurry or Raking Hand fires.", "number", 1, 300, 1),
             LootEntry("fencer_blade_drop_chance", "Weapon Mutators", "Fencer blade chance", "Chance for swords to roll Fencer.", "percent", 0, 1, 0.001),
             LootEntry("ravager_axe_drop_chance", "Weapon Mutators", "Ravager axe chance", "Chance for axes/hammers to roll Ravager.", "percent", 0, 1, 0.001),
             LootEntry("warden_maul_drop_chance", "Weapon Mutators", "Warden maul chance", "Chance for mauls to roll Warden.", "percent", 0, 1, 0.001),
             LootEntry("resolute_blade_drop_chance", "Weapon Mutators", "Resolute blade chance", "Chance for swords to roll Resolute.", "percent", 0, 1, 0.001),
+            LootEntry("resolute_kill_cooldown_seconds", "Weapon Mutators", "Resolute kill cooldown", "Cooldown after Resolute killing-blow burst fires.", "number", 1, 120, 1),
             LootEntry("polebreaker_drop_chance", "Weapon Mutators", "Polebreaker staff chance", "Chance for staves to roll Polebreaker.", "percent", 0, 1, 0.001),
+            LootEntry("polebreaker_min_tier", "Polebreaker", "Polebreaker min tier", "Minimum treasure tier before Polebreaker can roll.", "number", 1, 100, 1),
+            LootEntry("polebreaker_stack_min", "Polebreaker", "Stack bonus min", "Minimum damage bonus percent per consecutive full-power hit.", "number", 0, 100, 1),
+            LootEntry("polebreaker_stack_max", "Polebreaker", "Stack bonus max", "Maximum damage bonus percent per consecutive full-power hit.", "number", 0, 100, 1),
+            LootEntry("polebreaker_max_stack_min", "Polebreaker", "Max stacks min", "Minimum cap for consecutive Polebreaker stacks rolled onto the staff.", "number", 1, 20, 1),
+            LootEntry("polebreaker_max_stack_max", "Polebreaker", "Max stacks max", "Maximum cap for consecutive Polebreaker stacks rolled onto the staff.", "number", 1, 20, 1),
+            LootEntry("polebreaker_aggro_bonus", "Polebreaker", "Aggro bonus", "Threat weight added to the Polebreaker wielder.", "number", 0, 5, 0.05),
             LootEntry("stalker_bow_drop_chance", "Weapon Mutators", "Stalker bow chance", "Chance for bows to roll Stalker.", "percent", 0, 1, 0.001),
             LootEntry("breacher_crossbow_drop_chance", "Weapon Mutators", "Breacher crossbow chance", "Chance for crossbows to roll Breacher.", "percent", 0, 1, 0.001),
             LootEntry("reaper_atlatl_drop_chance", "Weapon Mutators", "Reaper atlatl chance", "Chance for atlatls to roll Reaper.", "percent", 0, 1, 0.001),
             LootEntry("ricochet_atlatl_drop_chance", "Weapon Mutators", "Ricochet atlatl chance", "Chance for atlatls to roll Ricochet.", "percent", 0, 1, 0.001),
+            LootEntry("shadow_volley_drop_chance", "Shadow Weapons", "Shadow Volley chance", "Chance for missile weapons to roll Shadow Volley.", "percent", 0, 1, 0.001),
+            LootEntry("second_shadow_drop_chance", "Shadow Weapons", "Second Shadow chance", "Chance for melee weapons to roll Second Shadow.", "percent", 0, 1, 0.001),
+            LootEntry("shadow_weapon_min_tier", "Shadow Weapons", "Shadow min tier", "Minimum treasure tier before shadow weapon affixes can roll.", "number", 1, 100, 1),
+            LootEntry("shadow_weapon_proc_chance", "Shadow Weapons", "Shadow proc chance", "Per-hit chance for a shadow weapon to summon its clone.", "percent", 0, 1, 0.001),
+            LootEntry("shadow_weapon_cooldown_seconds", "Shadow Weapons", "Shadow cooldown", "Visible cooldown after a shadow clone summon.", "number", 1, 600, 1),
+            LootEntry("shadow_volley_duration_seconds", "Shadow Weapons", "Volley duration", "How long Shadow Volley missile clones remain active.", "number", 1, 120, 1),
+            LootEntry("second_shadow_duration_seconds", "Shadow Weapons", "Second Shadow duration", "How long Second Shadow melee clones remain active.", "number", 1, 120, 1),
+            LootEntry("shadow_weapon_damage_scale", "Shadow Weapons", "Shadow damage scale", "Damage multiplier used by shadow weapon clones.", "percent", 0.05, 1, 0.01),
             LootEntry("lugian_hammer_throw_drop_chance", "Weapon Mutators", "Stonehand hammer chance", "Chance for eligible Lugian hammers to roll Stonehand Throw.", "percent", 0, 1, 0.001),
             LootEntry("lugian_hammer_throw_min_tier", "Weapon Mutators", "Stonehand min tier", "Minimum tier before Lugian Hammer Throw can roll.", "number", 1, 8, 1),
             LootEntry("lugian_hammer_throw_proc_chance", "Weapon Mutators", "Stonehand proc chance", "Per-hit chance for Stonehand Throw after it rolls on a hammer.", "percent", 0, 1, 0.001),
@@ -2956,11 +2731,24 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             LootEntry("dinnerware_spin_drop_chance", "Dinnerware", "Dinnerware spin chance", "Chance for dinnerware to roll bounce/spin behavior.", "percent", 0, 1, 0.001),
             LootEntry("dinnerware_spin_damage_scale", "Dinnerware", "Dinnerware bounce damage", "Damage scale for bounce hits.", "percent", 0, 1, 0.01),
             LootEntry("dinnerware_spin_radius", "Dinnerware", "Dinnerware bounce radius", "Search radius for bounce targets.", "number", 1, 40, 0.5),
+            LootEntry("warrior_princess_call_drop_chance", "Dinnerware", "Discus special chance", "Chance for discus rolls to become Warrior Princess's Call.", "percent", 0, 1, 0.001),
+            LootEntry("warrior_princess_call_proc_min", "Dinnerware", "Discus proc min", "Minimum ricochet proc chance rolled on Warrior Princess discus.", "percent", 0, 1, 0.001),
+            LootEntry("warrior_princess_call_proc_max", "Dinnerware", "Discus proc max", "Maximum ricochet proc chance rolled on Warrior Princess discus.", "percent", 0, 1, 0.001),
+            LootEntry("flying_buffet_drop_chance", "Dinnerware", "Platter special chance", "Chance for platter rolls to become Flying Buffet.", "percent", 0, 1, 0.001),
+            LootEntry("flying_buffet_proc_min", "Dinnerware", "Platter proc min", "Minimum bounce proc chance rolled on Flying Buffet platters.", "percent", 0, 1, 0.001),
+            LootEntry("flying_buffet_proc_max", "Dinnerware", "Platter proc max", "Maximum bounce proc chance rolled on Flying Buffet platters.", "percent", 0, 1, 0.001),
+            LootEntry("flying_buffet_first_bounce_damage_scale", "Dinnerware", "Platter first bounce damage", "First bounce damage scale for Flying Buffet platters.", "percent", 0.05, 1, 0.01),
             LootEntry("vampiric_jewelry_drop_chance", "Jewelry", "Vampiric jewelry chance", "Chance for eligible jewelry to roll vampiric points.", "percent", 0, 1, 0.001),
             LootEntry("vampiric_jewelry_on_hit_proc_chance", "Jewelry", "Jewelry on-hit chance", "Per-piece chance to fire the on-hit heal.", "percent", 0, 1, 0.001),
             LootEntry("derpcoin_base_chance", "Mob Rewards", "Derpcoin base chance", "Base derpcoin chance for mutator mobs.", "percent", 0, 1, 0.001),
             LootEntry("derpcoin_max_chance", "Mob Rewards", "Derpcoin max chance", "Maximum derpcoin chance at high tier.", "percent", 0, 1, 0.001),
             LootEntry("derpcoin_stack_multiplier", "Mob Rewards", "Derpcoin stack multiplier", "Multiplier per extra mutator stacked on a mob.", "number", 0, 10, 0.05),
+            LootEntry("mutated_mob_weapon_drop_base_chance", "Mob Rewards", "Mutated weapon base chance", "Base chance for mutated mobs to drop a forced mutated weapon.", "percent", 0, 1, 0.001),
+            LootEntry("mutated_mob_weapon_drop_tier_bonus", "Mob Rewards", "Mutated weapon tier bonus", "Chance added per loot tier for mutated mob weapon drops.", "percent", 0, 1, 0.001),
+            LootEntry("mutated_mob_weapon_drop_mutator_bonus", "Mob Rewards", "Mutated weapon mutator bonus", "Chance added per creature mutator on the mob.", "percent", 0, 1, 0.001),
+            LootEntry("mutated_mob_weapon_drop_min_chance", "Mob Rewards", "Mutated weapon min chance", "Minimum mutated weapon drop chance after scaling.", "percent", 0, 1, 0.001),
+            LootEntry("mutated_mob_weapon_drop_max_chance", "Mob Rewards", "Mutated weapon max chance", "Maximum mutated weapon drop chance after scaling.", "percent", 0, 1, 0.001),
+            LootEntry("mutated_mob_weapon_drop_attempts", "Mob Rewards", "Mutated weapon attempts", "Attempts to find a compatible forced weapon mutator after a drop roll succeeds.", "number", 1, 20, 1),
             LootEntry("mob_modifier_min_level", "Mob Mutators", "Mob mutator min level", "Minimum creature level before mob mutators roll.", "number", 1, 500, 1),
             LootEntry("mob_modifier_min_tier", "Mob Mutators", "Mob mutator min tier", "Minimum treasure tier before mob mutators roll.", "number", 1, 8, 1),
             LootEntry("mob_modifier_defense_skill_cap", "Mob Mutators", "Mutator defense cap", "Caps defensive skills on mutated mobs; 0 disables.", "number", 0, 1200, 25),
@@ -2981,17 +2769,14 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             LootEntry("vendor_random_loot_min_items", "Vendors", "Vendor min items", "Minimum random items per vendor category.", "number", 0, 100, 1),
             LootEntry("vendor_random_loot_max_items", "Vendors", "Vendor max items", "Maximum random items per vendor category.", "number", 0, 200, 1),
         };
-
         private static AdminLootConfigEntry LootEntry(string key, string group, string label, string help, string kind, double min = 0, double max = 1, double step = 0.01)
             => new AdminLootConfigEntry { Key = key, Group = group, Label = label, Help = help, Kind = kind, Min = min, Max = max, Step = step };
-
         private static object BuildLootConfigSnapshot()
         {
             var config = DerpAceConfigManager.Config;
             var properties = typeof(DerpAceConfiguration).GetProperties(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
                 .Select(property => new { Property = property, JsonName = property.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonPropertyNameAttribute), false).OfType<System.Text.Json.Serialization.JsonPropertyNameAttribute>().FirstOrDefault()?.Name ?? property.Name })
                 .ToDictionary(x => x.JsonName, x => x.Property, StringComparer.OrdinalIgnoreCase);
-
             var entries = LootConfigEntries.Select(entry =>
             {
                 properties.TryGetValue(entry.Key, out var property);
@@ -3010,27 +2795,21 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
                     type = property?.PropertyType.Name ?? "unknown"
                 };
             }).ToList();
-
             return new { ok = true, entries, groups = entries.Select(x => x.group).Distinct().ToList() };
         }
-
         private static object HandleLootConfigUpdate(AdminLootConfigUpdateRequest request, string adminName)
         {
             if (request?.Values == null || request.Values.Count == 0)
                 return new { ok = false, error = "No loot config values were provided." };
-
             var allowed = LootConfigEntries.Select(x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var updates = request.Values.Where(kvp => allowed.Contains(kvp.Key)).ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase);
             if (updates.Count == 0)
                 return new { ok = false, error = "No recognized loot config values were provided." };
-
             if (!DerpAceConfigManager.TryUpdate(updates, out var errors))
                 return new { ok = false, error = string.Join(" ", errors), errors };
-
             log.Warn($"[DerpACE AdminMap] {adminName} updated {updates.Count} loot config setting(s).");
             return new { ok = true, message = $"Saved and applied {updates.Count} loot config setting(s)." };
         }
-
         private static object HandleLootSimulation(AdminLootSimulationRequest request)
         {
             var requestedTier = request?.Tier ?? 8;
@@ -3042,7 +2821,6 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             var summary = LootGenerationFactory_Test.TestLootGen(count, tier, false, table);
             return new { ok = true, tier, count, table, summary };
         }
-
         private static object BuildLootTierSnapshot()
         {
             return new
@@ -3053,24 +2831,20 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
                 baseTiers = Enumerable.Range(1, 8).ToArray()
             };
         }
-
         private static object HandleLootTierUpdate(AdminLootTierRequest request, string adminName)
         {
             if (!LootTierManager.TrySave(request?.Tiers, out var error))
                 return new { ok = false, error };
-
             var count = request?.Tiers?.Count ?? 0;
             log.Warn($"[DerpACE AdminMap] {adminName} saved {count} custom loot tier profile(s).");
             return new { ok = true, message = $"Saved and hot-applied {count} custom loot tier profile(s).", maximumTier = LootTierManager.MaximumTier };
         }
-
         private static object BuildLootSpellWeightSnapshot(string pool)
         {
             pool = string.IsNullOrWhiteSpace(pool) ? "armor" : pool.Trim().ToLowerInvariant();
             var defaults = GetLootSpellDefaults(pool);
             if (defaults == null)
                 return new { ok = false, error = $"Unknown loot spell pool '{pool}'." };
-
             return new
             {
                 ok = true,
@@ -3082,34 +2856,28 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
                 data = LootSpellWeightManager.GetSnapshot(pool, defaults)
             };
         }
-
         private static object HandleLootSpellWeightUpdate(AdminLootSpellWeightRequest request, string adminName)
         {
             var pool = request?.Pool?.Trim().ToLowerInvariant() ?? "";
             var defaults = GetLootSpellDefaults(pool);
             if (defaults == null)
                 return new { ok = false, error = $"Unknown loot spell pool '{pool}'." };
-
             if (request.Reset)
             {
                 LootSpellWeightManager.Reset(pool);
                 log.Warn($"[DerpACE AdminMap] {adminName} reset the {pool} loot spell weights.");
                 return new { ok = true, message = $"Reset {pool} spell weights to ACE defaults." };
             }
-
             if (!LootSpellWeightManager.TryUpdate(pool, request.Entries, out var error))
                 return new { ok = false, error };
-
             log.Warn($"[DerpACE AdminMap] {adminName} updated {request.Entries.Count} {pool} loot spell weights.");
             return new { ok = true, message = $"Saved and hot-applied {request.Entries.Count} {pool} spell weights." };
         }
-
         private static object BuildLootWcidWeightSnapshot(string pool)
         {
             pool = string.IsNullOrWhiteSpace(pool) ? "melee" : pool.Trim().ToLowerInvariant();
             if (!LootWcidWeightManager.PoolNames.Contains(pool, StringComparer.OrdinalIgnoreCase))
                 return new { ok = false, error = $"Unknown loot WCID pool '{pool}'." };
-
             var definition = LootWcidWeightManager.GetSnapshot(pool);
             return new
             {
@@ -3128,7 +2896,6 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
                 }
             };
         }
-
         private static object HandleLootWcidWeightUpdate(AdminLootWcidWeightRequest request, string adminName)
         {
             var pool = request?.Pool?.Trim().ToLowerInvariant() ?? "";
@@ -3140,19 +2907,15 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
                 log.Warn($"[DerpACE AdminMap] {adminName} reset the {pool} loot WCID overlay.");
                 return new { ok = true, message = $"Reset {pool} to the built-in ACE WCID table." };
             }
-
             foreach (var entry in request.Entries ?? new List<LootWcidWeight>())
                 if (DatabaseManager.World.GetCachedWeenie(entry.Wcid) == null)
                     return new { ok = false, error = $"WCID {entry.Wcid} does not exist in the loaded world database." };
-
             if (!LootWcidWeightManager.TryUpdate(pool, request.BuiltInWeight, request.Entries, out var error))
                 return new { ok = false, error };
-
             var count = request.Entries?.Count ?? 0;
             log.Warn($"[DerpACE AdminMap] {adminName} updated {count} {pool} loot WCID weight(s).");
             return new { ok = true, message = $"Saved and hot-applied {count} {pool} WCID weight(s)." };
         }
-
         private static ChanceTable<SpellId> GetLootSpellDefaults(string pool)
         {
             return pool?.ToLowerInvariant() switch
@@ -3165,7 +2928,6 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
                 _ => null
             };
         }
-
         private static string BuildLootLabHtml()
         {
             return """
@@ -3334,7 +3096,6 @@ loadCatalog().catch(e=>status(e.message,'error'));</script></body></html>
         private static string BuildIndexHtml()
         {
             var refresh = Math.Max(1, DerpAceConfigManager.Config.AdminMapRefreshSeconds);
-
             return $@"<!doctype html>
 <html lang=""en"">
 <head>
@@ -3949,7 +3710,6 @@ async function copyText(text) {{
     await navigator.clipboard.writeText(text);
     return;
   }}
-
   const textarea = document.createElement('textarea');
   textarea.value = text;
   textarea.style.position = 'fixed';
@@ -3962,7 +3722,6 @@ async function copyText(text) {{
 async function copyMapLocAt(event) {{
   if (currentMode !== 'world' || !currentMapBounds || !mapLayer) {{ status.textContent = 'LOC copy is available on the overworld map.'; return; }}
   if (event.target.closest('button, input, textarea, select, aside, .bottomDock, .inventoryPanel')) return;
-
   const rect = map.getBoundingClientRect();
   const localX = (event.clientX - rect.left - view.x) / view.scale;
   const localY = (event.clientY - rect.top - view.y) / view.scale;
@@ -3973,7 +3732,6 @@ async function copyMapLocAt(event) {{
     status.textContent = 'Right-click inside the mapped Dereth area to copy a landloc.';
     return;
   }}
-
   const x = pctToMapX(xPct, b);
   const y = pctToMapY(yPct, b);
   try {{
@@ -4064,7 +3822,6 @@ function renderWatch(data) {{
   heading.className = 'watchHeading';
   heading.style.transform = `translate(-50%, -100%) rotate(${{data.player?.heading || 0}}deg)`;
   watchView.appendChild(heading);
-
   for (const b of data.blips || []) {{
     const left = 50 + (b.dx / radius) * 50;
     const top = 50 - (b.dy / radius) * 50;
@@ -4084,7 +3841,6 @@ function renderWatch(data) {{
     }}
     watchView.appendChild(dot);
   }}
-
   const counts = (data.blips || []).reduce((acc, b) => {{
     const key = b.kind || 'other';
     acc[key] = (acc[key] || 0) + 1;
@@ -4146,14 +3902,12 @@ function renderInventoryRows() {{
     inventoryRows.innerHTML = '<div class=""inventoryEmpty"">No matching items</div>';
     return;
   }}
-
   const groupMap = new Map();
   for (const item of items) {{
     const key = inventoryGroupKey(item);
     if (!groupMap.has(key)) groupMap.set(key, []);
     groupMap.get(key).push(item);
   }}
-
   const orderedGroups = [...groupMap.entries()].sort((a, b) => {{
     if (a[0] === 'Equipped') return -1;
     if (b[0] === 'Equipped') return 1;
@@ -4161,7 +3915,6 @@ function renderInventoryRows() {{
     if (b[0].trim() === 'Main Pack') return 1;
     return a[0].localeCompare(b[0]);
   }});
-
   inventoryRows.innerHTML = orderedGroups.map(([title, group]) => {{
     const sorted = group.slice().sort((a, b) => inventorySortValue(a) - inventorySortValue(b) || String(a.name || '').localeCompare(String(b.name || '')));
     const cleanTitle = title.trim();
@@ -4173,7 +3926,6 @@ function renderInventoryRows() {{
         </button>`).join('')}}</div>
     </section>`;
   }}).join('');
-
   inventoryRows.querySelectorAll('.inventorySlot').forEach(row => row.onclick = () => {{
     const item = (inventoryState.data?.items || []).find(i => i.guid === row.dataset.guid);
     inventoryState.selected = item;
@@ -4466,7 +4218,6 @@ checkSession();
 </body>
 </html>";
         }
-
         private sealed class AdminMapSnapshot
         {
             public DateTime ServerTimeUtc { get; set; }
@@ -4479,7 +4230,6 @@ checkSession();
             public AdminMapStats Stats { get; set; }
             public AdminMapFeeds Feeds { get; set; }
         }
-
         private sealed class AdminSpellWorkshopSaveRequest
         {
             public string FileName { get; set; }
@@ -4501,7 +4251,6 @@ checkSession();
             public bool HasWcidConflict { get; set; }
             public string TemplateError { get; set; }
         }
-
         private sealed class AdminBossFileTemplate
         {
             public string ProfileName { get; set; }
@@ -4523,7 +4272,6 @@ checkSession();
             public string Json { get; set; }
             public bool Enabled { get; set; }
         }
-
         private sealed class AdminBossSpawnRequest
         {
             public string Profile { get; set; }
@@ -4532,7 +4280,6 @@ checkSession();
             public int Count { get; set; }
             public float Distance { get; set; }
         }
-
         private sealed class AdminBossDespawnRequest
         {
             public string Guid { get; set; }
@@ -4553,24 +4300,20 @@ checkSession();
             public double Max { get; set; }
             public double Step { get; set; }
         }
-
         private sealed class AdminLootConfigUpdateRequest
         {
             public Dictionary<string, JsonElement> Values { get; set; } = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
         }
-
         private sealed class AdminLootTierRequest
         {
             public List<LootTierDefinition> Tiers { get; set; } = new List<LootTierDefinition>();
         }
-
         private sealed class AdminLootSpellWeightRequest
         {
             public string Pool { get; set; }
             public bool Reset { get; set; }
             public List<LootSpellWeight> Entries { get; set; } = new List<LootSpellWeight>();
         }
-
         private sealed class AdminLootWcidWeightRequest
         {
             public string Pool { get; set; }
@@ -4578,7 +4321,6 @@ checkSession();
             public double BuiltInWeight { get; set; } = 100.0;
             public List<LootWcidWeight> Entries { get; set; } = new List<LootWcidWeight>();
         }
-
         private sealed class AdminLootSimulationRequest
         {
             public int Tier { get; set; } = 8;
@@ -4590,7 +4332,6 @@ checkSession();
             public string Account { get; set; }
             public string Password { get; set; }
         }
-
         private sealed class AdminMapSession
         {
             public uint AccountId { get; set; }
@@ -4598,7 +4339,6 @@ checkSession();
             public AccessLevel AccessLevel { get; set; }
             public DateTime ExpiresUtc { get; set; }
         }
-
         private sealed class AdminMapBounds
         {
             public float Left { get; set; }
@@ -4606,7 +4346,6 @@ checkSession();
             public float Right { get; set; }
             public float Bottom { get; set; }
         }
-
         private sealed class AdminMapPlayer
         {
             public string Name { get; set; }
@@ -4628,7 +4367,6 @@ checkSession();
             public uint Mana { get; set; }
             public uint MaxMana { get; set; }
         }
-
         private sealed class AdminMapBlip
         {
             public string Name { get; set; }
@@ -4645,7 +4383,6 @@ checkSession();
             public float Y { get; set; }
             public float Z { get; set; }
         }
-
         private sealed class AdminWatchSnapshot
         {
             public bool Ok { get; set; }
@@ -4654,7 +4391,6 @@ checkSession();
             public AdminMapPlayer Player { get; set; }
             public List<AdminWatchBlip> Blips { get; set; }
         }
-
         private sealed class AdminWatchBlip
         {
             public string Name { get; set; }
@@ -4671,7 +4407,6 @@ checkSession();
             public double Heading { get; set; }
             public float Z { get; set; }
         }
-
         private sealed class AdminMapStats
         {
             public int OnlineCount { get; set; }
@@ -4684,7 +4419,6 @@ checkSession();
             public AdminLeaderboardEntry DeadliestHardcore { get; set; }
             public AdminLeaderboardEntry DeadliestIronman { get; set; }
         }
-
         private sealed class AdminLeaderboardEntry
         {
             public string Name { get; set; }
@@ -4692,13 +4426,11 @@ checkSession();
             public int Kills { get; set; }
             public int Lives { get; set; }
         }
-
         private sealed class AdminMapFeeds
         {
             public List<AdminChatFeedEntry> Chat { get; set; }
             public List<AdminRareFeedEntry> Rares { get; set; }
         }
-
         private sealed class AdminChatFeedEntry
         {
             public DateTime Utc { get; set; }
@@ -4706,7 +4438,6 @@ checkSession();
             public string Sender { get; set; }
             public string Message { get; set; }
         }
-
         private sealed class AdminRareFeedEntry
         {
             public DateTime Utc { get; set; }
@@ -4720,7 +4451,6 @@ checkSession();
             public string Location { get; set; }
             public string Landblock { get; set; }
         }
-
         private sealed class AdminIconCacheEntry
         {
             public byte[] Bytes { get; set; }
@@ -4737,13 +4467,11 @@ checkSession();
             public int CoinValue { get; set; }
             public bool Editable { get; set; }
             public List<AdminInventoryItem> Items { get; set; }
-
             public static AdminInventorySnapshot Fail(string error)
             {
                 return new AdminInventorySnapshot { Ok = false, Error = error, Items = new List<AdminInventoryItem>() };
             }
         }
-
         private sealed class AdminInventoryItem
         {
             public string Name { get; set; }
@@ -4795,14 +4523,12 @@ checkSession();
             public bool IsBonded { get; set; }
             public Dictionary<string, List<AdminItemProperty>> Properties { get; set; }
         }
-
         private sealed class AdminItemProperty
         {
             public uint Key { get; set; }
             public string Name { get; set; }
             public string Value { get; set; }
         }
-
         private sealed class AdminInventoryPropertyEditRequest
         {
             public string PlayerGuid { get; set; }
@@ -4843,13 +4569,11 @@ checkSession();
             public int? GearCritDamage { get; set; }
             public int? GearCritDamageResist { get; set; }
         }
-
         private sealed class AdminInventoryItemDeleteRequest
         {
             public string PlayerGuid { get; set; }
             public string ItemGuid { get; set; }
         }
-
         private sealed class AdminPlayerActionRequest
         {
             public string PlayerGuid { get; set; }
@@ -4865,7 +4589,6 @@ checkSession();
             public float? Qy { get; set; }
             public float? Qz { get; set; }
         }
-
         private sealed class AdminDungeonSnapshot
         {
             public string Landblock { get; set; }
@@ -4881,7 +4604,6 @@ checkSession();
             public List<AdminDungeonPlayer> Players { get; set; }
             public List<AdminMapBlip> Blips { get; set; }
         }
-
         private sealed class AdminDungeonMap
         {
             public bool Generated { get; set; }
@@ -4893,13 +4615,11 @@ checkSession();
             public float MinZ { get; set; }
             public float MaxZ { get; set; }
             public string Svg { get; set; }
-
             public static AdminDungeonMap Fail(string error)
             {
                 return new AdminDungeonMap { Generated = false, Error = error, Svg = "" };
             }
         }
-
         private sealed class AdminDungeonPlayer
         {
             public string Name { get; set; }

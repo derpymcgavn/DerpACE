@@ -61,7 +61,7 @@ namespace ACE.Server.WorldObjects
         private const float UnarmedCriticalBoostDamageMultiplier = 0.35f;
         private const double UnarmedStunSeconds = 1.25;
         private const float UnarmedKnockbackDistance = 2.0f;
-        private const float ShieldBashKnockbackDistance = 10.0f;
+        private static float ShieldBashKnockbackDistance => Math.Clamp(ACE.Server.Managers.DerpACEConfig.ShieldBashKnockbackDistance, 0.0f, 30.0f);
         public const int GoldleafSentinelCooldownId = 2014;
         public const int ThiefDaggerCooldownId = 2020;
         public const int QuickeningDaggerCooldownId = 2021;
@@ -92,26 +92,26 @@ namespace ACE.Server.WorldObjects
         private const int PolebreakerBreakGuardDuration = 5;
         private const int PolebreakerBreakGuardCooldown = 12;
         private const double ThiefDaggerCooldownSeconds = 3.0;
-        private const double QuickeningDaggerCooldownSeconds = 10.0;
+        private static double QuickeningDaggerCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.QuickeningDaggerCooldownSeconds);
         private const double FencerPierceCooldownSeconds = 3.0;
         private const double FencerRiposteCooldownSeconds = 4.0;
         private const double FencerParryCooldownSeconds = 4.0;
         private const double RavagerCooldownSeconds = 6.0;
         private const double WardenCooldownSeconds = 8.0;
         private const double ResoluteHealCooldownSeconds = 8.0;
-        private const double ResoluteKillCooldownSeconds = 10.0;
+        private static double ResoluteKillCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.ResoluteKillCooldownSeconds);
         private const double BreacherCooldownSeconds = 4.0;
         private const double StalkerCooldownSeconds = 6.0;
         private const double ReaperCooldownSeconds = 12.0;
         public const double RicochetCooldownSeconds = 4.0;
         public const double DinnerwareCooldownSeconds = 5.0;
         private const double ShieldThornsCooldownSeconds = 1.0;
-        private const double ShieldBashingCooldownSeconds = 8.0;
+        private static double ShieldBashingCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.ShieldBashingCooldownSeconds);
         private const double ShieldProjectileReflectCooldownSeconds = 6.0;
-        private const double ShieldSpellMirrorCooldownSeconds = 10.0;
+        private static double ShieldSpellMirrorCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.ShieldSpellMirrorCooldownSeconds);
         private static double LugianHammerThrowCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.LugianHammerThrowCooldownSeconds);
-        public const double PugilistCooldownSeconds = 6.0;
-        public const double HierophantCooldownSeconds = 10.0;
+        public static double PugilistCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.PugilistCooldownSeconds);
+        public static double HierophantCooldownSeconds => Math.Max(1.0, ACE.Server.Managers.DerpACEConfig.HierophantCooldownSeconds);
 
         // DerpACE: Unarmed combo system for tracking punch/kick combos
         private UnarmedComboSystem _unarmedComboSystem;
@@ -1967,7 +1967,7 @@ namespace ACE.Server.WorldObjects
                 distance = 1;
             }
 
-            foreach (var pushDistance in new[] { ShieldBashKnockbackDistance, 7.0f, 4.0f, 2.0f })
+            foreach (var pushDistance in BuildShieldBashDistances())
             {
                 var candidate = new ACE.Entity.Position(target.Location)
                 {
@@ -1989,6 +1989,20 @@ namespace ACE.Server.WorldObjects
             return false;
         }
 
+
+        private static IEnumerable<float> BuildShieldBashDistances()
+        {
+            var maxDistance = ShieldBashKnockbackDistance;
+            if (maxDistance <= 0.0f)
+                yield break;
+
+            foreach (var scale in new[] { 1.0f, 0.7f, 0.4f, 0.2f })
+            {
+                var distance = Math.Max(0.5f, maxDistance * scale);
+                if (distance <= maxDistance)
+                    yield return distance;
+            }
+        }
         private static bool PrepareShieldBashKnockbackPosition(Creature target, ACE.Entity.Position candidate)
         {
             if (target.CurrentLandblock.IsDungeon || candidate.Indoors)
@@ -2191,7 +2205,7 @@ namespace ACE.Server.WorldObjects
             if (parrySword == null)
                 return;
 
-            var parryPct = Math.Clamp((float)(parrySword.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct) ?? 0.0), 0.0f, 0.25f);
+            var parryPct = GetFencerParryPct(parrySword);
             if (parryPct <= 0.0f || ThreadSafeRandom.Next(0.0f, 1.0f) >= parryPct)
                 return;
 
@@ -2212,6 +2226,16 @@ namespace ACE.Server.WorldObjects
                 Session.Network.EnqueueSend(new GameMessageSystemChat(
                     $"Your {parrySword.NameWithMaterial} snaps low, parrying {(uint)parriedDamage} damage back at {attacker.Name}. [Parry Sword]",
                     ChatMessageType.CombatSelf));
+        }
+
+        private static float GetFencerParryPct(WorldObject parrySword)
+        {
+            var parryPct = (float)(parrySword?.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.FencerParryPct) ?? 0.0);
+
+            if (parryPct <= 0.0f && parrySword?.GetProperty(PropertyBool.IsFencerBlade) == true)
+                parryPct = (float)(parrySword.GetProperty((ACE.Entity.Enum.Properties.PropertyFloat)9045) ?? 0.0);
+
+            return Math.Clamp(parryPct, 0.0f, 0.25f);
         }
 
         private void PlayFencerParryPointDown()
