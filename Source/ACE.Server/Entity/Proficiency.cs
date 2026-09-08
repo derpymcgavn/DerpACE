@@ -2,6 +2,8 @@ using System;
 using log4net;
 using ACE.Common;
 using ACE.Entity.Enum;
+using ACE.Entity.Enum.Properties;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects;
 using ACE.Server.WorldObjects.Entity;
 
@@ -36,6 +38,9 @@ namespace ACE.Server.Entity
             var currentTime = Time.GetUnixTime();
 
             var timeDiff = currentTime - last_used_time;
+            var fullTime = player.GetProperty(PropertyBool.IsHardcoreRogue) == true && DerpACEConfig.HardcoreRogueEnabled
+                ? TimeSpan.FromMinutes(DerpACEConfig.HardcoreRogueProficiencyMinutes)
+                : FullTime;
 
             if (timeDiff < 0)
             {
@@ -46,7 +51,7 @@ namespace ACE.Server.Entity
             }
 
             var difficulty_check = difficulty > last_difficulty;
-            var time_check = timeDiff >= FullTime.TotalSeconds;
+            var time_check = timeDiff >= fullTime.TotalSeconds;
 
             if (difficulty_check || time_check)
             {
@@ -57,7 +62,7 @@ namespace ACE.Server.Entity
                 {
                     // 10 mins elapsed from 15 min FullTime:
                     // 0.66f timeScale
-                    timeScale = (float)(timeDiff / FullTime.TotalSeconds);
+                    timeScale = (float)(timeDiff / fullTime.TotalSeconds);
 
                     // any rng involved?
                 }
@@ -69,7 +74,10 @@ namespace ACE.Server.Entity
 
                 if (player.IsMaxLevel) return;
 
-                var pp = (uint)Math.Round(difficulty * timeScale);
+                var rogueMultiplier = player.GetProperty(PropertyBool.IsHardcoreRogue) == true && DerpACEConfig.HardcoreRogueEnabled
+                    ? Math.Max(0.0f, DerpACEConfig.HardcoreRogueProficiencyXpMultiplier)
+                    : 1.0f;
+                var pp = (uint)Math.Round(difficulty * timeScale * rogueMultiplier);
                 var totalXPGranted = (long)Math.Round(pp * 1.1f);   // give additional 10% of proficiency XP to unassigned XP
 
                 if (totalXPGranted > 10000)
@@ -121,3 +129,4 @@ namespace ACE.Server.Entity
         }
     }
 }
+

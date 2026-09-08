@@ -373,6 +373,7 @@ namespace ACE.Server.Command.Handlers
         // ----------------------------------------------------------------
 
         private static readonly ConcurrentDictionary<uint, DateTime> PendingHardcoreConfirms = new ConcurrentDictionary<uint, DateTime>();
+        private static readonly ConcurrentDictionary<uint, DateTime> PendingRogueHardcoreConfirms = new ConcurrentDictionary<uint, DateTime>();
 
         [CommandHandler("hardcore", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Hardcore self-found mode (IRREVERSIBLE).",
@@ -472,6 +473,103 @@ namespace ACE.Server.Command.Handlers
                 ChatMessageType.System);
         }
 
+        [CommandHandler("rogue", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
+            "Hardcore Rogue mode: one life, faster learn-by-doing skills, and level-up boon choices.",
+            "on      - begin Hardcore Rogue commitment (confirm within 30 seconds)\n" +
+            "confirm - finalize Hardcore Rogue conversion\n" +
+            "status  - show current Rogue state and chosen boons\n" +
+            "choices - show your pending level-up boon choices\n" +
+            "pick #  - choose one pending boon")]
+        public static void HandleRogue(Session session, params string[] parameters)
+        {
+            var player = session?.Player;
+            if (player == null) return;
+
+            if (!DerpACEConfig.HardcoreRogueEnabled)
+            {
+                player.SendMessage("Hardcore Rogue mode is currently disabled on this server.", ChatMessageType.System);
+                return;
+            }
+
+            var sub = parameters != null && parameters.Length > 0 ? parameters[0].ToLowerInvariant() : "status";
+
+            switch (sub)
+            {
+                case "status":
+                    RogueHardcoreManager.ShowStatus(player);
+                    return;
+
+                case "choices":
+                    RogueHardcoreManager.ShowChoices(player);
+                    return;
+
+                case "pick":
+                    if (parameters.Length < 2 || !int.TryParse(parameters[1], out var choice))
+                    {
+                        player.SendMessage("Usage: /rogue pick <number>", ChatMessageType.System);
+                        return;
+                    }
+                    RogueHardcoreManager.PickChoice(player, choice);
+                    return;
+            }
+
+            if (player.GetProperty(PropertyBool.IsIronman) == true || player.GetProperty(PropertyBool.IsIronmanNomad) == true)
+            {
+                player.SendMessage("Ironman-family characters already have their own progression path.", ChatMessageType.System);
+                return;
+            }
+
+            if (player.GetProperty(PropertyBool.IsHardcoreRogue) == true)
+            {
+                RogueHardcoreManager.ShowStatus(player);
+                return;
+            }
+
+            if ((player.Level ?? 1) > DerpACEConfig.HardcoreRogueMaxOptInLevel)
+            {
+                player.SendMessage($"Hardcore Rogue mode is only available at level {DerpACEConfig.HardcoreRogueMaxOptInLevel} or below.", ChatMessageType.System);
+                return;
+            }
+
+            switch (sub)
+            {
+                case "on":
+                    PendingRogueHardcoreConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
+                    player.SendMessage(
+                        "WARNING: Hardcore Rogue is permanent for this life. You will have one Hardcore life, " +
+                        "skills will grow faster through successful use, and every level will offer one boon choice. " +
+                        $"Type /rogue confirm within {ConfirmWindowSeconds} seconds to proceed.",
+                        ChatMessageType.System);
+                    return;
+
+                case "confirm":
+                    if (!PendingRogueHardcoreConfirms.TryRemove(player.Guid.Full, out var expires))
+                    {
+                        player.SendMessage("No pending Hardcore Rogue commitment. Type /rogue on first.", ChatMessageType.System);
+                        return;
+                    }
+                    if (DateTime.UtcNow > expires)
+                    {
+                        player.SendMessage("Your Hardcore Rogue commitment window expired. Type /rogue on again.", ChatMessageType.System);
+                        return;
+                    }
+
+                    if (player.GetProperty(PropertyBool.IsHardcore) != true)
+                        ApplyHardcoreStandalone(player);
+
+                    RogueHardcoreManager.Enable(player);
+
+                    var rogueMsg = $"[HARDCORE ROGUE] {player.Name} has entered the Rogue path. One life, many bad decisions.";
+                    var rogueBroadcast = new GameMessageSystemChat(rogueMsg, ChatMessageType.WorldBroadcast);
+                    PlayerManager.BroadcastToAll(rogueBroadcast);
+                    PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, rogueMsg);
+                    return;
+
+                default:
+                    player.SendMessage("Usage: /rogue on | confirm | status | choices | pick <number>", ChatMessageType.System);
+                    return;
+            }
+        }
         [CommandHandler("ironmantop", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Show the Ironman leaderboard (top players by mob kills).")]
         public static void HandleIronmanTop(Session session, params string[] parameters)
@@ -512,3 +610,4 @@ namespace ACE.Server.Command.Handlers
         }
     }
 }
+

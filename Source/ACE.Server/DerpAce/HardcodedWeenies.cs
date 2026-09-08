@@ -22,6 +22,7 @@ namespace ACE.Server.DerpAce
         public const uint NomadSurvivalTomeWeenieClassId = 2000611;
         public const uint DerptideIntroBookWeenieClassId = 2000612;
         public const uint IronmanGuideBookWeenieClassId = 2000613;
+        public const uint RogueHardcoreGuideBookWeenieClassId = 2000621;
         public const uint IronmanPathwardenChestWeenieClassId = 3238931;
         public const uint NomadPathwardenChestWeenieClassId = 2000615;
         public const uint IronmanSupplyKeyWeenieClassId = 3238934;
@@ -58,6 +59,7 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildNomadSurvivalTome());
                 DatabaseManager.World.SetCachedWeenie(BuildDerptideIntroBook());
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanGuideBook());
+                DatabaseManager.World.SetCachedWeenie(BuildRogueHardcoreGuideBook());
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanPathwardenChest());
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanSupplyKey());
                 DatabaseManager.World.SetCachedWeenie(BuildNomadSupplyKey());
@@ -933,6 +935,62 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
             AddIronmanGuidePage(w, "VI. Blind Ironman\n\nBlind Ironman hides the road ahead and spends experience into your plan as it opens. It is not weaker. It is simply less willing to hand you the map.\n\nYou will see what you have become, not every step you have not earned yet.\n\nIf you chose blind, resist the urge to turn every surprise into a spreadsheet. Some doors should stay closed until you are standing in front of them.");
             AddIronmanGuidePage(w, "VII. Loot, Quests, and Strange Stones\n\nSlayer Gems, global hunts, custom armor forces, spell focuses, and odd mutators all still exist for you, but the source matters. Keep your finds clean.\n\nGlobal quests can be checked with /gquest. Leaderboards are useful, but they are also bait. Chase them if you like; just remember the board does not pay death's bill.\n\nIf an item has strange text, read it twice before selling it once.");
             AddIronmanGuidePage(w, "VIII. Last Counsel\n\nIronman is not about proving you need nobody. It is about learning what you can do when the easy doors are shut.\n\nKeep backups. Carry recalls. Respect hollow damage. Do not let one good drop convince you that you are immortal.\n\nThe road less traveled is not empty. It is full of people who walked too loudly. Step softer.");
+
+            return w;
+        }
+
+        private static Weenie BuildRogueHardcoreGuideBook()
+        {
+            var w = new Weenie
+            {
+                WeenieClassId = RogueHardcoreGuideBookWeenieClassId,
+                ClassName     = "ace2000621-roguehardcoreguide",
+                WeenieType    = WeenieType.Book,
+
+                PropertiesInt          = new Dictionary<PropertyInt, int>(),
+                PropertiesBool         = new Dictionary<PropertyBool, bool>(),
+                PropertiesFloat        = new Dictionary<PropertyFloat, double>(),
+                PropertiesString       = new Dictionary<PropertyString, string>(),
+                PropertiesDID          = new Dictionary<PropertyDataId, uint>(),
+                PropertiesBook         = new PropertiesBook { MaxNumPages = 7, MaxNumCharsPerPage = 1800 },
+                PropertiesBookPageData = new List<PropertiesBookPageData>(),
+            };
+
+            w.PropertiesInt[PropertyInt.ItemType]        = (int)ItemType.Writable;
+            w.PropertiesInt[PropertyInt.PaletteTemplate] = 28;
+            w.PropertiesInt[PropertyInt.EncumbranceVal]  = 25;
+            w.PropertiesInt[PropertyInt.Mass]            = 25;
+            w.PropertiesInt[PropertyInt.Value]           = 0;
+            w.PropertiesInt[PropertyInt.ItemUseable]     = (int)Usable.ContainedViewedRemote;
+            w.PropertiesInt[PropertyInt.MaxStackSize]    = 1;
+            w.PropertiesInt[PropertyInt.StackSize]       = 1;
+            w.PropertiesInt[PropertyInt.PhysicsState]    = 1044;
+            w.PropertiesInt[PropertyInt.UiEffects]       = (int)(UiEffects.Magical | UiEffects.Nether);
+
+            w.PropertiesBool[PropertyBool.Inscribable] = false;
+            w.PropertiesBool[PropertyBool.IsSellable]  = false;
+            w.PropertiesBool[PropertyBool.Inelastic]   = true;
+            w.PropertiesBool[PropertyBool.IgnoreAuthor]= true;
+
+            w.PropertiesString[PropertyString.Name]        = "The Borrowed Pulse";
+            w.PropertiesString[PropertyString.ShortDesc]   = "A field guide for Rogue Hardcore characters.";
+            w.PropertiesString[PropertyString.LongDesc]    = "A sharp little guide for Hardcore rogues who choose boons, live by momentum, and keep finding stranger tools than they deserve.";
+            w.PropertiesString[PropertyString.Inscription] = "Take the gift. Pay attention to the hand that offered it.";
+            w.PropertiesString[PropertyString.ScribeName]  = "The Derptide Guides";
+            w.PropertiesString[PropertyString.ScribeAccount] = "prewritten";
+
+            w.PropertiesDID[PropertyDataId.Setup] = 0x0200018B;
+            w.PropertiesDID[PropertyDataId.Icon]  = 0x06001036;
+            CopySetupAndIcon(w, TomeWeenieClassId);
+            w.PropertiesDID[PropertyDataId.IconOverlay] = 0x06002A9C;
+
+            AddBookPage(w, "I. The First Bad Idea\n\nRogue Hardcore is still Hardcore. You have lives, and losing all of them still means the road writes your ending in permanent ink. The difference is that this path rewards movement, use, and adaptation.\n\nYour trained skills grow faster through use. The more you live like your build, the more your build answers back.\n\nThis mode is not meant to be fair in the tidy way. It is meant to be tempting, dangerous, and full of decisions you can blame on yourself later.");
+            AddBookPage(w, "II. Boons\n\nEach level after the first can offer a Rogue boon. Use /rogue choices to see the offered picks, then /rogue pick <number> to choose one. A pending boon stays with you through logout and server restart.\n\nSkill boons nudge trained skills upward. They are small, steady advantages for the playstyle you are actually using.\n\nThe choice is permanent for that life. If the road hands you three suspicious gifts, congratulations: that is the feature.");
+            AddBookPage(w, "III. One-Off Perks\n\nSome boons are one-off gifts. Borrowed Pulse can restore one Hardcore life, capped for Rogue Hardcore. Red Pocket, Blue Pocket, and Utility Belt are emergency kits for survival, mana, and field tools.\n\nOnce taken, one-off perks stop appearing. The road does not keep handing out the same miracle just because you made a convincing face.\n\nSpend them when they save a run, not when they merely make a quiet evening prettier.");
+            AddBookPage(w, "IV. Cache Rolls\n\nSome boons roll gear instead of skill. Weapon Cache, Blade Cache, Missile Cache, Caster Cache, and Armor Patch create level-appropriate loot for your current tier.\n\nThese cache boons can appear again later, because gear is part of the climb. A weapon that carries level 30 may become a fond memory by level 90. That is healthy. Give it a name, then replace it without ceremony.\n\nCache gear is Hardcore-provenance gear. Keep the economy clean.");
+            AddBookPage(w, "V. Proficiency\n\nRogue Hardcore uses a shorter proficiency window and a configurable proficiency multiplier. That means the skills you actively use can wake up faster than normal.\n\nThis does not make every skill useful by accident. Trained skills matter. Choices matter. Repetition matters. The mode is at its best when a character starts to feel like a little story written in bad decisions and useful habits.\n\nAdmins can tune Rogue settings with /lootconfig rogue.");
+            AddBookPage(w, "VI. The Living Board\n\nThe public Rogue board lives at /rogues on the Admin Map web service. It shows living online Rogue Hardcore characters, their levels, kills, lives, and chosen boons.\n\nIt does not show exact locations, inventory, private identifiers, or admin controls. It is meant for cheering, rivalry, and watching the brave make questionable decisions in near real time.\n\nIf you see your name there, remember: the board loves survivors most because they are still available for future mistakes.");
+            AddBookPage(w, "VII. Last Advice\n\nTake boring survival if your build is already exciting. Take exciting loot if your backpack looks like it lost a fight with a shed. Take skill growth when the run has found its rhythm.\n\nNo boon replaces caution. No cache roll makes you immortal. No one-off perk is owed to you twice.\n\nWhen the next level asks what kind of character you are becoming, answer honestly. Then keep enough stamina to run away from the answer.");
 
             return w;
         }

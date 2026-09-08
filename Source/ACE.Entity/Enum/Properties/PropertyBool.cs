@@ -288,5 +288,9 @@ namespace ACE.Entity.Enum.Properties
         IsExecutionerWeapon              = 9082,
         IsGravecallerCaster              = 9083,
         CorpseRaisedByGravecaller        = 9084,
+
+        /* DerpACE Hardcore Rogue submode - learn-by-doing progression and level-up boon choices */
+        IsHardcoreRogue                  = 9087,
     }
 }
+

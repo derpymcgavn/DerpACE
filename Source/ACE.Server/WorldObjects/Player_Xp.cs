@@ -366,6 +366,9 @@ namespace ACE.Server.WorldObjects
                 if (IsIronmanFamily)
                     ACE.Server.Factories.IronmanFactory.CheckIronmanLevelGrants(this);
 
+                // DerpACE: Hardcore Rogue offers one persistent boon choice per level.
+                ACE.Server.Managers.RogueHardcoreManager.OnLevelUp(this, Level ?? 1);
+
                 Session.Network.EnqueueSend(levelUp);
 
                 SetMaxVitals();
@@ -541,3 +544,4 @@ namespace ACE.Server.WorldObjects
         }
     }
 }
+

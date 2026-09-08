@@ -608,6 +608,11 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.IronmanXpScalar                     = Math.Max(0.0f, c.IronmanXpScalar);
             DerpACEConfig.NomadXpScalar                       = Math.Max(0.0f, c.NomadXpScalar);
             DerpACEConfig.HardcoreXpScalar                    = Math.Max(0.0f, c.HardcoreXpScalar);
+            DerpACEConfig.HardcoreRogueEnabled                = c.HardcoreRogueEnabled;
+            DerpACEConfig.HardcoreRogueMaxOptInLevel          = Math.Max(1, c.HardcoreRogueMaxOptInLevel);
+            DerpACEConfig.HardcoreRogueBoonChoices            = Math.Clamp(c.HardcoreRogueBoonChoices, 1, 5);
+            DerpACEConfig.HardcoreRogueProficiencyMinutes     = Math.Max(0.1, c.HardcoreRogueProficiencyMinutes);
+            DerpACEConfig.HardcoreRogueProficiencyXpMultiplier = Math.Max(0.0f, c.HardcoreRogueProficiencyXpMultiplier);
 
             // ── Bank ──────────────────────────────────────────────────────────
             DerpAce.Bank.BankConfig.EnableBank          = c.EnableBank;
@@ -632,3 +637,4 @@ namespace ACE.Server.DerpAce
         }
     }
 }
+

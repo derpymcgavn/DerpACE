@@ -181,6 +181,11 @@ namespace ACE.Server.Command.Handlers
             "  ironman.xp            IronmanXpScalar (float, default 0.75)\n" +
             "  nomad.xp              NomadXpScalar (float, default 0.75)\n" +
             "  hardcore.xp           HardcoreXpScalar (float, default 1.0)\n" +
+            "  rogue.enabled         HardcoreRogueEnabled (bool)\n" +
+            "  rogue.maxlevel        HardcoreRogueMaxOptInLevel (int)\n" +
+            "  rogue.choices         HardcoreRogueBoonChoices (int 1-5)\n" +
+            "  rogue.profmins        HardcoreRogueProficiencyMinutes (float)\n" +
+            "  rogue.profmult        HardcoreRogueProficiencyXpMultiplier (float)\n" +
             "  vendor.loot           VendorRandomLootEnabled (bool, master switch)\n" +
             "  vendor.lootmin        VendorRandomLootMinItems (int, min items per category)\n" +
             "  vendor.lootmax        VendorRandomLootMaxItems (int, max items per category)")]
@@ -359,6 +364,11 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  ironman.xp           = {DerpACEConfig.IronmanXpScalar:P0}  ({DerpACEConfig.IronmanXpScalar})");
                 sb.AppendLine($"  nomad.xp             = {DerpACEConfig.NomadXpScalar:P0}  ({DerpACEConfig.NomadXpScalar})");
                 sb.AppendLine($"  hardcore.xp          = {DerpACEConfig.HardcoreXpScalar:P0}  ({DerpACEConfig.HardcoreXpScalar})");
+                sb.AppendLine($"  rogue.enabled        = {DerpACEConfig.HardcoreRogueEnabled}");
+                sb.AppendLine($"  rogue.maxlevel       = {DerpACEConfig.HardcoreRogueMaxOptInLevel}");
+                sb.AppendLine($"  rogue.choices        = {DerpACEConfig.HardcoreRogueBoonChoices}");
+                sb.AppendLine($"  rogue.profmins       = {DerpACEConfig.HardcoreRogueProficiencyMinutes:0.##}");
+                sb.AppendLine($"  rogue.profmult       = {DerpACEConfig.HardcoreRogueProficiencyXpMultiplier:0.##}x");
                 sb.AppendLine($"  vendor.loot          = {DerpACEConfig.VendorRandomLootEnabled}");
                 sb.AppendLine($"  vendor.lootmin       = {DerpACEConfig.VendorRandomLootMinItems}");
                 sb.AppendLine($"  vendor.lootmax       = {DerpACEConfig.VendorRandomLootMaxItems}");
@@ -1068,6 +1078,31 @@ namespace ACE.Server.Command.Handlers
                         DerpACEConfig.HardcoreXpScalar = Math.Max(0.0f, hcxp);
                         break;
 
+                    case "rogue.enabled":
+                        if (!bool.TryParse(raw, out var rge)) { BadValue(session, key, "bool"); return; }
+                        DerpACEConfig.HardcoreRogueEnabled = rge;
+                        break;
+
+                    case "rogue.maxlevel":
+                        if (!TryInt(out var rgml)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreRogueMaxOptInLevel = Math.Max(1, rgml);
+                        break;
+
+                    case "rogue.choices":
+                        if (!TryInt(out var rgc)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreRogueBoonChoices = Math.Clamp(rgc, 1, 5);
+                        break;
+
+                    case "rogue.profmins":
+                        if (!TryFloat(out var rgpm)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HardcoreRogueProficiencyMinutes = Math.Max(0.1f, rgpm);
+                        break;
+
+                    case "rogue.profmult":
+                        if (!TryFloat(out var rgpx)) { BadValue(session, key, "float"); return; }
+                        DerpACEConfig.HardcoreRogueProficiencyXpMultiplier = Math.Max(0.0f, rgpx);
+                        break;
+
                     case "vendor.loot":
                         if (!bool.TryParse(raw, out var vle)) { BadValue(session, key, "bool"); return; }
                         DerpACEConfig.VendorRandomLootEnabled = vle;
@@ -1283,3 +1318,5 @@ namespace ACE.Server.Command.Handlers
         }
     }
 }
+
+

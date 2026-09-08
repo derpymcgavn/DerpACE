@@ -179,6 +179,16 @@ namespace ACE.Server.DerpAce
                     WriteText(context, BuildIndexHtml(), "text/html; charset=utf-8");
                     return;
                 }
+                if (path.Equals("/rogues", StringComparison.OrdinalIgnoreCase))
+                {
+                    WriteText(context, BuildRogueBoardHtml(), "text/html; charset=utf-8");
+                    return;
+                }
+                if (path.Equals("/api/rogues", StringComparison.OrdinalIgnoreCase))
+                {
+                    WriteJson(context, BuildRogueBoardSnapshot());
+                    return;
+                }
                 if (path.Equals("/boss-mechanics", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!IsAuthorized(context))
@@ -655,6 +665,17 @@ namespace ACE.Server.DerpAce
                         context.Response.StatusCode = 404;
                         WriteText(context, "Dereth map image not found.", "text/plain; charset=utf-8");
                     }
+                    return;
+                }
+                if (path.Equals("/api/admin/icon-test", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!IsAuthorized(context))
+                    {
+                        context.Response.StatusCode = 401;
+                        WriteJson(context, new { ok = false, error = "Admin map login required." });
+                        return;
+                    }
+                    WriteJson(context, BuildIconDiagnostic(context.Request.QueryString["did"]));
                     return;
                 }
                 if (path.Equals("/assets/icon", StringComparison.OrdinalIgnoreCase))
@@ -2207,7 +2228,7 @@ namespace ACE.Server.DerpAce
             if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                 return uint.TryParse(value.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out did);
             // Exported DAT filenames and some API clients use bare 8-digit hexadecimal DIDs.
-            if (value.Length == 8 && value.Any(c => char.IsLetter(c)))
+            if (value.Length == 8 && (value[0] == '0' || value.Any(c => char.IsLetter(c))))
                 return uint.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out did);
             return uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out did);
         }
@@ -2226,14 +2247,7 @@ namespace ACE.Server.DerpAce
                 return false;
             try
             {
-                var configuredRoot = DerpAceConfigManager.Config.AdminMapIconPath?.Trim();
-                var roots = new[]
-                {
-                    configuredRoot,
-                    Path.Combine(AppContext.BaseDirectory, "Data", "AdminMap", "icons"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "Data", "AdminMap", "icons"),
-                    Path.Combine(Directory.GetCurrentDirectory(), "Source", "ACE.Server", "Data", "AdminMap", "icons")
-                };
+                var roots = GetIconSearchRoots();
                 var path = roots
                     .Where(root => !string.IsNullOrWhiteSpace(root))
                     .Select(root => Path.IsPathRooted(root) ? root : Path.Combine(AppContext.BaseDirectory, root))
@@ -2259,6 +2273,57 @@ namespace ACE.Server.DerpAce
                 log.Warn($"[DerpACE AdminMap] Failed to load static icon 0x{did:X8}: {ex.Message}");
                 return false;
             }
+        }
+        private static IEnumerable<string> GetIconSearchRoots()
+        {
+            var configuredRoot = DerpAceConfigManager.Config.AdminMapIconPath?.Trim();
+            return new[]
+            {
+                configuredRoot,
+                Path.Combine(AppContext.BaseDirectory, "Data", "AdminMap", "icons"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Data", "AdminMap", "icons"),
+                Path.Combine(Directory.GetCurrentDirectory(), "Source", "ACE.Server", "Data", "AdminMap", "icons")
+            }.Where(root => !string.IsNullOrWhiteSpace(root));
+        }
+        private static object BuildIconDiagnostic(string didText)
+        {
+            if (!TryParseDataId(didText, out var did) || did == 0)
+                return new { ok = false, error = "Enter a decimal DID, 0x-prefixed DID, or bare 8-digit hex DID like 06002157.", requested = didText };
+            var fileName = $"{did:X8}.png";
+            var candidates = new List<object>();
+            string resolvedPath = null;
+            foreach (var root in GetIconSearchRoots())
+            {
+                try
+                {
+                    var expandedRoot = Path.IsPathRooted(root) ? root : Path.Combine(AppContext.BaseDirectory, root);
+                    var fullRoot = Path.GetFullPath(expandedRoot);
+                    var fullPath = Path.Combine(fullRoot, fileName);
+                    var exists = File.Exists(fullPath);
+                    long length = exists ? new FileInfo(fullPath).Length : 0;
+                    candidates.Add(new { root, fullRoot, path = fullPath, exists, length });
+                    if (exists && resolvedPath == null)
+                        resolvedPath = fullPath;
+                }
+                catch (Exception ex)
+                {
+                    candidates.Add(new { root, error = ex.Message });
+                }
+            }
+            return new
+            {
+                ok = resolvedPath != null,
+                requested = didText,
+                parsedDecimal = did,
+                parsedHex = $"0x{did:X8}",
+                fileName,
+                url = $"/assets/icon?did=0x{did:X8}",
+                configuredRoot = DerpAceConfigManager.Config.AdminMapIconPath,
+                appContextBase = AppContext.BaseDirectory,
+                currentDirectory = Directory.GetCurrentDirectory(),
+                resolvedPath,
+                candidates
+            };
         }
         private static AdminIconCacheEntry LoadIconCacheEntry(FileInfo info)
         {
@@ -3093,6 +3158,51 @@ $('save').onclick=async()=>{try{const doc=JSON.parse($('spellJson').value),spell
 loadCatalog().catch(e=>status(e.message,'error'));</script></body></html>
 """;
         }
+        private static RogueBoardSnapshot BuildRogueBoardSnapshot()
+        {
+            var players = PlayerManager.GetAllOnline()
+                .Where(player => RogueHardcoreManager.IsActive(player))
+                .Where(player => (player.GetProperty(PropertyInt.HardcoreLives) ?? 0) > 0)
+                .OrderByDescending(player => player.Level ?? 0)
+                .ThenByDescending(player => player.GetProperty(PropertyInt.CreatureKills) ?? 0)
+                .ThenBy(player => player.Name)
+                .Select(player => new RogueBoardEntry
+                {
+                    Name = player.Name,
+                    Level = player.Level ?? 0,
+                    Kills = player.GetProperty(PropertyInt.CreatureKills) ?? 0,
+                    Lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0,
+                    Boons = RogueHardcoreManager.GetChosenBoonLabels(player).ToList(),
+                    PendingChoice = RogueHardcoreManager.GetPendingBoonLabel(player)
+                })
+                .ToList();
+
+            return new RogueBoardSnapshot
+            {
+                Ok = true,
+                ServerTimeUtc = DateTime.UtcNow,
+                RefreshSeconds = Math.Max(5, DerpAceConfigManager.Config.AdminMapRefreshSeconds),
+                Count = players.Count,
+                Players = players
+            };
+        }
+
+        private static string BuildRogueBoardHtml()
+        {
+            return """
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DerpACE Living Rogues</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0f10;--panel:#121819;--line:#29383d;--text:#edf4ef;--muted:#9aa9a7;--blue:#70b7e8;--gold:#e1bd62}*{box-sizing:border-box}body{margin:0;background:#0b0f10;color:var(--text);font:14px/1.45 Segoe UI,Arial,sans-serif}.top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);background:rgba(11,15,16,.95)}h1{font-size:18px;margin:0}.top span{color:var(--muted)}.top a{margin-left:auto;color:var(--blue);text-decoration:none}.wrap{max-width:1180px;margin:0 auto;padding:18px 20px 28px}.summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin-bottom:16px}.metric,.card{border:1px solid var(--line);border-radius:6px;background:var(--panel)}.metric{padding:13px 14px}.metric strong{display:block;font-size:24px}.metric span,.meta,.empty{color:var(--muted)}.grid{display:grid;gap:10px}.card{display:grid;grid-template-columns:220px 1fr;gap:14px;padding:14px}.identity strong{display:block;font-size:16px}.pill{display:inline-flex;margin:6px 6px 0 0;padding:3px 8px;border:1px solid #395057;border-radius:999px;background:#172124;color:#dff4e8;font-size:12px}.pending{border-color:var(--gold);color:var(--gold)}.boons{display:flex;flex-wrap:wrap;align-content:flex-start}.empty{padding:34px;text-align:center;border:1px dashed var(--line);border-radius:6px;background:rgba(255,255,255,.025)}@media(max-width:780px){.summary{grid-template-columns:1fr 1fr}.card{grid-template-columns:1fr}.top{flex-wrap:wrap}.top a{margin-left:0}}
+</style></head><body>
+<header class="top"><h1>Living Rogue Hardcore</h1><span id="status">Loading...</span><a href="/">Admin Map</a></header>
+<main class="wrap"><section class="summary"><div class="metric"><strong id="count">0</strong><span>alive online rogues</span></div><div class="metric"><strong id="topLevel">0</strong><span>highest level</span></div><div class="metric"><strong id="totalKills">0</strong><span>combined kills</span></div><div class="metric"><strong id="refresh">0s</strong><span>refresh</span></div></section><section id="list" class="grid"></section></main>
+<script>
+const get=id=>document.getElementById(id);let timer=0;function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function render(data){const rows=data.players||[];get('count').textContent=rows.length;get('topLevel').textContent=rows.reduce((m,p)=>Math.max(m,p.level||0),0);get('totalKills').textContent=rows.reduce((n,p)=>n+(p.kills||0),0).toLocaleString();get('refresh').textContent=(data.refreshSeconds||10)+'s';get('status').textContent='Updated '+new Date(data.serverTimeUtc).toLocaleTimeString();get('list').innerHTML=rows.length?rows.map(p=>'<article class="card"><div class="identity"><strong>'+safe(p.name)+'</strong><div class="meta">Level '+p.level+' &middot; '+Number(p.kills||0).toLocaleString()+' kills &middot; '+p.lives+' lives</div>'+(p.pendingChoice?'<span class="pill pending">Pending '+safe(p.pendingChoice)+'</span>':'')+'</div><div class="boons">'+((p.boons||[]).map(b=>'<span class="pill">'+safe(b)+'</span>').join('')||'<span class="meta">No boons chosen yet.</span>')+'</div></article>').join(''):'<div class="empty">No living rogue hardcore characters are online right now.</div>'}async function load(){try{const r=await fetch('/api/rogues',{cache:'no-store'}),d=await r.json();render(d);clearTimeout(timer);timer=setTimeout(load,Math.max(5,d.refreshSeconds||10)*1000)}catch(e){get('status').textContent=e.message;clearTimeout(timer);timer=setTimeout(load,15000)}}load();
+</script></body></html>
+""";
+        }
         private static string BuildIndexHtml()
         {
             var refresh = Math.Max(1, DerpAceConfigManager.Config.AdminMapRefreshSeconds);
@@ -3338,6 +3448,59 @@ aside {{ position:relative; z-index:30; pointer-events:auto; }}
 .propertyGroup {{ background:#0d1315; }}
 @media(min-width:641px) {{ .inventoryPanel.open {{ display:grid; grid-template-columns:minmax(500px,1.35fr) minmax(360px,.85fr); overflow:hidden; }} .inventoryListPane,.inventoryEditPane {{ min-height:0; overflow:auto; }} .inventoryEditPane {{ border-left:1px solid rgba(255,255,255,.12); border-top:0; }} }}
 @media(max-width:640px) {{ .inventoryPanel {{ inset:8px; grid-template-columns:1fr; overflow:auto; }} .inventoryListPane {{ min-height:55vh; }} .inventoryEditPane {{ border-left:0; border-top:1px solid rgba(255,255,255,.12); }} .inventoryForm {{ grid-template-columns:1fr; }} .inventoryForm>* {{ grid-column:1!important; }} }}
+/* Admin inventory v2: icon board + inspector */
+.inventoryPanel.open {{ display:grid; grid-template-columns:minmax(420px,1fr) minmax(420px,480px); inset:18px; max-width:1500px; max-height:calc(100vh - 36px); margin:auto; border:1px solid rgba(155,214,255,.22); border-radius:8px; background:#0a0f11; box-shadow:0 22px 70px rgba(0,0,0,.62); overflow:hidden; }}
+.inventoryListPane {{ min-height:0; display:grid; grid-template-rows:auto auto minmax(0,1fr); gap:12px; padding:16px; background:linear-gradient(180deg,#101719,#0a0f11); }}
+.inventoryEditPane {{ min-height:0; overflow:auto; padding:0; border-left:1px solid rgba(255,255,255,.12); background:#141b1e; }}
+.inventoryTop {{ min-height:40px; padding:0 0 10px; border-bottom:1px solid rgba(255,255,255,.1); }}
+.inventoryTop h2 {{ margin:0; color:#f4e8b5; font-size:17px; line-height:32px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.inventorySearch {{ grid-template-columns:minmax(0,1fr) auto; gap:8px; }}
+.inventorySearch input {{ height:36px; border-color:#2f3d41; background:#070b0d; }}
+.inventoryTable {{ min-height:0; display:grid; gap:12px; align-content:start; overflow:auto; padding:10px; border:1px solid rgba(255,255,255,.1); border-radius:6px; background:#070b0d; scrollbar-gutter:stable; }}
+.inventoryBag {{ border:1px solid rgba(255,255,255,.11); border-radius:6px; background:#0b1113; overflow:hidden; }}
+.inventoryBagHeader {{ min-height:32px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 10px; border-bottom:1px solid rgba(255,255,255,.08); background:#121b1e; color:#f2e3a7; font-size:12px; font-weight:650; }}
+.inventoryBagTitle {{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.inventoryBagMeta {{ flex:0 0 auto; color:#8ea09a; font-size:10px; font-weight:500; }}
+.inventoryGrid {{ display:grid; grid-template-columns:repeat(auto-fill,46px); gap:6px; align-content:start; padding:9px; }}
+.inventorySlot {{ position:relative; width:46px; height:46px; display:grid; place-items:center; padding:0; border:1px solid #253438; border-radius:5px; background:linear-gradient(180deg,#141d20,#0a0f11); overflow:hidden; }}
+.inventorySlot:hover {{ transform:translateY(-1px); border-color:#70c3e8; background:#17252a; box-shadow:0 8px 16px rgba(0,0,0,.25); }}
+.inventorySlot.selected {{ border-color:#efc36b; outline:2px solid #efc36b; outline-offset:0; box-shadow:0 0 0 4px rgba(239,195,107,.12); }}
+.inventoryIconStack {{ position:relative; width:40px; height:40px; display:block; }}
+.inventoryIconLayer {{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; image-rendering:pixelated; pointer-events:none; }}
+.inventoryIconLayer.underlay {{ z-index:1; }}
+.inventoryIconLayer.icon {{ z-index:2; }}
+.inventoryIconLayer.overlay {{ z-index:3; }}
+.inventoryIconLayer.missing {{ display:none; }}
+.inventoryFallback {{ position:absolute; inset:0; z-index:0; display:grid; place-items:center; color:#84928e; font-size:10px; font-weight:700; text-transform:uppercase; background:radial-gradient(circle at 50% 35%,rgba(255,255,255,.08),transparent 62%); }}
+.inventoryQty {{ position:absolute; right:-2px; bottom:-1px; z-index:4; min-width:16px; padding:0 3px; border-radius:8px; background:rgba(0,0,0,.82); color:#b7ff8a; font-size:10px; line-height:14px; font-weight:800; text-shadow:0 1px 2px #000; }}
+.inventoryEmpty {{ padding:28px 8px; color:#7f8e89; text-align:center; font-size:12px; }}
+.inventoryDetails {{ position:sticky; top:0; z-index:3; margin:0; padding:16px; border-bottom:1px solid rgba(255,255,255,.12); background:#151d20; }}
+.inventoryDetailsHead {{ display:grid; grid-template-columns:52px minmax(0,1fr); gap:12px; align-items:center; }}
+.inventoryDetailsHead .inventoryIconStack {{ width:48px; height:48px; }}
+.inventoryDetailsHead strong {{ min-width:0; color:#fff; font-size:15px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.inventoryDetailsHead span {{ min-width:0; color:#aebbb6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
+.inventoryDetailsMeta {{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }}
+.inventoryTag {{ margin:0; padding:2px 6px; border:1px solid rgba(155,214,255,.18); border-radius:999px; background:rgba(155,214,255,.08); color:#a9dfff; font-size:10px; }}
+.inventoryForm {{ display:block; padding:12px 14px 16px; }}
+.editGroup {{ border:1px solid rgba(255,255,255,.11); border-radius:6px; background:#0f1719; overflow:hidden; }}
+.editGroup + .editGroup, .editGroup + button, button + .editGroup {{ margin-top:9px; }}
+.editGroup summary {{ cursor:pointer; padding:9px 11px; color:#f1e3aa; background:#151f22; border-bottom:1px solid rgba(255,255,255,.08); font-size:11px; font-weight:700; text-transform:uppercase; }}
+.editGroup:not([open]) summary {{ border-bottom:0; }}
+.editGrid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:11px; }}
+.editGrid label {{ display:grid; gap:5px; color:#9eaea8; font-size:10px; text-transform:uppercase; }}
+.editGrid label:has(textarea), .editGrid .wideField {{ grid-column:1/-1; }}
+.inventoryForm input,.inventoryForm textarea {{ width:100%; min-width:0; border:1px solid #344145; border-radius:4px; background:#090f11; color:#edf4f0; padding:7px; }}
+.inventoryForm textarea {{ min-height:74px; resize:vertical; }}
+#inventorySave,#inventoryDelete {{ width:100%; min-height:36px; }}
+#inventorySave {{ background:#2d6650; }}
+.propertyEditor {{ display:grid; gap:8px; padding:9px; margin:0; }}
+.propertyGroup {{ border:1px solid rgba(255,255,255,.1); border-radius:5px; background:#0b1214; overflow:hidden; }}
+.propertyGroup summary {{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:8px 10px; color:#d8e2dd; background:#111a1d; font-size:11px; font-weight:700; text-transform:uppercase; }}
+.propertyRows {{ display:grid; gap:5px; padding:8px; }}
+.propertyRow {{ display:grid; grid-template-columns:minmax(130px,1fr) minmax(90px,.8fr) auto; gap:6px; align-items:center; }}
+.propertyRow label {{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#aab7b2; font-size:11px; text-transform:none; }}
+.propertyRow input {{ height:31px; }}
+@media(max-width:900px) {{ .inventoryPanel.open {{ inset:8px; grid-template-columns:1fr; overflow:auto; }} .inventoryListPane {{ min-height:55vh; }} .inventoryEditPane {{ border-left:0; border-top:1px solid rgba(255,255,255,.12); }} .inventoryGrid {{ grid-template-columns:repeat(auto-fill,44px); }} .inventorySlot {{ width:44px; height:44px; }} .editGrid {{ grid-template-columns:1fr; }} }}
 </style>
 </head>
 <body id=""uiElementManager"" data-dat-root=""UiElementManager"">
@@ -3745,8 +3908,18 @@ async function copyMapLocAt(event) {{
     status.textContent = e.message || 'Could not copy cursor landloc.';
   }}
 }}
-function iconUrl(did) {{ return did ? `/assets/icon?did=${{encodeURIComponent(did)}}&v=6` : ''; }}
+function formatDid(did) {{ const n = Number(did || 0); return n > 0 ? '0x' + n.toString(16).toUpperCase().padStart(8, '0') : ''; }}
+function iconUrl(did) {{ const hex = formatDid(did); return hex ? `/assets/icon?did=${{encodeURIComponent(hex)}}&v=7` : ''; }}
+function iconDiagUrl(did) {{ const hex = formatDid(did); return hex ? `/api/admin/icon-test?did=${{encodeURIComponent(hex)}}` : ''; }}
 function iconLayer(did, cls) {{ return did ? `<img class=""inventoryIconLayer ${{cls || ''}}"" src=""${{iconUrl(did)}}"" alt="""" loading=""lazy"" decoding=""async"">` : ''; }}
+function iconDebugTags(item) {{
+  const rows = [
+    ['Underlay', item?.iconUnderlayId],
+    ['Icon', item?.iconId],
+    ['Overlay', item?.iconOverlayId]
+  ].filter(x => Number(x[1] || 0) > 0);
+  return rows.map(([label, did]) => `<a class=""inventoryTag"" href=""${{iconDiagUrl(did)}}"" target=""_blank"" title=""Open icon diagnostics"">${{label}} ${{formatDid(did)}}</a>`).join('');
+}}
 function itemFallback(item) {{
   const name = String(item?.name || item?.weenieClassName || '?').trim();
   const words = name.split(/\s+/).filter(Boolean);
@@ -3896,7 +4069,7 @@ function renderInventoryRows() {{
   const allItems = inventoryState.data?.items || [];
   const items = allItems.filter(i => {{
     if (!q) return true;
-    return [i.name, i.guid, i.weenieClassId, i.weenieClassName, i.weenieType, i.itemType, i.container].some(v => String(v ?? '').toLowerCase().includes(q));
+    return [i.name, i.guid, i.weenieClassId, i.weenieClassName, i.weenieType, i.itemType, i.container, i.wieldedLocation].some(v => String(v ?? '').toLowerCase().includes(q));
   }});
   if (!items.length) {{
     inventoryRows.innerHTML = '<div class=""inventoryEmpty"">No matching items</div>';
@@ -3918,10 +4091,11 @@ function renderInventoryRows() {{
   inventoryRows.innerHTML = orderedGroups.map(([title, group]) => {{
     const sorted = group.slice().sort((a, b) => inventorySortValue(a) - inventorySortValue(b) || String(a.name || '').localeCompare(String(b.name || '')));
     const cleanTitle = title.trim();
-    return `<section class=""inventoryBag"">
-      <div class=""inventoryBagHeader""><span>${{esc(cleanTitle)}}</span><span class=""inventoryBagMeta"">${{fmtNum(sorted.length)}} item${{sorted.length === 1 ? '' : 's'}}</span></div>
+    const depth = Math.max(0, Math.min(4, Math.floor(Number(sorted[0]?.depth || 0))));
+    return `<section class=""inventoryBag"" style=""margin-left:${{depth * 10}}px"">
+      <div class=""inventoryBagHeader""><span class=""inventoryBagTitle"">${{esc(cleanTitle)}}</span><span class=""inventoryBagMeta"">${{fmtNum(sorted.length)}} item${{sorted.length === 1 ? '' : 's'}}</span></div>
       <div class=""inventoryGrid"">${{sorted.map(i => `
-        <button class=""inventorySlot${{inventoryState.selected?.guid === i.guid ? ' selected' : ''}}"" data-guid=""${{esc(i.guid)}}"" title=""${{esc(i.name)}}\n${{esc(i.guid)}}\nWCID ${{esc(i.weenieClassId)}}\n${{esc(i.container || i.wieldedLocation || '')}}"">
+        <button class=""inventorySlot${{inventoryState.selected?.guid === i.guid ? ' selected' : ''}}"" data-guid=""${{esc(i.guid)}}"" aria-label=""${{esc(i.name)}}"" title=""${{esc(i.name)}}\n${{esc(i.guid)}}\nWCID ${{esc(i.weenieClassId)}}\n${{esc(i.container || i.wieldedLocation || '')}}"">
           ${{renderIconStack(i)}}
         </button>`).join('')}}</div>
     </section>`;
@@ -3944,7 +4118,8 @@ function renderInventoryDetails(item) {{
     return;
   }}
   inventoryDetails.innerHTML = `
-    <div class=""inventoryDetailsHead"">${{renderIconStack(item)}}<div><strong>${{esc(item.name)}}</strong><span>${{esc(item.guid)}} | WCID ${{esc(item.weenieClassId)}} | ${{esc(item.weenieType)}} / ${{esc(item.itemType)}}</span><span>${{item.equipped ? 'Equipped: ' + esc(item.wieldedLocation || '') : 'Container: ' + esc(item.container || 'Main Pack')}}</span><span>Value ${{fmtNum(item.value)}} | Burden ${{fmtNum(item.encumbrance)}}${{item.material ? ' | ' + esc(item.material) : ''}}</span></div></div>`;
+    <div class=""inventoryDetailsHead"">${{renderIconStack(item)}}<div><strong>${{esc(item.name)}}</strong><span>${{esc(item.guid)}} | WCID ${{esc(item.weenieClassId)}} | ${{esc(item.weenieType)}} / ${{esc(item.itemType)}}</span><span>${{item.equipped ? 'Equipped: ' + esc(item.wieldedLocation || '') : 'Container: ' + esc(item.container || 'Main Pack')}}</span></div></div>
+    <div class=""inventoryDetailsMeta""><span class=""inventoryTag"">Value ${{fmtNum(item.value)}}</span><span class=""inventoryTag"">Burden ${{fmtNum(item.encumbrance)}}</span>${{item.stackSize ? `<span class=""inventoryTag"">Stack ${{fmtNum(item.stackSize)}}${{item.maxStackSize ? ' / ' + fmtNum(item.maxStackSize) : ''}}</span>` : ''}}${{item.material ? `<span class=""inventoryTag"">${{esc(item.material)}}</span>` : ''}}${{iconDebugTags(item)}}</div>`;
   const stack = document.getElementById('editStack');
   stack.value = item.stackSize ?? '';
   stack.max = item.maxStackSize ?? '';
@@ -3982,7 +4157,16 @@ function renderInventoryDetails(item) {{
 }}
 function renderPropertyEditor(item) {{
   const groups = item.properties || {{}};
-  propertyEditor.innerHTML = Object.entries(groups).map(([family, rows]) => `<details class=""propertyGroup""><summary>${{esc(family)}} (${{rows.length}})</summary><div class=""propertyRows"">${{rows.map(p => `<div class=""propertyRow""><label title=""Property ${{p.key}}"">${{esc(p.name)}} (${{p.key}})</label><input data-family=""${{esc(family)}}"" data-key=""${{p.key}}"" value=""${{esc(p.value)}}""><button class=""smallButton propertySave"">Save</button></div>`).join('')}}</div></details>`).join('');
+  const order = ['ints', 'bools', 'floats', 'dids', 'strings', 'int64s', 'spellBook', 'createList', 'emote'];
+  const entries = Object.entries(groups).sort((a, b) => {{
+    const ai = order.indexOf(String(a[0]).toLowerCase());
+    const bi = order.indexOf(String(b[0]).toLowerCase());
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi) || a[0].localeCompare(b[0]);
+  }});
+  propertyEditor.innerHTML = entries.map(([family, rows]) => {{
+    const sortedRows = (rows || []).slice().sort((a, b) => Number(a.key || 0) - Number(b.key || 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    return `<details class=""propertyGroup""><summary><span>${{esc(family)}}</span><span>${{sortedRows.length}}</span></summary><div class=""propertyRows"">${{sortedRows.map(p => `<div class=""propertyRow""><label title=""Property ${{p.key}}: ${{esc(p.name)}}"">${{esc(p.name)}} (${{p.key}})</label><input data-family=""${{esc(family)}}"" data-key=""${{p.key}}"" value=""${{esc(p.value)}}""><button class=""smallButton propertySave"">Save</button></div>`).join('')}}</div></details>`;
+  }}).join('') || '<div class=""inventoryEmpty"">No raw properties exposed for this item</div>';
   propertyEditor.querySelectorAll('.propertySave').forEach(button => button.onclick = () => saveItemProperty(button.previousElementSibling));
 }}
 async function saveItemProperty(input) {{
@@ -4217,6 +4401,23 @@ checkSession();
 </script>
 </body>
 </html>";
+        }
+        private sealed class RogueBoardSnapshot
+        {
+            public bool Ok { get; set; }
+            public DateTime ServerTimeUtc { get; set; }
+            public int RefreshSeconds { get; set; }
+            public int Count { get; set; }
+            public List<RogueBoardEntry> Players { get; set; }
+        }
+        private sealed class RogueBoardEntry
+        {
+            public string Name { get; set; }
+            public int Level { get; set; }
+            public int Kills { get; set; }
+            public int Lives { get; set; }
+            public List<string> Boons { get; set; }
+            public string PendingChoice { get; set; }
         }
         private sealed class AdminMapSnapshot
         {

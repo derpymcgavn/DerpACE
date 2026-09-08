@@ -1010,6 +1010,21 @@ namespace ACE.Server.Managers
         /// <summary>XP scalar applied to standalone Hardcore earnings after server XP modifiers. Default 1.0 (100%).</summary>
         public static float HardcoreXpScalar { get; set; } = 1.0f;
 
+        /// <summary>Master switch for Hardcore Rogue mode. Default true.</summary>
+        public static bool HardcoreRogueEnabled { get; set; } = true;
+
+        /// <summary>Maximum starting level for opting into Hardcore Rogue. Default 10.</summary>
+        public static int HardcoreRogueMaxOptInLevel { get; set; } = 10;
+
+        /// <summary>Number of random boons offered each level. Default 3.</summary>
+        public static int HardcoreRogueBoonChoices { get; set; } = 3;
+
+        /// <summary>Minutes before the same skill can earn full proficiency again in Hardcore Rogue. Default 2.</summary>
+        public static double HardcoreRogueProficiencyMinutes { get; set; } = 2.0;
+
+        /// <summary>Multiplier applied to proficiency PP in Hardcore Rogue. Default 2.0.</summary>
+        public static float HardcoreRogueProficiencyXpMultiplier { get; set; } = 2.0f;
+
         // ---------- Vampiric Jewelry (rings / necklaces / bracelets) ----------
 
         /// <summary>Per-jewelry-piece chance (0-1) at lootgen to roll the Vampiric affix. Default 0.04.</summary>
@@ -1073,3 +1088,4 @@ namespace ACE.Server.Managers
         public static int VendorRestockMaxMinutes { get; set; } = 45;
     }
 }
+

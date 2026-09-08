@@ -879,6 +879,16 @@ namespace ACE.Server.DerpAce
         public float NomadXpScalar { get; set; } = 0.75f;
         [JsonPropertyName("hardcore_xp_scalar")]
         public float HardcoreXpScalar { get; set; } = 1.0f;
+        [JsonPropertyName("hardcore_rogue_enabled")]
+        public bool HardcoreRogueEnabled { get; set; } = true;
+        [JsonPropertyName("hardcore_rogue_max_opt_in_level")]
+        public int HardcoreRogueMaxOptInLevel { get; set; } = 10;
+        [JsonPropertyName("hardcore_rogue_boon_choices")]
+        public int HardcoreRogueBoonChoices { get; set; } = 3;
+        [JsonPropertyName("hardcore_rogue_proficiency_minutes")]
+        public double HardcoreRogueProficiencyMinutes { get; set; } = 2.0;
+        [JsonPropertyName("hardcore_rogue_proficiency_xp_multiplier")]
+        public float HardcoreRogueProficiencyXpMultiplier { get; set; } = 2.0f;
 
         // ── Bank ─────────────────────────────────────────────────────────────
         [JsonPropertyName("enable_bank")]
@@ -895,3 +905,4 @@ namespace ACE.Server.DerpAce
         public int BankCashProperty { get; set; } = 39999;
     }
 }
+
