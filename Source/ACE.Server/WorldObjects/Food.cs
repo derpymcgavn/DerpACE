@@ -108,7 +108,10 @@ namespace ACE.Server.WorldObjects
             player.EnqueueBroadcast(soundEvent);
 
             if (!UnlimitedUse && player.TryConsumeFromInventoryWithNetworking(this, 1))
+            {
                 GlobalKillQuestManager.OnFoodConsumed(player, this, consumedMotion);
+                HardcoreCrawlerManager.OnFoodConsumed(player, this, consumedMotion);
+            }
 
             // Easter egg: eat 3 cheese wheels → involuntary consequences.
             TryCheeseWheelEasterEgg(player);

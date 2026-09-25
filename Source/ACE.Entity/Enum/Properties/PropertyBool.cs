@@ -289,8 +289,10 @@ namespace ACE.Entity.Enum.Properties
         IsGravecallerCaster              = 9083,
         CorpseRaisedByGravecaller        = 9084,
 
-        /* DerpACE Hardcore Rogue submode - learn-by-doing progression and level-up boon choices */
-        IsHardcoreRogue                  = 9087,
+        /* DerpACE Hardcore Crawler submode - learn-by-doing progression and level-up boon choices */
+        IsHardcoreCrawler                  = 9087,
+
+        /* DerpACE Nomad variant - infinite lives and excluded from public challenge scoreboards */
+        IsIronmanNomadLifebound            = 9088,
     }
 }
-

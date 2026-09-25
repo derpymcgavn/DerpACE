@@ -62,12 +62,15 @@ namespace ACE.Server.Command.Handlers
         private static readonly ConcurrentDictionary<uint, bool> PendingNoNonHuman = new ConcurrentDictionary<uint, bool>();
         // GUID -> whether the pending commitment requested blind progression.
         private static readonly ConcurrentDictionary<uint, bool> PendingBlind = new ConcurrentDictionary<uint, bool>();
+        // GUID -> whether a pending Nomad is lifebound: infinite lives, excluded from public scoreboards.
+        private static readonly ConcurrentDictionary<uint, bool> PendingLifeboundNomad = new ConcurrentDictionary<uint, bool>();
         private const int ConfirmWindowSeconds = 30;
 
         [CommandHandler("ironman", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Ironman mode (IRREVERSIBLE).",
             "on        - begin Ironman commitment (you must then run /ironman confirm within 30 seconds)\n" +
-            "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 420 with above-average protections while unarmored)\n" +
+            "nomad     - begin NOMAD Ironman commitment (no weapons or casters; gauntlet/shoe damage; natural AL 450 with above-average protections while unarmored)\n" +
+            "  add -lifebound to nomad for infinite lives and no public scoreboard placement\n" +
             "  add -nh to 'on' or 'nomad' to exclude non-human heritages, rolling only\n" +
             "            Aluvian, Gharundim, Sho, Viamontian, Umbraen, Penumbraen, Undead, or Empyrean\n" +
             "  add -blind to hide future skill milestones and auto-spend XP into skills, vitals, and attributes as the build grows\n" +
@@ -99,7 +102,7 @@ namespace ACE.Server.Command.Handlers
                     return;
                 }
 
-                player.SendMessage("Usage: /ironman on [-nh] [-blind] | nomad [-nh] [-blind] | confirm");
+                player.SendMessage("Usage: /ironman on [-nh] [-blind] | nomad [-nh] [-blind] [-lifebound] | confirm");
                 return;
             }
 
@@ -114,6 +117,14 @@ namespace ACE.Server.Command.Handlers
             var blind = parameters.Skip(1).Any(p =>
                 string.Equals(p, "-blind", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(p, "blind", StringComparison.OrdinalIgnoreCase));
+
+            var lifeboundNomad = parameters.Skip(1).Any(p =>
+                string.Equals(p, "-lifebound", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "lifebound", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "-infinite", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "infinite", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "-noscore", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p, "noscore", StringComparison.OrdinalIgnoreCase));
 
             // Handle read-only commands first (bypass enrollment checks)
             switch (sub)
@@ -165,6 +176,7 @@ namespace ACE.Server.Command.Handlers
                     PendingModes[player.Guid.Full] = "standard";
                     PendingNoNonHuman[player.Guid.Full] = noNonHuman;
                     PendingBlind[player.Guid.Full] = blind;
+                    PendingLifeboundNomad[player.Guid.Full] = false;
                     player.SendMessage(
                         $"WARNING: Ironman mode is permanent and will wipe your inventory, spellbook, " +
                         $"and reroll your attributes/skills.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
@@ -178,11 +190,12 @@ namespace ACE.Server.Command.Handlers
                     PendingModes[player.Guid.Full] = "nomad";
                     PendingNoNonHuman[player.Guid.Full] = noNonHuman;
                     PendingBlind[player.Guid.Full] = blind;
+                    PendingLifeboundNomad[player.Guid.Full] = lifeboundNomad;
                     player.SendMessage(
                         $"WARNING: Ironman NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
                         $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
                         $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
-                        $"AL of 450 (average); worn armor is only half effective.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
+                        $"AL of 450 (average); worn armor is only half effective.{(lifeboundNomad ? " Lifebound Nomad has infinite lives and is excluded from public challenge scoreboards." : "")}{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
                         $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP into skills, vitals, and attributes." : "")} " +
                         $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
@@ -193,6 +206,7 @@ namespace ACE.Server.Command.Handlers
                     {
                         PendingNoNonHuman.TryRemove(player.Guid.Full, out _);
                         PendingBlind.TryRemove(player.Guid.Full, out _);
+                        PendingLifeboundNomad.TryRemove(player.Guid.Full, out _);
                         player.SendMessage("You have no pending Ironman commitment. Type /ironman on or /ironman nomad first.");
                         return;
                     }
@@ -201,21 +215,23 @@ namespace ACE.Server.Command.Handlers
                         PendingModes.TryRemove(player.Guid.Full, out _);
                         PendingNoNonHuman.TryRemove(player.Guid.Full, out _);
                         PendingBlind.TryRemove(player.Guid.Full, out _);
+                        PendingLifeboundNomad.TryRemove(player.Guid.Full, out _);
                         player.SendMessage("Your Ironman commitment window has expired. Type /ironman on or /ironman nomad again.");
                         return;
                     }
                     PendingModes.TryRemove(player.Guid.Full, out var pendingMode);
                     PendingNoNonHuman.TryRemove(player.Guid.Full, out var pendingNoNonHuman);
                     PendingBlind.TryRemove(player.Guid.Full, out var pendingBlind);
+                    PendingLifeboundNomad.TryRemove(player.Guid.Full, out var pendingLifeboundNomad);
                     var isNomad = string.Equals(pendingMode, "nomad", StringComparison.OrdinalIgnoreCase);
 
                     if (isNomad)
-                        IronmanFactory.InitializeIronmanNomad(player, pendingNoNonHuman, pendingBlind);
+                        IronmanFactory.InitializeIronmanNomad(player, pendingNoNonHuman, pendingBlind, pendingLifeboundNomad);
                     else
                         IronmanFactory.InitializeIronman(player, pendingNoNonHuman, pendingBlind);
 
                     // Global announcement for Ironman activation
-                    var pathLabel = isNomad ? "NOMAD Ironman" : "Ironman";
+                    var pathLabel = isNomad ? (pendingLifeboundNomad ? "Lifebound NOMAD Ironman" : "NOMAD Ironman") : "Ironman";
                     var ironmanMsg = $"[IRONMAN] {player.Name} has taken the {pathLabel} path. There is no turning back!";
                     var ironmanBroadcast = new GameMessageSystemChat(ironmanMsg, ChatMessageType.WorldBroadcast);
                     PlayerManager.BroadcastToAll(ironmanBroadcast);
@@ -223,7 +239,7 @@ namespace ACE.Server.Command.Handlers
                     break;
 
                 default:
-                    player.SendMessage("Usage: /ironman on [-nh] [-blind] | nomad [-nh] [-blind] | confirm");
+                    player.SendMessage("Usage: /ironman on [-nh] [-blind] | nomad [-nh] [-blind] [-lifebound] | confirm");
                     break;
             }
         }
@@ -238,7 +254,8 @@ namespace ACE.Server.Command.Handlers
             sb.AppendLine();
             sb.AppendLine("Current Status:");
             var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0;
-            sb.AppendLine($"  Hardcore lives remaining: {lives}");
+            var livesText = player.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true ? "Infinite" : lives.ToString();
+            sb.AppendLine($"  Hardcore lives remaining: {livesText}");
 
             player.SendMessage(sb.ToString(), ChatMessageType.System);
         }
@@ -254,8 +271,10 @@ namespace ACE.Server.Command.Handlers
         private static void ShowIronmanStatus(ACE.Server.WorldObjects.Player player)
         {
             var lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0;
+            var livesText = player.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true ? "Infinite" : lives.ToString();
             var isBlind = player.GetProperty(PropertyBool.IsIronmanBlind) == true;
             var planStr = player.GetProperty(PropertyString.IronmanPlan) ?? "";
+            var isLifeboundNomad = player.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true;
             var lifeMilestones = IronmanFactory.GetHardcoreLifeMilestones();
             var claimedLifeMilestones = IronmanFactory.GetClaimedHardcoreLifeMilestones(player);
             var currentLevel = (int)(player.Level ?? 1);
@@ -287,20 +306,23 @@ namespace ACE.Server.Command.Handlers
                 }
             }
 
-            foreach (var milestone in lifeMilestones)
+            if (!isLifeboundNomad)
             {
-                if (milestone <= currentLevel || claimedLifeMilestones.Contains(milestone))
-                    continue;
+                foreach (var milestone in lifeMilestones)
+                {
+                    if (milestone <= currentLevel || claimedLifeMilestones.Contains(milestone))
+                        continue;
 
-                if (!pending.ContainsKey(milestone))
-                    pending[milestone] = new List<(Skill, string)>();
+                    if (!pending.ContainsKey(milestone))
+                        pending[milestone] = new List<(Skill, string)>();
 
-                pending[milestone].Add((Skill.None, "+1 Hardcore life (max 3)"));
+                    pending[milestone].Add((Skill.None, "+1 Hardcore life (max 3)"));
+                }
             }
 
             var sb = new StringBuilder();
             sb.AppendLine("=== Ironman Status ===");
-            sb.AppendLine($"  Hardcore lives remaining: {lives}");
+            sb.AppendLine($"  Hardcore lives remaining: {livesText}");
             if (isBlind)
                 sb.AppendLine("  Blind progression: ON");
             sb.AppendLine();
@@ -373,7 +395,7 @@ namespace ACE.Server.Command.Handlers
         // ----------------------------------------------------------------
 
         private static readonly ConcurrentDictionary<uint, DateTime> PendingHardcoreConfirms = new ConcurrentDictionary<uint, DateTime>();
-        private static readonly ConcurrentDictionary<uint, DateTime> PendingRogueHardcoreConfirms = new ConcurrentDictionary<uint, DateTime>();
+        private static readonly ConcurrentDictionary<uint, DateTime> PendingHardcoreCrawlerConfirms = new ConcurrentDictionary<uint, DateTime>();
 
         [CommandHandler("hardcore", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
             "Toggle Hardcore self-found mode (IRREVERSIBLE).",
@@ -473,43 +495,76 @@ namespace ACE.Server.Command.Handlers
                 ChatMessageType.System);
         }
 
-        [CommandHandler("rogue", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
-            "Hardcore Rogue mode: one life, faster learn-by-doing skills, and level-up boon choices.",
-            "on      - begin Hardcore Rogue commitment (confirm within 30 seconds)\n" +
-            "confirm - finalize Hardcore Rogue conversion\n" +
-            "status  - show current Rogue state and chosen boons\n" +
+        [CommandHandler("crawler", AccessLevel.Player, CommandHandlerFlag.RequiresWorld, 0,
+            "Hardcore Crawler mode: one life, faster learn-by-doing skills, and level-up boon choices.",
+            "on      - begin Hardcore Crawler commitment (confirm within 30 seconds)\n" +
+            "confirm - finalize Hardcore Crawler conversion\n" +
+            "status  - show current Crawler state and chosen boons\n" +
             "choices - show your pending level-up boon choices\n" +
-            "pick #  - choose one pending boon")]
-        public static void HandleRogue(Session session, params string[] parameters)
+            "pick #  - choose one pending boon\n" +
+            "train <skill> - train a skill that is ready from use\n" +
+            "spec <skill> - specialize a skill that is ready from use\n" +
+            "trial   - show active milestone trials\n" +
+            "trial claim - claim a completed trial fan box\n" +
+            "convert - refresh an existing old Crawler character title/state")]
+        public static void HandleCrawler(Session session, params string[] parameters)
         {
             var player = session?.Player;
             if (player == null) return;
 
-            if (!DerpACEConfig.HardcoreRogueEnabled)
+            if (!DerpACEConfig.HardcoreCrawlerEnabled)
             {
-                player.SendMessage("Hardcore Rogue mode is currently disabled on this server.", ChatMessageType.System);
+                player.SendMessage("Hardcore Crawler mode is currently disabled on this server.", ChatMessageType.System);
                 return;
             }
 
             var sub = parameters != null && parameters.Length > 0 ? parameters[0].ToLowerInvariant() : "status";
+            if (sub == "convert")
+            {
+                if (!HardcoreCrawlerManager.EnsureConverted(player, notify: true))
+                    player.SendMessage("This character is not flagged as Hardcore Crawler.", ChatMessageType.System);
+                return;
+            }
 
             switch (sub)
             {
                 case "status":
-                    RogueHardcoreManager.ShowStatus(player);
+                    HardcoreCrawlerManager.ShowStatus(player);
                     return;
 
                 case "choices":
-                    RogueHardcoreManager.ShowChoices(player);
+                    HardcoreCrawlerManager.ShowChoices(player);
+                    return;
+
+                case "trial":
+                    if (parameters.Length >= 2 && parameters[1].Equals("claim", StringComparison.OrdinalIgnoreCase))
+                        HardcoreCrawlerManager.ClaimTrial(player);
+                    else
+                        HardcoreCrawlerManager.ShowTrial(player);
                     return;
 
                 case "pick":
                     if (parameters.Length < 2 || !int.TryParse(parameters[1], out var choice))
                     {
-                        player.SendMessage("Usage: /rogue pick <number>", ChatMessageType.System);
+                        player.SendMessage("Usage: /crawler pick <number>", ChatMessageType.System);
                         return;
                     }
-                    RogueHardcoreManager.PickChoice(player, choice);
+                    HardcoreCrawlerManager.PickChoice(player, choice);
+                    return;
+
+                case "train":
+                    if (parameters.Length < 2)
+                        HardcoreCrawlerManager.ShowReadyTraining(player, specialize: false);
+                    else
+                        HardcoreCrawlerManager.TrainReadySkill(player, string.Join(" ", parameters.Skip(1)));
+                    return;
+
+                case "spec":
+                case "specialize":
+                    if (parameters.Length < 2)
+                        HardcoreCrawlerManager.ShowReadyTraining(player, specialize: true);
+                    else
+                        HardcoreCrawlerManager.SpecializeReadySkill(player, string.Join(" ", parameters.Skip(1)));
                     return;
             }
 
@@ -519,54 +574,54 @@ namespace ACE.Server.Command.Handlers
                 return;
             }
 
-            if (player.GetProperty(PropertyBool.IsHardcoreRogue) == true)
+            if (player.GetProperty(PropertyBool.IsHardcoreCrawler) == true)
             {
-                RogueHardcoreManager.ShowStatus(player);
+                HardcoreCrawlerManager.ShowStatus(player);
                 return;
             }
 
-            if ((player.Level ?? 1) > DerpACEConfig.HardcoreRogueMaxOptInLevel)
+            if ((player.Level ?? 1) > DerpACEConfig.HardcoreCrawlerMaxOptInLevel)
             {
-                player.SendMessage($"Hardcore Rogue mode is only available at level {DerpACEConfig.HardcoreRogueMaxOptInLevel} or below.", ChatMessageType.System);
+                player.SendMessage($"Hardcore Crawler mode is only available at level {DerpACEConfig.HardcoreCrawlerMaxOptInLevel} or below.", ChatMessageType.System);
                 return;
             }
 
             switch (sub)
             {
                 case "on":
-                    PendingRogueHardcoreConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
+                    PendingHardcoreCrawlerConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     player.SendMessage(
-                        "WARNING: Hardcore Rogue is permanent for this life. You will have one Hardcore life, " +
+                        "WARNING: Hardcore Crawler is permanent for this life. You will have one Hardcore life, " +
                         "skills will grow faster through successful use, and every level will offer one boon choice. " +
-                        $"Type /rogue confirm within {ConfirmWindowSeconds} seconds to proceed.",
+                        $"Type /crawler confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     return;
 
                 case "confirm":
-                    if (!PendingRogueHardcoreConfirms.TryRemove(player.Guid.Full, out var expires))
+                    if (!PendingHardcoreCrawlerConfirms.TryRemove(player.Guid.Full, out var expires))
                     {
-                        player.SendMessage("No pending Hardcore Rogue commitment. Type /rogue on first.", ChatMessageType.System);
+                        player.SendMessage("No pending Hardcore Crawler commitment. Type /crawler on first.", ChatMessageType.System);
                         return;
                     }
                     if (DateTime.UtcNow > expires)
                     {
-                        player.SendMessage("Your Hardcore Rogue commitment window expired. Type /rogue on again.", ChatMessageType.System);
+                        player.SendMessage("Your Hardcore Crawler commitment window expired. Type /crawler on again.", ChatMessageType.System);
                         return;
                     }
 
                     if (player.GetProperty(PropertyBool.IsHardcore) != true)
                         ApplyHardcoreStandalone(player);
 
-                    RogueHardcoreManager.Enable(player);
+                    HardcoreCrawlerManager.Enable(player);
 
-                    var rogueMsg = $"[HARDCORE ROGUE] {player.Name} has entered the Rogue path. One life, many bad decisions.";
-                    var rogueBroadcast = new GameMessageSystemChat(rogueMsg, ChatMessageType.WorldBroadcast);
-                    PlayerManager.BroadcastToAll(rogueBroadcast);
-                    PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, rogueMsg);
+                    var crawlerMsg = $"[HARDCORE CRAWLER] {player.Name} has entered the Crawler path. One life, many bad decisions.";
+                    var crawlerBroadcast = new GameMessageSystemChat(crawlerMsg, ChatMessageType.WorldBroadcast);
+                    PlayerManager.BroadcastToAll(crawlerBroadcast);
+                    PlayerManager.LogBroadcastChat(Channel.AllBroadcast, player, crawlerMsg);
                     return;
 
                 default:
-                    player.SendMessage("Usage: /rogue on | confirm | status | choices | pick <number>", ChatMessageType.System);
+                    player.SendMessage("Usage: /crawler on | confirm | status | choices | pick <number> | train <skill> | spec <skill> | trial | trial claim | convert", ChatMessageType.System);
                     return;
             }
         }
@@ -610,4 +665,3 @@ namespace ACE.Server.Command.Handlers
         }
     }
 }
-

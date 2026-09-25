@@ -31,5 +31,6 @@ namespace ACE.Entity.Enum.Properties
         VerifyXp              = 9003,
         // DerpACE: unarmed combo system - bitfield tracking which combos the player has discovered
         UnarmedCombosDiscovered = 9004,
+        HardcoreCrawlerQuestFavor = 9005,
     }
 }

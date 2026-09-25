@@ -59,8 +59,10 @@ namespace ACE.Server.DerpAce
             if (_resolvedPath == null)
                 return "DerpAceConfigManager has not been initialized.";
 
+
             if (!File.Exists(_resolvedPath))
                 return $"Config file not found: {_resolvedPath}";
+
 
             try
             {
@@ -68,11 +70,13 @@ namespace ACE.Server.DerpAce
                 Apply();
                 AdminMapService.Restart();
                 return $"DerpAce config reloaded from '{_resolvedPath}'.";
+
             }
             catch (Exception ex)
             {
                 log.Error($"[DerpAce] Reload failed: {ex}");
                 return $"Reload failed: {ex.Message}";
+
             }
         }
 
@@ -94,6 +98,7 @@ namespace ACE.Server.DerpAce
             errors = new List<string>();
             if (values == null || values.Count == 0)
                 return true;
+
 
             var properties = typeof(DerpAceConfiguration)
                 .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -126,9 +131,11 @@ namespace ACE.Server.DerpAce
             if (errors.Count > 0)
                 return false;
 
+
             Save();
             Apply();
             return true;
+
         }
 
         private static object ConvertJsonValue(JsonElement value, Type targetType)
@@ -138,23 +145,31 @@ namespace ACE.Server.DerpAce
             {
                 if (value.ValueKind == JsonValueKind.Null)
                     return null;
+
                 targetType = nullableType;
             }
 
             if (targetType == typeof(string))
                 return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
+
             if (targetType == typeof(bool))
                 return value.ValueKind == JsonValueKind.True || (value.ValueKind != JsonValueKind.False && bool.Parse(value.ToString()));
+
             if (targetType == typeof(int))
                 return value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var i) ? i : int.Parse(value.ToString(), CultureInfo.InvariantCulture);
+
             if (targetType == typeof(uint))
                 return value.ValueKind == JsonValueKind.Number && value.TryGetUInt32(out var u) ? u : uint.Parse(value.ToString(), CultureInfo.InvariantCulture);
+
             if (targetType == typeof(float))
                 return value.ValueKind == JsonValueKind.Number && value.TryGetSingle(out var f) ? f : float.Parse(value.ToString(), CultureInfo.InvariantCulture);
+
             if (targetType == typeof(double))
                 return value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var d) ? d : double.Parse(value.ToString(), CultureInfo.InvariantCulture);
 
+
             return JsonSerializer.Deserialize(value.GetRawText(), targetType, _jsonOptions);
+
         }
 
         // ── private helpers ──────────────────────────────────────────────────
@@ -179,7 +194,9 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.EnableMysteriousStranger = c.EnableMysteriousStranger;
             DerpACEConfig.EnableMobModifiers       = c.EnableMobModifiers;
             DerpACEConfig.ModernMobAiEnabled      = c.ModernMobAiEnabled;
+
             DerpACEConfig.ModernMobAiSwitchThreshold = c.ModernMobAiSwitchThreshold;
+
             DerpACEConfig.MobMovementSyncIntervalSeconds = c.MobMovementSyncIntervalSeconds;
             DerpACEConfig.MobOutdoorChaseRange    = c.MobOutdoorChaseRange;
             DerpACEConfig.EnableDerpcoin           = c.EnableDerpcoin;
@@ -190,6 +207,7 @@ namespace ACE.Server.DerpAce
 
             // ── Per-Mutator Toggles ───────────────────────────────────────────
             DerpACEConfig.NocturnalMobEnabled    = c.NocturnalMobEnabled;
+
             DerpACEConfig.ExplodingMobEnabled    = c.ExplodingMobEnabled;
             DerpACEConfig.VampiricMobEnabled     = c.VampiricMobEnabled;
             DerpACEConfig.ThiefMobEnabled        = c.ThiefMobEnabled;
@@ -289,6 +307,7 @@ namespace ACE.Server.DerpAce
             MysteriousStranger.MaxChestOpens              = c.StrangerMaxChestOpens;
             MysteriousStranger.ChestDespawnSeconds        = c.StrangerChestDespawnSeconds;
             MysteriousStranger.ChestDespawnWarningSeconds = c.StrangerChestDespawnWarningSeconds;
+
             MysteriousStranger.ChestDespawnGraceSeconds   = c.StrangerChestDespawnGraceSeconds;
             MysteriousStranger.ChestArcDistance           = c.StrangerChestArcDistance;
             MysteriousStranger.ChestArcSweepDegrees       = c.StrangerChestArcSweepDegrees;
@@ -305,6 +324,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.MobModifierMinTier          = c.MobModifierMinTier;
             DerpACEConfig.MobModifierDefenseSkillCap  = c.MobModifierDefenseSkillCap;
             DerpACEConfig.NocturnalMobChance          = c.NocturnalMobChance;
+
             DerpACEConfig.ExplodingMobChance          = c.ExplodingMobChance;
             DerpACEConfig.ExplodingMobRadius          = c.ExplodingMobRadius;
             DerpACEConfig.ExplodingMobDamageScale     = c.ExplodingMobDamageScale;
@@ -368,6 +388,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.DefenderShieldMinTier       = c.DefenderShieldMinTier;
             DerpACEConfig.DefenderAggroBonus          = c.DefenderAggroBonus;
             DerpACEConfig.ShieldThornsRollChance      = c.ShieldThornsRollChance;
+
             DerpACEConfig.ShieldBashingRollChance     = c.ShieldBashingRollChance;
             DerpACEConfig.ShieldReflectionRollChance  = c.ShieldReflectionRollChance;
             DerpACEConfig.ShieldSpellMirrorRollChance = c.ShieldSpellMirrorRollChance;
@@ -464,6 +485,7 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.SentinelSpearMaxStacks      = c.SentinelSpearMaxStacks;
             DerpACEConfig.SentinelSpearDrainPct       = c.SentinelSpearDrainPct;
             DerpACEConfig.SentinelSpearReturnMult     = c.SentinelSpearReturnMult;
+
             DerpACEConfig.SentinelSpearCooldownSeconds = c.SentinelSpearCooldownSeconds;
             DerpACEConfig.SentinelSpearPoiseDurationSeconds = c.SentinelSpearPoiseDurationSeconds;
             DerpACEConfig.SentinelSpearPoiseDamageReduction = c.SentinelSpearPoiseDamageReduction;
@@ -608,11 +630,21 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.IronmanXpScalar                     = Math.Max(0.0f, c.IronmanXpScalar);
             DerpACEConfig.NomadXpScalar                       = Math.Max(0.0f, c.NomadXpScalar);
             DerpACEConfig.HardcoreXpScalar                    = Math.Max(0.0f, c.HardcoreXpScalar);
-            DerpACEConfig.HardcoreRogueEnabled                = c.HardcoreRogueEnabled;
-            DerpACEConfig.HardcoreRogueMaxOptInLevel          = Math.Max(1, c.HardcoreRogueMaxOptInLevel);
-            DerpACEConfig.HardcoreRogueBoonChoices            = Math.Clamp(c.HardcoreRogueBoonChoices, 1, 5);
-            DerpACEConfig.HardcoreRogueProficiencyMinutes     = Math.Max(0.1, c.HardcoreRogueProficiencyMinutes);
-            DerpACEConfig.HardcoreRogueProficiencyXpMultiplier = Math.Max(0.0f, c.HardcoreRogueProficiencyXpMultiplier);
+            DerpACEConfig.HardcoreCrawlerEnabled                = c.HardcoreCrawlerEnabled;
+            DerpACEConfig.HardcoreCrawlerMaxOptInLevel          = Math.Max(1, c.HardcoreCrawlerMaxOptInLevel);
+            DerpACEConfig.HardcoreCrawlerBoonChoices            = Math.Clamp(c.HardcoreCrawlerBoonChoices, 1, 5);
+            DerpACEConfig.HardcoreCrawlerProficiencyMinutes     = Math.Max(0.1, c.HardcoreCrawlerProficiencyMinutes);
+            DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier = Math.Max(0.0f, c.HardcoreCrawlerProficiencyXpMultiplier);
+            DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel      = Math.Max(1, c.HardcoreCrawlerSkillRanksPerLevel);
+            DerpACEConfig.HardcoreCrawlerAutoSpecMinLevel        = Math.Max(1, c.HardcoreCrawlerAutoSpecMinLevel);
+            DerpACEConfig.HardcoreCrawlerAutoSpecRanks           = Math.Max(1, c.HardcoreCrawlerAutoSpecRanks);
+            DerpACEConfig.HardcoreCrawlerAutoTrainUses           = Math.Max(1, c.HardcoreCrawlerAutoTrainUses);
+            DerpACEConfig.HardcoreCrawlerMaxTrainedSkills        = Math.Max(0, c.HardcoreCrawlerMaxTrainedSkills);
+            DerpACEConfig.HardcoreCrawlerSpecializedCreditBudget = Math.Max(0, c.HardcoreCrawlerSpecializedCreditBudget);
+            DerpACEConfig.HardcoreCrawlerBaseAttribute           = Math.Max(1u, c.HardcoreCrawlerBaseAttribute);
+            DerpACEConfig.HardcoreCrawlerBaseVital               = Math.Max(1u, c.HardcoreCrawlerBaseVital);
+            DerpACEConfig.HardcoreCrawlerCacheMilestoneInterval = Math.Max(0, c.HardcoreCrawlerCacheMilestoneInterval);
+            DerpACEConfig.HardcoreCrawlerTrialInterval          = Math.Max(0, c.HardcoreCrawlerTrialInterval);
 
             // ── Bank ──────────────────────────────────────────────────────────
             DerpAce.Bank.BankConfig.EnableBank          = c.EnableBank;
@@ -628,12 +660,15 @@ namespace ACE.Server.DerpAce
             if (Path.IsPathRooted(path))
                 return path;
 
+
             // Try working directory first, then executable directory
             var cwd = Path.Combine(Environment.CurrentDirectory, path);
             if (File.Exists(cwd)) return cwd;
 
+
             var exe = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             return exe != null ? Path.Combine(exe, path) : cwd;
+
         }
     }
 }

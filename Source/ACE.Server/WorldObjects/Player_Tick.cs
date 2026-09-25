@@ -134,6 +134,8 @@ namespace ACE.Server.WorldObjects
 
             DanceBootsTick(currentUnixTime);
 
+            HardcoreCrawlerManager.Heartbeat(this, currentUnixTime);
+
             // Check if we're due for our periodic SavePlayer
             if (LastRequestedDatabaseSave == DateTime.MinValue)
                 LastRequestedDatabaseSave = DateTime.UtcNow;

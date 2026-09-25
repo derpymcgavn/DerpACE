@@ -30,7 +30,11 @@ namespace ACE.Server.Entity
 
             // ensure skill is at least trained
             if (skill.AdvancementClass < SkillAdvancementClass.Trained)
+            {
+                if (HardcoreCrawlerManager.IsActive(player))
+                    HardcoreCrawlerManager.OnUntrainedSkillUsed(player, skill, difficulty);
                 return;
+            }
 
             var last_difficulty = skill.PropertiesSkill.ResistanceAtLastCheck;
             var last_used_time = skill.PropertiesSkill.LastUsedTime;
@@ -38,8 +42,8 @@ namespace ACE.Server.Entity
             var currentTime = Time.GetUnixTime();
 
             var timeDiff = currentTime - last_used_time;
-            var fullTime = player.GetProperty(PropertyBool.IsHardcoreRogue) == true && DerpACEConfig.HardcoreRogueEnabled
-                ? TimeSpan.FromMinutes(DerpACEConfig.HardcoreRogueProficiencyMinutes)
+            var fullTime = player.GetProperty(PropertyBool.IsHardcoreCrawler) == true && DerpACEConfig.HardcoreCrawlerEnabled
+                ? TimeSpan.FromMinutes(DerpACEConfig.HardcoreCrawlerProficiencyMinutes)
                 : FullTime;
 
             if (timeDiff < 0)
@@ -74,10 +78,10 @@ namespace ACE.Server.Entity
 
                 if (player.IsMaxLevel) return;
 
-                var rogueMultiplier = player.GetProperty(PropertyBool.IsHardcoreRogue) == true && DerpACEConfig.HardcoreRogueEnabled
-                    ? Math.Max(0.0f, DerpACEConfig.HardcoreRogueProficiencyXpMultiplier)
+                var crawlerMultiplier = player.GetProperty(PropertyBool.IsHardcoreCrawler) == true && DerpACEConfig.HardcoreCrawlerEnabled
+                    ? Math.Max(0.0f, DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier)
                     : 1.0f;
-                var pp = (uint)Math.Round(difficulty * timeScale * rogueMultiplier);
+                var pp = (uint)Math.Round(difficulty * timeScale * crawlerMultiplier);
                 var totalXPGranted = (long)Math.Round(pp * 1.1f);   // give additional 10% of proficiency XP to unassigned XP
 
                 if (totalXPGranted > 10000)
@@ -107,13 +111,17 @@ namespace ACE.Server.Entity
 
                 //Console.WriteLine($"Earned {pp} PP ({skill.Skill})");
 
-                // send CP to player as unassigned XP
-                player.GrantXP(totalXPGranted, XpType.Proficiency, ShareType.None);
+                // send CP to player as unassigned XP. Crawlers use this only as hidden skill-growth fuel,
+                // so do not advance their normal total XP track.
+                if (HardcoreCrawlerManager.IsActive(player))
+                    player.RefundXP(totalXPGranted);
+                else
+                    player.GrantXP(totalXPGranted, XpType.Proficiency, ShareType.None);
 
                 // send PP to player as skill XP, which gets spent from the CP sent
                 if (pp > 0)
                 {
-                    player.HandleActionRaiseSkill(skill.Skill, pp);
+                    player.HandleActionRaiseSkillFromUse(skill.Skill, pp);
                 }
             }
         }

@@ -102,6 +102,9 @@ namespace ACE.Server.Managers
                 if (player == null || player.IsDeleted)
                     continue;
 
+                if (player.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true)
+                    continue;
+
                 var isIronman = Player.IsIronmanFamilyPlayer(player);
                 if (!isIronman && player.GetProperty(PropertyBool.IsHardcore) != true)
                     continue;
@@ -167,6 +170,7 @@ namespace ACE.Server.Managers
         {
             return players
                 .Where(p => !p.IsDeleted
+                    && p.GetProperty(PropertyBool.IsIronmanNomadLifebound) != true
                     && (ironmanOnly
                         ? Player.IsIronmanFamilyPlayer(p)
                         : p.GetProperty(PropertyBool.IsHardcore) == true && !Player.IsIronmanFamilyPlayer(p)))

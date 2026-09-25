@@ -12,6 +12,12 @@ namespace ACE.Server.WorldObjects
     {
         public bool HandleActionRaiseAttribute(PropertyAttribute attribute, uint amount)
         {
+            if (HardcoreCrawlerManager.IsActive(this))
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Hardcore Crawler attributes cannot be raised manually; your power comes from use-based progression.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             if (!Attributes.TryGetValue(attribute, out var creatureAttribute))
             {
                 log.Warn($"{Name}.HandleActionRaiseAttribute({attribute}, {amount}) - invalid attribute");

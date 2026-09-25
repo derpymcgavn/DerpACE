@@ -9,6 +9,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 
@@ -123,6 +124,7 @@ namespace ACE.Server.WorldObjects
             chain.AddAction(player, () =>
             {
                 if (unlocker.WeenieType == WeenieType.Lockpick &&
+                    !HardcoreCrawlerManager.IsActive(player) &&
                     player.Skills[Skill.Lockpick].AdvancementClass != SkillAdvancementClass.Trained &&
                     player.Skills[Skill.Lockpick].AdvancementClass != SkillAdvancementClass.Specialized)
                 {
@@ -162,7 +164,10 @@ namespace ACE.Server.WorldObjects
                                 player.EnqueueBroadcast(new GameMessageSound(player.Guid, Sound.Lockpicking, 1.0f));
 
                                 var lockpickSkill = player.GetCreatureSkill(Skill.Lockpick);
-                                Proficiency.OnSuccessUse(player, lockpickSkill, difficulty);
+                                if (HardcoreCrawlerManager.IsActive(player) && lockpickSkill.AdvancementClass < SkillAdvancementClass.Trained)
+                                    HardcoreCrawlerManager.OnUntrainedSkillUsed(player, lockpickSkill, (uint)Math.Max(1, difficulty));
+                                else
+                                    Proficiency.OnSuccessUse(player, lockpickSkill, difficulty);
                             }
 
                             ConsumeUnlocker(player, unlocker, target, true);
@@ -176,6 +181,12 @@ namespace ACE.Server.WorldObjects
                             break;
                         case UnlockResults.PickLockFailed:
                             target.EnqueueBroadcast(new GameMessageSound(target.Guid, Sound.PicklockFail, 1.0f));
+                            if (unlocker.WeenieType == WeenieType.Lockpick)
+                            {
+                                var lockpickSkill = player.GetCreatureSkill(Skill.Lockpick);
+                                if (HardcoreCrawlerManager.IsActive(player) && lockpickSkill.AdvancementClass < SkillAdvancementClass.Trained)
+                                    HardcoreCrawlerManager.OnUntrainedSkillUsed(player, lockpickSkill, (uint)Math.Max(1, difficulty));
+                            }
                             ConsumeUnlocker(player, unlocker, target, false);
                             break;
                         case UnlockResults.CannotBePicked:

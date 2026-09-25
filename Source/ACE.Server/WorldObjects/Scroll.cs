@@ -4,6 +4,7 @@ using ACE.Entity;
 using ACE.Entity.Enum;
 using ACE.Entity.Models;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameMessages.Messages;
 
 namespace ACE.Server.WorldObjects
@@ -96,7 +97,7 @@ namespace ACE.Server.WorldObjects
                 if (!player.CanReadScroll(this))
                 {
                     var msg = "";
-                    if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained)
+                    if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained && !HardcoreCrawlerManager.IsActive(player))
                         msg = $"You are not trained in {playerSkill.Skill.ToSentence()}!";
                     else
                         msg = $"You are not skilled enough in {playerSkill.Skill.ToSentence()} to learn this spell.";
@@ -107,6 +108,9 @@ namespace ACE.Server.WorldObjects
 
                 if (player.TryConsumeFromInventoryWithNetworking(this))
                 {
+                    if (HardcoreCrawlerManager.IsActive(player) && playerSkill.AdvancementClass < SkillAdvancementClass.Trained)
+                        HardcoreCrawlerManager.OnUntrainedSkillUsed(player, playerSkill, Spell.PowerMod);
+
                     player.LearnSpellWithNetworking(Spell.Id);
 
                     player.Session.Network.EnqueueSend(new GameMessageSystemChat("The scroll is destroyed.", ChatMessageType.Broadcast));

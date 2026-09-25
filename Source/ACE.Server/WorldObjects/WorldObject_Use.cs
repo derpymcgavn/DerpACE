@@ -140,6 +140,12 @@ namespace ACE.Server.WorldObjects
             }
         }
 
+        private bool IsCrawlerLearnByDoingUse(Player player, Skill skill)
+        {
+            return HardcoreCrawlerManager.IsActive(player)
+                && this is Healer
+                && skill == Skill.Healing;
+        }
         public virtual void ActOnUse(WorldObject activator)
         {
             if (activator is Player player && IsSpellFocus && player.TryBeginSpellFocusAttunement(this))
@@ -210,8 +216,15 @@ namespace ACE.Server.WorldObjects
             if (ItemDifficulty != null)
             {
                 var arcaneLore = player.GetCreatureSkill(Skill.ArcaneLore);
+                var crawlerArcanePractice = HardcoreCrawlerManager.IsActive(player);
                 if (arcaneLore.Current < ItemDifficulty.Value)
+                {
+                    if (crawlerArcanePractice)
+                        HardcoreCrawlerManager.OnSkillPracticed(player, arcaneLore, (uint)Math.Max(1, ItemDifficulty.Value));
                     return new ActivationResult(new GameEventWeenieErrorWithString(player.Session, WeenieErrorWithString.Your_IsTooLowToUseItemMagic, arcaneLore.Skill.ToSentence()));
+                }
+                if (crawlerArcanePractice)
+                    HardcoreCrawlerManager.OnSkillPracticed(player, arcaneLore, (uint)Math.Max(1, ItemDifficulty.Value));
             }
 
             // verify skill - does this have to be trained, or only in conjunction with UseRequiresSkillLevel?
@@ -238,7 +251,8 @@ namespace ACE.Server.WorldObjects
                 var skill = player.GetBattlemageAdjustedItemSkill(this, (Skill)UseRequiresSkill.Value);
                 var playerSkill = player.GetCreatureSkill(skill);
 
-                if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained)
+                var crawlerLearningUse = IsCrawlerLearnByDoingUse(player, skill);
+                if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained && !crawlerLearningUse)
                 {
                     //return new ActivationResult(new GameEventWeenieErrorWithString(player.Session, WeenieErrorWithString.Your_SkillMustBeTrained, playerSkill.Skill.ToSentence()));
                     player.Session.Network.EnqueueSend(new GameEventCommunicationTransientString(player.Session, $"You must have {playerSkill.Skill.ToSentence()} trained to use that item's magic"));
@@ -246,7 +260,7 @@ namespace ACE.Server.WorldObjects
                 }
 
                 // verify skill level
-                if (UseRequiresSkillLevel != null)
+                if (UseRequiresSkillLevel != null && !crawlerLearningUse)
                 {
                     if (playerSkill.Current < UseRequiresSkillLevel.Value)
                         return new ActivationResult(new GameEventWeenieErrorWithString(player.Session, WeenieErrorWithString.Your_IsTooLowToUseItemMagic, playerSkill.Skill.ToSentence()));

@@ -146,6 +146,7 @@ namespace ACE.Server.WorldObjects
 
             var salvageBags = new List<WorldObject>();
             var salvageResults = new SalvageResults();
+            var crawlerSalvageDifficulty = 0;
 
             foreach (var itemGuid in salvageItems)
             {
@@ -170,11 +171,15 @@ namespace ACE.Server.WorldObjects
 
                 if (item.Workmanship == null || item.Retained) continue;
 
+                crawlerSalvageDifficulty = Math.Max(crawlerSalvageDifficulty, (int)Math.Round((item.Workmanship ?? 1.0f) * 25.0f));
                 AddSalvage(salvageBags, item, salvageResults);
 
                 // can any salvagable items be stacked?
                 TryConsumeFromInventoryWithNetworking(item);
             }
+
+            if (crawlerSalvageDifficulty > 0 && HardcoreCrawlerManager.IsActive(this))
+                HardcoreCrawlerManager.OnUntrainedSkillUsed(this, GetCreatureSkill(Skill.Salvaging), (uint)Math.Max(1, crawlerSalvageDifficulty));
 
             // add salvage bags
             foreach (var salvageBag in salvageBags)

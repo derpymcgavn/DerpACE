@@ -49,7 +49,8 @@ namespace ACE.Server.WorldObjects
             // death, mark the character as deleted + force logoff. The debounce prevents
             // duplicate death events from chain-burning lives, but should never shield
             // later legitimate deaths.
-            if (GetProperty(PropertyBool.IsHardcore) == true)
+            var isLifeboundNomad = GetProperty(PropertyBool.IsIronmanNomadLifebound) == true;
+            if (GetProperty(PropertyBool.IsHardcore) == true && !isLifeboundNomad)
             {
                 var nowTs = ACE.Common.Time.GetUnixTime();
                 var cooldown = Math.Clamp(ACE.Server.Managers.DerpACEConfig.IronmanHardcoreSecondsBetweenDeaths, 0.0f, 30.0f);
@@ -128,7 +129,11 @@ namespace ACE.Server.WorldObjects
                 var isIronman = GetProperty(PropertyBool.IsIronman) == true;
                 var isHardcore = GetProperty(PropertyBool.IsHardcore) == true;
 
-                if (isIronman)
+                if (isLifeboundNomad)
+                {
+                    // Lifebound Nomads are intentionally excluded from public challenge scoreboards.
+                }
+                else if (isIronman)
                 {
                     ACE.Server.Managers.IronmanKillerTracker.RecordKill(lastDamager.Name);
                     ACE.Server.Managers.PlayerKillerTracker.RecordKill(ACE.Server.Managers.PlayerKillerTracker.Category.Ironman, lastDamager.Name);
@@ -175,7 +180,17 @@ namespace ACE.Server.WorldObjects
             excludePlayers.AddRange(nearbyPlayers);
             
             // Global announcement for Ironman/Hardcore player deaths
-            if (GetProperty(PropertyBool.IsIronman) == true)
+            if (isLifeboundNomad)
+            {
+                var victimLevel = DeathLevel ?? Level ?? 1;
+                var killerName = lastDamager?.Name ?? "Unknown";
+                var nomadDeathMsg = $"[NOMAD FALLEN] {Name} (Level {victimLevel}) was slain by {killerName}. Their journey continues.";
+
+                var nomadDeathBroadcast = new GameMessageSystemChat(nomadDeathMsg, ChatMessageType.WorldBroadcast);
+                PlayerManager.BroadcastToAll(nomadDeathBroadcast);
+                PlayerManager.LogBroadcastChat(Channel.AllBroadcast, this, nomadDeathMsg);
+            }
+            else if (GetProperty(PropertyBool.IsIronman) == true)
             {
                 var victimLevel = DeathLevel ?? Level ?? 1;
                 var killerName = lastDamager?.Name ?? "Unknown";

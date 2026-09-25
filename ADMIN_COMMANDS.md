@@ -21,11 +21,41 @@ Persistent global quests include tier-8 hunts, mutator and dungeon hunts, Correc
 |---|---|---|
 | `@derpconfig reload` | Developer | Reloads `DerpAce.json` and restarts services that require it, including the admin map. |
 | `@lootconfig list` | Developer | Lists live loot, mutator, mob, armor, and vendor tuning. |
-| `@lootconfig set <key> <value>` | Developer | Changes a supported live tuning value. |
+| `@lootconfig set <key> <value>` | Developer | Changes a supported live tuning value. Examples: `@lootconfig set crawler.trialinterval 10`, `@lootconfig set crawler.cacheinterval 5`. |
 | `@ironmanmode on|off|toggle|status` | Admin | Controls whether players may opt into Ironman modes. |
 | `@wiflag <player> [reroll|on|off]` | Admin | Shows or changes a player WI loot bias flag for testing. |
 
 Changes affecting generated objects apply to future loot rolls, spawns, or vendor restocks. Existing objects retain their rolled properties unless explicitly converted.
+
+
+## Ironman / Nomad
+
+| Command | Access | Purpose |
+|---|---|---|
+| `/ironman on [-nh] [-blind]` | Player | Starts the 30-second standard Ironman confirmation window. |
+| `/ironman nomad [-nh] [-blind] [-lifebound]` | Player | Starts the 30-second Nomad Ironman confirmation window. Add `-lifebound` for infinite lives and no public challenge scoreboard placement. |
+| `/ironman confirm` | Player | Finalizes the pending Ironman or Nomad conversion. Permanent. |
+| `/ironman char` | Player | Shows Ironman progression milestones. |
+| `/ironman top` | Player | Shows the Ironman leaderboard. Lifebound Nomads are excluded. |
+| `/ironman topkillers` | Player | Shows creatures with the most Ironman kills. Lifebound Nomad deaths are excluded. |
+## Hardcore Crawler
+
+| Command | Access | Purpose |
+|---|---|---|
+| `/crawler on` | Player | Starts the 30-second Hardcore Crawler confirmation window. |
+| `/crawler confirm` | Player | Finalizes Crawler mode for the character. This is permanent for that life. |
+| `/crawler status` | Player | Shows use-based progression, chosen boons, pending boons, and the oldest active milestone trial. |
+| `/crawler choices` | Player | Shows the oldest queued boon choice. Missed choices persist through logout/restart. |
+| `/crawler pick <number>` | Player | Chooses one boon from the oldest queued level choice. |
+| `/crawler train <skill>` | Player | Trains a skill that has become ready through use. Omit `<skill>` to list ready skills. |
+| `/crawler spec <skill>` | Player | Specializes a trained skill that has become ready through use. Omit `<skill>` to list ready skills. |
+| `/crawler trial` | Player | Shows active milestone trials, progress, completed milestones, and claim instructions. |
+| `/crawler trial claim` | Player | Claims the oldest completed Crawler trial Fan Box reward. |
+| `/crawler convert` | Player | Refreshes title/state for existing Crawler characters after mode updates. |
+
+Crawler tuning lives under `@lootconfig`: `crawler.enabled`, `crawler.maxlevel`, `crawler.choices`, `crawler.profmins`, `crawler.profmult`, `crawler.ranklevel`, `crawler.autospeclvl`, `crawler.autospecranks`, `crawler.autotrain`, `crawler.baseattr`, `crawler.basevital`, `crawler.cacheinterval`, and `crawler.trialinterval`. Setting `crawler.cacheinterval` or `crawler.trialinterval` to `0` disables new milestone generation for that reward type. `crawler.baseattr` defaults to 55 for new Crawler primary attributes. `crawler.autotrain` controls uses before a skill is ready to train, `crawler.autospecranks` defaults to 10 trained rank gains before a skill is ready to specialize, and `crawler.ranklevel` defaults to 5.
+
+Milestone trials persist through logout and restart. Current built-in trial types are XP-worthy hunts, high-risk hunts, mutated hunts, field medicine, rations, and Road Lessons skill-growth objectives. Completed trials grant themed Fan Box reward packages instead of physical loot-box WCIDs. Normal quest XP for Crawlers is converted into persistent Crawler Favor instead of conventional XP; each full level-worth of favor grants a Crawler quest cache. Crawlers also count as having all spell foci built in, so they do not need physical foci clutter to cast learned spells.
 
 ## Vendor Tools
 
@@ -101,7 +131,7 @@ The web admin map is configured in `DerpAce.json` with the `admin_map_*` setting
 @derpconfig reload
 ```
 
-The default local address is `http://127.0.0.1:9110/`. Admin accounts can use controls and edit inventory data; player accounts are limited to their own account/fellowship view. The admin-only boss profile editor and live spawn operations are available at `/boss-mechanics`; the custom Spell Workshop is available at `/spell-workshop`. Inventory icons load from `Data/AdminMap/icons` using eight-digit hexadecimal DID PNG filenames. Do not expose the service publicly without a strong token and appropriate network controls.
+The default local address is `http://127.0.0.1:9110/`. Admin accounts can use controls and edit inventory data; player accounts are limited to their own account/fellowship view. The admin-only boss profile editor and live spawn operations are available at `/boss-mechanics`; the custom Spell Workshop is available at `/spell-workshop`. Inventory icons load from `Data/AdminMap/icons` using eight-digit hexadecimal DID PNG filenames. For LAN or remote access, set `admin_map_host` to the desired bind address, use a strong `admin_map_token`, then run `@derpconfig reload`. Player accounts are view-only for their own account/fellowship context; admin controls require admin access. Do not expose the service publicly without firewall/VPN protection and a strong token.
 
 ## General Command Discovery
 

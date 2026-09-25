@@ -83,7 +83,10 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (xpType == XpType.Quest && HardcoreCrawlerManager.TryConvertQuestExperience(this, amount))
+                return;
             // Make sure UpdateXpAndLevel is done on this players thread
+
             EnqueueAction(new ActionEventDelegate(() => UpdateXpAndLevel(amount, xpType)));
 
             // for passing XP up the allegiance chain,
@@ -299,6 +302,9 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         private void CheckForLevelup()
         {
+            if (ACE.Server.Managers.HardcoreCrawlerManager.IsActive(this))
+                return;
+
             var xpTable = DatManager.PortalDat.XpTable;
 
             var maxLevel = GetMaxLevel();
@@ -366,8 +372,8 @@ namespace ACE.Server.WorldObjects
                 if (IsIronmanFamily)
                     ACE.Server.Factories.IronmanFactory.CheckIronmanLevelGrants(this);
 
-                // DerpACE: Hardcore Rogue offers one persistent boon choice per level.
-                ACE.Server.Managers.RogueHardcoreManager.OnLevelUp(this, Level ?? 1);
+                // DerpACE: Hardcore Crawler offers one persistent boon choice per level.
+                ACE.Server.Managers.HardcoreCrawlerManager.OnLevelUp(this, Level ?? 1);
 
                 Session.Network.EnqueueSend(levelUp);
 
@@ -544,4 +550,3 @@ namespace ACE.Server.WorldObjects
         }
     }
 }
-

@@ -531,7 +531,7 @@ namespace ACE.Server.Managers
         /// <summary>Minimum treasure tier required. Default 2.</summary>
         public static int ResoluteBladeMinTier { get; set; } = 5;
 
-        /// <summary>Minimum heal-on-crit proc chance % rolled at loot time (integer). Default 25.</summary>
+        /// <summary>Minimum heal-on-crit proc chance % rolled at loot time (integer). Default 1.</summary>
         public static int ResoluteProcMin { get; set; } = 15;
 
         /// <summary>Maximum heal-on-crit proc chance % rolled at loot time (integer). Default 50.</summary>
@@ -593,7 +593,7 @@ namespace ACE.Server.Managers
         /// <summary>Maximum first-strike proc chance % rolled at loot time (integer). Default 50.</summary>
         public static int StalkerProcMax { get; set; } = 35;
 
-        /// <summary>Minimum first-strike bonus damage % rolled at loot time (integer). Default 25.</summary>
+        /// <summary>Minimum first-strike bonus damage % rolled at loot time (integer). Default 1.</summary>
         public static int StalkerBonusMin { get; set; } = 15;
 
         /// <summary>Maximum first-strike bonus damage % rolled at loot time (integer). Default 50.</summary>
@@ -697,7 +697,7 @@ namespace ACE.Server.Managers
         /// <summary>Umbral Mirror caster cooldown in seconds. Default 120.</summary>
         public static float CasterShadowCloneCooldownSeconds { get; set; } = 120.0f;
 
-        /// <summary>Umbral Mirror caster summon duration in seconds. Default 25.</summary>
+        /// <summary>Umbral Mirror caster summon duration in seconds. Default 1.</summary>
         public static float CasterShadowCloneDurationSeconds { get; set; } = 25.0f;
 
         /// <summary>Umbral Mirror caster clone damage scale. Default 0.35 = 35%.</summary>
@@ -870,7 +870,7 @@ namespace ACE.Server.Managers
         /// <summary>Minimum vampiric lifesteal % rolled at spawn (integer). Default 10.</summary>
         public static int VampiricLifestealMin { get; set; } = 10;
 
-        /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 25.</summary>
+        /// <summary>Maximum vampiric lifesteal % rolled at spawn (integer). Default 1.</summary>
         public static int VampiricLifestealMax { get; set; } = 25;
 
         /// <summary>Per-spawn chance (0-1) for the Thief modifier to land on an eligible mob. Default 0.0005 (1 in 2000).</summary>
@@ -902,7 +902,7 @@ namespace ACE.Server.Managers
         /// <summary>Per-spawn chance (0-1) for the Shaman modifier to land on an eligible mob. Default 0.00035.</summary>
         public static float ShamanMobChance { get; set; } = 0.00035f;
 
-        /// <summary>Maximum range (meters) a Healer mob will look for wounded allies to mend. Default 25.</summary>
+        /// <summary>Maximum range (meters) a Healer mob will look for wounded allies to mend. Default 1.</summary>
         public static float HealerMobRange { get; set; } = 25.0f;
 
         /// <summary>Allies whose Health/MaxHealth ratio is below this value are eligible to be healed. Default 0.75.</summary>
@@ -1010,20 +1010,50 @@ namespace ACE.Server.Managers
         /// <summary>XP scalar applied to standalone Hardcore earnings after server XP modifiers. Default 1.0 (100%).</summary>
         public static float HardcoreXpScalar { get; set; } = 1.0f;
 
-        /// <summary>Master switch for Hardcore Rogue mode. Default true.</summary>
-        public static bool HardcoreRogueEnabled { get; set; } = true;
+        /// <summary>Master switch for Hardcore Crawler mode. Default true.</summary>
+        public static bool HardcoreCrawlerEnabled { get; set; } = true;
 
-        /// <summary>Maximum starting level for opting into Hardcore Rogue. Default 10.</summary>
-        public static int HardcoreRogueMaxOptInLevel { get; set; } = 10;
+        /// <summary>Maximum starting level for opting into Hardcore Crawler. Default 10.</summary>
+        public static int HardcoreCrawlerMaxOptInLevel { get; set; } = 10;
 
         /// <summary>Number of random boons offered each level. Default 3.</summary>
-        public static int HardcoreRogueBoonChoices { get; set; } = 3;
+        public static int HardcoreCrawlerBoonChoices { get; set; } = 3;
 
-        /// <summary>Minutes before the same skill can earn full proficiency again in Hardcore Rogue. Default 2.</summary>
-        public static double HardcoreRogueProficiencyMinutes { get; set; } = 2.0;
+        /// <summary>Minutes before the same skill can earn full proficiency again in Hardcore Crawler. Default 2.</summary>
+        public static double HardcoreCrawlerProficiencyMinutes { get; set; } = 2.0;
 
-        /// <summary>Multiplier applied to proficiency PP in Hardcore Rogue. Default 2.0.</summary>
-        public static float HardcoreRogueProficiencyXpMultiplier { get; set; } = 2.0f;
+        /// <summary>Multiplier applied to proficiency PP in Hardcore Crawler. Default 2.0.</summary>
+        public static float HardcoreCrawlerProficiencyXpMultiplier { get; set; } = 2.0f;
+
+        /// <summary>Specialized skill ranks earned through use required for one Hardcore Crawler level. Default 5.</summary>
+        public static int HardcoreCrawlerSkillRanksPerLevel { get; set; } = 5;
+
+        /// <summary>Minimum Hardcore Crawler level before trained skills can auto-specialize from use. Default 1.</summary>
+        public static int HardcoreCrawlerAutoSpecMinLevel { get; set; } = 1;
+
+        /// <summary>Trained-skill ranks earned through use before Hardcore Crawler auto-specializes that skill. Default 10.</summary>
+        public static int HardcoreCrawlerAutoSpecRanks { get; set; } = 10;
+
+        /// <summary>Successful uses of an untrained skill before Hardcore Crawler auto-trains it. Default 5.</summary>
+        public static int HardcoreCrawlerAutoTrainUses { get; set; } = 5;
+
+        /// <summary>Maximum number of trained-or-better skills a Crawler can hold. 0 disables the count cap. Default 28.</summary>
+        public static int HardcoreCrawlerMaxTrainedSkills { get; set; } = 28;
+
+        /// <summary>Maximum adjusted specialized skill credits a Crawler can hold. Default 80 gives Crawlers a little extra build flexibility without uncapping specialization.</summary>
+        public static int HardcoreCrawlerSpecializedCreditBudget { get; set; } = 80;
+
+        /// <summary>Base starting value for Hardcore Crawler primary attributes. Default 55.</summary>
+        public static uint HardcoreCrawlerBaseAttribute { get; set; } = 55;
+
+        /// <summary>Base starting value for Hardcore Crawler vitals before formulas. Default 10.</summary>
+        public static uint HardcoreCrawlerBaseVital { get; set; } = 10;
+
+        /// <summary>Hardcore Crawler level interval for milestone cache rewards. Default 5.</summary>
+        public static int HardcoreCrawlerCacheMilestoneInterval { get; set; } = 5;
+
+        /// <summary>Hardcore Crawler level interval for milestone trials / fan boxes. Default 10.</summary>
+        public static int HardcoreCrawlerTrialInterval { get; set; } = 10;
 
         // ---------- Vampiric Jewelry (rings / necklaces / bracelets) ----------
 
@@ -1088,4 +1118,3 @@ namespace ACE.Server.Managers
         public static int VendorRestockMaxMinutes { get; set; } = 45;
     }
 }
-

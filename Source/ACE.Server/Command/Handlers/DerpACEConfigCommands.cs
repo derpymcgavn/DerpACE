@@ -181,11 +181,21 @@ namespace ACE.Server.Command.Handlers
             "  ironman.xp            IronmanXpScalar (float, default 0.75)\n" +
             "  nomad.xp              NomadXpScalar (float, default 0.75)\n" +
             "  hardcore.xp           HardcoreXpScalar (float, default 1.0)\n" +
-            "  rogue.enabled         HardcoreRogueEnabled (bool)\n" +
-            "  rogue.maxlevel        HardcoreRogueMaxOptInLevel (int)\n" +
-            "  rogue.choices         HardcoreRogueBoonChoices (int 1-5)\n" +
-            "  rogue.profmins        HardcoreRogueProficiencyMinutes (float)\n" +
-            "  rogue.profmult        HardcoreRogueProficiencyXpMultiplier (float)\n" +
+            "  crawler.enabled         HardcoreCrawlerEnabled (bool)\n" +
+            "  crawler.maxlevel        HardcoreCrawlerMaxOptInLevel (int)\n" +
+            "  crawler.choices         HardcoreCrawlerBoonChoices (int 1-5)\n" +
+            "  crawler.profmins        HardcoreCrawlerProficiencyMinutes (float)\n" +
+            "  crawler.profmult        HardcoreCrawlerProficiencyXpMultiplier (float)\n" +
+            "  crawler.ranklevel       HardcoreCrawlerSkillRanksPerLevel (int)\n" +
+            "  crawler.autospeclvl     HardcoreCrawlerAutoSpecMinLevel (int, default 1)\n" +
+            "  crawler.autospecranks   HardcoreCrawlerAutoSpecRanks (int)\n" +
+            "  crawler.autotrain       HardcoreCrawlerAutoTrainUses (int)\n" +
+            "  crawler.maxtrained      HardcoreCrawlerMaxTrainedSkills (int, 0=off)\n" +
+            "  crawler.specbudget      HardcoreCrawlerSpecializedCreditBudget (int, 0=off)\n" +
+            "  crawler.baseattr        HardcoreCrawlerBaseAttribute (uint)\n" +
+            "  crawler.basevital       HardcoreCrawlerBaseVital (uint)\n" +
+            "  crawler.cacheinterval   HardcoreCrawlerCacheMilestoneInterval (int, 0=off)\n" +
+            "  crawler.trialinterval   HardcoreCrawlerTrialInterval (int, 0=off)\n" +
             "  vendor.loot           VendorRandomLootEnabled (bool, master switch)\n" +
             "  vendor.lootmin        VendorRandomLootMinItems (int, min items per category)\n" +
             "  vendor.lootmax        VendorRandomLootMaxItems (int, max items per category)")]
@@ -364,11 +374,21 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  ironman.xp           = {DerpACEConfig.IronmanXpScalar:P0}  ({DerpACEConfig.IronmanXpScalar})");
                 sb.AppendLine($"  nomad.xp             = {DerpACEConfig.NomadXpScalar:P0}  ({DerpACEConfig.NomadXpScalar})");
                 sb.AppendLine($"  hardcore.xp          = {DerpACEConfig.HardcoreXpScalar:P0}  ({DerpACEConfig.HardcoreXpScalar})");
-                sb.AppendLine($"  rogue.enabled        = {DerpACEConfig.HardcoreRogueEnabled}");
-                sb.AppendLine($"  rogue.maxlevel       = {DerpACEConfig.HardcoreRogueMaxOptInLevel}");
-                sb.AppendLine($"  rogue.choices        = {DerpACEConfig.HardcoreRogueBoonChoices}");
-                sb.AppendLine($"  rogue.profmins       = {DerpACEConfig.HardcoreRogueProficiencyMinutes:0.##}");
-                sb.AppendLine($"  rogue.profmult       = {DerpACEConfig.HardcoreRogueProficiencyXpMultiplier:0.##}x");
+                sb.AppendLine($"  crawler.enabled        = {DerpACEConfig.HardcoreCrawlerEnabled}");
+                sb.AppendLine($"  crawler.maxlevel       = {DerpACEConfig.HardcoreCrawlerMaxOptInLevel}");
+                sb.AppendLine($"  crawler.choices        = {DerpACEConfig.HardcoreCrawlerBoonChoices}");
+                sb.AppendLine($"  crawler.profmins       = {DerpACEConfig.HardcoreCrawlerProficiencyMinutes:0.##}");
+                sb.AppendLine($"  crawler.profmult       = {DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier:0.##}x");
+                sb.AppendLine($"  crawler.ranklevel      = {DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel}");
+                sb.AppendLine($"  crawler.autospeclvl    = {DerpACEConfig.HardcoreCrawlerAutoSpecMinLevel}");
+                sb.AppendLine($"  crawler.autospecranks  = {DerpACEConfig.HardcoreCrawlerAutoSpecRanks}");
+                sb.AppendLine($"  crawler.autotrain      = {DerpACEConfig.HardcoreCrawlerAutoTrainUses}");
+                sb.AppendLine($"  crawler.maxtrained     = {DerpACEConfig.HardcoreCrawlerMaxTrainedSkills} (0=off)");
+                sb.AppendLine($"  crawler.specbudget     = {DerpACEConfig.HardcoreCrawlerSpecializedCreditBudget} adjusted spec credits (0=off)");
+                sb.AppendLine($"  crawler.baseattr       = {DerpACEConfig.HardcoreCrawlerBaseAttribute}");
+                sb.AppendLine($"  crawler.basevital      = {DerpACEConfig.HardcoreCrawlerBaseVital}");
+                sb.AppendLine($"  crawler.cacheinterval  = {DerpACEConfig.HardcoreCrawlerCacheMilestoneInterval}");
+                sb.AppendLine($"  crawler.trialinterval  = {DerpACEConfig.HardcoreCrawlerTrialInterval}");
                 sb.AppendLine($"  vendor.loot          = {DerpACEConfig.VendorRandomLootEnabled}");
                 sb.AppendLine($"  vendor.lootmin       = {DerpACEConfig.VendorRandomLootMinItems}");
                 sb.AppendLine($"  vendor.lootmax       = {DerpACEConfig.VendorRandomLootMaxItems}");
@@ -1078,29 +1098,79 @@ namespace ACE.Server.Command.Handlers
                         DerpACEConfig.HardcoreXpScalar = Math.Max(0.0f, hcxp);
                         break;
 
-                    case "rogue.enabled":
+                    case "crawler.enabled":
                         if (!bool.TryParse(raw, out var rge)) { BadValue(session, key, "bool"); return; }
-                        DerpACEConfig.HardcoreRogueEnabled = rge;
+                        DerpACEConfig.HardcoreCrawlerEnabled = rge;
                         break;
 
-                    case "rogue.maxlevel":
+                    case "crawler.maxlevel":
                         if (!TryInt(out var rgml)) { BadValue(session, key, "int"); return; }
-                        DerpACEConfig.HardcoreRogueMaxOptInLevel = Math.Max(1, rgml);
+                        DerpACEConfig.HardcoreCrawlerMaxOptInLevel = Math.Max(1, rgml);
                         break;
 
-                    case "rogue.choices":
+                    case "crawler.choices":
                         if (!TryInt(out var rgc)) { BadValue(session, key, "int"); return; }
-                        DerpACEConfig.HardcoreRogueBoonChoices = Math.Clamp(rgc, 1, 5);
+                        DerpACEConfig.HardcoreCrawlerBoonChoices = Math.Clamp(rgc, 1, 5);
                         break;
 
-                    case "rogue.profmins":
+                    case "crawler.profmins":
                         if (!TryFloat(out var rgpm)) { BadValue(session, key, "float"); return; }
-                        DerpACEConfig.HardcoreRogueProficiencyMinutes = Math.Max(0.1f, rgpm);
+                        DerpACEConfig.HardcoreCrawlerProficiencyMinutes = Math.Max(0.1f, rgpm);
                         break;
 
-                    case "rogue.profmult":
+                    case "crawler.profmult":
                         if (!TryFloat(out var rgpx)) { BadValue(session, key, "float"); return; }
-                        DerpACEConfig.HardcoreRogueProficiencyXpMultiplier = Math.Max(0.0f, rgpx);
+                        DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier = Math.Max(0.0f, rgpx);
+                        break;
+
+                    case "crawler.ranklevel":
+                        if (!TryInt(out var rgrl)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel = Math.Max(1, rgrl);
+                        break;
+
+                    case "crawler.autospeclvl":
+                        if (!TryInt(out var rgasl)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerAutoSpecMinLevel = Math.Max(1, rgasl);
+                        break;
+
+                    case "crawler.autospecranks":
+                        if (!TryInt(out var rgasr)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerAutoSpecRanks = Math.Max(1, rgasr);
+                        break;
+
+                    case "crawler.autotrain":
+                        if (!TryInt(out var rgat)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerAutoTrainUses = Math.Max(1, rgat);
+                        break;
+
+                    case "crawler.maxtrained":
+                        if (!TryInt(out var rgmt)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerMaxTrainedSkills = Math.Max(0, rgmt);
+                        break;
+
+                    case "crawler.specbudget":
+                        if (!TryInt(out var rgsb)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerSpecializedCreditBudget = Math.Max(0, rgsb);
+                        break;
+
+                    case "crawler.baseattr":
+                        if (!uint.TryParse(raw, out var rgba)) { BadValue(session, key, "uint"); return; }
+                        DerpACEConfig.HardcoreCrawlerBaseAttribute = Math.Max(1u, rgba);
+                        break;
+
+                    case "crawler.basevital":
+                        if (!uint.TryParse(raw, out var rgbv)) { BadValue(session, key, "uint"); return; }
+                        DerpACEConfig.HardcoreCrawlerBaseVital = Math.Max(1u, rgbv);
+                        break;
+
+                    case "crawler.cacheinterval":
+                        if (!TryInt(out var rgci)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerCacheMilestoneInterval = Math.Max(0, rgci);
+                        break;
+
+                    case "crawler.trialinterval":
+                        if (!TryInt(out var rgti)) { BadValue(session, key, "int"); return; }
+                        DerpACEConfig.HardcoreCrawlerTrialInterval = Math.Max(0, rgti);
                         break;
 
                     case "vendor.loot":
@@ -1318,5 +1388,4 @@ namespace ACE.Server.Command.Handlers
         }
     }
 }
-
 

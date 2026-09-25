@@ -164,9 +164,26 @@ namespace ACE.Server.WorldObjects
             }
             var success = pet.Init(player, this);
 
-            if (success != true) wo.Destroy();
+            if (success == true)
+                PracticeCrawlerSummoning(player, pet);
+            else
+                wo.Destroy();
 
             return success;
+        }
+
+        private void PracticeCrawlerSummoning(Player player, Pet pet)
+        {
+            if (!HardcoreCrawlerManager.IsActive(player))
+                return;
+
+            var summoning = player.GetCreatureSkill(Skill.Summoning, false);
+            if (summoning == null)
+                return;
+
+            var itemDifficulty = Math.Max(1, ItemDifficulty ?? 0);
+            var petLevelDifficulty = Math.Max(1, (pet.Level ?? 1) * 5);
+            HardcoreCrawlerManager.OnSkillPracticed(player, summoning, (uint)Math.Max(itemDifficulty, petLevelDifficulty));
         }
 
         /// <summary>

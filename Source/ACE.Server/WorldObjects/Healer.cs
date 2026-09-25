@@ -7,6 +7,7 @@ using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.Physics;
@@ -50,7 +51,8 @@ namespace ACE.Server.WorldObjects
         {
             target = GetValidHealingTarget(healer, target);
 
-            if (healer.GetCreatureSkill(Skill.Healing).AdvancementClass < SkillAdvancementClass.Trained)
+            var healerSkill = healer.GetCreatureSkill(Skill.Healing);
+            if (healerSkill.AdvancementClass < SkillAdvancementClass.Trained && !HardcoreCrawlerManager.IsActive(healer))
             {
                 healer.SendUseDoneEvent(WeenieError.YouArentTrainedInHealing);
                 return;
@@ -217,6 +219,9 @@ namespace ACE.Server.WorldObjects
             // skill check
             var difficulty = 0;
             var skillCheck = DoSkillCheck(healer, target, missingVital, ref difficulty);
+            if (HardcoreCrawlerManager.IsActive(healer))
+                HardcoreCrawlerManager.OnUntrainedSkillUsed(healer, healer.GetCreatureSkill(Skill.Healing), (uint)Math.Max(1, difficulty));
+
             if (!skillCheck)
             {
                 var failMsg = new GameMessageSystemChat($"You fail to heal {targetName}.{remainingMsg}", ChatMessageType.Broadcast);
@@ -236,6 +241,8 @@ namespace ACE.Server.WorldObjects
             var actualHealAmount = (uint)target.UpdateVitalDelta(vital, healAmount);
             if (vital.Vital == PropertyAttribute2nd.MaxHealth)
                 target.DamageHistory.OnHeal(actualHealAmount);
+
+            HardcoreCrawlerManager.OnHealingKitUsed(healer, target, actualHealAmount);
 
             //if (target.Fellowship != null)
             //target.Fellowship.OnVitalUpdate(target);
@@ -264,7 +271,8 @@ namespace ACE.Server.WorldObjects
             // (healing skill + healing kit boost) * trainedMod
             // vs. damage * 2 * combatMod
             var healingSkill = healer.GetCreatureSkill(Skill.Healing);
-            var trainedMod = healingSkill.AdvancementClass == SkillAdvancementClass.Specialized ? 1.5f : 1.1f;
+            var trainedMod = healingSkill.AdvancementClass == SkillAdvancementClass.Specialized ? 1.5f :
+                healingSkill.AdvancementClass >= SkillAdvancementClass.Trained ? 1.1f : 0.65f;
 
             var combatMod = healer.CombatMode == CombatMode.NonCombat ? 1.0f : 1.1f;
 
@@ -314,7 +322,8 @@ namespace ACE.Server.WorldObjects
 
             healAmount *= ratingMod;
 
-            return (uint)Math.Round(healAmount);
+            var modifiedHealAmount = HardcoreCrawlerManager.ModifyHealingKitAmount(healer, target, (uint)Math.Round(healAmount));
+            return Math.Min(modifiedHealAmount, missingVital);
         }
     }
 }

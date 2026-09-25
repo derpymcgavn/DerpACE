@@ -732,6 +732,8 @@ namespace ACE.Entity.Enum.Properties
         GlobalQuestCurrencyCountedAmount         = 9058,
         // DerpACE: per-NPC ambient town AI override. See TownNpcAiMode.
         TownNpcAiOverride                       = 9059,
+        // DerpACE: Hardcore Crawler specialized skill ranks earned toward next usage level.
+        HardcoreCrawlerUsageRankProgress         = 9060,
     }
 
     public static class PropertyIntExtensions

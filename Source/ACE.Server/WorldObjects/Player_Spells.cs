@@ -459,6 +459,9 @@ namespace ACE.Server.WorldObjects
 
         public bool HasFoci(MagicSchool school)
         {
+            if (HardcoreCrawlerManager.IsActive(this))
+                return true;
+
             switch (school)
             {
                 case MagicSchool.CreatureEnchantment:

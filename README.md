@@ -43,7 +43,7 @@ Please note that this project is released with a [Contributor Code of Conduct](h
 ***
 ## DerpACE Custom Changes
 
-### Current DerpACE Abilities And Commands (August 1, 2026)
+### Current DerpACE Abilities And Commands (September 2026)
 This section is the current operator-facing source of truth for active DerpACE systems. Older patch notes below are historical and may describe earlier balance values.
 
 See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator workflows and command examples.
@@ -62,7 +62,8 @@ See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator 
 | Vampiric jewelry | `enable_vampiric_jewelry` plus `vampiric_jewelry_*` | Yes | Controls new loot rolls and live regen/on-hit behavior. |
 | Prepatch variants | `enable_prepatch_variants` plus `prepatch_*` | Yes, future rolls | Controls selected prepatch-style item variants. |
 | Vendor random loot | `vendor_random_loot_enabled` plus `vendor_*` | Yes, future vendor loads/restocks | Vendor inventories reroll when the vendor reloads. |
-| Ironman / Nomad / Hardcore | `ironman_enabled` plus `ironman_*` | Yes | Gates opt-in commands and controls blind/hardcore support values. Challenge gear provenance and magic-aid isolation are live code rules. |
+| Ironman / Nomad / Hardcore | `ironman_enabled` plus `ironman_*`, `*_xp_scalar`, hardcore lives/death debounce | Yes | Gates challenge opt-ins and controls blind/hardcore support values. Challenge gear provenance, fellowship limits, and magic-aid isolation are live code rules. |
+| Hardcore Crawler | `hardcore_crawler_*` | Yes | Optional Hardcore submode with use-based skill growth, queued boon choices, flaw boons, milestone caches, configurable milestone trials, quest XP converted into Crawler Favor, and Fan Box rewards. |
 | Bank | `enable_bank` plus `bank_*` | Yes | Controls coin banking, direct deposit, vendor bank spend, and overflow behavior. |
 | Admin map | `admin_map_enabled` plus `admin_map_*` | Yes | `@derpconfig reload` restarts the map service with the new host, port, token, image, and calibration settings. |
 | Custom spells | JSON files plus `@customspells` commands | Reload command | No hard-off JSON toggle yet; spell packages are an import/export pipeline and custom spell data is intentionally loaded through `@customspells reload` or startup. |
@@ -85,7 +86,7 @@ DerpACE keeps the existing ACE startup behavior but avoids repeating expensive w
 | Command | Purpose |
 |---|---|
 | `@lootconfig list` | Prints runtime loot, mutator, armor, mob, and vendor tuning values. |
-| `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Example: `@lootconfig set sentinel.cooldown 14`. |
+| `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Examples: `@lootconfig set sentinel.cooldown 14`, `@lootconfig set crawler.trialinterval 10`. |
 | `@lootgen weapon <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon and can force a compatible weapon/caster mutator. Example: `@lootgen weapon 7 mutator=discus`. |
 | `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced weapon, shield, and armor/clothing mutators can be applied to compatible WCIDs/classnames. Examples: `@lootgen shieldtower 7 luck=1 mutator=bashing`, `@lootgen glovescloth 7 mutator=alchemicalinstability`. |
 | `@customspells reload` | Reloads JSON custom spell definitions from `Data/CustomSpells`. |
@@ -119,13 +120,18 @@ An unconfigured tier above T8 safely generates with T8 behavior. Admin generatio
 | Command | Purpose |
 |---|---|
 | `/ironman on [-nh] [-blind]` | Begins standard Ironman commitment. Requires `/ironman confirm` within 30 seconds. Blind mode hides future skill milestones and auto-spends XP across trained skills, Health/Stamina/Mana, and supporting attributes. |
-| `/ironman nomad [-nh] [-blind]` | Begins Nomad Ironman commitment: no weapons/casters, elemental gauntlet/shoe damage, natural unarmored AL. Requires confirmation. Blind mode uses the same balanced auto-spend. |
+| `/ironman nomad [-nh] [-blind] [-lifebound]` | Begins Nomad Ironman commitment: no weapons/casters, elemental gauntlet/shoe damage, natural unarmored AL. Add `-lifebound` for infinite lives and no public challenge scoreboard placement. Requires confirmation. Blind mode uses the same balanced auto-spend. |
 | `/ironman confirm` | Finalizes the pending Ironman or Nomad conversion. Permanent. |
 | `/ironman char` | Shows current Ironman progression. Blind Ironmen only see unlocked skills, not future milestones. |
 | `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |
 | `/ironman topkillers`, `/ironmantopkillers` | Shows creatures with the most Ironman kills. |
 | `/hardcore on`, `/hardcore confirm` | Begins and confirms Hardcore challenge mode. Hardcore uses its own gear provenance economy and death rules. |
 | `/hardcoretop` | Shows Hardcore leaderboard. |
+| `/crawler on`, `/crawler confirm` | Begins and confirms Hardcore Crawler mode: Hardcore rules, use-based skill/stat growth, built-in spell foci, queued boons, milestone trials, caches, and Fan Boxes. |
+| `/crawler status`, `/crawler choices`, `/crawler pick <number>` | Shows Crawler state, quest favor, pending train/spec readiness, pending boon choices, and chooses the oldest pending boon. |
+| `/crawler train <skill>`, `/crawler spec <skill>` | Accepts a use-unlocked skill training or specialization choice. Omit `<skill>` to list ready skills. |
+| `/crawler trial`, `/crawler trial claim` | Shows active milestone trials and claims completed Fan Box rewards. |
+| `/crawler convert` | Refreshes an existing Crawler character title/state after mode updates. |
 | `/topkillers`, `/hardcoretopkillers` | Shows creature kill/death leaderboards. |
 | `/gquest` | Shows half-hour, hourly, daily, and weekly global quests, rewards, personal progress, completion state, and time remaining. Includes hunts, item races, drunken mob hunts, chug races, Cardinal Trek, Dereth Express, and T8 luminance/currency variants. |
 | `/mail help` | Shows player mail commands for text mail, MMD payment, item shipping, COD, claiming, declining, and deleting. |
@@ -203,6 +209,8 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Dartflinger / Ricochet | `ricochet.drop`, `ricochet.tier`, `ricochet.procmin`, `ricochet.procmax`, `ricochet.scale`, `ricochet.radius` |
 | Quickening | `quickening.drop`, `quickening.tier`, `quickening.procmin`, `quickening.procmax`, `quickening.speedmin`, `quickening.speedmax`, `quickening.durmin`, `quickening.durmax` |
 | Elemental blast | `blast.mintier`, `blast.chancemin`, `blast.chancemax`, `blast.ratemin`, `blast.ratemax` |
+| Hardcore Crawler | `crawler.enabled`, `crawler.maxlevel`, `crawler.choices`, `crawler.profmins`, `crawler.profmult`, `crawler.ranklevel`, `crawler.autospeclvl`, `crawler.autospecranks`, `crawler.autotrain`, `crawler.maxtrained`, `crawler.specbudget`, `crawler.baseattr`, `crawler.basevital`, `crawler.cacheinterval`, `crawler.trialinterval` |
+`crawler.baseattr` defaults new Crawler primary attributes to 55, while `crawler.basevital` controls the raw vital baseline before normal formulas. `crawler.autotrain` controls uses before an untrained skill becomes ready to train, `crawler.autospecranks` defaults to 10 trained rank gains before a skill becomes ready to specialize, `crawler.ranklevel` defaults to 5 specialized rank gains per Crawler level, `crawler.maxtrained` defaults to 28 trained-or-better skills, and `crawler.specbudget` defaults to 80 adjusted specialized credits. Set either cap to 0 to disable that cap.
 
 #### Other Current Custom Systems
 | System | Current behavior |
@@ -218,7 +226,7 @@ Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `f
 | Self-Found Trophies And Item Races | Existing creature trophy/create-list drops are stamped with hidden owner/source/time properties. Nomad dynamic quests can require trophies obtained by that exact Nomad, and global item-race quests can ask for the first self-found copy of a curated trophy item found during the active quest window. Traded or old copies do not count. |
 | Starter And Path Books | WCID `2000612` Derptide Intro is granted to every newly created character. WCID `2000613` The Road Less Traveled is granted to standard/blind Ironmen on conversion. Nomads receive WCID `2000611` The Road That Keeps You on conversion. Ironman conversion preserves beginner quest/help items such as Calling Stone, Pathwarden Token, Letters From Home, Gear Knight core tools, Mud Golem Essence, books, and quest-stamped objects. |
 | Battlemage Helm | Battlemage gear lets War Magic substitute for compatible Light Weapon wield and activation requirements while equipped, with green/red appraisal feedback on affected weapons. |
-| Challenge Economy And Magic Isolation | Normal players can wear any gear. Hardcore and Ironman-family characters use hidden gear provenance tags and may only equip/trade/mail restricted gear from their matching challenge economy. Helpful magic aid, heals, transfers, friendly negative dispels, item buffs, and Hierophant echo heals are isolated across challenge economies. |
+| Challenge Economy And Magic Isolation | Normal players can wear any gear. Hardcore, Hardcore Crawler, and Ironman-family characters use hidden gear provenance tags and may only equip/trade/mail restricted gear from their matching challenge economy. Helpful magic aid, heals, transfers, friendly negative dispels, item buffs, NPC buffs, and Hierophant echo heals are isolated across challenge economies. Hardcore players may only fellowship with Hardcore-compatible players. |
 | Leaderboard Cache | Ironman, Hardcore, and killer leaderboards are served from periodic in-memory snapshots. Player leaderboard scans are batched over time to avoid a large synchronous database or player-list spike when someone types a command. |
 | Global Quest Scheduler | Half-hour/hour quests can repeat normally; daily and weekly lanes persist through restarts, prevent same-lane repeats, and cannot roll the same type at the same time. Item-race completions reroll the active race immediately. Correct the Corruption uses stackable Horribly Forged Derp Coins only while that event is active and pays partial credit on event end. |
 | Roadrunner | Outdoor road movement can apply a custom run-speed spell while the player remains on roads and refreshes the client skill panel when removed. |
@@ -382,8 +390,8 @@ Adapted from selected features in [ACE.BaseMod / Samples / Expansion / Features]
     * **Inscribed by M. Stranger** - the inscription lists the base damage, variance, and element so the player can read exactly what the item does. Marked non-`Inscribable` so the text cannot be overwritten.
   * Without armor (clothes only), nomads have a **natural body AL of 450** averaged across all damage types.
   * When a nomad wears `ItemType.Armor`, the armor layer's effective AL contribution is **halved** because nomads don't know how to wear it.
-  * Persisted via `PropertyBool.IsIronmanNomad = 9039`; mode title is set to `NOMAD`.
-  * `/ironman nomad` opens a 30-second confirmation window (same UX as `/ironman on`); `/ironman confirm` finalizes either standard or nomad based on which was requested.
+  * Persisted via `PropertyBool.IsIronmanNomad = 9039`; mode title is set to `NOMAD`. Lifebound Nomads also set `PropertyBool.IsIronmanNomadLifebound = 9088`, use the `NOMAD LB` title, have infinite lives, and are excluded from public challenge scoreboards.
+  * `/ironman nomad` opens a 30-second confirmation window (same UX as `/ironman on`); `/ironman nomad -lifebound` opts into the infinite-life, no-scoreboard variant; `/ironman confirm` finalizes either standard or nomad based on which was requested.
 * **Ironman leaderboard now shows Lives and Status** (`/ironmantop` / `/ironman top`):
   * New `Lives` column reads `PropertyInt.HardcoreLives` per player.
   * New `Status` column reads `DEAD` (lives <= 0), `NOMAD`, or `ALIVE`.
@@ -712,105 +720,10 @@ Rare "affix" variants applied to freshly-spawned hostile mobs (think Diablo rare
 * Added `/cimob <vamp|thief|sim> <wcid or classname>` for admins to spawn a creature and force-apply a specific modifier without RNG.
 * `sim` follows the same eligibility rules as normal Simulacrum logic (requires Simulacrum creature type and a nearby player in the same landblock).
 
-### Ironman Mode
-A hardcoded port of [aquafir's Ironman BaseMod](https://github.com/aquafir/ACE.BaseMod/tree/master/Samples/Ironman). Players opt in with a chat command; the choice is **irreversible** for the lifetime of the character.
+### Ironman, Nomad, Hardcore, and Crawler Modes
+Detailed implementation notes for these challenge modes moved to the current DerpACE sections above so the README does not keep two conflicting sources of truth. In short: `/ironman`, `/hardcore`, and `/crawler` are irreversible character challenge commitments; Ironman/Nomad/Hardcore/Crawler use provenance-tagged gear and isolated outside aid rules; Nomads fight through bonded unarmed gauntlets/shoes and tools; Crawlers progress through use-based skill growth, queued boons, configurable milestone trials, caches, and Fan Box rewards.
 
-#### Commands
-
-| Command | Access | Description |
-|---|---|---|
-| `/ironman` | Player | If already an Ironman: show skill plan status. Otherwise: show usage. |
-| `/ironman on` | Player | Begin commitment - prints a warning and opens a 30-second confirmation window. Only available at level 10 or below. |
-| `/ironman nomad` | Player | Begin **NOMAD Ironman** commitment - no weapons or casters, unarmed damage via elemental gauntlets/shoes, natural AL 450 in clothes. Same 30-second confirm window. |
-| `/ironman confirm` | Player | Finalize the conversion within the window. **Cannot be undone.** |
-| `/ironman char` | Player | Show Ironman character progression milestones and unlocked skills. |
-| `/ironman top` | Player | Show the Ironman leaderboard (top 10 players by creature kills). |
-| `/ironman topkillers` | Player | Show the top 10 creatures that have killed the most Ironman players. |
-| `/ironmantop` | Player | Shortcut for `/ironman top`. |
-| `/ironmantopkillers` | Player | Show the top 10 creatures that have killed the most Ironman players. |
-| `@ironmanmode on|off|toggle|status` | Admin | Live server toggle for Ironman opt-in availability. |
-
-> **Flow:** type `/ironman on`, read the warning, then type `/ironman confirm` within 30 seconds. If the window expires you must run `/ironman on` again.
-
-* On commit, the character is rerolled and re-equipped:
-  * Attributes wiped: one random primary attribute set to **100**, the others to **46**
-  * All skills reset; a **level-milestone plan** is rolled:
-    * One random **primary** skill (`TwoHandedCombat`, `MissileWeapons`, `WarMagic`, `VoidMagic`, `LightWeapons`, `HeavyWeapons`, `FinesseWeapons`) is trained + specialized immediately at no credit cost
-    * A **secondary** skill is trained (and specialized if non-magic); `ManaConversion` if a magic primary was rolled
-    * 2-4 random skills are flagged **at-creation** and trained ~2 s after commit (same session, no relog required)
-    * Remaining skills are distributed across level milestones (5, 12, 20, 32, 50, 70, 100, 130, 150, 175, 200, 225, 250, 275) or marked **not obtainable**
-    * Skills unlock automatically on level-up in real time (no relog); the client skill panel updates immediately
-    * Skill credits are always shown as **0** to the player - the system handles all training automatically
-  * Inventory wiped (every wielded + carried item destroyed)
-  * Spellbook wiped, then a fixed low-level spell set learned (life/creature/item/war basics) after a short delay
-  * Starter gear granted: Ironman-specific items based on the rolled primary skill, plus the standard new-character gear from `starterGear.json` for every skill the player has trained (including dual-wield bonus weapon)
-  * Character name gets ` - IM` appended unless it already ends with that suffix
-  * Quest flag `IronmanChallenge` stamped via `QuestManager`
-  * `RadarColor` set to `Sentinel` (gold) so other players can identify Ironmen
-* Hardcore lives:
-  * `PropertyInt.HardcoreLives` set to `IronmanHardcoreStartingLives` (default 1)
-  * On death, lives is decremented (gated by an `IronmanHardcoreSecondsBetweenDeaths` cooldown so back-to-back PK / accidents don't burn multiple lives)
-  * On final death (lives <= 0): `Character.IsDeleted = true`, `DeleteTime` stamped, force log-off after 2 s, `PlayerManager.HandlePlayerDelete` + `ProcessDeletedPlayer`
-  * Creature kills on Ironman players are recorded in `ironmanKillers.json` for the `/ironmantopkillers` leaderboard
-* Ongoing restrictions (inlined into source - no Harmony):
-  * **Wield gate** - `Player_Inventory.CheckWieldRequirements` rejects any item that isn't flagged `IsIronmanItem` with `WeenieError.YouCannotUseThatItem`
-  * **Auto-tag** - `Player_Inventory.TryCreateInInventoryWithNetworking` flips `IsIronmanItem = true` on every item that successfully enters an Ironman's inventory; items with workmanship also get a ` [IM]` suffix appended to their name (e.g. `Ebony Sword [IM]`) so players can distinguish Ironman-bound gear at a glance (covers corpse loot, chest loot, vendor purchase, emote grants, etc.)
-  * **Skill train/specialize lock** - `HandleActionTrainSkill` blocks spending skill credits to train new skills; `SkillAlterationDevice.VerifyRequirements` blocks Gems of Enlightenment (specialize) and Gems of Forgetfulness (lower/untrain). Raising already-trained skills with XP is unrestricted
-  * **Allegiance** - `Player_Allegiance.IsPledgable` returns `false` if either party is an Ironman
-  * **Fellowship** - `Player_Fellowship.FellowshipRecruit` blocks if either party is an Ironman
-  * **External enchantments** - `WorldObject_Magic.CreateEnchantment` early-returns if the target is an Ironman and the caster is a different player who is not also an Ironman (self-buffs and item procs from the Ironman's own gear still work because the source resolves to the Ironman themselves)
-* Persistent state (new properties):
-  * `PropertyBool.IsIronman` (9029), `PropertyBool.IsHardcore` (9030), `PropertyBool.IsIronmanItem` (9031)
-  * `PropertyInt.HardcoreLives` (9016)
-  * `PropertyString.IronmanPlan` (9008) - serialized as `SkillName:level;...` where `0` = applied, `-1` = at-creation, `-2` = not obtainable, `>0` = level milestone
-* Configuration (in `DerpACEConfig`):
-  * `IronmanEnabled` (bool, default `true`) - master kill-switch for the `/ironman` command
-  * `IronmanWelcomeMessage` (string)
-  * `IronmanCreditsToPlanFor` (int, default 50)
-  * `IronmanHardcoreStartingLives` (int, default 1)
-  * `IronmanHardcoreSecondsBetweenDeaths` (float, default 7 days)
-* Global announcements:
-  * Ironman activation and Hardcore activation both broadcast server-wide.
-  * Ironman and Hardcore deaths broadcast server-wide with killer + victim level context.
-
-#### Ironman Nomad
-A stricter Ironman submode for players who want a "monk-like" no-weapons playstyle. Entered with `/ironman nomad` + `/ironman confirm`. Stacks on top of standard Ironman + Hardcore - all of the base Ironman restrictions still apply.
-
-* **Equipment**
-  * Cannot wield any `MeleeWeapon`, `MissileWeapon`, `Caster`, or `MagicWieldable`. `Player_Inventory.CheckWieldRequirements` rejects them with *"Nomads cannot wield weapons or casters."*
-  * Can wear armor and clothing, but armor effective AL is halved (see Armor below).
-* **Attributes & skills**
-  * `RollAttributesRandom(player)` - every attribute rolls 10-100 (instead of the standard 100/46 split).
-  * Weapon skill is forced to **Light Weapons** (trained + specialized) - useful for the unarmed fist/foot attack skill check.
-  * **Arcane Lore** is specialized in addition to being pre-trained.
-  * Remaining milestone planning runs through the standard Ironman skill plan.
-* **Unarmed damage (elemental gauntlets & shoes)**
-  * On commit, the player is granted **leather gauntlets (WCID 56)** and **leather boots (WCID 115)** rerolled into unarmed damage sources.
-  * The starter pair **share a single rolled damage type** from: **Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric** - so a nomad cleanly collects one new element per level-up grant.
-  * On every **even level from 2 through 14**, the nomad is automatically granted a matched gauntlet/shoe pair of a random element they don't yet own (`IronmanFactory.GrantNextNomadElement`). By **level 14** all 7 elements are collected.
-  * The rolled values are stored on each WO as:
-    * `PropertyInt.UnarmedBaseDamage` (12 gauntlets / 10 shoes)
-    * `PropertyInt.UnarmedDamageType` (= rolled `DamageType`)
-    * `PropertyFloat.UnarmedDamageVariance` (0.50 gauntlets / 0.55 shoes)
-  * The existing unarmed-armor pipeline (`Player.GetBaseDamageMod` + `Player.GetDamageType`) reads these properties automatically - Punch attacks pull from the gauntlets and Kick attacks pull from the shoes.
-  * Renamed to surface the element (e.g. *Flame Nomad Gauntlets*, *Lightning Nomad Shoes*).
-  * **Inscribed by M. Stranger** - `PropertyString.Inscription` lists the base damage, variance, element, and proc; `PropertyString.ScribeName = "M. Stranger"`; `PropertyBool.Inscribable = true` (required, otherwise the client hides the inscription text).
-* **Unarmed procs (custom)**
-  * Each gauntlet/shoe rolls one of two custom procs at creation time, stored on the WO as `PropertyInt.NomadProcType` + `PropertyFloat.NomadProcChance` + `PropertyFloat.NomadProcMagnitude`. The proc description is appended to the M. Stranger inscription.
-  * **Cleave Flurry** (type 1): ~8-15% chance on Punch/Kick hit to unleash **2-4 fast extra strikes** at 30-45% damage each. Uses a recursion guard so the extra strikes don't fire their own procs. Splatter VFX per hit + `Cleave Flurry! N extra strikes for X damage [target]` message.
-  * **Healing Strike** (type 2): ~8-15% chance on Punch/Kick hit to heal the wielder for **100-110% of damage dealt** (1-10% above the damage you hit for). Uses `UpdateVitalDelta(Health, ...)` (caps at MaxHealth) + `DamageHistory.OnHeal` + `HealthUpRed` VFX + combat-self message.
-  * Evaluation lives in `Player_Combat.DamageTarget`, gated on `AttackType == Punch || Kick`, pulling proc properties from `HandArmor` for Punch and `FootArmor` for Kick.
-* **Armor calculation** (`Creature_BodyPart.GetEffectiveArmorVsType`)
-  * If the nomad has **no `ItemType.Armor` layers** equipped on a body part (clothes only or bare), the base AL for that body part is overridden to **450** with resistance `1.0` (average across all damage types).
-  * If any armor layer is worn, that layer's effective AL contribution is multiplied by **0.5** - nomads don't know how to wear armor.
-* **Persistent state**
-  * `PropertyBool.IsIronmanNomad = 9039` is set on the player.
-  * Mode title is set to `NOMAD` via `SetModeTitle`.
-  * `IsHardcore` and `IsIronman` are also applied (nomad mode is a strict superset of standard Ironman).
-* **Leaderboard integration**
-  * `/ironmantop` shows a `Status` column reading `NOMAD` for nomad players, `DEAD` for any Ironman whose lives are exhausted, or `ALIVE` otherwise.
-  * `Lives` column reads `PropertyInt.HardcoreLives` directly.
-
+Use the current **Player Commands**, **Other Current Custom Systems**, and [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) sections for live commands, config keys, and behavior.
 ### Global Kill Quest
 Server-wide rotating kill quest that gives all online players the same timed objective.
 
@@ -879,7 +792,7 @@ For deeper documentation of DerpACE-specific systems (Defender's Shield, Ravager
 | `/acehelp` | Displays help. |
 | `/aceversion` | Shows this server's version data |
 | `/castmeter` | Shows the fast casting efficiency meter |
-| `/config` | Manually sets a character option on the server.\nUse /config list to see a list of settings. |
+| `/config` | Manually sets a character option on the server. Use `/config list` to see available settings. |
 | `/debugcast` | Shows debug information about the current magic casting state |
 | `/fixbusy` | Attempts to remove the hourglass / fix the busy state for the player |
 | `/fixcast` | Fixes magic casting if locked up for an extended time |

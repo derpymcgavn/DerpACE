@@ -879,16 +879,36 @@ namespace ACE.Server.DerpAce
         public float NomadXpScalar { get; set; } = 0.75f;
         [JsonPropertyName("hardcore_xp_scalar")]
         public float HardcoreXpScalar { get; set; } = 1.0f;
-        [JsonPropertyName("hardcore_rogue_enabled")]
-        public bool HardcoreRogueEnabled { get; set; } = true;
-        [JsonPropertyName("hardcore_rogue_max_opt_in_level")]
-        public int HardcoreRogueMaxOptInLevel { get; set; } = 10;
-        [JsonPropertyName("hardcore_rogue_boon_choices")]
-        public int HardcoreRogueBoonChoices { get; set; } = 3;
-        [JsonPropertyName("hardcore_rogue_proficiency_minutes")]
-        public double HardcoreRogueProficiencyMinutes { get; set; } = 2.0;
-        [JsonPropertyName("hardcore_rogue_proficiency_xp_multiplier")]
-        public float HardcoreRogueProficiencyXpMultiplier { get; set; } = 2.0f;
+        [JsonPropertyName("hardcore_crawler_enabled")]
+        public bool HardcoreCrawlerEnabled { get; set; } = true;
+        [JsonPropertyName("hardcore_crawler_max_opt_in_level")]
+        public int HardcoreCrawlerMaxOptInLevel { get; set; } = 10;
+        [JsonPropertyName("hardcore_crawler_boon_choices")]
+        public int HardcoreCrawlerBoonChoices { get; set; } = 3;
+        [JsonPropertyName("hardcore_crawler_proficiency_minutes")]
+        public double HardcoreCrawlerProficiencyMinutes { get; set; } = 2.0;
+        [JsonPropertyName("hardcore_crawler_proficiency_xp_multiplier")]
+        public float HardcoreCrawlerProficiencyXpMultiplier { get; set; } = 2.0f;
+        [JsonPropertyName("hardcore_crawler_skill_ranks_per_level")]
+        public int HardcoreCrawlerSkillRanksPerLevel { get; set; } = 5;
+        [JsonPropertyName("hardcore_crawler_auto_spec_min_level")]
+        public int HardcoreCrawlerAutoSpecMinLevel { get; set; } = 1;
+        [JsonPropertyName("hardcore_crawler_auto_spec_ranks")]
+        public int HardcoreCrawlerAutoSpecRanks { get; set; } = 10;
+        [JsonPropertyName("hardcore_crawler_auto_train_uses")]
+        public int HardcoreCrawlerAutoTrainUses { get; set; } = 5;
+        [JsonPropertyName("hardcore_crawler_max_trained_skills")]
+        public int HardcoreCrawlerMaxTrainedSkills { get; set; } = 28;
+        [JsonPropertyName("hardcore_crawler_specialized_credit_budget")]
+        public int HardcoreCrawlerSpecializedCreditBudget { get; set; } = 80;
+        [JsonPropertyName("hardcore_crawler_base_attribute")]
+        public uint HardcoreCrawlerBaseAttribute { get; set; } = 55;
+        [JsonPropertyName("hardcore_crawler_base_vital")]
+        public uint HardcoreCrawlerBaseVital { get; set; } = 10;
+        [JsonPropertyName("hardcore_crawler_cache_milestone_interval")]
+        public int HardcoreCrawlerCacheMilestoneInterval { get; set; } = 5;
+        [JsonPropertyName("hardcore_crawler_trial_interval")]
+        public int HardcoreCrawlerTrialInterval { get; set; } = 10;
 
         // ── Bank ─────────────────────────────────────────────────────────────
         [JsonPropertyName("enable_bank")]
@@ -905,4 +925,3 @@ namespace ACE.Server.DerpAce
         public int BankCashProperty { get; set; } = 39999;
     }
 }
-

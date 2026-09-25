@@ -106,9 +106,14 @@ namespace ACE.Entity.Enum.Properties
         /* DerpACE Olthoi morphic system - comma-delimited unlocked creature WCIDs */
         MorphicUnlockedForms           = 9011,
 
-        /* DerpACE Hardcore Rogue submode */
-        HardcoreRogueBoons             = 9012,
-        HardcoreRoguePendingChoices    = 9013,
+        /* DerpACE Hardcore Crawler submode */
+        HardcoreCrawlerBoons             = 9012,
+        HardcoreCrawlerPendingChoices    = 9013,
+        HardcoreCrawlerLastProgressSkill  = 9014,
+        HardcoreCrawlerAutoSpecProgress    = 9015,
+        HardcoreCrawlerAutoTrainProgress   = 9016,
+        HardcoreCrawlerMilestoneCaches     = 9017,
+        HardcoreCrawlerTrials              = 9018,
+        HardcoreCrawlerCompletedTrials     = 9019,
     }
 }
-

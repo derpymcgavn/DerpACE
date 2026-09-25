@@ -71,6 +71,7 @@ namespace ACE.Server.WorldObjects
             }
 
             HandlePreOrderItems();
+            HardcoreCrawlerManager.EnsureConverted(this);
 
             // SendSelf will trigger the entrance into portal space
             SendSelf();

@@ -334,5 +334,9 @@ namespace ACE.Entity.Enum.Properties
         PugilistProcChance             = 9060,  // chance on successful unarmed-weapon hit to fire Flurry/Rake
         PugilistDamageScale            = 9061,  // extra strike or total bleed damage as a fraction of the hit
         PugilistDurationSeconds        = 9062,  // bleed duration for Raking Hand style
+
+        /* DerpACE Hardcore Crawler - behavioral flaw tracking */
+        HardcoreCrawlerLastMealUnixTime   = 9064,  // last Eat motion timestamp for satiation-price boons
+        HardcoreCrawlerNextHungerPulse    = 9065,  // next hunger penalty timestamp for satiation-price boons
     }
 }

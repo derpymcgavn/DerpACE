@@ -572,6 +572,9 @@ namespace ACE.Server.WorldObjects
                 tryBoost = (int)Math.Round(tryBoost * tankHealMult);
             }
 
+            if (targetCreature is Player crawlerTarget && spell.IsBeneficial && tryBoost > 0)
+                tryBoost = HardcoreCrawlerManager.ModifyIncomingSpellRestore(crawlerTarget, tryBoost);
+
             int boost = tryBoost;
 
             // handle cloak damage proc for harm other

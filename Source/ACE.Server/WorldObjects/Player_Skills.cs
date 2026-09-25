@@ -33,6 +33,22 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool HandleActionRaiseSkill(Skill skill, uint amount)
         {
+            return HandleActionRaiseSkill(skill, amount, false);
+        }
+
+        public bool HandleActionRaiseSkillFromUse(Skill skill, uint amount)
+        {
+            return HandleActionRaiseSkill(skill, amount, true);
+        }
+
+        private bool HandleActionRaiseSkill(Skill skill, uint amount, bool fromUse)
+        {
+            if (!fromUse && HardcoreCrawlerManager.IsActive(this))
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Hardcore Crawler skills grow only through use.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             var creatureSkill = GetCreatureSkill(skill, false);
 
             if (creatureSkill == null || creatureSkill.AdvancementClass < SkillAdvancementClass.Trained)
@@ -56,6 +72,10 @@ namespace ACE.Server.WorldObjects
 
             if (prevRank != creatureSkill.Ranks)
             {
+                var gainedRanks = Math.Max(1, creatureSkill.Ranks - prevRank);
+                if (fromUse)
+                    HardcoreCrawlerManager.OnSkillRankGained(this, creatureSkill, gainedRanks);
+
                 // if the skill ranks out at the top of our xp chart
                 // then we will start fireworks effects and have special text!
                 var suffix = "";
@@ -126,6 +146,12 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool HandleActionTrainSkill(Skill skill, int creditsSpent)
         {
+            if (HardcoreCrawlerManager.IsActive(this))
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Hardcore Crawler cannot manually train skills; use them until the road teaches you.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             // DerpACE Ironman: skills are locked to the reroll — no manual training allowed.
             if (IsIronmanFamily)
             {
@@ -218,6 +244,12 @@ namespace ACE.Server.WorldObjects
 
         public bool SpecializeSkill(Skill skill, bool resetSkill = true)
         {
+            if (HardcoreCrawlerManager.IsActive(this))
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Hardcore Crawler skills specialize automatically through use.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             // get the amount of skill credits required to upgrade this skill
             // from trained -> specialized
             if (!DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)skill, out var skillBase))
@@ -486,6 +518,9 @@ namespace ACE.Server.WorldObjects
             var playerSkill = GetCreatureSkill(magicSkill);
 
             var minSkill = power - magicSkillCheckMargin;
+
+            if (HardcoreCrawlerManager.IsActive(this))
+                return playerSkill.Current >= minSkill;
 
             return playerSkill.AdvancementClass >= SkillAdvancementClass.Trained && playerSkill.Current >= minSkill;
         }

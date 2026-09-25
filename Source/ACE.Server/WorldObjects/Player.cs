@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -412,6 +412,17 @@ namespace ACE.Server.WorldObjects
                     chance = 1.0f;
 
                 success = chance > ThreadSafeRandom.Next(0.0f, 1.0f);
+            }
+
+            if (HardcoreCrawlerManager.IsActive(this) && creature != null)
+            {
+                var assessSkillType = player != null ? Skill.AssessPerson : Skill.AssessCreature;
+                var assessSkill = GetCreatureSkill(assessSkillType);
+                if (assessSkill.AdvancementClass < SkillAdvancementClass.Trained)
+                {
+                    var difficulty = Math.Max(1, (int)creature.GetCreatureSkill(Skill.Deception).Current);
+                    HardcoreCrawlerManager.OnUntrainedSkillUsed(this, assessSkill, (uint)difficulty);
+                }
             }
 
             if (obj.ResistItemAppraisal >= 999)

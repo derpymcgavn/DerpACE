@@ -2435,6 +2435,14 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
+        private void TrackCrawlerArcaneLoreWieldAttempt(Skill skill, uint difficulty)
+        {
+            if (skill != Skill.ArcaneLore || difficulty == 0 || !HardcoreCrawlerManager.IsActive(this))
+                return;
+
+            HardcoreCrawlerManager.OnSkillPracticed(this, GetCreatureSkill(Skill.ArcaneLore), difficulty);
+        }
+
         private WeenieError CheckWieldRequirements(WorldObject item)
         {
             // DerpACE challenge economies: normal players can wear anything, but
@@ -2515,6 +2523,7 @@ namespace ACE.Server.WorldObjects
 
                     // verify skill level - current / buffed
                     var skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
+                    TrackCrawlerArcaneLoreWieldAttempt(skill.Skill, difficulty);
                     if (skill.Current < difficulty)
                         return WeenieError.SkillTooLow;
                     break;
@@ -2523,6 +2532,7 @@ namespace ACE.Server.WorldObjects
 
                     // verify skill level - base
                     skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
+                    TrackCrawlerArcaneLoreWieldAttempt(skill.Skill, difficulty);
                     if (skill.Base < difficulty)
                         return WeenieError.SkillTooLow;
                     break;
@@ -2570,6 +2580,7 @@ namespace ACE.Server.WorldObjects
 
                     // verify skill is trained / specialized
                     skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
+                    TrackCrawlerArcaneLoreWieldAttempt(skill.Skill, difficulty);
                     if ((int)skill.AdvancementClass < difficulty)
                         return WeenieError.SkillTooLow;
                     break;

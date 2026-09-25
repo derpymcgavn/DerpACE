@@ -808,24 +808,59 @@ namespace ACE.Server.WorldObjects
             // 20 DR combined with 20 DRR = 1.2 * 0.8333... = 1.0
             // 20 DR combined with -20 DRR = 1.2 * 1.2 = 1.44
             if (playerAttacker != null)
+            {
                 recklessnessMod *= playerAttacker.GetRecklessnessMod();
+                playerAttacker.PracticeCrawlerCombatSkill(Skill.Recklessness, defender);
+            }
 
             if (playerDefender != null)
+            {
                 recklessnessMod *= playerDefender.GetRecklessnessMod();
+                playerDefender.PracticeCrawlerCombatSkill(Skill.Recklessness, attacker);
+            }
 
             return recklessnessMod;
         }
 
+        private void PracticeCrawlerCombatSkill(Skill skill, Creature target)
+        {
+            var player = this as Player;
+            if (player == null || target == null || !HardcoreCrawlerManager.IsActive(player))
+                return;
+
+            var crawlerSkill = player.GetCreatureSkill(skill, false);
+            if (crawlerSkill == null)
+                return;
+
+            var difficulty = GetCrawlerCombatPracticeDifficulty(target);
+            HardcoreCrawlerManager.OnSkillPracticed(player, crawlerSkill, difficulty);
+        }
+
+        private static uint GetCrawlerCombatPracticeDifficulty(Creature target)
+        {
+            var defense = Math.Max(target.GetCreatureSkill(Skill.MeleeDefense)?.Current ?? 0,
+                Math.Max(target.GetCreatureSkill(Skill.MissileDefense)?.Current ?? 0, target.GetCreatureSkill(Skill.MagicDefense)?.Current ?? 0));
+            var levelDifficulty = Math.Max(1, (target.Level ?? 1) * 5);
+            return (uint)Math.Max(1, Math.Max(defense, levelDifficulty));
+        }
+
         public float GetSneakAttackMod(WorldObject target)
         {
-            // ensure trained
-            var sneakAttack = GetCreatureSkill(Skill.SneakAttack);
-            if (sneakAttack.AdvancementClass < SkillAdvancementClass.Trained)
-                return 1.0f;
-
             // ensure creature target
             var creatureTarget = target as Creature;
             if (creatureTarget == null)
+                return 1.0f;
+
+            var angle = creatureTarget.GetAngle(this);
+            var behind = Math.Abs(angle) > 90.0f;
+            if (behind)
+                PracticeCrawlerCombatSkill(Skill.SneakAttack, creatureTarget);
+            else
+                PracticeCrawlerCombatSkill(Skill.Deception, creatureTarget);
+
+            // ensure trained
+            var sneakAttack = GetCreatureSkill(Skill.SneakAttack);
+            if (sneakAttack.AdvancementClass < SkillAdvancementClass.Trained)
                 return 1.0f;
 
             // Effects:
@@ -833,8 +868,6 @@ namespace ACE.Server.WorldObjects
             //   - 100% chance to sneak attack from behind an opponent.
             //   - Deception trained: 10% chance to sneak attack from the front of an opponent
             //   - Deception specialized: 15% chance to sneak attack from the front of an opponent
-            var angle = creatureTarget.GetAngle(this);
-            var behind = Math.Abs(angle) > 90.0f;
             var chance = 0.0f;
             if (behind)
             {
@@ -899,6 +932,10 @@ namespace ACE.Server.WorldObjects
 
             var sneakAttackMod = (100 + damageRating) / 100.0f;
 
+            PracticeCrawlerCombatSkill(Skill.SneakAttack, creatureTarget);
+            if (!behind)
+                PracticeCrawlerCombatSkill(Skill.Deception, creatureTarget);
+
             //Console.WriteLine("SneakAttackMod: " + sneakAttackMod);
             return sneakAttackMod;
         }
@@ -936,12 +973,15 @@ namespace ACE.Server.WorldObjects
             //   "Dirty Fighting! <Player> delivers a Traumatic Assault to <target>!"
 
             // dirty fighting skill must be at least trained
+            var creatureTarget = target as Creature;
+            if (creatureTarget != null)
+                PracticeCrawlerCombatSkill(Skill.DirtyFighting, creatureTarget);
+
             var dirtySkill = GetCreatureSkill(Skill.DirtyFighting);
             if (dirtySkill.AdvancementClass < SkillAdvancementClass.Trained)
                 return;
 
             // ensure creature target
-            var creatureTarget = target as Creature;
             if (creatureTarget == null)
                 return;
 
@@ -956,6 +996,8 @@ namespace ACE.Server.WorldObjects
             var rng = ThreadSafeRandom.Next(0.0f, 1.0f);
             if (rng >= chance)
                 return;
+
+            PracticeCrawlerCombatSkill(Skill.DirtyFighting, creatureTarget);
 
             switch (AttackHeight)
             {

@@ -324,7 +324,7 @@ namespace ACE.Server.Factories
         ///   * Natural body AL is 450 in clothes only; worn armor is half effective.
         /// Starter gear uses a Nomad-specific kit instead of generic Pathwarden armor/weapons.
         /// </summary>
-        public static void InitializeIronmanNomad(Player player, bool noNonHuman = false, bool blind = false)
+        public static void InitializeIronmanNomad(Player player, bool noNonHuman = false, bool blind = false, bool lifebound = false)
         {
             if (player == null) return;
 
@@ -408,16 +408,20 @@ namespace ACE.Server.Factories
             });
             chain.EnqueueChain();
 
-            ApplyHardcore(player);
+            ApplyHardcore(player, lifebound);
             ApplyIronmanFlag(player);
-            ApplyIronmanNomadFlag(player);
+            ApplyIronmanNomadFlag(player, lifebound);
             ApplyIronmanBlindFlag(player, blind);
         }
 
-        private static void ApplyIronmanNomadFlag(Player player)
+        private static void ApplyIronmanNomadFlag(Player player, bool lifebound = false)
         {
             player.SetProperty(PropertyBool.IsIronmanNomad, true);
-            player.SetModeTitle("NOMAD");
+            if (lifebound)
+                player.SetProperty(PropertyBool.IsIronmanNomadLifebound, true);
+            else
+                player.RemoveProperty(PropertyBool.IsIronmanNomadLifebound);
+            player.SetModeTitle(lifebound ? "NOMAD LB" : "NOMAD");
         }
 
         private static void GrantChallengeBook(Player player, uint wcid, string pathName)
@@ -1560,12 +1564,14 @@ namespace ACE.Server.Factories
 
         // ---------- Hardcore + flag ----------
 
-        private static void ApplyHardcore(Player player)
+        private static void ApplyHardcore(Player player, bool infiniteLives = false)
         {
-            player.SetProperty(PropertyInt.HardcoreLives, DerpACEConfig.IronmanHardcoreStartingLives);
+            player.SetProperty(PropertyInt.HardcoreLives, infiniteLives ? int.MaxValue : DerpACEConfig.IronmanHardcoreStartingLives);
             player.SetProperty(PropertyBool.IsHardcore, true);
             player.SetModeTitle("HARDCORE");
-            player.SendMessage($"You begin with {DerpACEConfig.IronmanHardcoreStartingLives} hardcore life/lives. Final death is permanent.");
+            player.SendMessage(infiniteLives
+                ? "You walk the Lifebound Nomad path. Death will not delete this character, and this path does not appear on public challenge scoreboards."
+                : $"You begin with {DerpACEConfig.IronmanHardcoreStartingLives} hardcore life/lives. Final death is permanent.");
         }
 
         private static void ApplyIronmanFlag(Player player)
@@ -1745,6 +1751,9 @@ namespace ACE.Server.Factories
         private static void ApplyIronmanLifeMilestones(Player player, int currentLevel)
         {
             if (player.GetProperty(PropertyBool.IsIronman) != true)
+                return;
+
+            if (player.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true)
                 return;
 
             var claimed = GetClaimedLifeMilestones(player);

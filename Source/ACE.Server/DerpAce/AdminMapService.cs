@@ -179,14 +179,14 @@ namespace ACE.Server.DerpAce
                     WriteText(context, BuildIndexHtml(), "text/html; charset=utf-8");
                     return;
                 }
-                if (path.Equals("/rogues", StringComparison.OrdinalIgnoreCase))
+                if (path.Equals("/crawlers", StringComparison.OrdinalIgnoreCase))
                 {
-                    WriteText(context, BuildRogueBoardHtml(), "text/html; charset=utf-8");
+                    WriteText(context, BuildCrawlerBoardHtml(), "text/html; charset=utf-8");
                     return;
                 }
-                if (path.Equals("/api/rogues", StringComparison.OrdinalIgnoreCase))
+                if (path.Equals("/api/crawlers", StringComparison.OrdinalIgnoreCase))
                 {
-                    WriteJson(context, BuildRogueBoardSnapshot());
+                    WriteJson(context, BuildCrawlerBoardSnapshot());
                     return;
                 }
                 if (path.Equals("/boss-mechanics", StringComparison.OrdinalIgnoreCase))
@@ -3158,26 +3158,26 @@ $('save').onclick=async()=>{try{const doc=JSON.parse($('spellJson').value),spell
 loadCatalog().catch(e=>status(e.message,'error'));</script></body></html>
 """;
         }
-        private static RogueBoardSnapshot BuildRogueBoardSnapshot()
+        private static CrawlerBoardSnapshot BuildCrawlerBoardSnapshot()
         {
             var players = PlayerManager.GetAllOnline()
-                .Where(player => RogueHardcoreManager.IsActive(player))
+                .Where(player => HardcoreCrawlerManager.IsActive(player))
                 .Where(player => (player.GetProperty(PropertyInt.HardcoreLives) ?? 0) > 0)
                 .OrderByDescending(player => player.Level ?? 0)
                 .ThenByDescending(player => player.GetProperty(PropertyInt.CreatureKills) ?? 0)
                 .ThenBy(player => player.Name)
-                .Select(player => new RogueBoardEntry
+                .Select(player => new CrawlerBoardEntry
                 {
                     Name = player.Name,
                     Level = player.Level ?? 0,
                     Kills = player.GetProperty(PropertyInt.CreatureKills) ?? 0,
                     Lives = player.GetProperty(PropertyInt.HardcoreLives) ?? 0,
-                    Boons = RogueHardcoreManager.GetChosenBoonLabels(player).ToList(),
-                    PendingChoice = RogueHardcoreManager.GetPendingBoonLabel(player)
+                    Boons = HardcoreCrawlerManager.GetChosenBoonLabels(player).ToList(),
+                    PendingChoice = HardcoreCrawlerManager.GetPendingBoonLabel(player)
                 })
                 .ToList();
 
-            return new RogueBoardSnapshot
+            return new CrawlerBoardSnapshot
             {
                 Ok = true,
                 ServerTimeUtc = DateTime.UtcNow,
@@ -3187,19 +3187,19 @@ loadCatalog().catch(e=>status(e.message,'error'));</script></body></html>
             };
         }
 
-        private static string BuildRogueBoardHtml()
+        private static string BuildCrawlerBoardHtml()
         {
             return """
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DerpACE Living Rogues</title>
+<title>DerpACE Living Crawlers</title>
 <style>
 :root{color-scheme:dark;--bg:#0b0f10;--panel:#121819;--line:#29383d;--text:#edf4ef;--muted:#9aa9a7;--blue:#70b7e8;--gold:#e1bd62}*{box-sizing:border-box}body{margin:0;background:#0b0f10;color:var(--text);font:14px/1.45 Segoe UI,Arial,sans-serif}.top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);background:rgba(11,15,16,.95)}h1{font-size:18px;margin:0}.top span{color:var(--muted)}.top a{margin-left:auto;color:var(--blue);text-decoration:none}.wrap{max-width:1180px;margin:0 auto;padding:18px 20px 28px}.summary{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin-bottom:16px}.metric,.card{border:1px solid var(--line);border-radius:6px;background:var(--panel)}.metric{padding:13px 14px}.metric strong{display:block;font-size:24px}.metric span,.meta,.empty{color:var(--muted)}.grid{display:grid;gap:10px}.card{display:grid;grid-template-columns:220px 1fr;gap:14px;padding:14px}.identity strong{display:block;font-size:16px}.pill{display:inline-flex;margin:6px 6px 0 0;padding:3px 8px;border:1px solid #395057;border-radius:999px;background:#172124;color:#dff4e8;font-size:12px}.pending{border-color:var(--gold);color:var(--gold)}.boons{display:flex;flex-wrap:wrap;align-content:flex-start}.empty{padding:34px;text-align:center;border:1px dashed var(--line);border-radius:6px;background:rgba(255,255,255,.025)}@media(max-width:780px){.summary{grid-template-columns:1fr 1fr}.card{grid-template-columns:1fr}.top{flex-wrap:wrap}.top a{margin-left:0}}
 </style></head><body>
-<header class="top"><h1>Living Rogue Hardcore</h1><span id="status">Loading...</span><a href="/">Admin Map</a></header>
-<main class="wrap"><section class="summary"><div class="metric"><strong id="count">0</strong><span>alive online rogues</span></div><div class="metric"><strong id="topLevel">0</strong><span>highest level</span></div><div class="metric"><strong id="totalKills">0</strong><span>combined kills</span></div><div class="metric"><strong id="refresh">0s</strong><span>refresh</span></div></section><section id="list" class="grid"></section></main>
+<header class="top"><h1>Living Hardcore Crawlers</h1><span id="status">Loading...</span><a href="/">Admin Map</a></header>
+<main class="wrap"><section class="summary"><div class="metric"><strong id="count">0</strong><span>alive online crawlers</span></div><div class="metric"><strong id="topLevel">0</strong><span>highest level</span></div><div class="metric"><strong id="totalKills">0</strong><span>combined kills</span></div><div class="metric"><strong id="refresh">0s</strong><span>refresh</span></div></section><section id="list" class="grid"></section></main>
 <script>
-const get=id=>document.getElementById(id);let timer=0;function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function render(data){const rows=data.players||[];get('count').textContent=rows.length;get('topLevel').textContent=rows.reduce((m,p)=>Math.max(m,p.level||0),0);get('totalKills').textContent=rows.reduce((n,p)=>n+(p.kills||0),0).toLocaleString();get('refresh').textContent=(data.refreshSeconds||10)+'s';get('status').textContent='Updated '+new Date(data.serverTimeUtc).toLocaleTimeString();get('list').innerHTML=rows.length?rows.map(p=>'<article class="card"><div class="identity"><strong>'+safe(p.name)+'</strong><div class="meta">Level '+p.level+' &middot; '+Number(p.kills||0).toLocaleString()+' kills &middot; '+p.lives+' lives</div>'+(p.pendingChoice?'<span class="pill pending">Pending '+safe(p.pendingChoice)+'</span>':'')+'</div><div class="boons">'+((p.boons||[]).map(b=>'<span class="pill">'+safe(b)+'</span>').join('')||'<span class="meta">No boons chosen yet.</span>')+'</div></article>').join(''):'<div class="empty">No living rogue hardcore characters are online right now.</div>'}async function load(){try{const r=await fetch('/api/rogues',{cache:'no-store'}),d=await r.json();render(d);clearTimeout(timer);timer=setTimeout(load,Math.max(5,d.refreshSeconds||10)*1000)}catch(e){get('status').textContent=e.message;clearTimeout(timer);timer=setTimeout(load,15000)}}load();
+const get=id=>document.getElementById(id);let timer=0;function safe(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function render(data){const rows=data.players||[];get('count').textContent=rows.length;get('topLevel').textContent=rows.reduce((m,p)=>Math.max(m,p.level||0),0);get('totalKills').textContent=rows.reduce((n,p)=>n+(p.kills||0),0).toLocaleString();get('refresh').textContent=(data.refreshSeconds||10)+'s';get('status').textContent='Updated '+new Date(data.serverTimeUtc).toLocaleTimeString();get('list').innerHTML=rows.length?rows.map(p=>'<article class="card"><div class="identity"><strong>'+safe(p.name)+'</strong><div class="meta">Level '+p.level+' &middot; '+Number(p.kills||0).toLocaleString()+' kills &middot; '+p.lives+' lives</div>'+(p.pendingChoice?'<span class="pill pending">Pending '+safe(p.pendingChoice)+'</span>':'')+'</div><div class="boons">'+((p.boons||[]).map(b=>'<span class="pill">'+safe(b)+'</span>').join('')||'<span class="meta">No boons chosen yet.</span>')+'</div></article>').join(''):'<div class="empty">No living Hardcore Crawler characters are online right now.</div>'}async function load(){try{const r=await fetch('/api/crawlers',{cache:'no-store'}),d=await r.json();render(d);clearTimeout(timer);timer=setTimeout(load,Math.max(5,d.refreshSeconds||10)*1000)}catch(e){get('status').textContent=e.message;clearTimeout(timer);timer=setTimeout(load,15000)}}load();
 </script></body></html>
 """;
         }
@@ -4402,15 +4402,15 @@ checkSession();
 </body>
 </html>";
         }
-        private sealed class RogueBoardSnapshot
+        private sealed class CrawlerBoardSnapshot
         {
             public bool Ok { get; set; }
             public DateTime ServerTimeUtc { get; set; }
             public int RefreshSeconds { get; set; }
             public int Count { get; set; }
-            public List<RogueBoardEntry> Players { get; set; }
+            public List<CrawlerBoardEntry> Players { get; set; }
         }
-        private sealed class RogueBoardEntry
+        private sealed class CrawlerBoardEntry
         {
             public string Name { get; set; }
             public int Level { get; set; }

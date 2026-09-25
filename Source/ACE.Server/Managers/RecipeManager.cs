@@ -188,7 +188,7 @@ namespace ACE.Server.Managers
 
             //Console.WriteLine("Required skill: " + skill.Skill);
 
-            if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained)
+            if (playerSkill.AdvancementClass < SkillAdvancementClass.Trained && !HardcoreCrawlerManager.IsActive(player))
             {
                 player.SendWeenieError(WeenieError.YouAreNotTrainedInThatTradeSkill);
                 return null;
@@ -224,7 +224,7 @@ namespace ACE.Server.Managers
             var skill = player.GetCreatureSkill(recipeSkill);
 
             // tinkering skill must be trained
-            if (skill.AdvancementClass < SkillAdvancementClass.Trained)
+            if (skill.AdvancementClass < SkillAdvancementClass.Trained && !HardcoreCrawlerManager.IsActive(player))
             {
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You are not trained in {skill.Skill.ToSentence()}.", ChatMessageType.Broadcast));
                 return null;
@@ -365,6 +365,9 @@ namespace ACE.Server.Managers
                 player.SendWeenieError(WeenieError.YouDoNotPassCraftingRequirements);
                 return;
             }
+
+            if (HardcoreCrawlerManager.IsActive(player) && recipe.Skill > 0 && recipe.Difficulty > 0)
+                HardcoreCrawlerManager.OnUntrainedSkillUsed(player, player.GetCreatureSkill((Skill)recipe.Skill), (uint)Math.Max(1, recipe.Difficulty));
 
             var success = ThreadSafeRandom.Next(0.0f, 1.0f) < successChance;
 

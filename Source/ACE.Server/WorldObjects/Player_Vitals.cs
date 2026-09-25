@@ -19,6 +19,12 @@ namespace ACE.Server.WorldObjects
         /// </summary>
         public bool HandleActionRaiseVital(PropertyAttribute2nd vital, uint amount)
         {
+            if (HardcoreCrawlerManager.IsActive(this))
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Hardcore Crawler vitals cannot be raised manually; your power comes from use-based progression.", ChatMessageType.Broadcast));
+                return false;
+            }
+
             if (!Vitals.TryGetValue(vital, out var creatureVital))
             {
                 log.Warn($"{Name}.HandleActionRaiseVital({vital}, {amount}) - invalid vital");

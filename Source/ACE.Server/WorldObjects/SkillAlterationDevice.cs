@@ -8,6 +8,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Entity;
+using ACE.Server.Managers;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects.Entity;
@@ -116,6 +117,13 @@ namespace ACE.Server.WorldObjects
             {
                 // Gem of Enlightenment
                 case SkillAlterationType.Specialize:
+
+                    if (HardcoreCrawlerManager.IsActive(player))
+                    {
+                        player.Session.Network.EnqueueSend(new GameEventWeenieError(player.Session, WeenieError.YouFailToAlterSkill));
+                        player.SendMessage("Hardcore Crawler skills specialize automatically through use. Lowering skills is still allowed to free credits.");
+                        return false;
+                    }
 
                     // ensure skill is trained
                     if (skill.AdvancementClass != SkillAdvancementClass.Trained)

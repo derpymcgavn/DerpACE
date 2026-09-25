@@ -7,6 +7,7 @@ using ACE.Entity.Enum;
 using ACE.Entity.Enum.Properties;
 using ACE.Entity.Models;
 using ACE.Server.Network.Structure;
+using ACE.Server.Managers;
 using ACE.Server.WorldObjects.Entity;
 
 namespace ACE.Server.Network.GameEvent.Events
@@ -35,6 +36,11 @@ namespace ACE.Server.Network.GameEvent.Events
             Skill       = 0x0002,
             Spell       = 0x0100,
             Enchantment = 0x0200
+        }
+
+        private static bool IsCrawlerExperienceProperty(PropertyInt64 property)
+        {
+            return property == PropertyInt64.TotalExperience || property == PropertyInt64.AvailableExperience;
         }
 
         public GameEventPlayerDescription(Session session)
@@ -90,11 +96,12 @@ namespace ACE.Server.Network.GameEvent.Events
                 PackableHashTable.WriteHeader(Writer, _propertiesInt64.Count, PropertyInt64Comparer.NumBuckets);
 
                 var propertiesInt64 = new SortedDictionary<PropertyInt64, long>(_propertiesInt64, PropertyInt64Comparer);
+                var maskCrawlerExperience = HardcoreCrawlerManager.IsActive(Session.Player);
 
                 foreach (var property in propertiesInt64)
                 {
                     Writer.Write((uint)property.Key);
-                    Writer.Write(property.Value);
+                    Writer.Write(maskCrawlerExperience && IsCrawlerExperienceProperty(property.Key) ? 0 : property.Value);
                 }
             }
 

@@ -368,6 +368,7 @@ namespace ACE.Server.WorldObjects
 
                 // notify global kill quest tracker
                 GlobalKillQuestManager.OnCreatureKilled(playerDamager, this, xpForKill);
+                HardcoreCrawlerManager.OnCreatureKilled(playerDamager, this, xpForKill);
 
                 // handle luminance
                 if (LuminanceAward != null)
