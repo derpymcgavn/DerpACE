@@ -26,6 +26,12 @@ namespace ACE.Server.WorldObjects
                 return;
             }
 
+            if (IsIronmanFamily)
+            {
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen and Ironman variants walk alone - no fellowship can be formed.", ChatMessageType.Broadcast));
+                return;
+            }
+
             Fellowship = new Fellowship(this, fellowshipName, shareXP);
             Session.Network.EnqueueSend(new GameEventFellowshipFullUpdate(Session));
             Session.Network.EnqueueSend(new GameEventFellowshipFellowUpdateDone(Session));

@@ -49,7 +49,7 @@ namespace ACE.Server.Managers
             MutatedHunt,
             FieldMedicine,
             Rations,
-                    SkillGrowth,
+            SkillGrowth,
         }
 
         private sealed class TrialState
@@ -611,6 +611,21 @@ namespace ACE.Server.Managers
             return true;
         }
 
+        private static void AppendReadySkillStatus(StringBuilder sb, Player player, bool specialize)
+        {
+            var property = specialize ? PropertyString.HardcoreCrawlerAutoSpecProgress : PropertyString.HardcoreCrawlerAutoTrainProgress;
+            var threshold = specialize ? Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecRanks) : Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses);
+            var ready = GetReadySkillNames(player, property, threshold).ToList();
+            if (ready.Count == 0)
+                return;
+
+            var label = specialize ? "Ready to specialize" : "Ready to train";
+            var command = specialize ? "/crawler spec" : "/crawler train";
+            var visible = ready.Take(12).ToList();
+            var extra = ready.Count > visible.Count ? $" (+{ready.Count - visible.Count} more)" : string.Empty;
+            sb.AppendLine($"  {label}: {string.Join(", ", visible)}{extra} - use {command} <skill>");
+        }
+
         private static IEnumerable<string> GetReadySkillNames(Player player, PropertyString property, int threshold)
         {
             var progress = ParseSkillProgress(player.GetProperty(property));
@@ -951,6 +966,8 @@ namespace ACE.Server.Managers
             sb.AppendLine($"  Skill credits: {player.AvailableSkillCredits ?? 0}/{player.TotalSkillCredits ?? 0} available");
             sb.AppendLine(trainedCap > 0 ? $"  Trained skills: {trainedCount}/{trainedCap}" : $"  Trained skills: {trainedCount} (uncapped)");
             sb.AppendLine(specBudget > 0 ? $"  Specialized skills: {specCount}, budget {specCredits}/{specBudget}" : $"  Specialized skills: {specCount}, budget {specCredits} (uncapped)");
+            AppendReadySkillStatus(sb, player, specialize: false);
+            AppendReadySkillStatus(sb, player, specialize: true);
             sb.AppendLine($"  Quest favor: {Math.Max(0, player.GetProperty(PropertyInt64.HardcoreCrawlerQuestFavor) ?? 0):N0}/{GetQuestFavorThreshold(player):N0}");
             sb.AppendLine("  Spell foci: built in");
             if (!string.IsNullOrWhiteSpace(lastSkill))

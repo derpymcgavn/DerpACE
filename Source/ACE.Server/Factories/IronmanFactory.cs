@@ -1443,7 +1443,8 @@ namespace ACE.Server.Factories
         private const uint NomadStarterRobeWcid = 40439;
 
         private static void GiveNomadStarterRunes(Player player)
-        {            var starterSpells = NomadRune.GetStarterSpells(player);
+        {
+            var starterSpells = NomadRune.GetStarterSpells(player);
             foreach (var spellId in starterSpells)
             {
                 var rune = WorldObjectFactory.CreateNewWorldObject(NomadRune.NomadRuneWeenieClassId);
