@@ -29,6 +29,10 @@ namespace ACE.Server.DerpAce
         public float ModernMobAiSwitchThreshold { get; set; } = 1.20f;
         [JsonPropertyName("mob_movement_sync_interval_seconds")]
         public float MobMovementSyncIntervalSeconds { get; set; } = 0.20f;
+        [JsonPropertyName("mob_chase_motion_refresh_interval_seconds")]
+        public float MobChaseMotionRefreshIntervalSeconds { get; set; } = 0.75f;
+        [JsonPropertyName("mob_chase_motion_refresh_distance")]
+        public float MobChaseMotionRefreshDistance { get; set; } = 1.25f;
         [JsonPropertyName("mob_outdoor_chase_range")]
         public float MobOutdoorChaseRange { get; set; } = 576.0f;
         [JsonPropertyName("enable_derpcoin")]

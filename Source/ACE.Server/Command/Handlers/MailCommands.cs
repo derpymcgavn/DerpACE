@@ -11,6 +11,9 @@ using ACE.Server.DerpAce.Mail;
 using ACE.Server.Factories;
 using ACE.Server.Managers;
 using ACE.Server.Network;
+using ACE.Server.Network.GameEvent.Events;
+using ACE.Server.Network.GameMessages;
+using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
 
 namespace ACE.Server.Command.Handlers
@@ -21,6 +24,7 @@ namespace ACE.Server.Command.Handlers
     /// Usage:
     ///   /mail list                                       - list inbox
     ///   /mail read    &lt;id&gt;                                 - read a single message
+    ///   /mail open    &lt;id&gt;                                 - preview attached items
     ///   /mail send    &lt;name&gt; &lt;subject&gt; | &lt;body&gt;             - send text-only message
     ///   /mail pay     &lt;name&gt; &lt;mmds&gt; [note]                 - send MMDs (250k Pyreals each)
     ///   /mail ship    &lt;name&gt; &lt;wcid|item name&gt; [stack]      - ship an item
@@ -36,6 +40,7 @@ namespace ACE.Server.Command.Handlers
         private const uint MmdWcid     = 20630;
         private const long MmdValue    = 250_000;
         private const int  MmdMaxStack = 1000;
+        private const uint MailPreviewContainerWcid = 136; // Backpack
 
         /// <summary>PropertyInt64 slot for banked MMDs (from BankConfig.Items, defaults to 40000).</summary>
         private static int MmdBankProp =>
@@ -45,7 +50,7 @@ namespace ACE.Server.Command.Handlers
 
         [CommandHandler("mail", AccessLevel.Player, CommandHandlerFlag.RequiresWorld,
             "Player mail - send MMDs/items between players.",
-            "Usage: /mail list|read|send|pay|ship|cod|take|decline|delete|help [args]")]
+            "Usage: /mail list|read|open|send|pay|ship|cod|take|decline|delete|help [args]")]
         public static void HandleMail(Session session, params string[] parameters)
         {
             var player = session.Player;
@@ -55,6 +60,8 @@ namespace ACE.Server.Command.Handlers
             {
                 case "list":    CmdList(player, parameters);    break;
                 case "read":    CmdRead(player, parameters);    break;
+                case "open":
+                case "preview": CmdPreview(player, parameters); break;
                 case "send":    CmdSend(player, parameters);    break;
                 case "pay":     CmdPay(player, parameters);     break;
                 case "ship":    CmdShip(player, parameters);    break;
@@ -94,7 +101,7 @@ namespace ACE.Server.Command.Handlers
                 sb.AppendLine($"  {m.Id,-8}  {MailboxManager.FormatTimestamp(m.SentUtc),-12}  {m.SenderName,-20}  {Truncate(m.Subject, 30),-30}  {flags}");
             }
 
-            sb.Append("  Use: /mail read <id> | /mail take <id> | /mail delete <id>");
+            sb.Append("  Use: /mail read <id> | /mail open <id> | /mail take <id> | /mail delete <id>");
             player.SendMessage(sb.ToString());
         }
 
@@ -111,7 +118,28 @@ namespace ACE.Server.Command.Handlers
 
             msg.Read = true;
             MailboxManager.SaveMailbox(player, box);
+            SendMessageText(player, msg);
+        }
 
+        // -- preview -----------------------------------------------------------
+
+        private static void CmdPreview(Player player, string[] parameters)
+        {
+            if (parameters.Length < 2) { player.SendMessage("[MAIL] Usage: /mail open <id>"); return; }
+
+            var box = MailboxManager.GetMailbox(player);
+            var msg = MailboxManager.FindById(box, parameters[1]);
+
+            if (msg == null) { player.SendMessage("[MAIL] Message not found."); return; }
+
+            msg.Read = true;
+            MailboxManager.SaveMailbox(player, box);
+            SendMessageText(player, msg);
+            SendPreviewPackage(player, msg);
+        }
+
+        private static void SendMessageText(Player player, MailMessage msg)
+        {
             var sb = new StringBuilder();
             sb.AppendLine($"[MAIL] -- Message {msg.Id} --------------------------");
             sb.AppendLine($"  From   : {msg.SenderName}");
@@ -505,6 +533,7 @@ namespace ACE.Server.Command.Handlers
                 "[MAIL] Commands:\n" +
                 "  /mail list                                          - view inbox\n" +
                 "  /mail read    <id>                                  - read a message\n" +
+                "  /mail open    <id>                                  - preview attached items\n" +
                 "  /mail send    <name> <subject> | <body>             - send text mail\n" +
                 "  /mail pay     <name> <mmds> [note]                  - send MMDs (pulls from bank if short)\n" +
                 "  /mail ship    <name> <wcid|item name> [stack]       - ship an item (pulls from bank if short)\n" +
@@ -659,6 +688,91 @@ namespace ACE.Server.Command.Handlers
 
             return MailboxManager.Deliver(recipient, message);
         }
+
+        private static void SendPreviewPackage(Player player, MailMessage msg)
+        {
+            if (msg == null || msg.Claimed || !msg.HasUnclaimed)
+            {
+                player.SendMessage("[MAIL] No unclaimed package contents to preview.");
+                return;
+            }
+
+            var package = WorldObjectFactory.CreateNewWorldObject(MailPreviewContainerWcid) as Container;
+            if (package == null)
+            {
+                player.SendMessage("[MAIL] Could not build a package preview.");
+                return;
+            }
+
+            package.Name = $"Mail Package {msg.Id}: {Truncate(msg.Subject, 28)}";
+            package.ItemCapacity = (byte)Math.Clamp(msg.Attachments.Count + (int)Math.Ceiling((double)Math.Max(0, msg.Pyreals / MmdValue) / MmdMaxStack), 10, 120);
+            package.ContainerCapacity = 0;
+            package.IsOpen = true;
+            package.Viewer = player.Guid.Full;
+
+            var placement = 0;
+            var previewCount = 0;
+
+            if (msg.Pyreals > 0)
+            {
+                var mmds = (int)(msg.Pyreals / MmdValue);
+                while (mmds > 0)
+                {
+                    var stackSize = Math.Min(mmds, MmdMaxStack);
+                    var stack = WorldObjectFactory.CreateNewWorldObject(MmdWcid);
+                    if (stack == null)
+                        break;
+
+                    if (stack.MaxStackSize > 1)
+                        stack.SetStackSize(Math.Min(stackSize, stack.MaxStackSize ?? stackSize));
+
+                    if (package.TryAddToInventory(stack, out _, placement++, true, false))
+                        previewCount++;
+                    else
+                        stack.Destroy();
+
+                    mmds -= stackSize;
+                }
+            }
+
+            foreach (var att in msg.Attachments)
+            {
+                WorldObject item = null;
+                try
+                {
+                    item = CreateAttachmentItem(att);
+                    if (item == null)
+                        continue;
+
+                    if (package.TryAddToInventory(item, out _, placement++, true, false))
+                        previewCount++;
+                    else
+                        item.Destroy();
+                }
+                catch
+                {
+                    item?.Destroy();
+                }
+            }
+
+            if (previewCount == 0)
+            {
+                package.Destroy();
+                player.SendMessage("[MAIL] No package contents could be previewed.");
+                return;
+            }
+
+            player.Session.Network.EnqueueSend(new GameMessageCreateObject(package));
+            player.Session.Network.EnqueueSend(new GameEventViewContents(player.Session, package));
+
+            var createMessages = new List<GameMessage>();
+            foreach (var item in package.Inventory.Values.OrderBy(i => i.PlacementPosition))
+                createMessages.Add(new GameMessageCreateObject(item));
+
+            player.Session.Network.EnqueueSend(createMessages);
+            player.SendMessage($"[MAIL] Preview opened for package {msg.Id}. Use /mail take {msg.Id} to claim; preview items cannot be removed.");
+        }
+
         // -- item-shipping helpers --------------------------------------------
 
         /// <summary>

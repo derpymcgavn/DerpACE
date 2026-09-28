@@ -17,6 +17,8 @@ namespace ACE.Server.Managers
         public static bool ModernMobAiEnabled      { get; set; } = true;
         public static float ModernMobAiSwitchThreshold { get; set; } = 1.20f;
         public static float MobMovementSyncIntervalSeconds { get; set; } = 0.20f;
+        public static float MobChaseMotionRefreshIntervalSeconds { get; set; } = 0.75f;
+        public static float MobChaseMotionRefreshDistance { get; set; } = 1.25f;
         public static float MobOutdoorChaseRange { get; set; } = 576.0f;
         public static bool EnableDerpcoin          { get; set; } = true;
         public static bool EnableCustomWeapons     { get; set; } = true;

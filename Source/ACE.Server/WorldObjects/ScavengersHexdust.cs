@@ -180,20 +180,50 @@ namespace ACE.Server.WorldObjects
             corpse.SetProperty(PropertyBool.CorpseHexdustHarvested, true);
             corpse.SaveBiotaToDatabase();
 
+            PlayHarvestCraftingSequence(player, corpse, () => FinishHarvest(player, corpse, chance));
+            return true;
+        }
+
+        private static void PlayHarvestCraftingSequence(Player player, Corpse corpse, Action finishHarvest)
+        {
+            var motionCommand = MotionCommand.ClapHands;
+            var currentStance = player.CurrentMotionState?.Stance ?? MotionStance.NonCombat;
+            var clapTime = Physics.Animation.MotionTable.GetAnimationLength(player.MotionTableId, currentStance, motionCommand);
+            var chain = new ActionChain();
+
+            player.IsBusy = true;
+            chain.AddAction(player, () => player.SendMotionAsCommands(motionCommand, currentStance));
+            chain.AddDelaySeconds(clapTime);
+            chain.AddAction(player, () =>
+            {
+                if (player.IsDestroyed || corpse.IsDestroyed || !player.IsAlive)
+                {
+                    player.IsBusy = false;
+                    player.SendUseDoneEvent();
+                    return;
+                }
+
+                corpse.ApplyVisualEffects(PlayScript.BlackMadness, 1.0f);
+                player.ApplyVisualEffects(PlayScript.BlackMadness, 1.0f);
+                finishHarvest();
+                player.IsBusy = false;
+                player.SendUseDoneEvent();
+            });
+            chain.EnqueueChain();
+        }
+
+        private static void FinishHarvest(Player player, Corpse corpse, double chance)
+        {
             if (ThreadSafeRandom.Next(0.0f, 1.0f) > chance)
             {
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat("You scrape the corpse, but the grit will not hold a hex.", ChatMessageType.Broadcast));
-                player.SendUseDoneEvent();
-                return true;
+                return;
             }
 
             var amount = GetHarvestAmount(player, corpse);
             var dust = WorldObjectFactory.CreateNewWorldObject(ScavengersHexdustWeenieClassId);
             if (dust == null)
-            {
-                player.SendUseDoneEvent();
-                return true;
-            }
+                return;
 
             dust.SetStackSize(amount);
             dust.SetProperty(PropertyBool.IsIronmanItem, true);
@@ -207,9 +237,6 @@ namespace ACE.Server.WorldObjects
             }
             else
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat($"You grind {amount} pinches of {dust.Name} from the corpse.", ChatMessageType.Broadcast));
-
-            player.SendUseDoneEvent();
-            return true;
         }
 
         private static bool TryThrow(Player player, WorldObject dust, WorldObject target)

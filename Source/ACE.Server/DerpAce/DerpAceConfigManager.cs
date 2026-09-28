@@ -198,6 +198,8 @@ namespace ACE.Server.DerpAce
             DerpACEConfig.ModernMobAiSwitchThreshold = c.ModernMobAiSwitchThreshold;
 
             DerpACEConfig.MobMovementSyncIntervalSeconds = c.MobMovementSyncIntervalSeconds;
+            DerpACEConfig.MobChaseMotionRefreshIntervalSeconds = c.MobChaseMotionRefreshIntervalSeconds;
+            DerpACEConfig.MobChaseMotionRefreshDistance = c.MobChaseMotionRefreshDistance;
             DerpACEConfig.MobOutdoorChaseRange    = c.MobOutdoorChaseRange;
             DerpACEConfig.EnableDerpcoin           = c.EnableDerpcoin;
             DerpACEConfig.EnableCustomWeapons      = c.EnableCustomWeapons;
@@ -672,4 +674,3 @@ namespace ACE.Server.DerpAce
         }
     }
 }
-
