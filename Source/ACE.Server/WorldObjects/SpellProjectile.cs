@@ -296,7 +296,7 @@ namespace ACE.Server.WorldObjects
 
             if (player != null)
                 player.LastHitSpellProjectile = Spell;
-            
+
             // ensure caster can damage target
             var sourceCreature = ProjectileSource as Creature;
             if (sourceCreature != null && !sourceCreature.CanDamage(creatureTarget))
@@ -718,7 +718,7 @@ namespace ACE.Server.WorldObjects
             var duration = Math.Clamp(confusionCaster.GetProperty(PropertyFloat.VoidConfusionDurationSeconds) ?? 4.0, 1.0, 60.0);
             var maxTargets = Math.Clamp((int)Math.Round(confusionCaster.GetProperty(PropertyFloat.VoidConfusionTargetCount) ?? 1.0), 1, 12);
 
-            var confused = GetNearbyMonsterTargets(sourcePlayer, firstTarget, firstTarget, 12.0f, maxTargets, null);
+            var confused = GetNearbyMonsterTargets(sourcePlayer, firstTarget, firstTarget, 12.0f, maxTargets, null, false);
             if (!confused.Contains(firstTarget))
                 confused.Insert(0, firstTarget);
             confused = confused.Distinct().Take(maxTargets).ToList();
@@ -776,14 +776,16 @@ namespace ACE.Server.WorldObjects
                 return null;
 
             var preferred = preferredTargets
-                .Where(c => c != null && c != mob && c.IsAlive && c.Location != null && (!c.IsVoidConfused || c.VoidConfusionOwnerGuid != sourcePlayer.Guid.Full) && sourcePlayer.CanDamage(c))
+                .Where(c => IsValidConfusionMonsterTarget(sourcePlayer, c)
+                            && c != mob
+                            && (!c.IsVoidConfused || c.VoidConfusionOwnerGuid != sourcePlayer.Guid.Full))
                 .OrderBy(c => mob.Location.SquaredDistanceTo(c.Location))
                 .FirstOrDefault();
 
             if (preferred != null)
                 return preferred;
 
-            return GetNearbyMonsterTargets(sourcePlayer, mob, mob, 10.0f, 1, new HashSet<uint> { mob.Guid.Full }).FirstOrDefault();
+            return GetNearbyMonsterTargets(sourcePlayer, mob, mob, 10.0f, 1, new HashSet<uint> { mob.Guid.Full }, false).FirstOrDefault();
         }
 
         private void LaunchSpiralStar(Player sourcePlayer, Creature firstTarget, float primaryDamage)
@@ -847,7 +849,7 @@ namespace ACE.Server.WorldObjects
                 ApplySpecialWarDamage(sourcePlayer, target, fallbackDamageType, fallbackDamage, spellName);
         }
 
-        private static List<Creature> GetNearbyMonsterTargets(Player sourcePlayer, WorldObject center, WorldObject sortFrom, float radius, int maxTargets, HashSet<uint> excluded)
+        private static List<Creature> GetNearbyMonsterTargets(Player sourcePlayer, WorldObject center, WorldObject sortFrom, float radius, int maxTargets, HashSet<uint> excluded, bool requirePlayerCanDamage = true)
         {
             var results = new List<Creature>();
             var landblock = center?.CurrentLandblock ?? sourcePlayer?.CurrentLandblock;
@@ -859,17 +861,11 @@ namespace ACE.Server.WorldObjects
 
             results = landblock.GetWorldObjectsForLocalQuery()
                 .OfType<Creature>()
-                .Where(c => c != null
-                            && c != sourcePlayer
-                            && c.IsAlive
-                            && c.Attackable
-                            && c.IsMonster
-                            && !c.Teleporting
-                            && c.Location != null
+                .Where(c => IsValidConfusionMonsterTarget(sourcePlayer, c)
                             && (c.Location.Cell & 0xFFFF0000) == baseLandblock
                             && center.Location.SquaredDistanceTo(c.Location) <= radiusSq
                             && (excluded == null || !excluded.Contains(c.Guid.Full))
-                            && sourcePlayer.CanDamage(c))
+                            && (!requirePlayerCanDamage || sourcePlayer.CanDamage(c)))
                 .OrderBy(c => (sortFrom?.Location ?? center.Location).SquaredDistanceTo(c.Location))
                 .Take(maxTargets)
                 .ToList();
@@ -881,6 +877,19 @@ namespace ACE.Server.WorldObjects
             }
 
             return results;
+        }
+
+
+        private static bool IsValidConfusionMonsterTarget(Player sourcePlayer, Creature target)
+        {
+            return sourcePlayer != null
+                && target != null
+                && target != sourcePlayer
+                && target.IsAlive
+                && target.Attackable
+                && target.IsMonster
+                && !target.Teleporting
+                && target.Location != null;
         }
 
         private static void ApplySpecialWarDamage(Player sourcePlayer, Creature target, DamageType damageType, float damage, string spellName)
@@ -1253,7 +1262,7 @@ namespace ACE.Server.WorldObjects
                 info += $"CriticalDefended: {critDefended}\n";
 
             info += $"Overpower: {overpower}\n";
-        
+
             if (spell.MetaSpellType == ACE.Entity.Enum.SpellType.LifeProjectile)
             {
                 // life magic projectile

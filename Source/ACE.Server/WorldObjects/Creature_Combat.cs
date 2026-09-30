@@ -1163,11 +1163,17 @@ namespace ACE.Server.WorldObjects
         {
             if (target is Player)
             {
+                if (IsVoidConfused)
+                    return false;
+
                 // monster attacking player
                 return true;    // other checks handled elsewhere
             }
             else
             {
+                if (CanDamageVoidConfusionTarget(target))
+                    return true;
+
                 // monster attacking monster
                 var sourcePet = this is CombatPet;
                 var targetPet = target is CombatPet;

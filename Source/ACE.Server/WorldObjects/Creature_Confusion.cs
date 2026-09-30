@@ -22,7 +22,7 @@ namespace ACE.Server.WorldObjects
             if (owner == null || forcedTarget == null || forcedTarget == this || IsDead || forcedTarget.IsDead)
                 return;
 
-            if (!owner.CanDamage(forcedTarget))
+            if (!IsValidVoidConfusionTarget(owner, forcedTarget))
                 return;
 
             VoidConfusionUntil = DateTime.UtcNow.AddSeconds(Math.Max(1.0, durationSeconds));
@@ -66,8 +66,18 @@ namespace ACE.Server.WorldObjects
                 return true;
             }
 
-            ClearVoidConfusionIfCurrent();
-            return false;
+            AttackTarget = null;
+            CurrentAttack = null;
+            return true;
+        }
+
+        public bool CanDamageVoidConfusionTarget(Creature target)
+        {
+            if (!IsVoidConfused || target == null || target.Guid.Full != VoidConfusionTargetGuid)
+                return false;
+
+            var owner = PlayerManager.GetOnlinePlayer(VoidConfusionOwnerGuid);
+            return IsValidVoidConfusionTarget(owner, target);
         }
 
         private void SetVoidConfusionTarget(Creature target)

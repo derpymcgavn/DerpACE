@@ -78,9 +78,9 @@ namespace ACE.Server.WorldObjects
         private double nextMeleeCornerRecoveryTime;
         private double nextTacticalFlankTime;
         private double nextMovementNetworkSync;
-        private double nextChaseMotionRefresh;
-        private uint lastChaseMotionTargetGuid;
-        private Vector3 lastChaseMotionTargetPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+        private double nextChasePositionSync;
+        private uint lastChasePositionTargetGuid;
+        private Vector3 lastChasePositionTarget = new Vector3(float.NaN, float.NaN, float.NaN);
 
         private const double StuckSampleInterval = 0.75;
         private const float StuckMinTravelDistance = 0.30f;
@@ -103,9 +103,9 @@ namespace ACE.Server.WorldObjects
         private const float TacticalFlankChance = 0.65f;
         private const float TacticalFlankRangeBuffer = 1.75f;
         private const float TacticalFlankSpacing = 1.35f;
-        private const float MinChaseMotionRefreshInterval = 0.25f;
-        private const float MaxChaseMotionRefreshInterval = 5.0f;
-        private const float MinChaseMotionRefreshDistance = 0.25f;
+        private const float MinChasePositionSyncInterval = 0.25f;
+        private const float MaxChasePositionSyncInterval = 5.0f;
+        private const float MinChasePositionSyncDistance = 0.25f;
 
         /// <summary>
         /// Starts the process of monster turning towards target
@@ -152,9 +152,9 @@ namespace ACE.Server.WorldObjects
                 MoveTo(AttackTarget, RunRate);
 
             if (turnTo)
-                ResetChaseMotionRefresh();
+                ResetChasePositionSync();
             else
-                PrimeChaseMotionRefresh(AttackTarget);
+                PrimeChasePositionSync(AttackTarget);
 
             // need turning listener?
             IsTurning = false;
@@ -185,59 +185,59 @@ namespace ACE.Server.WorldObjects
             nextMeleeCornerRecoveryTime = 0;
         }
 
-        private void PrimeChaseMotionRefresh(WorldObject target)
+        private void PrimeChasePositionSync(WorldObject target)
         {
             if (target?.Location == null)
             {
-                ResetChaseMotionRefresh();
+                ResetChasePositionSync();
                 return;
             }
 
-            lastChaseMotionTargetGuid = target.Guid.Full;
-            lastChaseMotionTargetPosition = target.Location.ToGlobal();
-            nextChaseMotionRefresh = Timers.RunningTime + GetChaseMotionRefreshInterval();
+            lastChasePositionTargetGuid = target.Guid.Full;
+            lastChasePositionTarget = target.Location.ToGlobal();
+            nextChasePositionSync = Timers.RunningTime + GetChasePositionSyncInterval();
         }
 
-        private void ResetChaseMotionRefresh()
+        private void ResetChasePositionSync()
         {
-            nextChaseMotionRefresh = 0;
-            lastChaseMotionTargetGuid = 0;
-            lastChaseMotionTargetPosition = new Vector3(float.NaN, float.NaN, float.NaN);
+            nextChasePositionSync = 0;
+            lastChasePositionTargetGuid = 0;
+            lastChasePositionTarget = new Vector3(float.NaN, float.NaN, float.NaN);
         }
 
-        private float GetChaseMotionRefreshInterval()
+        private float GetChasePositionSyncInterval()
         {
-            return Math.Clamp(DerpACEConfig.MobChaseMotionRefreshIntervalSeconds, MinChaseMotionRefreshInterval, MaxChaseMotionRefreshInterval);
+            return Math.Clamp(DerpACEConfig.MobChaseMotionRefreshIntervalSeconds, MinChasePositionSyncInterval, MaxChasePositionSyncInterval);
         }
 
-        private void TryRefreshChaseMotion()
+        private void TrySyncChasePosition()
         {
             if (!IsMoving || IsTurning || IsRouting || IsRouteStartPending || AttackTarget?.Location == null || CurrentMotionState?.MovementType != MovementType.MoveToObject)
                 return;
 
             var now = Timers.RunningTime;
-            if (now < nextChaseMotionRefresh)
+            if (now < nextChasePositionSync)
                 return;
 
-            var refreshInterval = GetChaseMotionRefreshInterval();
-            var refreshDistance = Math.Max(MinChaseMotionRefreshDistance, DerpACEConfig.MobChaseMotionRefreshDistance);
+            var refreshInterval = GetChasePositionSyncInterval();
+            var refreshDistance = Math.Max(MinChasePositionSyncDistance, DerpACEConfig.MobChaseMotionRefreshDistance);
             var targetPos = AttackTarget.Location.ToGlobal();
             var targetGuid = AttackTarget.Guid.Full;
 
-            if (targetGuid == lastChaseMotionTargetGuid
-                && !float.IsNaN(lastChaseMotionTargetPosition.X)
-                && Vector3.Distance(lastChaseMotionTargetPosition, targetPos) < refreshDistance)
+            if (targetGuid == lastChasePositionTargetGuid
+                && !float.IsNaN(lastChasePositionTarget.X)
+                && Vector3.Distance(lastChasePositionTarget, targetPos) < refreshDistance)
             {
-                nextChaseMotionRefresh = now + refreshInterval;
+                nextChasePositionSync = now + refreshInterval;
                 return;
             }
 
-            var motion = GetMoveToMotion(AttackTarget, RunRate);
-            CurrentMotionState = motion;
-            EnqueueBroadcastMotion(motion, applyPhysics: false);
-            lastChaseMotionTargetGuid = targetGuid;
-            lastChaseMotionTargetPosition = targetPos;
-            nextChaseMotionRefresh = now + refreshInterval;
+            // Do not resend MoveToObject here: restarting that client motion mid-chase
+            // can make monsters slide instead of preserving their run cycle.
+            SendUpdatePosition();
+            lastChasePositionTargetGuid = targetGuid;
+            lastChasePositionTarget = targetPos;
+            nextChasePositionSync = now + refreshInterval;
         }
 
         private bool IsMeleeGeometryBlocked(float targetDist, bool isMeleeVisible)
@@ -921,7 +921,7 @@ namespace ACE.Server.WorldObjects
 
             TrackAndHandleStuck();
 
-            TryRefreshChaseMotion();
+            TrySyncChasePosition();
 
             var maxChaseRange = Location?.Indoors == true
                 ? MaxChaseRange
