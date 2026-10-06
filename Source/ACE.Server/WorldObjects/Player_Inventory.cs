@@ -18,6 +18,7 @@ using ACE.Server.Managers;
 using ACE.Server.Network;
 using ACE.Server.Network.GameEvent.Events;
 using ACE.Server.Network.GameMessages.Messages;
+using ACE.Server.WorldObjects.Entity;
 
 namespace ACE.Server.WorldObjects
 {
@@ -2435,12 +2436,15 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
-        private void TrackCrawlerArcaneLoreWieldAttempt(Skill skill, uint difficulty)
+        private void TrackCrawlerArcaneLoreWieldAttempt(CreatureSkill skill, uint difficulty, bool succeeded)
         {
-            if (skill != Skill.ArcaneLore || difficulty == 0 || !HardcoreCrawlerManager.IsActive(this))
+            if (skill?.Skill != Skill.ArcaneLore || difficulty == 0 || !HardcoreCrawlerManager.IsActive(this))
                 return;
 
-            HardcoreCrawlerManager.OnSkillPracticed(this, GetCreatureSkill(Skill.ArcaneLore), difficulty);
+            if (succeeded)
+                HardcoreCrawlerManager.OnSkillPracticed(this, skill, difficulty);
+            else if (skill.AdvancementClass == SkillAdvancementClass.Untrained)
+                HardcoreCrawlerManager.OnUntrainedSkillUsed(this, skill, difficulty);
         }
 
         private WeenieError CheckWieldRequirements(WorldObject item)
@@ -2523,8 +2527,9 @@ namespace ACE.Server.WorldObjects
 
                     // verify skill level - current / buffed
                     var skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
-                    TrackCrawlerArcaneLoreWieldAttempt(skill.Skill, difficulty);
-                    if (skill.Current < difficulty)
+                    var succeeded = skill.Current >= difficulty;
+                    TrackCrawlerArcaneLoreWieldAttempt(skill, difficulty, succeeded);
+                    if (!succeeded)
                         return WeenieError.SkillTooLow;
                     break;
 
@@ -2532,8 +2537,9 @@ namespace ACE.Server.WorldObjects
 
                     // verify skill level - base
                     skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
-                    TrackCrawlerArcaneLoreWieldAttempt(skill.Skill, difficulty);
-                    if (skill.Base < difficulty)
+                    succeeded = skill.Base >= difficulty;
+                    TrackCrawlerArcaneLoreWieldAttempt(skill, difficulty, succeeded);
+                    if (!succeeded)
                         return WeenieError.SkillTooLow;
                     break;
 
@@ -2580,8 +2586,9 @@ namespace ACE.Server.WorldObjects
 
                     // verify skill is trained / specialized
                     skill = GetCreatureSkill(GetBattlemageAdjustedItemSkill(item, (Skill)skillOrAttribute), false);
-                    TrackCrawlerArcaneLoreWieldAttempt(skill.Skill, difficulty);
-                    if ((int)skill.AdvancementClass < difficulty)
+                    succeeded = (int)skill.AdvancementClass >= difficulty;
+                    TrackCrawlerArcaneLoreWieldAttempt(skill, difficulty, succeeded);
+                    if (!succeeded)
                         return WeenieError.SkillTooLow;
                     break;
 

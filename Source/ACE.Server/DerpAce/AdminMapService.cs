@@ -2659,7 +2659,7 @@ newProfile();Promise.all([loadProfiles(),loadPlayers(),loadActive()]);setInterva
             LootEntry("weapon_blast_proc_rate_max", "Weapon Blast", "Blast proc rate max", "Maximum per-hit proc rate rolled onto the weapon.", "percent", 0, 1, 0.001),
             LootEntry("thief_dagger_enabled", "Weapon Toggles", "Thief dagger enabled", "Allows Thief dagger affixes to roll.", "toggle"),
             LootEntry("quickening_dagger_enabled", "Weapon Toggles", "Quickening dagger enabled", "Allows Quickening dagger affixes to roll.", "toggle"),
-            LootEntry("quickening_dagger_cooldown_seconds", "Weapon Mutators", "Quickening cooldown", "Cooldown after Quickening dagger speed burst fires.", "number", 1, 120, 1),
+            LootEntry("quickening_dagger_cooldown_seconds", "Weapon Mutators", "Quickening cooldown legacy", "Cooldown triggered when Quickening reaches its 4x max stack burst.", "number", 1, 120, 1),
             LootEntry("fencer_blade_enabled", "Weapon Toggles", "Fencer blade enabled", "Allows Fencer blade affixes to roll.", "toggle"),
             LootEntry("ravager_axe_enabled", "Weapon Toggles", "Ravager axe enabled", "Allows Ravager axe/hammer affixes to roll.", "toggle"),
             LootEntry("warden_maul_enabled", "Weapon Toggles", "Warden maul enabled", "Allows Warden maul affixes to roll.", "toggle"),

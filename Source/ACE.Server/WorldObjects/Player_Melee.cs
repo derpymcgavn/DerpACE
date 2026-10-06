@@ -307,7 +307,7 @@ namespace ACE.Server.WorldObjects
 
             // stamina usage
             // TODO: ensure enough stamina for attack
-            var staminaCost = GetAttackStamina(GetPowerRange());
+            var staminaCost = GetAttackStamina(GetPowerRange()) * GetQuickeningDaggerStaminaMultiplier(weapon);
             UpdateVitalDelta(Stamina, -staminaCost);
 
             if (numStrikes != attackFrames.Count)

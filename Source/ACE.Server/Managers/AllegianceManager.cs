@@ -312,6 +312,8 @@ namespace ACE.Server.Managers
                 if (onlinePatron != null)
                     onlinePatron.AddAllegianceXP();
 
+                HardcoreCrawlerManager.OnAllegianceXpPassed(vassal, patron, generatedAmount, passupAmount);
+
                 // call recursively
                 DoPassXP(patronNode, passupAmount, false);
             }

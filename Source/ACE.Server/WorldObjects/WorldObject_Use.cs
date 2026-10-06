@@ -142,9 +142,11 @@ namespace ACE.Server.WorldObjects
 
         private bool IsCrawlerLearnByDoingUse(Player player, Skill skill)
         {
-            return HardcoreCrawlerManager.IsActive(player)
-                && this is Healer
-                && skill == Skill.Healing;
+            if (!HardcoreCrawlerManager.IsActive(player))
+                return false;
+
+            return this is Healer && skill == Skill.Healing
+                || this is PetDevice && skill == Skill.Summoning;
         }
         public virtual void ActOnUse(WorldObject activator)
         {
@@ -219,8 +221,8 @@ namespace ACE.Server.WorldObjects
                 var crawlerArcanePractice = HardcoreCrawlerManager.IsActive(player);
                 if (arcaneLore.Current < ItemDifficulty.Value)
                 {
-                    if (crawlerArcanePractice)
-                        HardcoreCrawlerManager.OnSkillPracticed(player, arcaneLore, (uint)Math.Max(1, ItemDifficulty.Value));
+                    if (crawlerArcanePractice && arcaneLore.AdvancementClass == SkillAdvancementClass.Untrained)
+                        HardcoreCrawlerManager.OnUntrainedSkillUsed(player, arcaneLore, (uint)Math.Max(1, ItemDifficulty.Value));
                     return new ActivationResult(new GameEventWeenieErrorWithString(player.Session, WeenieErrorWithString.Your_IsTooLowToUseItemMagic, arcaneLore.Skill.ToSentence()));
                 }
                 if (crawlerArcanePractice)

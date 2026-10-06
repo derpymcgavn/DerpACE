@@ -1,1127 +1,172 @@
-# ACEmulator Core Server
+# DerpACE Server
 
-[![Discord](https://img.shields.io/discord/261242462972936192.svg?label=play+now!&style=for-the-badge&logo=discord)](https://discord.gg/C2WzhP9)
+DerpACE is a customized ACEmulator server fork for Asheron's Call. It keeps the ACE server foundation and layers in DerpACE challenge modes, loot mutators, global events, admin tooling, custom content pipelines, and server quality-of-life systems.
 
-Build status: [![GitHub last commit (master)](https://img.shields.io/github/last-commit/acemulator/ace/master)](https://github.com/ACEmulator/ACE/commits/master) [![Windows CI](https://ci.appveyor.com/api/projects/status/rqebda31cgu8u59w/branch/master?svg=true)](https://ci.appveyor.com/project/LtRipley36706/ace/branch/master) [![docker build](https://github.com/ACEmulator/ACE/actions/workflows/docker-image.yml/badge.svg)](https://hub.docker.com/r/acemulator/ace)
+This README is the current high-level project overview. Operator command workflows live in [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md). Historical implementation notes were removed from this file so it stays useful as a starting point instead of a patch diary.
 
-[![Download Latest Server Release](https://img.shields.io/github/v/release/ACEmulator/ACE?label=latest%20server%20release) ![GitHub Release Date](https://img.shields.io/github/release-date/acemulator/ace)](https://github.com/ACEmulator/ACE/releases/latest)
-[![Download Latest World Database Release](https://img.shields.io/github/v/release/ACEmulator/ACE-World-16PY-Patches?label=latest%20world%20database%20release) ![GitHub Release Date](https://img.shields.io/github/release-date/acemulator/ACE-World-16PY-Patches)](https://github.com/ACEmulator/ACE-World-16PY-Patches/releases/latest)
+## Upstream Base
 
-[![GitHub All Releases](https://img.shields.io/github/downloads/acemulator/ace/total?label=server%20downloads)](https://github.com/ACEmulator/ACE/releases) [![GitHub All Releases](https://img.shields.io/github/downloads/acemulator/ACE-World-16PY-Patches/total?label=database%20downloads)](https://github.com/ACEmulator/ACE-World-16PY-Patches/releases) [![Docker Pulls](https://img.shields.io/docker/pulls/acemulator/ace)](https://hub.docker.com/r/acemulator/ace)
+DerpACE is based on ACEmulator ACE, a C# open-source Asheron's Call server implementation using MySQL or MariaDB for world and shard data.
 
-**ACEmulator is a custom, completely from-scratch open source server implementation for Asheron's Call built on C#**
- * MySQL and MariaDB are used as the database engine.
- * Latest client supported.
- * [![License](https://img.shields.io/github/license/acemulator/ace)](https://github.com/ACEmulator/ACE/blob/master/LICENSE)
+Useful upstream references:
 
-***
+- [ACEmulator ACE wiki](https://github.com/ACEmulator/ACE/wiki)
+- [ACE development guide](https://github.com/ACEmulator/ACE/wiki/ACE-Development)
+- [ACE hosting guide](https://github.com/ACEmulator/ACE/wiki/ACE-Hosting)
+- [ACE content creation guide](https://github.com/ACEmulator/ACE/wiki/Content-Creation)
+
 ## Disclaimer
-**This project is for educational and non-commercial purposes only, use of the game client is for interoperability with the emulated server.**
-- Asheron's Call was a registered trademark of Turbine, Inc. and WB Games Inc which has since expired.
-- ACEmulator is not associated or affiliated in any way with Turbine, Inc. or WB Games Inc.
-***
-## Getting Started
-Extended documentation can be found on the project [Wiki](https://github.com/ACEmulator/ACE/wiki).
-* [Developing ACE](https://github.com/ACEmulator/ACE/wiki/ACE-Development)
-* [Hosting ACE](https://github.com/ACEmulator/ACE/wiki/ACE-Hosting)
-* [Content Creation](https://github.com/ACEmulator/ACE/wiki/Content-Creation)
 
-## Contributions
-* Contributions in the form of issues and pull requests are welcomed and encouraged.
-* The preferred way to contribute is to fork the repo and submit a pull request on GitHub.
-* Code style information can be found on the [Wiki](https://github.com/ACEmulator/ACE/wiki/Code-Style).
+This project is for educational and non-commercial purposes only. Use of the game client is for interoperability with the emulated server.
 
-Please note that this project is released with a [Contributor Code of Conduct](https://github.com/ACEmulator/ACE/blob/master/CODE_OF_CONDUCT.md). By participating in this project you agree to abide by its terms.
+Asheron's Call was a trademark of Turbine, Inc. and WB Games Inc. DerpACE and ACEmulator are not associated with or endorsed by Turbine, Inc. or WB Games Inc.
 
-## Bug Reports
-* Please use the [issue tracker](https://github.com/ACEmulator/ACE/issues) provided by GitHub to send us bug reports.
-* You may also discuss issues and bug reports on our discord listed below.
+## Runtime Configuration
 
-## Contact
-* [Discord Channel](https://discord.gg/C2WzhP9)
+DerpACE runtime settings are written to `DerpAce.json` next to the server binary. Use `@derpconfig reload` to reload runtime configuration and restart services that support live reload.
 
-***
-## DerpACE Custom Changes
+Many systems also expose live tuning through `@lootconfig list` and `@lootconfig set <key> <value>`. Changes that affect generated objects usually apply to future loot rolls, vendor restocks, or creature spawns; existing rolled objects keep their current properties unless a command explicitly changes them.
 
-### Current DerpACE Abilities And Commands (September 2026)
-This section is the current operator-facing source of truth for active DerpACE systems. Older patch notes below are historical and may describe earlier balance values.
+Important config areas:
 
-See the [Dedicated admin command guide](ADMIN_COMMANDS.md) for concise operator workflows and command examples.
+| Area | Notes |
+|---|---|
+| Challenge modes | Ironman, Nomad, Hardcore, and Hardcore Crawler gates, XP scalars, lives, and progression settings. |
+| Loot and mutators | Weapon, shield, armor, clothing, jewelry, caster, and mob modifier drop/proc settings. |
+| Vendors | Random vendor loot, town/tier behavior, bank spending, and restock behavior. |
+| Admin map | Host, port, auth token, map image, calibration, refresh, and browser tools. |
+| Pathfinding | DotRecast navmesh generation, loading, rebuild, cache, import, and export settings. |
+| Boss mechanics | Database-backed boss profile drafts, published revisions, JSON fallbacks, and web editor behavior. |
+| Bank and mail | Currency banking, vendor bank spend, direct deposit, item mail, COD, and item preview behavior. |
 
-#### Runtime Config Toggles
-`DerpAce.json` is generated next to the server binary and reloads with `@derpconfig reload`. The reload pushes values into live runtime config; some changes affect only future rolls, spawns, or restocks because existing objects already have their rolled properties.
+## Player-Facing Systems
 
-| System | DerpAce.json key | Runtime reload | Notes |
-|---|---|---|---|
-| Teleport | `enable_teleport` plus `tp_*` | Yes | Gates `/tp` and its cost/request timing. |
-| Mysterious Stranger | `enable_mysterious_stranger` plus `stranger_*` | Yes | Gates the death/chest stranger system. |
-| Mob mutators | `enable_mob_modifiers`, `mob_*_enabled`, `mob_*` | Yes, future spawns | Controls nocturnal, exploding, vampiric, thief, scout, simulacrum, healer, tank, reaper, necromancer, and warder mobs. |
-| Derpcoin | `enable_derpcoin` plus `derpcoin_*` | Yes | Controls custom coin corpse drops. |
-| Custom weapon/shield/caster mutators | `enable_custom_weapons`, per-mutator `*_enabled`, balance keys | Yes, future rolls and live procs | Includes Defender, Archmagi, Life Caster, Hierophant, thief daggers, sentinel spears, fencer swords, ravager, warden, resolute, polebreaker, stalker, breacher, reaper atlatl, ricochet/dartflinger, dinnerware/discus/platter, quickening, and elemental blast. |
-| Armor and clothing enchants | `enable_armor_enchants` plus armor/handwear/footwear keys | Yes, future rolls and live item checks | Covers armor bane, culinarian gloves, alchemist gloves, unarmed hand/footwear, and dance boots. |
-| Vampiric jewelry | `enable_vampiric_jewelry` plus `vampiric_jewelry_*` | Yes | Controls new loot rolls and live regen/on-hit behavior. |
-| Prepatch variants | `enable_prepatch_variants` plus `prepatch_*` | Yes, future rolls | Controls selected prepatch-style item variants. |
-| Vendor random loot | `vendor_random_loot_enabled` plus `vendor_*` | Yes, future vendor loads/restocks | Vendor inventories reroll when the vendor reloads. |
-| Ironman / Nomad / Hardcore | `ironman_enabled` plus `ironman_*`, `*_xp_scalar`, hardcore lives/death debounce | Yes | Gates challenge opt-ins and controls blind/hardcore support values. Challenge gear provenance, fellowship limits, and magic-aid isolation are live code rules. |
-| Hardcore Crawler | `hardcore_crawler_*` | Yes | Optional Hardcore submode with use-based skill growth, queued boon choices, flaw boons, milestone caches, configurable milestone trials, quest XP converted into Crawler Favor, and Fan Box rewards. |
-| Bank | `enable_bank` plus `bank_*` | Yes | Controls coin banking, direct deposit, vendor bank spend, and overflow behavior. |
-| Admin map | `admin_map_enabled` plus `admin_map_*` | Yes | `@derpconfig reload` restarts the map service with the new host, port, token, image, and calibration settings. |
-| Custom spells | JSON files plus `@customspells` commands | Reload command | No hard-off JSON toggle yet; spell packages are an import/export pipeline and custom spell data is intentionally loaded through `@customspells reload` or startup. |
-| Custom ClothingBase | JSON files plus `@cb*` commands | Reload command | No hard-off JSON toggle yet; custom clothing is a data merge pipeline keyed by ClothingBase id filenames and supports normal CustomClothingBase-style filename prefixes. |
-| Fixed utility items | Item WCIDs and live item behavior | Item-specific | Foci containers, Aetherial Quiver, random dye, weapon appearance tailoring kit, spell focus, Slayer Gems, Flutter Stones, Nomad tools/runes, and starter books are currently always available if their weenies exist. |
-| Boss mechanics | Database profiles plus `Data/DerpACE/BossMechanics/*.json` fallback | Live publish / cache invalidation | Admins can draft, validate, publish, roll back, and clone boss profiles with safe mechanics. The web builder lives at `/boss-mechanics` behind the admin map login and includes authenticated DAT sound-table previews that can insert sound events into rules. |
-| Monster pathfinding | `pathfinding`, `pathfinding_*` server properties | Yes | DotRecast navmeshes are generated on demand, cached to disk, import/exportable, and now used for smarter routed home movement and outdoor endpoint snapping. |
+### Challenge Modes
 
-#### Startup Performance And Maintenance
-DerpACE keeps the existing ACE startup behavior but avoids repeating expensive work when the source data has not changed:
+DerpACE currently supports:
 
-* World customization SQL uses a persistent metadata manifest. Unchanged scripts and unchanged known failures are skipped; changed files are imported normally and progress is reported during large scans.
-* DDD keeps a validated DAT file-size cache under `Data/DDD/file-size-cache.json`. `DDD.PrecacheCompressedDATFiles = true` still eagerly recompresses every eligible DAT record and can add substantial startup CPU, memory, and time. Keep it `false` for lazy on-demand compression unless immediate DDD response latency is more important than boot cost.
-* Player and housing startup use bounded split-query biota batches instead of issuing a full property-query set for every character, slumlord, and owned house. PlayerManager and HouseManager report phase timings; HouseManager also reports managed memory after returning.
-* Deleted-character recovery still runs every boot. The destructive full orphan-property sweep is scheduled separately with `MySql.StartupOrphanSweepIntervalHours`, default `168` (weekly). `0` restores every-boot sweeps and a negative value disables only the scheduled full sweep; per-biota orphan cleanup before new inserts always remains active.
-* Each shard database gets an independent marker at `Data/orphan-sweep-<database>.stamp`. A missing marker initializes the schedule without immediately repeating a sweep, and successful weekly sweeps refresh it.
-* Startup uses one compacting generation-2 garbage collection before opening the world rather than repeatedly forcing the same heap generations.
+- **Ironman**: self-found challenge mode with isolated economy rules and optional blind progression.
+- **Nomad Ironman**: weaponless/casterless Ironman variant using unarmed gauntlet and shoe damage, Nomad tools/runes, and optional Lifebound infinite-life play with no public scoreboard placement.
+- **Hardcore**: death-limited challenge mode with challenge gear provenance and economy isolation.
+- **Hardcore Crawler**: Hardcore submode where skills, stats, levels, boons, and rewards are driven primarily by use-based progression.
 
-#### Admin Commands
+Crawler highlights:
+
+- Skills become ready to train or specialize through use, then the player chooses with `/crawler train <skill>` or `/crawler spec <skill>`.
+- XP display is masked for Crawlers; normal quest XP converts into Crawler Favor and cache rewards.
+- Specialized rank gains drive Crawler levels.
+- Milestone caches, milestone trials, Fan Box rewards, queued boon choices, and flaw boons persist through logout/restart.
+- Crawler magic has built-in spell foci.
+- Spam-friendly skills have slower progression gates: Assess Creature, Assess Person, Arcane Lore, Recklessness, Loyalty, and Leadership take longer than normal use skills.
+- Summoning can be learned through pet device use; practice scales from pet/device difficulty once summons succeed.
+- Loyalty and Leadership slowly grow from allegiance XP pass-up sent and received.
+
+### Global Quests
+
+`/gquest` shows active half-hour, hourly, daily, and weekly global quests. Quest types include hunts, dungeon/mutator hunts, item races, chug races, Cardinal Trek, Dereth Express, Correct the Corruption, and high-tier luminance/currency variants.
+
+### Mail, Bank, and Currency
+
+Player mail supports text mail, MMD payment, item shipping, COD, claiming, declining, deletion, and item preview. Banking supports stackable currency and bankable item storage with optional direct deposit and vendor bank spend.
+
+### Teleport Requests
+
+When enabled, `/tp <player>` starts a player-to-player teleport request flow with accept, decline, and cancel commands plus configurable costs/timing.
+
+## Loot and Mutators
+
+DerpACE extends loot generation with custom weapon, shield, armor, clothing, jewelry, caster, pet device, and mob systems. Forced testing is available through `@lootgen`, `testlootgen`, and related admin tools.
+
+Major loot/mutator families include:
+
+| Family | Examples |
+|---|---|
+| Weapon and caster mutators | Thief, Quickening, Fencer, Pugilist, Ravager, Warden, Resolute, Polebreaker, Stalker, Breacher, Reaper, Archmagi, Hierophant, Shadow Clone, Bedlam, Skybreaker, Stormcaller, Orbitweaver. |
+| Shield mutators | Defender, Thorns, Bashing, Reflection, Spell Mirror. |
+| Armor and clothing mutators | Armor banes, Culinarian gloves, Alchemist gloves, Alchemical Instability, unarmed hand/footwear, dance boots. |
+| Jewelry | Vampiric jewelry with configurable drop and regen/on-hit behavior. |
+| Mob modifiers | Nocturnal, Exploding, Vampiric, Thief, Scout, Simulacrum, Healer, Tank, Reaper, Necromancer, Warder, and related future-spawn tuning. |
+
+Notable current behavior:
+
+- Quickening daggers stack attack animation speed up to 4x, cost matching stamina, then trigger a cooldown at max stack burst.
+- Bedlam/Confusion casters make affected monsters friendly to the player and hostile toward nearby mobs for the effect window.
+- Scavenger tools and Nomad items support the current Nomad/Crawler challenge ecosystem.
+
+## Loot Lab and Admin Web Tools
+
+The admin map service defaults to `http://127.0.0.1:9110/` and is configured through `DerpAce.json`. It includes authenticated admin-only tools such as:
+
+- `/loot-lab`: tune T1-T100 loot tier profiles, spell weights, and WCID weights.
+- `/boss-mechanics`: create, validate, publish, roll back, spawn, and despawn boss mechanics profiles.
+- `/spell-workshop`: inspect, create, clone, validate, save, and reload custom spell JSON packages.
+
+Do not expose the admin map publicly without firewall/VPN protection and a strong token.
+
+## Custom Content Pipelines
+
+| Pipeline | Path / commands |
+|---|---|
+| Custom spells | `Data/CustomSpells`, `@customspells reload`, `@customspells export`, `@customspells exportcopy`, `@customspells import`. |
+| Custom ClothingBase | `Data/CustomClothingBase`, `@cbexport`, `@cbclone`, `@cbreload`, `@cbclear`. |
+| Boss mechanics | Database profiles plus optional `Data/DerpACE/BossMechanics/<wcid>*.json` fallback templates. |
+| Admin map assets | `Data/AdminMap/icons` using eight-digit hex DID PNG filenames. |
+
+## Vendor Random Loot
+
+Random vendor loot can be enabled and tuned at runtime. Vendor tier detection uses PointsOfInterest anchors and DerpACE town progression. Admins can inspect or pin a vendor tier with `@vendortier`; vendor inventories reroll when the vendor reloads or restocks according to current settings.
+
+Dereth Express uses normal vendor interactions to learn eligible source towns for delivery-race global quests.
+
+## Pathfinding
+
+Monster pathfinding uses DotRecast navmeshes generated on demand and cached to disk. Admins can enable/disable pathfinding, rebuild the current landblock mesh, prebuild meshes, list cached meshes, and import/export mesh packs with `@pathfinding` commands.
+
+## Startup and Maintenance
+
+DerpACE keeps ACE startup behavior while reducing repeated expensive work:
+
+- World customization SQL tracks a persistent metadata manifest so unchanged scripts and unchanged known failures are skipped.
+- DDD can cache validated DAT file sizes and optionally precompress DAT records.
+- Player and housing startup use bounded split-query batches and report phase timing.
+- Deleted-character recovery remains active; the full orphan-property sweep is scheduled separately and tracked per shard database.
+- Startup uses one compacting generation-2 garbage collection before opening the world.
+
+## Common Commands
+
+Player commands:
+
 | Command | Purpose |
 |---|---|
-| `@lootconfig list` | Prints runtime loot, mutator, armor, mob, and vendor tuning values. |
-| `@lootconfig set <key> <value>` | Changes a runtime tuning value immediately. Examples: `@lootconfig set sentinel.cooldown 14`, `@lootconfig set crawler.trialinterval 10`. |
-| `@lootgen weapon <tier> [luck=0-1] [mutator=name]` | Creates a random loot weapon and can force a compatible weapon/caster mutator. Example: `@lootgen weapon 7 mutator=discus`. |
-| `@lootgen <wcid-or-classname> <tier> [luck=0-1] [mutator=name]` | Mutates a specific item if that weenie has `PropertyInt.TsysMutationData`; forced weapon, shield, and armor/clothing mutators can be applied to compatible WCIDs/classnames. Examples: `@lootgen shieldtower 7 luck=1 mutator=bashing`, `@lootgen glovescloth 7 mutator=alchemicalinstability`. |
-| `@customspells reload` | Reloads JSON custom spell definitions from `Data/CustomSpells`. |
-| `@customspells export <spellId>` | Exports a readable SQL package plus the DerpACE custom JSON block for an existing spell. |
-| `@customspells exportcopy <spellId>` | Clones the source spell to the next unused custom spell id, exports it, and loads it. |
-| `@customspells import <file.sql>` | Imports the DerpACE custom spell JSON block from an exported SQL file. |
-| `@cbexport <clothingBaseId> [label]` | Exports a ClothingBase entry to `Data/CustomClothingBase/<id>[_label].json`. |
-| `@cbreload` | Reloads custom ClothingBase JSON files and flushes the ClothingTable cache. |
-| `@cbclear` | Clears ClothingTable cache entries so the next read reloads from DAT/custom merge data. |
-| `@derpconfig reload` | Reloads `DerpAce.json` and restarts runtime services that need it, including the admin map web UI. |
-| `@ironmanmode on|off|toggle|status` | Enables or disables player Ironman opt-in server-wide. |
-| `@gquestreroll daily|weekly|all` | Ends and rerolls stale daily and/or weekly global quests while preserving freshness rules. |
-| `@boss create <profile> <sourceWcid> [newBossWcid]` | Creates a boss mechanics draft. With a new WCID, exports cloned boss SQL for import/reload before spawning. |
-| `@boss add-minions|add-taunt|add-say|add-effect|show|validate|publish|rollback ...` | Builds and safely publishes boss mechanics profiles. |
-| `@wiflag <player> [reroll|on|off]` | Shows or manages a player WI loot bias flag for testing. |
-| `@pathfinding status|on|off|load|rebuild|unload|list|prebuild [stop]|export <zip>|import <zip>` | Manages DotRecast navmesh generation and cached mesh packs. |
-| `testlootgen -info` | Console examples for bulk loot generation. |
-| `testlootgen <count> <tier> <melee|missile|caster|armor|jewelry|cloak|all>` | Console bulk loot test by table. |
+| `/ironman on`, `/ironman nomad`, `/ironman confirm`, `/ironman char`, `/ironman top` | Ironman and Nomad challenge flow. |
+| `/hardcore on`, `/hardcore confirm`, `/hardcoretop` | Hardcore challenge flow. |
+| `/crawler on`, `/crawler confirm`, `/crawler status`, `/crawler choices`, `/crawler pick`, `/crawler train`, `/crawler spec`, `/crawler trial` | Hardcore Crawler flow. |
+| `/gquest` | Global quest status and rewards. |
+| `/mail help` | Player mail commands. |
+| `/bank`, `/cash`, `/ddt` | Banking, currency, and direct deposit controls. |
+| `/tp`, `/tp accept`, `/tp decline`, `/tp cancel` | Player teleport request flow. |
+| `/pop`, `/population` | Online population. |
+| `/cast-style` | Casting animation style preference. |
 
-#### Loot Lab: Tiers, Spells, and WCIDs
-Loot Lab (`/loot-lab`, admin login required) exposes neutral profiles for ACE tiers T1-T8 and extensible profiles through T100. Base tiers can be tuned directly; higher tiers inherit an ACE selection/mutation table and layer explicit scaling without indexing beyond ACE's fixed eight-row data.
+Admin and operator commands are summarized in [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md). Use in-game help for inherited ACE command discovery and exact access levels.
 
-1. Use **All Loot Tier Profiles** to tune loot quality, drop count, value, workmanship, spellcraft, armor, weapon damage, mana, and wield level. Changes hot-apply and persist in `Data/DerpACE/LootTiers.json`.
-2. Use **Loot Spell Weights** to select a pool, choose a base four-level cantrip by name or ID, and set its relative weight. Pools normalize automatically and persist in `Data/DerpACE/LootSpellWeights.json`.
-3. Use **Loot WCID Weights** to add a loaded world WCID to a specific item pool, set its relative weight and T1-T100 range, and preview its normalized chance at any tier. Weapon rows show their current PropertyInt.TsysMutationData in hex and expose the mutation family used to generate appropriate weapon stats and spells; Auto / rolled family preserves ACE's preliminary random family.
-4. The built-in ACE table remains a weighted baseline in every WCID pool. Set a small custom weight for rare additions, increase it for common additions, or set the built-in weight to zero for a fully custom pool.
-5. WCID overlays hot-apply and persist in `Data/DerpACE/LootWcidWeights.json`. Resetting a pool removes only its overlay and immediately restores ACE selection.
+## Build and Test
 
-An unconfigured tier above T8 safely generates with T8 behavior. Admin generation and simulation require higher tier profiles to be enabled, which catches unfinished content before it is used.
-#### Player Commands
-| Command | Purpose |
-|---|---|
-| `/ironman on [-nh] [-blind]` | Begins standard Ironman commitment. Requires `/ironman confirm` within 30 seconds. Blind mode hides future skill milestones and auto-spends XP across trained skills, Health/Stamina/Mana, and supporting attributes. |
-| `/ironman nomad [-nh] [-blind] [-lifebound]` | Begins Nomad Ironman commitment: no weapons/casters, elemental gauntlet/shoe damage, natural unarmored AL. Add `-lifebound` for infinite lives and no public challenge scoreboard placement. Requires confirmation. Blind mode uses the same balanced auto-spend. |
-| `/ironman confirm` | Finalizes the pending Ironman or Nomad conversion. Permanent. |
-| `/ironman char` | Shows current Ironman progression. Blind Ironmen only see unlocked skills, not future milestones. |
-| `/ironman top`, `/ironmantop` | Shows Ironman leaderboard. |
-| `/ironman topkillers`, `/ironmantopkillers` | Shows creatures with the most Ironman kills. |
-| `/hardcore on`, `/hardcore confirm` | Begins and confirms Hardcore challenge mode. Hardcore uses its own gear provenance economy and death rules. |
-| `/hardcoretop` | Shows Hardcore leaderboard. |
-| `/crawler on`, `/crawler confirm` | Begins and confirms Hardcore Crawler mode: Hardcore rules, use-based skill/stat growth, built-in spell foci, queued boons, milestone trials, caches, and Fan Boxes. |
-| `/crawler status`, `/crawler choices`, `/crawler pick <number>` | Shows Crawler state, quest favor, pending train/spec readiness, pending boon choices, and chooses the oldest pending boon. |
-| `/crawler train <skill>`, `/crawler spec <skill>` | Accepts a use-unlocked skill training or specialization choice. Omit `<skill>` to list ready skills. |
-| `/crawler trial`, `/crawler trial claim` | Shows active milestone trials and claims completed Fan Box rewards. |
-| `/crawler convert` | Refreshes an existing Crawler character title/state after mode updates. |
-| `/topkillers`, `/hardcoretopkillers` | Shows creature kill/death leaderboards. |
-| `/gquest` | Shows half-hour, hourly, daily, and weekly global quests, rewards, personal progress, completion state, and time remaining. Includes hunts, item races, drunken mob hunts, chug races, Cardinal Trek, Dereth Express, and T8 luminance/currency variants. |
-| `/mail help` | Shows player mail commands for text mail, MMD payment, item shipping, COD, claiming, declining, and deleting. |
-| `/bank list`, `/bank store`, `/bank take` | Stores and withdraws bankable items. |
-| `/cash list`, `/cash give`, `/cash take` | Shows, deposits, and withdraws banked currency. |
-| `/ddt` | Toggles direct-deposit opt-out for the character. |
-| `/tp <player>`, `/tp accept`, `/tp decline`, `/tp cancel` | Player teleport request workflow when teleport is enabled. |
-| `/pop`, `/population` | Shows online population. |
-| `/cast-style npc|normal|toggle|status` | Controls compatible player casting animation style. |
+Typical local verification:
 
-Forced `@lootgen` mutator aliases: weapons/casters use `thief`, `quickening`, `fencer`, `pugilist`, `combo`, `flurry`, `rake`, `ravager`, `warden`, `lugianhammer`, `resolute`, `polebreaker`, `sentinel`, `stalker`, `breacher`, `dinnerware`, `discus`, `platter`, `dartflinger`, `reaper`, `archmagi`, `shadowclone`, `shadowshot`, `secondshadow`, `hierophant`, `skybreaker`, `stormcaller`, `orbitweaver`, `confusion`; shield WCIDs/classnames use `defender`, `thorns`, `bashing`, `reflection`, `spellmirror`; armor/clothing WCIDs/classnames use `culinarian`, `alchemist`, `alchemicalinstability`, `unarmed`, `healingdance`, `rejuvenatingdance`, `replenishingdance`.
+```text
+dotnet build Source\ACE.sln -c Release
+dotnet test Source\ACE.Server.Tests\ACE.Server.Tests.csproj -c Release --no-restore
+```
 
-`handcrossbow` loot conversion is intentionally retired for now. Legacy hand crossbows are converted away on login so players are not left with broken combat-mode or dual-wield state.
+The compiled server output is under:
 
-#### Weapon And Caster Mutators
-| Mutator | Eligible loot | Current effect |
-|---|---|---|
-| `thief` | Daggers | Requires specialized Sneak Attack. Sneak attacks can add bonus damage and open a hidden seam, reducing target defense briefly. Lowers monster targeting weight. |
-| `quickening` | Daggers | On hit, can speed the wielder's attack animation for a short duration. No start visual; expiration gives feedback. |
-| `fencer` | SwordMS: epee, rapier, schlager | Chance to recover part of armor-mitigated damage as bonus damage, plus a small riposte chance against incoming melee pressure. |
-| `parry sword` | Fencer sword in offhand | Acts as a parry sword: chance to reduce and reflect incoming damage with stamina-down feedback. |
-| `pugilist` | Unarmed weapons across their available physical/elemental variants: cestus, knuckles, handwraps, katars, nekodes, claws | Family-specific fist weapon perk. Cestus, knuckles, and handwraps roll Iron Flurry: a short-cooldown chance for a second punching/bludgeoning hit. Katars roll piercing Raking Hand. Claws roll slashing Raking Hand. Nekodes can roll slash or pierce Raking Hand. |
-| `ravager` | Axes and two-handed axes | Axes bleed over ticks. Hammer-named axe variants use a crushing guard/stamina hit instead. |
-| `warden` | Maces, jittes, two-handed maces | Chance to concuss the target, lowering effective defense for a short duration. |
-| `lugianhammer` | Heavy Weapons Lugian hammer WCIDs | Stonehand Throw: rare strike proc hurls a spectral hammer into another nearby foe within 10 yards for 75% of the original hit. |
-| `resolute` | Swords and two-handed swords | Critical hits can heal from damage dealt; killing blows give a small health/stamina burst. |
-| `polebreaker` | Staves | Hits at 70%+ power build same-target rhythm. At full rhythm, Break Guard plays a fast overhead slam, applies a defense penalty, resets rhythm, and starts a visible cooldown. |
-| `sentinel` | Spears and two-handed spears | Goldleaf Sentinel. Hits at configured power or higher build same-target poise. At full stacks, drains target stamina, returns part of it, gives short damage reduction, and starts a visible cooldown. |
-| `stalker` | Bows | First registered hit on a target can gain bonus damage. |
-| `breacher` | Crossbows | Always recovers a small part of armor-mitigated damage as bonus pierce damage. |
-| `dartflinger` | Dart flinger atlatl family only | Ricochet-style bounce behavior for dartflingers. Separate from standard atlatls. |
-| `reaper` | Standard atlatls only | Killing blows can restore a small percentage of max health. Does not roll on dartflingers. |
-| `dinnerware` | Throwable dinnerware | Banquet spin/bounce behavior. Projectiles visually bounce up to 5 targets with falling damage: 100%, 50%, 25%, 10%, 5%. |
-| `discus` | Discus WCID 8211 as missile loot | Most are plain discus. About 1 in 100 rolls become `Discus of the Warrior Princess's Call`, using dinnerware bounce behavior with discus combat log flavor at a 5-8% proc rate. Lootgen strips admin-added spell/proc/resistance/crit extras so damage stays in line with dinnerware. |
-| `platter` | Platter WCID 251 as super-rare missile loot | Most platter rolls stay plain. Rare rolls become `Platter of the Flying Buffet`: infinite-use thrown platter with a 3-5% proc to bounce through four extra targets at 60%, 35%, 20%, and 10% damage, then make a harmless visible return pass back to the player. Lootgen stamps missing `PropertyInt.TsysMutationData` as `0x11000005` and strips admin-added spell/proc/resistance/crit extras. |
-| `archmagi` | Casters | Chance on successful cast to echo an additional same-family spell. |
-| `hierophant` | Life casters / Martyr staff family | Heal support caster with heal boost, HoT chance, fellowship echo, and healer aggro tuning. |
-| `shadowclone` | Void casters only | Umbral Mirror caster can summon a temporary shadow clone combat ally on a 120 second visible cooldown. Clone uses shadow visuals and void/ring style spell support. |
-| `shadowshot` | Bows, crossbows, atlatls | Shadow Volley. Successful shots have a small chance to summon a missile-locked shadow clone for 18 seconds at reduced damage. Shares the visible shadow cooldown and fights alongside the normal pet. |
-| `secondshadow` | Melee weapons | Second Shadow. Successful strikes have a small chance to summon a melee-locked shadow clone for 16 seconds at reduced damage. Shares the visible shadow cooldown and fights alongside the normal pet. |
-| `confusion` | Void casters only | Bedlam caster replaces its spell with `Void Confusion` (`65005`): a weak nether bolt that, on cooldown, makes 1-4 nearby monsters blindly attack other nearby monsters for 1-10 seconds. |
-| `skybreaker` | War casters | Replaces the caster spell with custom spell `Meteor Squall` (`65002`): outdoor-only fire projectile; impact is normal, then fire rains over nearby monsters in short capped ticks. |
-| `stormcaller` | War casters | Replaces the caster spell with custom spell `Chain Lightning` (`65004`): first bolt is normal, then arcs through up to four additional nearby monsters at falling damage. |
-| `orbitweaver` | War casters | Replaces the caster spell with custom spell `Spiral Star` (`65003`): bludgeoning force pulses unwind outward from the caster toward nearby monsters. |
-| `blast` | Rare elemental weapon overlay | T5+ elemental weapons can rarely also roll a level-3 blast-on-strike proc. Nether is excluded from general caster/weapon blast rolls. Ring procs cast from the player toward the target location. |
+```text
+Source\ACE.Server\bin\Release\net10.0
+```
 
-#### Shield Mutators
-| Mutator | Current effect |
-|---|---|
-| Defender | Adds monster targeting weight to the shield bearer. |
-| Thorns | Reflects a small percentage of damage actually taken on shield-blocked hits. Kept low to avoid runaway reflect builds. |
-| Bashing | Requires specialized Shield. On block, can deal shield-AL-scaled bash damage, push the attacker back 10 feet, and interrupt a monster spell windup with fizzle feedback. |
-| Reflection | 8-12% chance on incoming missile damage to negate the hit and reflect that damage back at the attacker. Cooldown: 6 seconds. |
-| Spell Mirror | 5-10% chance on harmful spell projectile damage to reduce the hit by 50% and reflect the reduced damage back at the caster. Cooldown: 10 seconds. |
+## Contributing
 
-#### Armor And Clothing Mutators
-| Mutator | Eligible loot | Current effect |
-|---|---|---|
-| `culinarian` | Handwear, including cloth gloves | Requires specialized Cooking. Food/drink restores 10-20% more health, stamina, or mana, with a rare T8 25% roll. Every tenth meal grants Well Fed for 2 hours, increasing all primary attributes by 5; cooldown is visible and persists in real time. |
-| `alchemist` | Handwear, including cloth gloves | Requires specialized Alchemy. Potions restore 10-15% more health, stamina, or mana. Targeted alchemy phials have a 10-18% chance to splash their spell onto 1-3 nearby monster targets without consuming extra phials. |
-| `alchemicalinstability` | Rare T6+ alchemist glove sub-perk | Drinking potions has a 4-8% chance to backfire on the player with one random debuff or a Tumerok-palette hair/skin color change; harmful thrown phials trigger an extra random debuff at half chance on their primary target. Natural roll chance: 15% on T6-T7 alchemist gloves, 25% on T8. |
-| `healingdance` | Footwear | After 10 uninterrupted seconds of `/dance`, pulses health restoration to nearby fellowship members; restores only the dancer if no fellows are nearby. |
-| `rejuvenatingdance` | Footwear | Same dance behavior, but restores stamina. |
-| `replenishingdance` | Footwear | Same dance behavior, but restores mana. |
-| `unarmed` | Handwear and footwear | Adds unarmed surrogate damage, damage type, variance, offense/defense, speed, icon overlay, and combat UI effect for truly unarmed attacks. |
-| Elemental force | Armor | Armor pieces can roll +1 to +3 elemental force bonuses. The appraisal text is verbose, uses the matching element overlay style, and the bonuses stack with diminishing returns like Aetheria. |
+Keep changes focused and consistent with the existing ACE/DerpACE style. For DerpACE operator behavior, update [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) and this README when commands, mode rules, runtime config, or admin workflows change.
 
-#### Important `@lootconfig` Keys
-| Family | Keys |
-|---|---|
-| Thief | `thief.drop`, `thief.tier`, `thief.proc`, `thief.bonus`, `thief.aggro`, `thief.seampenalty`, `thief.seamduration` |
-| Goldleaf Sentinel | `sentinel.drop`, `sentinel.tier`, `sentinel.power`, `sentinel.stacks`, `sentinel.drain`, `sentinel.return`, `sentinel.cooldown`, `sentinel.poisedur`, `sentinel.poisedr`, `sentinel.aggro` |
-| Polebreaker | `polebreaker.drop`, `polebreaker.tier`, `polebreaker.stackmin`, `polebreaker.stackmax`, `polebreaker.maxstackmin`, `polebreaker.maxstackmax` |
-| Dinnerware / Discus / Platter | `dinnerware.drop`, `dinnerware.tier`, `dinnerware.spin`, `dinnerware.spintier`, `dinnerware.scale`, `dinnerware.radius` |
-| Dartflinger / Ricochet | `ricochet.drop`, `ricochet.tier`, `ricochet.procmin`, `ricochet.procmax`, `ricochet.scale`, `ricochet.radius` |
-| Quickening | `quickening.drop`, `quickening.tier`, `quickening.procmin`, `quickening.procmax`, `quickening.speedmin`, `quickening.speedmax`, `quickening.durmin`, `quickening.durmax` |
-| Elemental blast | `blast.mintier`, `blast.chancemin`, `blast.chancemax`, `blast.ratemin`, `blast.ratemax` |
-| Hardcore Crawler | `crawler.enabled`, `crawler.maxlevel`, `crawler.choices`, `crawler.profmins`, `crawler.profmult`, `crawler.ranklevel`, `crawler.autospeclvl`, `crawler.autospecranks`, `crawler.autotrain`, `crawler.maxtrained`, `crawler.specbudget`, `crawler.baseattr`, `crawler.basevital`, `crawler.cacheinterval`, `crawler.trialinterval` |
-`crawler.baseattr` defaults new Crawler primary attributes to 55, while `crawler.basevital` controls the raw vital baseline before normal formulas. `crawler.autotrain` controls uses before an untrained skill becomes ready to train, `crawler.autospecranks` defaults to 10 trained rank gains before a skill becomes ready to specialize, `crawler.ranklevel` defaults to 5 specialized rank gains per Crawler level, `crawler.maxtrained` defaults to 28 trained-or-better skills, and `crawler.specbudget` defaults to 80 adjusted specialized credits. Set either cap to 0 to disable that cap.
-
-#### Other Current Custom Systems
-| System | Current behavior |
-|---|---|
-| Custom Clothing Base | JSON filenames identify the custom `ClothingBase` id. Save under `Source/ACE.Server/Data/CustomClothingBase/<clothingBaseId>[_label].json` or the runtime `Data/CustomClothingBase` folder; use `@cbclone` for isolated custom IDs, `@cbexport` for intentional base overrides, then `@cbreload` or restart. Existing portal.dat base IDs require `AllowBaseOverride: true` unless the filename explicitly targets them in the supported CustomClothingBase-compatible format. |
-| Custom Spells | JSON files in `Data/CustomSpells` load at runtime. SQL export/import commands include a marked DerpACE JSON block for easy admin copy/edit/clone workflows. The admin-only `/spell-workshop` page provides a searchable catalog of every loaded custom spell, displays source/template ownership, allocates the next free ID in `65001`-`65535`, explains supported `SpellBase`/`DbSpell` fields, and separates safe creation from confirmed edit/overwrite mode. Server validation rejects duplicate IDs, occupied IDs, filename collisions, and attempts to replace a different multi-spell package before hot reload. |
-| Weapon Appearance Tailoring Kit | WCID `420420423` creates a non-destructive weapon appearance stamp from a donor weapon, then applies that appearance to a same-family destination weapon while preserving destination stats, spells, procs, damage type, and particles. |
-| Foci Containers | Foci WCIDs `15268`, `15269`, `15270`, `15271`, `43173` act as 15-slot side containers for scarabs, prismatic tapers, and mana stones, and contents persist across relog. |
-| Aetherial Quiver | WCID `2000600` acts as self-replenishing prismatic ammunition for bows, crossbows, and atlatls, tuned slightly below deadly prismatics. |
-| Slayer Gems | WCIDs `2000602` dormant and `2000603` charged. Dormant gems attune to an allowed creature type, gain kill XP while carried, play a skill-up effect at level 100, and become charged automatically. Charged gems can add creature slayer to a fully tinkered weapon/wand/missile weapon with a 50% destruction risk and a 2-2.75% slayer modifier. |
-| Spell Focus | WCID `2000604` is an offhand shield-slot mage focus. Major Atlan stones attune elements; Black Fire / Enhanced Black Fire / Armor Upgrade Kit upgrades improve magical AL while base AL remains 10. Focus-first setups allow compatible wands/staffs one-handed and can use NPC cast animation/charge. |
-| Nomad Runes And Tools | WCIDs `2000605`-`2000611` cover Nomad Rune, Rune Pouch, Rune Loom, Ritual Rune, Scavenger's Mortar, Scavenger's Hexdust, and The Road That Keeps You. Runes have limited uses, ritual runes merge school buffs, and Hexdust gives Nomads an Assess Creature-driven Imperil-style tool. Nomads receive The Road That Keeps You when they convert. |
-| Self-Found Trophies And Item Races | Existing creature trophy/create-list drops are stamped with hidden owner/source/time properties. Nomad dynamic quests can require trophies obtained by that exact Nomad, and global item-race quests can ask for the first self-found copy of a curated trophy item found during the active quest window. Traded or old copies do not count. |
-| Starter And Path Books | WCID `2000612` Derptide Intro is granted to every newly created character. WCID `2000613` The Road Less Traveled is granted to standard/blind Ironmen on conversion. Nomads receive WCID `2000611` The Road That Keeps You on conversion. Ironman conversion preserves beginner quest/help items such as Calling Stone, Pathwarden Token, Letters From Home, Gear Knight core tools, Mud Golem Essence, books, and quest-stamped objects. |
-| Battlemage Helm | Battlemage gear lets War Magic substitute for compatible Light Weapon wield and activation requirements while equipped, with green/red appraisal feedback on affected weapons. |
-| Challenge Economy And Magic Isolation | Normal players can wear any gear. Hardcore, Hardcore Crawler, and Ironman-family characters use hidden gear provenance tags and may only equip/trade/mail restricted gear from their matching challenge economy. Helpful magic aid, heals, transfers, friendly negative dispels, item buffs, NPC buffs, and Hierophant echo heals are isolated across challenge economies. Hardcore players may only fellowship with Hardcore-compatible players. |
-| Leaderboard Cache | Ironman, Hardcore, and killer leaderboards are served from periodic in-memory snapshots. Player leaderboard scans are batched over time to avoid a large synchronous database or player-list spike when someone types a command. |
-| Global Quest Scheduler | Half-hour/hour quests can repeat normally; daily and weekly lanes persist through restarts, prevent same-lane repeats, and cannot roll the same type at the same time. Item-race completions reroll the active race immediately. Correct the Corruption uses stackable Horribly Forged Derp Coins only while that event is active and pays partial credit on event end. |
-| Roadrunner | Outdoor road movement can apply a custom run-speed spell while the player remains on roads and refreshes the client skill panel when removed. |
-| Flutter Stone | Stackable blink utility item with cooldown overlay, 30 second cooldown, or 20 seconds for specialized Arcane Lore. Movement uses safety checks to avoid portal space, void, and interior wall/door blinks. |
-| Boss Mechanics | Boss profiles live in the shard database with draft/published/previous revisions and may also be loaded from `Data/DerpACE/BossMechanics/<wcid>*.json`. Built-in actions include speech/taunts, PlayScript effects, maintained low-health minions, hostile `mirror_minions` that clone nearby players or fellowship members through the Simulacrum system, `explode_corpse` death bursts with visuals, safe push/pull/blink/scatter/knock-up movement, temporary spells, phase changes, and `frost_rain` projectile waves. Mirror minions support shell WCID, count, source, radius, duration, optional health override, XP, corpse/drop, and translucency toggles; when health is omitted they use copied player biota max health, and copied player gear is filtered from corpse loot. Exploding corpses support damage type, radius, damage scale, delay, PlayScript effect, and optional corpse suppression. Movement visuals are action-specific (`ProjectileCollision`, `PortalStorm`, `Launch`, `TransUpWhite`, and `PortalExit`) rather than the healing effect. The admin-only `/boss-mechanics` operations page discovers database profiles and file-backed templates, can import/create/load/edit/validate/publish/rollback/enable profiles, spawn published bosses at an online player or full LOC, list active instances, and safely despawn them. Database profiles can also be removed after they are disabled and all active instances using that WCID are despawned; removal leaves the creature weenie intact. |
-| Pathfinding And Town Ambient AI | DotRecast indoor/outdoor navmeshes are generated on demand, cached, import/exportable, and used by monsters for route recovery/home return. Town ambient NPC behavior is intentionally quiet: NPCs move/gesture locally, and Ulgrim in Ayan favors the tavern/keg with a safe `MimeDrink` motion. |
-| Ayan Ulgrim Chess | A persistent ethereal/no-gravity chessboard in Ayan uses the client board model and supports Ulgrim as the automatic AI opponent. The temporary opponent approaches the board and uses a portal-enter departure when the match ends. White and black game pieces face inward along their ranks on this custom board; standard ACE boards retain their original orientation behavior. |
-| WI Loot Bias | Optional WI-style loot flavor can factor the player name into luck. `@wiflag` lets admins inspect, reroll, or toggle a player's flag for testing. |
-| Random Dye | WCID `420420420` applies a random palette to compatible armor, clothing, weapons, casters, and shields. |
-| Admin Map Web UI | Optional web service for admins and account-scoped player viewing. Configure in `DerpAce.json`: `admin_map_enabled`, `admin_map_host` default `127.0.0.1`, `admin_map_port` default `9110`, `admin_map_token`, `admin_map_show_admins`, `admin_map_refresh_seconds`, `admin_map_image_path` default `Data/AdminMap/dereth-map.png`, `admin_map_icon_path` default `Data/AdminMap/icons`, and the four `admin_map_bounds_*_pct` calibration edges. Visit `http://127.0.0.1:9110/`; JSON is at `/api/players`. Admin accounts get map controls and inventory editing; player accounts only see their own account/fellowship context. Inventory icon PNGs are loaded from `Data/AdminMap/icons` by eight-digit DID filename and layered in the browser. Clicking an indoor/dungeon player generates a cached top-down SVG floor plan for that dungeon landblock from server DAT geometry and overlays player dots; JSON is at `/api/dungeon?landblock=0x........`. Right-click map copying, collapsible panels, feeds, stats, `/boss-mechanics`, and `/spell-workshop` share the same admin map login/session. `@derpconfig reload` restarts the service with new settings. |
-
-### Historical Development Notes
-The notes below are retained as implementation history. Prefer the current sections above when checking live behavior, commands, aliases, or balance.
-
-### Recent Patch Notes (Vendor Random Loot by Town Tier)
-Auto-generates tier-appropriate random loot for every vendor based on the town they inhabit. All behavior is runtime-tunable and admin-overridable.
-
-#### Town Tier Resolution (`Source/ACE.Server/Factories/Tables/VendorTownTier.cs`)
-* Town anchor coordinates are now sourced **directly from the in-database `PointsOfInterest` table** (the same data that powers `/telepoi`), so every POI the server knows about is automatically a town anchor -- no hand-curated landblock table to drift out of sync.
-* `VendorTownTier.GetTierForVendor(Vendor)` resolves loot tier 1-7 from the vendor's town anchor. The default sweep is +/-3 landblocks, with wider overrides for spread-out cities.
-* `GetTownName(...)` returns the human-readable town name for diagnostics, Dereth Express, and `@vendortier`.
-* `GetAllTownAnchors()` is used by town landblock preloading.
-* `VendorTownTier.Rebuild()` refreshes anchors from the current PointsOfInterest cache.
-* POI matching is case/space/punctuation-insensitive. Common database aliases map to the same tier:
-  * **T1** - Holtburg, Shoushi, Yaraq, Sanamar, Redspire, Greenspire, Bluespire
-  * **T2** - Lytelthorpe, Rithwic, Yanshi, Nanto, Samsur, Al-Arqas, Xarabydun
-  * **T3** - Mayoi, Lin, Uziz, Khayyaban, Arwic, Dryreach, Hebian-To, Zaikhal, Cragstone, West Watch
-  * **T4** - Eastham, Sawato, Al-Jalima, Kara, Ahuranga, Linvak, Monkey Town
-  * **T5** - Baishi, Qalabar, Glenden Wood, Freehold, Plateau, Timaru, Siyun
-  * **T6** - Bandit Castle, Neydisa, Crater Village, Danby's, Stonehold, Fiun Outpost
-  * **T7** - Waijhou, Ayan, Candeth, Eastwatch, Teth, Merwart Village
-* POIs absent from the tier table remain valid anchors but resolve to tier 0 unless the vendor has an explicit override.
-
-#### Vendor auto-stocking (`Source/ACE.Server/WorldObjects/Vendor.cs`)
-* `LoadInventory()` calls `LoadRandomLootInventory()` after the static shop items load.
-* When `VendorRandomLootEnabled` is `true`, rolls `VendorRandomLootMinItems`-`VendorRandomLootMaxItems` items per loot category (weapons, armor, casters, jewelry, etc.) using the resolved town tier and adds them to `DefaultItemsForSale` alongside the vendor's regular wares.
-* Stock is re-rolled each time the vendor is loaded (server restart / zone reload) - not persisted.
-
-#### Admin override (`@vendortier`)
-| Usage | Effect |
-|---|---|
-| `@vendortier` | Shows the auto-resolved tier and town name for the last appraised vendor. |
-| `@vendortier <1-8>` | Pins `PropertyInt.VendorLootTier` on the vendor, overriding the town-location lookup. Persisted on the world object. |
-| `@vendortier clear` | Removes the explicit override so the vendor reverts to auto-resolution. |
-
-#### Runtime tuning (via `@lootconfig`)
-| Key | Default | Description |
-|---|---|---|
-| `vendor.loot` | `true` | Master on/off for vendor random loot generation. |
-| `vendor.lootmin` | `1` | Minimum items per category rolled per vendor load. |
-| `vendor.lootmax` | `5` | Maximum items per category rolled per vendor load. |
-
----
-
-### Recent Patch Notes (Expansion Hybrid - Nomad Unarmed, Procs, Bonus Stats, Pet QoL)
-Adapted from selected features in [ACE.BaseMod / Samples / Expansion / Features](https://github.com/aquafir/ACE.BaseMod/tree/master/Samples/Expansion/Features) and integrated directly into the DerpACE server (no runtime Harmony patches). Every feature is **toggleable at runtime** via `PropertyManager` and tuned for the Nomad/unarmed playstyle.
-
-#### New PropertyManager toggles & balance knob (`Source/ACE.Server/Managers/PropertyManager.cs`)
-| Property | Default | Purpose |
-| --- | --- | --- |
-| `unarmed_weapon_surrogate_enabled` | `true` | When the player is truly unarmed, the relevant glove or boot acts as the swing's weapon (stats, imbues, slayer/crit/resistance mods, and proc spell all flow through `DamageEvent`). |
-| `unarmed_combo_streaks_enabled` | `true` | Adds an additive hit/kill-streak damage layer on top of the existing combo system. |
-| `bonus_stats_enabled` | `true` | Enables in-memory bonus stat storage on `Creature` (attributes, vitals, skills). |
-| `proc_on_attack_enabled` | `true` | Every attacker-equipped proc-bearing item rolls on attack (not just the swing weapon + aetheria). |
-| `proc_on_hit_enabled` | `true` | Every defender-equipped proc-bearing item rolls when hit (not just the cloak). |
-| `pet_attack_selected_enabled` | `true` | The combat pet biases `FindNextTarget` to the owner's currently selected target. |
-| `pet_message_damage_enabled` | `true` | Pet hits are echoed to the owner: `[Pet] Fluffy hits Drudge for 47 Slash damage.` |
-| `pet_auto_recover_enabled` | `true` | After the pet's target dies/becomes invalid, the pet waits a short cooldown before re-acquiring (less twitchy mid-animation snap-to-next-mob). |
-| `unarmed_damage_scalar` (double) | `0.75` | Scales the **bonus portion** of combo + streak damage. Tuned slightly below finesse overall while keeping the combo loop fun. |
-
-#### Nomad-style true unarmed (`Source/ACE.Server/WorldObjects/Player_Unarmed.cs` - new)
-* `IsNomadUnarmed` - returns `true` only when the player has nothing in `MeleeWeapon | MissileWeapon | TwoHanded | Held` slots. **Shields are explicitly allowed** for blocking / tank mechanics.
-* `GetUnarmedSurrogateWeapon()` - returns the equipped boot when `PowerLevel >= KickThreshold` (kick zone) or the equipped glove otherwise. Mirrors the boundary `Player_Melee.GetSwingAnimation()` already uses, so the surrogate stays perfectly in sync with the resolved `AttackType`.
-
-#### Surrogate weapon integration into combat
-* `Source/ACE.Server/Entity/DamageEvent.cs` - when the swing has no real weapon and the attacker is a player, the surrogate is promoted to `Weapon` so its slayer mod, crit mods, imbues, resistance mods, and `IgnoreMagicArmor` / `IgnoreMagicResist` all flow through damage calc naturally.
-* `Source/ACE.Server/WorldObjects/Player_Melee.cs` - `Attack()` falls back to the surrogate when `GetEquippedMeleeWeapon()` returns `null`, so proc rolls (`TryProcEquippedItems`) use the surrogate's `ProcSpell` on the swing.
-
-#### Combo system hybrid (`Source/ACE.Server/Entity/UnarmedComboSystem.cs` + `Source/ACE.Server/WorldObjects/Player_Combat.cs`)
-* **Strict nomad gate**: `RecordAttack` is only called when `IsNomadUnarmed` is true. Equipping any disqualifying weapon instantly stops combo tracking.
-* **Damage scalar**: combo bonus damage (`damage * (multiplier - 1)`) is multiplied by `unarmed_damage_scalar` before being applied. Combos still fire all their flavor/effects; only the bonus damage is tuned.
-* **New streak layer** (adapted from `FakeCombo`):
-  * `OnUnarmedHit(bool killed)` - increments hit streak (cap 10) and, on kill, kill streak (cap 10).
-  * `OnUnarmedMiss()` - resets hit streak on evade / lifestone protection. Kill streak decays on its own 30-second timer.
-  * `GetStreakDamageBonus()` - returns `(hitStreak * 0.02) + (killStreak * 0.05)`, scaled by `unarmed_damage_scalar`. Applied additively on top of combo damage.
-
-#### In-memory bonus stats (`Source/ACE.Server/WorldObjects/Creature_BonusStats.cs` - new)
-* Lazily allocated per-creature dictionaries for `PropertyAttribute`, `PropertyAttribute2nd`, and `Skill` bonuses.
-* `GetBonus(...)`, `SetBonus(...)`, `IncBonus(...)`, `ClearBonusStats()`.
-* Wired into:
-  * `CreatureAttribute.StartingValue` - adds `GetBonus(Attribute)` (clamped at 0).
-  * `CreatureVital.StartingValue` - adds `GetBonus(Vital)` (clamped at 0).
-  * `CreatureSkill.InitLevel` - adds `GetBonus(Skill)` (clamped at 0).
-* **Logout-resetting by design**: storage is instance-local on the `Creature`, so bonuses naturally vanish on logout / despawn (matches the "fun temporary buffs" intent without persisting power creep).
-
-#### Proc expansion
-* `Source/ACE.Server/WorldObjects/WorldObject_Combat.cs` - `TryProcEquippedItems` now, when `proc_on_attack_enabled` is true, iterates every equipped item with a proc spell on the attacker and rolls each (excluding items already rolled: `this`, the swing weapon, and the attacker itself). When toggled off, retail behavior (weapon + aetheria) is preserved exactly.
-* `Source/ACE.Server/Entity/Cloak.cs` - new helper `Cloak.TryProcAllEquipped(defender, attacker, equippedCloak, damage_percent)`:
-  * Always runs the original cloak proc path (vanilla behavior preserved).
-  * When `proc_on_hit_enabled` is true, iterates every other equipped item on the defender and runs `RollProc` + `HandleProcSpell` for each one with a proc spell. Items without an `ItemLevel` fail `RollProc` naturally, so generic jewelry/armor is a safe no-op.
-* All four `Cloak.TryProcSpell` call sites have been routed through the new helper: `Player_Combat.cs`, `SpellProjectile.cs`, and two paths in `WorldObject_Magic.cs` (boost + drain).
-
-#### Pet quality of life (`Source/ACE.Server/WorldObjects/CombatPet.cs` + `Source/ACE.Server/WorldObjects/Monster_Melee.cs`)
-* **1-pet limit**: already enforced by retail `CurrentActivePet` logic - no additional change needed; passive/combat pet stowing rules continue to work.
-* **PetAttackSelected**: `FindNextTarget` checks the owner's `HealthQueryTarget`; if that GUID is in the nearby-attackable set, the pet targets it instead of the nearest mob. Falls back to nearest when no valid selection exists.
-* **PetMessageDamage**: when the attacker is a `CombatPet` with a `Player` owner, the owner receives a `CombatSelf` chat line each time the pet deals damage, including target name, damage amount, and damage type.
-* **PetAutoRecover (less twitchy)**: `HandleFindTarget` defers re-acquisition by 0.75 s after the current target dies / becomes invalid. The first tick noticing the loss arms the cooldown and clears `AttackTarget`; subsequent ticks wait out the timer before calling `FindNextTarget()`. Prevents the pet from instantly whipping to the next mob mid-animation.
-
-### Recent Patch Notes (May 17, 2026 - ClothingMod wiring & content pipeline)
-* **CustomClothingManager - startup wiring hardened** (`Source/ACE.Server/Managers/CustomClothingManager.cs`):
-  * `Initialize()` now registers `DatDatabase.ClothingTableMergeHook = MergeCustom` **before** calling `LoadAll()`, so any `ReadFromDat<ClothingTable>` racing with init still goes through the merge.
-  * After loading, `Initialize()` calls `ClearCache()` once to flush any `ClothingTable` entries cached during DAT preload, guaranteeing the override is applied on the first post-init read.
-  * `LoadAll()` now logs:
-    * a warning if `Data/CustomClothingBase/` is missing,
-    * an info line if zero JSON files are present,
-    * a debug line per loaded `ClothingTable` id,
-    * a final `Loaded N/M custom clothing table(s) from <path>` summary.
-* **CustomClothingBase content now copies to the build output** (`Source/ACE.Server/ACE.Server.csproj`):
-  * Added `<None Include="Data\CustomClothingBase\**\*.json" CopyToOutputDirectory="PreserveNewest" />`.
-  * JSON overrides dropped into `Source/ACE.Server/Data/CustomClothingBase/` are now copied to `bin/x64/<cfg>/net10.0/Data/CustomClothingBase/` automatically on build, so they're visible to the running server.
-* **Developer commands for the clothing override pipeline** (`Source/ACE.Server/Command/Handlers/DerpACEClothingBaseCommands.cs`):
-  * `@cbexport <id> [label]` - exports a `ClothingBase` entry from `portal.dat` to `Data/CustomClothingBase/<id>[_label].json`. ID accepts hex (`0x10001234`) or decimal. Example: `@cbexport 0x10001234 male plate` -> `10001234_male_plate.json`.
-  * `@cbreload` - reloads every JSON file from `Data/CustomClothingBase/` and flushes the `ClothingTable` cache so edits take effect without a server restart.
-  * `@cbclear` - clears only the `ClothingTable` entries from the portal.dat file cache, forcing a fresh re-read on next use.
-  * All three commands require `AccessLevel.Developer`.
-* **Authoring workflow**:
-  1. Export an existing entry with `@cbexport 0x10001234`, or hand-author a JSON file (must contain `Id`, plus the `ClothingBaseEffects` and/or `ClothingSubPalEffects` you want to override).
-  2. Save it under `Source/ACE.Server/Data/CustomClothingBase/<id>.json`.
-  3. Rebuild (or copy to the running server's `bin/.../Data/CustomClothingBase/`).
-  4. Run `@cbreload` in-game, or restart the server. Look for `CustomClothingManager: Loaded N/M custom clothing table(s)` in the server log.
-* **Merge semantics** (`MergeCustom`): the override upserts into the live `ClothingTable` - entries present in the JSON replace the portal.dat values, entries omitted from the JSON are left alone. Brand-new `Id`s that don't exist in `portal.dat` are returned as fresh `ClothingTable` instances so completely custom items can be added.
-
-### Recent Patch Notes (May 17, 2026)
-* **Standard Ironman - Mana Conversion auto-train for magic primaries** (`IronmanFactory.RollSkills`):
-  * When the rolled primary weapon skill is **Life Magic, Void Magic, or War Magic**, `ManaConversion` is now auto-trained **immediately after the weapon train/spec step**, before the rest of the primary pool is shuffled and rolled.
-  * Its credit cost is pulled from `SkillBase.TrainedCost` and deducted via `Player.TrainSkill(...)` so the remaining shuffled rolls work off the **reduced** credit pool.
-  * Mana Conversion is then removed from the shuffled primary pool to prevent a double spend. If credits are insufficient (very rare), the player is notified and the rest of the plan continues without MC.
-* **Ironman Nomad - element progression** (`IronmanFactory.GrantNextNomadElement`):
-  * Starter gauntlets and shoes now **share a single element** instead of rolling independently, so element collection is clean.
-  * Hooked into `CheckIronmanLevelGrants`: on every **even level from 2 through 14**, a nomad is granted a matched gauntlet/shoe pair of a random element they don't yet own.
-  * By **level 14** a nomad has collected **all 7 non-void elements** (Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric). The grant no-ops once the full set is collected.
-  * Each new pair sends a `[Nomad] You have unlocked a new element: <Name>!` broadcast message.
-* **Ironman Nomad - gauntlet/shoe inscription visibility fix**:
-  * `PropertyBool.Inscribable` is now set to **`true`** on nomad gauntlets and shoes. With `false` the client was hiding the inscription text and the player couldn't see the stamped damage stats and proc info.
-* **Ironman Nomad - custom unarmed procs (Cleave Flurry / Healing Strike)**:
-  * Every nomad gauntlet/shoe now rolls one of two custom procs at creation time, stamped onto the item as `PropertyInt.NomadProcType` + `PropertyFloat.NomadProcChance` + `PropertyFloat.NomadProcMagnitude`. The proc description is appended to the M. Stranger inscription so the player can read exactly what the item does.
-  * **Cleave Flurry** (type 1): ~8-15% chance on Punch/Kick hit to unleash **2-4 fast extra strikes** at 30-45% damage each, using the item's stamped damage type. Uses a `_nomadProcInProgress` recursion guard so the extra strikes don't recursively proc themselves. Splatter VFX per hit and a `Cleave Flurry! N extra strikes for X damage` combat-self message.
-  * **Healing Strike** (type 2): ~8-15% chance on Punch/Kick hit to heal the wielder for **100-110% of damage dealt** (1-10% above the damage you hit for). Uses `UpdateVitalDelta(Health, ...)` (caps at MaxHealth), records via `DamageHistory.OnHeal`, plays `HealthUpRed` VFX, and sends a `Healing Strike! +X health from <target>` combat-self message.
-  * Proc evaluation runs in `Player_Combat.DamageTarget`, gated on `AttackType == Punch || Kick` and pulled from `HandArmor` for Punch / `FootArmor` for Kick - only the nomad's stamped gauntlets/shoes trigger.
-  * New persistent properties added: `PropertyInt.NomadProcType = 9030`, `PropertyFloat.NomadProcChance = 9026`, `PropertyFloat.NomadProcMagnitude = 9027`.
-
-### Recent Patch Notes (May 2026 - Ironman Nomad)
-* **Ironman Nomad submode** (`/ironman nomad`):
-  * Players cannot wield weapons or casters of any kind. Wield attempts are rejected with *"Nomads cannot wield weapons or casters."*
-  * Attributes roll **randomly between 10 and 100** per stat (instead of the standard 100/46 split).
-  * Light Weapons is forced as the rolled primary skill (trained + specialized) and Arcane Lore is specialized.
-  * All damage comes from elemental gauntlets and shoes granted on commit.
-    * Starter pair are leather gauntlets (`WCID 56`) and leather boots (`WCID 115`) rerolled with `UnarmedBaseDamage`, `UnarmedDamageType`, and `UnarmedDamageVariance` so the existing unarmed-armor pipeline picks them up.
-    * Each piece independently rolls one damage type from **Slash, Pierce, Bludgeon, Fire, Cold, Acid, Electric**.
-    * Renamed for clarity (e.g. *Flame Nomad Gauntlets*, *Lightning Nomad Shoes*).
-    * **Inscribed by M. Stranger** - the inscription lists the base damage, variance, and element so the player can read exactly what the item does. Marked non-`Inscribable` so the text cannot be overwritten.
-  * Without armor (clothes only), nomads have a **natural body AL of 450** averaged across all damage types.
-  * When a nomad wears `ItemType.Armor`, the armor layer's effective AL contribution is **halved** because nomads don't know how to wear it.
-  * Persisted via `PropertyBool.IsIronmanNomad = 9039`; mode title is set to `NOMAD`. Lifebound Nomads also set `PropertyBool.IsIronmanNomadLifebound = 9088`, use the `NOMAD LB` title, have infinite lives, and are excluded from public challenge scoreboards.
-  * `/ironman nomad` opens a 30-second confirmation window (same UX as `/ironman on`); `/ironman nomad -lifebound` opts into the infinite-life, no-scoreboard variant; `/ironman confirm` finalizes either standard or nomad based on which was requested.
-* **Ironman leaderboard now shows Lives and Status** (`/ironmantop` / `/ironman top`):
-  * New `Lives` column reads `PropertyInt.HardcoreLives` per player.
-  * New `Status` column reads `DEAD` (lives <= 0), `NOMAD`, or `ALIVE`.
-* **Biota integrity hardening** - addresses recurring duplicate-key errors (`biota_properties_int.PRIMARY`) caused by orphaned child rows + recycled dynamic GUIDs:
-  * `ShardDatabase.SaveBiota` and `ShardDatabaseWithCaching.SaveBiota` now purge stale `biota_properties_*` rows before inserting a brand-new biota.
-  * `ShardDatabaseOfflineTools.RunStartupCleanup()` runs after `DatabaseManager.Start()` and before `GuidManager.Initialize()`. It recovers `IsDeleted` characters every boot; the full `biota_properties_*` orphan sweep defaults to a database-specific weekly schedule controlled by `MySql.StartupOrphanSweepIntervalHours`.
-  * Ironman/Hardcore final-death cleanup now waits for `PlayerManager.GetOnlinePlayer(charId) == null` before calling `PurgeCharacter(...)`, eliminating the logout-finalization race that NRE'd in `SwitchPlayerFromOnlineToOffline`.
-
-### Recent Patch Notes (May 2026)
-* Added server-wide activation broadcasts when players commit to modes:
-  * Ironman: `[IRONMAN] <name> has taken the Ironman path. There is no turning back!`
-  * Hardcore: `[HARDCORE] <name> has entered Hardcore mode. One life remains.`
-* Added server-wide death/fall broadcasts:
-  * Ironman deaths announce killer + victim level with mild ridicule flavor text.
-  * Hardcore deaths announce killer + victim level.
-* Expanded Ironman command UX:
-  * `/ironman` now shows an Ironman help menu for committed players.
-  * `/ironman char` shows progression details.
-  * `/ironman topkillers` is available through `/ironman` subcommand routing.
-* Ironman progression display improvements:
-  * Milestones now show unlock level.
-  * Specialized skills are marked with `[Spec]`.
-* Added Global Kill Quest system:
-  * Rotates a server-wide kill target every 30 minutes.
-  * Players can track progress with `/gquest`.
-  * Completing the objective grants a 4x XP bonus based on kill XP earned toward the quest.
-  * Quest expiry is enforced; late kills do not count after timer expiry.
-  * End-of-quest wrap-up broadcast announces completion count before the next quest starts.
-* Foci now allow mana stones in addition to scarabs and prismatic tapers.
-* Added admin Ironman toggle command: `@ironmanmode on|off|toggle|status`.
-* Added admin special-mob spawn command: `/cimob <vamp|thief|sim> <wcid or classname>`.
-
-### Random Dye (Enigmatic Dye)
-* Added `RandomDye` world object class (`WCID 420420420`) that applies a random palette to the target item
-* Works on **armor, clothing, weapons (melee/missile), casters, and shields** - any item with a `ClothingBase` property
-* Plays the crafting (`ClapHands`) animation before applying, matching the behavior of normal dyes
-* Refreshes the item's appearance for all nearby players after dyeing (`GameMessageUpdateObject` / `GameMessageObjDescEvent` for equipped items)
-* Consumes exactly 1 from the stack on use
-* Switches the player out of combat mode if needed before animating
-* Database `TargetType` should be set to `33031` (MeleeWeapon | Armor | Clothing | MissileWeapon | Caster)
-
-### Foci Improvements
-* Foci (Enchantment 15268, Artifice 15269, Verdancy 15270, Strife 15271, Shadow 43173) now default to **15 item slots** instead of 0
-* Foci only accept **scarabs** (all tiers: lead, iron, copper, silver, gold, pyreal), **prismatic tapers** (regular WCID 20631 and PEA variant WCID 20963), and **mana stones**
-* Attempting to place any other item into a foci displays the message: *"Only scarabs, prismatic tapers, and mana stones can be placed in a focus."*
-
-### Loot Generation Additions
-* Added **Lyceum Hood** (`ace44977_lyceumhood`, WCID 44977) to the leather armor loot table (`ArmorWcids.LeatherWcids`) at 2% chance
-* Added **Fletcher's Cap** (`hatfletcher`, WCID 9624) to the leather armor loot table (`ArmorWcids.LeatherWcids`) at 2% chance
-
-### Life Magic Casters
-* Added **Martyr's Staff** (`ace420420421_martyrstaff`, WCID 420420421) - a custom life-magic caster weapon
-* Appears in the **Caster loot table at T7 (1.5%) and T8 (3.5%)**
-* Any caster with WCID in the `LifeCasterWcids` set automatically receives `W_DamageType = DamageType.Health` during loot mutation, enabling life-magic spell bonuses on the tooltip
-* `UiEffects` should be set to `5` (Magical | BoostHealth) in the weenie SQL, not `4096` (Nether)
-
-### Dart Flinger Loot Table
-* Added 7 elemental **Dart Flingers** (WCIDs 5238245-5238251: Acid, Blunt, Electric, Fire, Frost, Piercing, Slashing) to the **Atlatl loot table**
-* Appear at **T5 (1% each)** and **T6-T8 (1.5% each)** alongside slingstones and standard atlatls
-* All weights rebalanced to sum exactly to 1.0
-
-### Defender's Shield
-* **5% of all shield loot drops** receive the "Defender's" prefix (e.g. *Defender's Kite Shield*)
-* The item stores `PropertyBool.IsDefendersShield = true` on the world object
-* **Icon overlay:** `0x06002878`
-* Long description reads: *"This shield resonates with a protective challenge - enemies are more likely to target its bearer."*
-* Monsters using **Random targeting** (the most common tactic) give the Defender's shield wearer **+0.5 weight** in `SelectWeightedDistance`, making them roughly 50% more likely to be targeted than an equal-distance player
-* Effect is live - unequipping the shield removes the taunt immediately
-
-### Admin Flight Mode (`@fly`)
-* `@fly` / `@fly on` / `@fly off` - toggles gravity off on the player and broadcasts the physics state change to nearby clients
-* Sets `IsAdminFlying = true` - a transient in-memory flag (resets on logout/restart)
-* **Fall damage is suppressed** while `IsAdminFlying` is true (checked in `TakeDamage_Falling`)
-* Requires **Developer** access level
-
-### Admin Movement Commands
-All commands require **Developer** access level and accept an optional distance argument (default: 10 units).
-
-| Command | Effect |
-|---|---|
-| `@up [n]` | Teleport upward by n units |
-| `@down [n]` | Teleport downward by n units |
-| `@forward [n]` | Teleport in the direction you are facing |
-| `@backward [n]` | Teleport opposite to facing direction |
-| `@left [n]` | Strafe 90 degrees left of facing |
-| `@right [n]` | Strafe 90 degrees right of facing |
-
-Direction is calculated from the character's current heading (`RotationW`/`RotationZ`) at the time the command is issued. Each command triggers a brief server-side teleport.
-
-### Archmagi Caster
-* **5% of T7-T8 caster loot drops** receive the "Archmagi" suffix (e.g. *Orb of the Archmagi*)
-* The item stores `PropertyBool.IsArchmagiCaster = true` on the world object
-* **Icon overlay:** `0x06002860`
-* On each successful spell cast, `TryProcArchmagi` fires with a **6% proc chance**:
-  * Rolls a random level of the same spell school/family and casts it for free on the same target
-  * Life casters proc a random `HealSelf` level; other casters proc a random level of the weapon's `SpellDID` family
-* Proc is handled in `Player_Magic.cs` after `HandleCastSpell` succeeds
-
-### Thief's Daggers
-* **5% of T6+ dagger loot drops** (Dagger and DaggerMultiStrike types) are converted to a Thief's Dagger (e.g. *Obsidian Kris of the Thief*)
-* When the loot-modifier "interchangeable" rule is active, the same affix can also roll on Sword / SwordMultiStrike finesse blades (epee/rapier/schlager families), keeping generation in lockstep with the combat proc gate.
-* The item stores `PropertyBool.IsThievesDagger = true` on the world object
-* **Wield requirement:** Specialized Sneak Attack skill
-* **Icon underlay:** `0x060065FC`
-* **Long description:** notes the stealth, aggro reduction, and sneak attack proc
-
-#### Stealth Effect (equip/unequip)
-* Equipping a Thief's Dagger plays the `SkillDownBlack` particle effect, briefly deletes the player for nearby clients, then recreates them at **50% translucency** (`ObjScale` / `Translucency = 0.5f`)
-* Unequipping reverses the process - `Translucency` is cleared and the player is recreated at full opacity with an `UnHide` particle
-* **Dual-wield aware:** translucency is only removed when the *last* Thief's Dagger is unequipped
-* Player receives a private `Magic` chat message: *"You slip into the shadows."* / *"You step out of the shadows."*
-* `Translucency` is set synchronously before the action chain so the tracking system always serializes the correct value
-
-#### Mob Aggro Reduction
-* In `Monster_Awareness.SelectWeightedDistance`, Thief's Dagger bearers receive a **-0.4 weight penalty** in monster target selection
-* Applied both to the global `invRatioSum` and per-target weight, making Thief's Dagger wielders roughly 40% less likely to be the primary attack target
-
-#### Sneak Attack Bonus (proc)
-* On each successful sneak attack hit with a Thief-tagged weapon equipped (`IsThievesDagger == true` on a `WeaponType.Dagger` **or** `WeaponType.Sword`), there is a **6% proc chance** to deal an additional **+10% damage**
-* Gated in `Player_Combat.cs` to ensure the proc only fires when `damageEvent.SneakAttackMod > 1.0f` (i.e. an actual sneak attack landed)
-* When the proc fires, the player sees: `+N [Thief's Dagger]` in the combat chat channel (after the standard hit notification)
-* Long description reads: *"Sneak attacks have a 10% chance to proc an additional 10% bonus damage."*
-
-### Sentinel's Spears
-* **5% of T6+ spear loot drops** (Spear and TwoHandedSpear types) are converted to a Sentinel's Spear (e.g. *Obsidian Spear of the Sentinel*)
-* The item stores `PropertyBool.IsSentinelSpear = true` on the world object
-* **Icon overlay:** `0x06002699`
-* **Long description:** notes the stamina drain and return proc
-
-#### Stamina Drain (proc)
-* On each hit with a Sentinel's Spear, there is a **6% proc chance** to drain **10% of the target's current stamina**
-* **125% of the drained stamina is returned to the wielder**
-* Plays `HealthDownYellow` on the target and `HealthUpYellow` on the player when the proc fires
-* When the proc fires, the player sees: `-N stamina [TargetName] +N [Sentinel's Spear]` in the combat chat channel
-
-### Fencer's Blades
-* **5% of T6+ epee / rapier / schlager loot drops** (`TreasureWeaponType.SwordMS`) are converted to a Fencer's Blade (e.g. *Obsidian Rapier of the Fencer*)
-* The item stores `PropertyBool.IsFencerBlade = true` on the world object
-* **Icon overlay:** `0x06002699`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.FencerArmorPiercePct` - 1-5% of the armor mitigation refunded as bonus damage when the pierce proc fires
-  * `PropertyFloat.FencerArmorPierceProc` - 1-4% per-hit chance to fire pierce
-  * `PropertyFloat.FencerDeflectChance` - 1-2% per-incoming-hit chance to deflect 10% of the damage back at the attacker
-
-#### Armor Pierce (proc)
-* On each hit, rolls `FencerArmorPierceProc`; on success adds `max(0, DamageMitigated) x FencerArmorPiercePct` as bonus damage
-* Combat message: `+N pierce [Fencer's Blade]`
-
-#### Deflect (proc)
-* In `TakeDamage`, when struck by a Creature attacker while wielding a Fencer's Blade, rolls `FencerDeflectChance`
-* On success, attacker takes `round(damageTaken x 0.10)` as `DamageType.Pierce`
-* Player sees `[Fencer's Blade] Deflected! -N [AttackerName]` (PvE only)
-
-### Ravager's Axes
-* **5% of T6+ axe loot drops** (`TreasureWeaponType.Axe` and `TreasureWeaponType.TwoHandedAxe`) are converted to a Ravager's Axe (e.g. *Obsidian Axe of the Ravager*)
-* The item stores `PropertyBool.IsRavagersAxe = true` on the world object
-* **Icon overlay:** `0x06002878`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.RavagerBleedProc` - 2-5% per-hit chance to apply a bleed
-  * `PropertyFloat.RavagerBleedPct` - fraction of the triggering hit (default 30-60%) dealt as total bleed; **two-handed axes get a `RavagerTwoHandMult` multiplier (default 1.5x) baked in at loot time**
-
-#### Bleed (proc, DoT)
-* When the proc fires, total bleed = `hit damage x RavagerBleedPct`, split evenly across `RavagerBleedTicks` ticks (default 3) at `RavagerBleedInterval` second intervals (default 2.0s)
-* Implemented as an `ActionChain` on the wielder; each tick: re-checks `target.IsAlive`, deals `perTick` damage of the same type as the triggering hit, plays `SplatterMidLeftBack` on the target, and emits `-N bleed [TargetName] [Ravager's Axe]` in the combat chat channel
-* On proc, an immediate announce: `[TargetName] is bleeding (+N) [Ravager's Axe]` (N = total bleed across all ticks)
-* All values runtime-tunable via `@lootconfig` (`ravager.drop`, `ravager.tier`, `ravager.procmin`, `ravager.procmax`, `ravager.bleedmin`, `ravager.bleedmax`, `ravager.twohandmult`, `ravager.ticks`, `ravager.interval`)
-
-### Warden's Mauls
-* **5% of T6+ mace loot drops** (`TreasureWeaponType.Mace`, `MaceJitte`, and `TwoHandedMace`) are converted to a Warden's Maul (e.g. *Ebony Mace of the Warden*)
-* The item stores `PropertyBool.IsWardensMaul = true` on the world object
-* **Icon overlay:** `0x06002878`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.WardenConcussProc` - 4-8% per-hit chance to apply the concussion debuff
-  * `PropertyFloat.WardenConcussPenalty` - flat defense-skill penalty (default 10-30; **two-handed maces get a `WardenTwoHandMult` multiplier (default 1.5x) baked in at loot time**)
-  * `PropertyFloat.WardenConcussDuration` - debuff duration in seconds (default 5-10)
-
-#### Concussion (proc, debuff)
-* On proc, sets transient in-memory fields on the target `Creature`: `ConcussedUntil = now + duration` and `ConcussedPenalty = penalty`
-* If the target is already concussed with an equal-or-stronger penalty, only the duration is refreshed (does not stack down)
-* Penalty is subtracted from `effectiveDefense` in **both** `Creature.GetEffectiveDefenseSkill` (mob-side defense rolls) and `Player.GetTargetEffectiveDefenseSkill` (player-attacks-mob path), so attackers see a higher hit rate
-* No spell/enchantment is created - the debuff is purely server-side state and does not appear on the target's enchantment bar
-* Plays `HealthDownYellow` on the target when the proc fires
-* Combat message: `crushes [TargetName]'s guard - -N defense skill for D sec [Warden's Maul]`
-* All values runtime-tunable via `@lootconfig` (`warden.drop`, `warden.tier`, `warden.procmin`, `warden.procmax`, `warden.penaltymin`, `warden.penaltymax`, `warden.durationmin`, `warden.durationmax`, `warden.twohandmult`)
-
-### Resolute Blades
-* **5% of T6+ sword loot drops** (`TreasureWeaponType.Sword` and `TreasureWeaponType.TwoHandedSword`; fencer `SwordMS` is excluded) are converted to a Resolute Blade (e.g. *Obsidian Sword of Resolve*)
-* The item stores `PropertyBool.IsResoluteBlade = true` on the world object
-* **Icon overlay:** `0x06002860`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.ResoluteHealProc` - 25-50% per-critical-hit chance to heal the wielder
-  * `PropertyFloat.ResoluteHealPct` - 2-5% of the crit damage restored as health
-  * `PropertyFloat.ResoluteKillBurstPct` - fraction of MaxHealth/MaxStamina restored on a killing blow (default 10%; **two-handed swords get a `ResoluteTwoHandMult` multiplier (default 1.5x) baked in at loot time**)
-
-#### Heal-on-Critical (proc)
-* On every **critical hit**, rolls `ResoluteHealProc`; on success heals `damage x ResoluteHealPct` to the wielder via `UpdateVitalDelta(Health, ...)`
-* Only fires when the wielder is below max health (no overheal waste)
-* Combat message: `+N health [Resolute Blade]`
-
-#### Bloodthirst (killing blow)
-* When the killing blow is delivered to a non-player target, restores `MaxHealth x ResoluteKillBurstPct` health and `MaxStamina x ResoluteKillBurstPct` stamina to the wielder
-* Plays `HealthUpRed` particle effect on the wielder
-* Combat message: `Bloodthirst! +N health, +N stamina [Resolute Blade]`
-* Does **not** fire on PvP kills (avoids stacking exploits in PK fights)
-* All values runtime-tunable via `@lootconfig` (`resolute.drop`, `resolute.tier`, `resolute.procmin`, `resolute.procmax`, `resolute.healmin`, `resolute.healmax`, `resolute.killburst`, `resolute.twohandmult`)
-
-### Polebreaker Staves
-* **5% of T6+ staff loot drops** (`TreasureWeaponType.Staff`) are converted to a Polebreaker (e.g. *Obsidian Staff of the Polebreaker*)
-* The item stores `PropertyBool.IsPolebreakerStaff = true` on the world object
-* **Icon overlay:** `0x06002699`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.PolebreakerStackBonus` - bonus damage fraction added per stack (default 1-3% per stack)
-  * `PropertyFloat.PolebreakerMaxStacks` - maximum stack count (default 4-6)
-
-#### Consecutive Hit Escalation (rhythm)
-* Tracks a hit streak against the same target via transient `LastPolebreakerTargetGuid` + `PolebreakerStackCount` fields on the player (no enchantment, resets on logout/restart)
-* Each consecutive hit on the same target adds one stack (capped at the rolled `PolebreakerMaxStacks`); the *next* hit's bonus damage is `damage x StackBonus x (currentStack - 1)` - so the 1st hit has no bonus, the 2nd has +StackBonus, etc.
-* Stacks reset to 1 when you switch to a different target, and reset to 0 if you score a hit with any non-Polebreaker weapon
-* Combat message (only when stacks >= 2 and bonus damage applied): `[Polebreaker] +N (xS)` where N = bonus damage and S = current stack count
-* All values runtime-tunable via `@lootconfig` (`polebreaker.drop`, `polebreaker.tier`, `polebreaker.stackmin`, `polebreaker.stackmax`, `polebreaker.maxstackmin`, `polebreaker.maxstackmax`)
-
-### Stalker's Bows
-* **5% of T6+ bow loot drops** (`TreasureWeaponType.Bow`) are converted to a Stalker's Bow (e.g. *Yew Shortbow of the Stalker*)
-* The item stores `PropertyBool.IsStalkersBow = true` on the world object
-* **Icon overlay:** `0x06002699`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.StalkerFirstStrikeProc` - chance the opening shot procs (default 30-50%)
-  * `PropertyFloat.StalkerFirstStrikeBonus` - bonus damage fraction on a successful first strike (default +25-50%)
-
-#### First Strike (proc, opening shot)
-* Hooks into `Player.DamageTarget` (also fires for missile attacks via `ProjectileCollisionHelper`)
-* Fires only when `target.DamageHistory.TotalDamage` does **not** yet contain the attacker's `Guid` - i.e. this is the first hit *this* player has landed on the target this encounter
-* On proc, adds `damage x StalkerFirstStrikeBonus` as bonus damage *before* the hit is applied
-* Combat message: `+N [Stalker's Bow] first strike`
-* Naturally resets when the target dies (DamageHistory cleared on respawn) or when a different player is the first to engage; opening a new fight against a fresh target re-enables the proc
-* All values runtime-tunable via `@lootconfig` (`stalker.drop`, `stalker.tier`, `stalker.procmin`, `stalker.procmax`, `stalker.bonusmin`, `stalker.bonusmax`)
-
-### Breacher's Crossbows
-* **5% of T6+ crossbow loot drops** (`TreasureWeaponType.Crossbow`) are converted to a Breacher's Crossbow (e.g. *Steel Heavy Crossbow of the Breacher*)
-* The item stores `PropertyBool.IsBreachersCrossbow = true` on the world object
-* **Icon overlay:** `0x06002878`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.BreacherArmorIgnoreChance` - chance per shot to completely ignore the target's armor mitigation (default 5-15%)
-
-#### Armor Bypass Proc
-* Small chance per shot to trigger armor bypass, allowing the full pre-mitigation damage to pass through
-* When triggered: `Damage = DamageBeforeMitigation` (armor entirely bypassed for that one hit)
-* Combat message: `+N armor bypass [Breacher's Crossbow]` (N = the damage that armor blocked)
-* Fits the crossbow archetype: rare, dramatic armor-piercing moments instead of steady chip damage
-* All values runtime-tunable via `@lootconfig` (`breacher.drop`, `breacher.tier`, `breacher.ignorechancemin`, `breacher.ignorechancemax`)
-
-### Reaper's Atlatls
-* **5% of T6+ atlatl loot drops** (`TreasureWeaponType.Atlatl`) are converted to a Reaper's Atlatl (e.g. *Obsidian Atlatl of the Reaper*)
-* The item stores `PropertyBool.IsReapersAtlatl = true` on the world object
-* **Icon overlay:** `0x06002860`
-* Stats are rolled per-weapon at loot time and stored on the WO:
-  * `PropertyFloat.ReaperKillProc` - chance the heal procs on a killing blow (default 30-60%)
-  * `PropertyFloat.ReaperKillHealPct` - fraction of MaxHealth restored on proc (default 5-15%)
-
-#### Kill-Fed Sustain (proc)
-* Hooks into `Player.DamageTarget` after the standard hit-resolution block (same path as Resolute Bloodthirst); fires when `!target.IsAlive && targetPlayer == null`
-* On proc, restores `MaxHealth x ReaperKillHealPct` health to the wielder via `UpdateVitalDelta(Health, ...)`
-* Plays `HealthUpRed` particle effect on the wielder
-* Combat message: `Reaped! +N health [Reaper's Atlatl]`
-* Only fires when the wielder is below max health (no overheal waste); does **not** fire on PvP kills (avoids stacking exploits in PK fights)
-* All values runtime-tunable via `@lootconfig` (`reaper.drop`, `reaper.tier`, `reaper.procmin`, `reaper.procmax`, `reaper.healmin`, `reaper.healmax`)
-
-### Armor Bane Roll Rates
-* Bumps the per-bane roll chance in `ArmorSpells.Roll` so banes show up more often on loot
-* **Normal armor** (leather, chain, plate, etc.): per-bane chance raised from retail's `0.15` to `ArmorBaneChanceNormal` (default `0.20` - slight bump)
-* **Covenant armor** (`TreasureArmorType.Covenant`, including covenant shields): per-bane chance raised to `ArmorBaneChanceCovenant` (default `0.60` - significant bump, often 3+ banes per piece)
-* Applies to all 7 banes (Blade / Piercing / Bludgeon / Flame / Frost / Acid / Lightning); `Impenetrability1` keeps its original `1.00` chance
-* `ArmorSpells.Roll` now takes the `TreasureRoll` so it can branch on armor type; the parameterless overload is preserved for legacy callers
-* Runtime-tunable via `@lootconfig` (`armor.banenormal`, `armor.banecovenant`)
-
-### Mob Modifiers
-Rare "affix" variants applied to freshly-spawned hostile mobs (think Diablo rare-pack prefixes). Stage 1 ships **Vampiric** and **Thieving**; Warden / Nocturnal / Assassin slots are reserved (`PropertyBool 9025/9026/9027`) for follow-up stages.
-
-* Hooked into `GeneratorProfile.Spawn()` immediately after `WorldObjectFactory.CreateNewWorldObject(...)` and before `EnterWorld()` - `MobModifierFactory.TryApplyModifiers(wo)` rolls each enabled modifier independently so multiple can stack on one mob (e.g. *Vampiric Thieving Drudge*)
-* **Eligibility gate** (all must pass):
-  * `MobModifierEnabled` master switch is true
-  * Object is a `Creature`, not a `Player`, not a `Pet`, not an `IsNPC` (no vendors / advocates)
-  * `Attackable == true` OR `TargetingTactic != None` (mirrors `Monster.IsMonster`)
-  * `DeathTreasure?.Tier ?? (Level/10) >= MobModifierMinTier` (default T5)
-* All modifier flags + transient state are **in-memory only** - a server restart resets every spawned mob to vanilla
-* Visual indicator is the **renamed creature** only (e.g. *Vampiric Drudge*); no spawn broadcast or particle
-* Master toggles via `@lootconfig` (`mobmod.enabled`, `mobmod.tier`)
-
-#### Vampiric (lifesteal on hit)
-* Per-spawn chance `VampiricMobChance` (default `0.02`)
-* On spawn: `PropertyBool.IsVampiricMob = true`, `PropertyFloat.VampiricLifestealPct` rolled between `VampiricLifestealMin..Max` (default 5-15%), name prepended with `"Vampiric "`
-* **Visual tells:** `ObjScale` is increased by `+0.5` (a Vampiric mob is roughly half a unit larger than its base form) and the creature is shifted toward red - `PaletteTemplate = Red` and `Shade = 1.0` push palette-set-driven creatures to their reddest variant (no-op on creatures whose appearance is pure CSetup/AnimPart, but the size bump always reads)
-* On every successful hit on a player (hooked in `Player.TakeDamage` after `DamageHistory.Add`), the mob is healed by `round(damageDealt x VampiricLifestealPct)` via `UpdateVitalDelta(Health, ...)`; only fires if mob is below max HP
-* Plays `HealthUpRed` particle on the mob; victim sees `"<Mob> drains N health from you. [Vampiric]"` in CombatEnemy chat (squelch-aware)
-* Tunable: `vampiric.chance`, `vampiric.lifestealmin`, `vampiric.lifestealmax`
-
-#### Thieving (pickpocket tradenotes)
-* Per-spawn chance `ThiefMobChance` (default `0.02`)
-* On spawn: `PropertyBool.IsThiefMob = true`, name prepended with `"Thieving "`
-* Adds three transient fields to `Creature`: `StolenTradeNoteWcid`, `StolenTradeNoteAmount`, `StolenFromGuid`
-* On hit (same hook as Vampiric), if mob isn't already holding a stolen stack, rolls `ThiefStealProc` (default `0.10`):
-  * Picks the **smallest tradenote stack** from the victim's inventory (any item with `ItemType.PromissoryNote` - covers all retail denominations 100->250k *and* any custom tradenotes), ordered by lowest `StackSize x Value`
-  * `TryRemoveFromInventoryWithNetworking(...)` -> `Destroy()`; the WCID + stack size are stored on the mob
-  * Plays `HealthDownYellow` on the player; chat: `"Pickpocketed! <Mob> stole a tradenote stack (N). Kill it to recover. [Thief]"`
-* On death (`Creature.OnDeath` after XP grant), if the mob is holding a stolen stack:
-  * Recreates the tradenote via `WorldObjectFactory.CreateNewWorldObject(wcid)`, sets the original `StackSize`
-  * Auto-credits the **killing-blow player** (whoever the `lastDamager` is - not necessarily the original victim) via `TryCreateInInventoryWithNetworking(...)`
-  * Falls back to dropping on the ground at the corpse if the killer's pack is full
-  * Player sees: `"You recover N stolen tradenotes from <Mob>. [Thief]"`
-* On death (regardless of whether anything was stolen), a Thieving mob has a `ThiefChestDropChance` (default `0.50`) chance to **spawn a Chest of Tradenotes** (WCID `80524`, configurable via `ThiefChestWcid`) on the ground at the mob's death location - separate from the corpse so it can't be looted as part of normal death-treasure. The chest auto-despawns after `ThiefChestDespawnSeconds` (default `30`) via a queued `ActionChain` -> `Destroy()` (set to `0` to disable).
-* Tunable: `thiefmob.chance`, `thiefmob.proc`, `thiefmob.chestchance`, `thiefmob.chestwcid`, `thiefmob.chestdespawn` (renamed from `thief.*` to avoid collision with the existing Thief's Dagger keys)
-
-#### Simulacrum (player doppelganger)
-* **Restricted to mobs with `CreatureType.Simulacrum` (59)** - every other mob type silently skips the modifier
-* **Always applies** to every Simulacrum-typed spawn (no per-spawn chance roll, and the master tier gate is bypassed so even low-level Simulacrum mobs clone). `SimulacrumMobChance` is retained only as a kill-switch - set it to `0` to disable globally
-* At spawn time, picks a random online `Player` whose `Location.LandblockId` matches the mob's spawn landblock; if no players are present in that landblock, the modifier silently skips and the mob spawns vanilla
-* When a target is chosen, the mob is reskinned to look exactly like that player (same path used by `Creature.CreateCorpse` for player corpses):
-  * Copies `SetupTableId`, `MotionTableId`, `PhysicsTableId`, `PaletteBaseDID`, `ClothingBase`, plus `PaletteTemplate` / `Shade` / `ObjScale` if the player has them
-  * Snapshots `target.CalculateObjDesc()` and clones `AnimPartChanges`, `SubPalettes`, `TextureChanges` into the mob's `Biota.PropertiesAnimPart` / `PropertiesPalette` / `PropertiesTextureMap` collections - the existing "no equipped items" branch in `Creature.CalculateObjDesc` then renders the mob using that saved ObjDesc, so **armor / clothing / hair / face all carry over** (identical to how a player corpse displays the player's gear)
-* Sets `PropertyBool.IsSimulacrumMob = true` (PropertyBool 9028)
-* **Steals the player's name verbatim into the creature's `Name` field** - overrides any other modifier prefix (e.g. a Vampiric Simulacrum that procced both still ends up named after the player)
-* All copied state is in-memory only; the original player is unaffected and a server restart wipes it
-* Tunable: `simulacrum.chance` (kill-switch only - any value `> 0` enables, `0` disables)
-
-#### Admin Spawn Helper
-* Added `/cimob <vamp|thief|sim> <wcid or classname>` for admins to spawn a creature and force-apply a specific modifier without RNG.
-* `sim` follows the same eligibility rules as normal Simulacrum logic (requires Simulacrum creature type and a nearby player in the same landblock).
-
-### Ironman, Nomad, Hardcore, and Crawler Modes
-Detailed implementation notes for these challenge modes moved to the current DerpACE sections above so the README does not keep two conflicting sources of truth. In short: `/ironman`, `/hardcore`, and `/crawler` are irreversible character challenge commitments; Ironman/Nomad/Hardcore/Crawler use provenance-tagged gear and isolated outside aid rules; Nomads fight through bonded unarmed gauntlets/shoes and tools; Crawlers progress through use-based skill growth, queued boons, configurable milestone trials, caches, and Fan Box rewards.
-
-Use the current **Player Commands**, **Other Current Custom Systems**, and [ADMIN_COMMANDS.md](ADMIN_COMMANDS.md) sections for live commands, config keys, and behavior.
-### Global Kill Quest
-Server-wide rotating kill quest that gives all online players the same timed objective.
-
-#### Commands
-
-| Command | Access | Description |
-|---|---|---|
-| `/gquest` | Player | Shows current global quest target, required kills, your progress, and time remaining. |
-
-#### Behavior
-* Four lanes run concurrently: half-hour, hourly, daily, and weekly.
-* Per-character progress and completion state persist through logout; persistent lanes are saved across server restarts.
-* A character may complete each quest epoch once. `/gquest` displays `Completed` until that lane refreshes.
-* Daily and weekly quests cannot repeat their outgoing type or match each other's active type.
-* Objectives include creature hunts, tier-8 luminance hunts, mutator and dungeon hunts, Correct the Corruption, drunken mobs, first-found item races, Cardinal Trek, and Dereth Express.
-* Tier-8 kill quests award 100 luminance per required kill. Correct the Corruption retains its separate currency reward logic.
-* Cardinal Trek asks for 10-50 clicks in one random cardinal direction. Grounded overworld travel counts; portals, recalls, instances, forced movement, and implausible position jumps do not. Reward is 4% of level XP per click, capped at 200%.
-* Dereth Express selects a proven reachable vendor item and another town. The purchased parcel is owner/source/epoch stamped, and the first valid destination delivery wins and rerolls that lane.
-* Item races immediately reroll the half-hour lane after the first valid winner.
-* Admins can replace stale long-duration objectives with `@gquestreroll daily|weekly|all`.
-* Leaderboard data:
-  * Player leaderboard (`/ironman top`) - live query over all online + offline players via `PlayerManager.GetAllPlayers()`, sorted by `CreatureKills` descending
-  * Killer leaderboard (`/ironmantopkillers`) - persisted to `ironmanKillers.json` in the server exe directory; loaded at startup by `IronmanKillerTracker.Initialize()`, incremented on every Ironman player death caused by a non-player creature
-* Notes / deviations from the source mod:
-  * Appearance / heritage rerolling is **not** ported - that path mutates Biota directly and is fragile across DerpACE forks
-  * The hardcore-death cooldown is tracked in a process-lifetime `ConcurrentDictionary` rather than a persistent property; on server restart the cooldown is fresh (acceptable trade-off)
-  * Item-tagging uses an opt-in *auto-tag-on-pickup* model (any item that lands in an Ironman's inventory is tagged) rather than the source mod's per-source tagging patches; functionally equivalent for solo play and far simpler
-
-### Wacky Loot Event
-* A lightweight server-side event flag system (`ServerEvents` static class) that requires no database entries
-* `@start event wacky` - enables the Wacky Loot event; broadcasts *"A strange wind sweeps through Dereth..."* to all players
-* `@end event wacky` - disables it; broadcasts *"The strange wind passes. Loot returns to normal."*
-* Both commands require **Developer** access level
-* While active, all **weapon and shield loot drops** receive:
-  * A random `ObjScale` between **0.25 and 3.25** (tiny to gigantic)
-  * The `[Whack]` prefix baked into the item name, placed **before the material type** (e.g. `[Whack] Ebony Sword`)
-  * `MaterialType` is zeroed after baking the material name into `wo.Name` to prevent the client double-prepending it
-* New events can be added by extending the `ServerEvents` class and the `start`/`end` switch statements in `DerpACEEventCommands.cs`
-
-
-### Live Server Performance Benchmark
-
-Use the built-in monitor on a populated server to compare synchronization and simulation changes under the same workload:
-
-1. Restart the server and allow normal DAT, world, and loot caches to warm for at least five minutes.
-2. Run `@serverperformance start` before the test window.
-3. Exercise a representative busy landblock for 10-15 minutes: movement, combat, spell projectiles, loot generation, corpses, and nearby observers.
-4. Run `@serverperformance` twice at least 60 seconds apart. The second sample includes a useful managed allocation rate.
-5. Run `@landblockperformance` and `@serverstatus`, then retain all three outputs with player count and test duration.
-6. Use `@serverperformance reset` before an A/B comparison; use `@serverperformance stop` when prolonged instrumentation is not needed.
-
-The performance report includes world/network stage timings, managed allocation rate, heap fragmentation, GC pause percentage, process memory, thread-pool pressure, shard database queue depth, packet totals, retransmits, and CRC errors. For sync investigations, prioritize long `UpdateGameWorld`, `TickOutbound`, physics/navigation spikes, a growing DB queue, sustained allocation, or rising retransmit percentages.
-***
-## Full Command Reference
-
-This is an auto-generated index of every in-game command registered via `[CommandHandler(...)]`. Player commands are typed with `/` (e.g. `/ironman`); staff/admin commands are typed with `@` (e.g. `@teleto`). The required access level for each command is shown by section.
-
-For deeper documentation of DerpACE-specific systems (Defender's Shield, Ravager's Axe, Ironman, Hardcore, Loot Config, etc.), see the sections above.
-
-
-#### Player
-
-| Command | Description |
-|---|---|
-| `/acecommands` | Lists all commands. |
-| `/acehelp` | Displays help. |
-| `/aceversion` | Shows this server's version data |
-| `/castmeter` | Shows the fast casting efficiency meter |
-| `/config` | Manually sets a character option on the server. Use `/config list` to see available settings. |
-| `/debugcast` | Shows debug information about the current magic casting state |
-| `/fixbusy` | Attempts to remove the hourglass / fix the busy state for the player |
-| `/fixcast` | Fixes magic casting if locked up for an extended time |
-| `/gquest` | Show the current global kill quest status. |
-| `/hardcore` | Toggle Hardcore self-found mode (IRREVERSIBLE). |
-| `/house-select` | For characters/accounts who currently own multiple houses, used to select which house they want to keep |
-| `/ironman` | Toggle Ironman mode (IRREVERSIBLE). |
-| `/ironmantop` | Show the Ironman leaderboard (top players by mob kills). |
-| `/ironmantopkillers` | Show the top 10 creatures that have killed the most Ironman players. |
-| `/myquests` | Shows your quest log |
-| `/objsend` | Force resend of all visible objects known to this player. Can fix rare cases of invisible object bugs. Can only be used once every 5 mins max. |
-| `/passwd` | Change your account password. |
-| `/pop` | Show current world population |
-| `/reportbug` | Generate a Bug Report |
-
-#### Advocate
-
-| Command | Description |
-|---|---|
-| `@allstats` | Displays a summary of all server statistics and usage |
-| `@attackable` | Sets whether monsters will attack you or not. |
-| `@bestow` | Sets a character's Advocate Level. |
-| `@gcstatus` | Displays a summary of server GC Information |
-| `@landblockperformance` | Displays a summary of landblock performance statistics |
-| `@landblockstats` | Displays a summary of landblock performance statistics |
-| `@lbgroupstats` | Displays a summary of landblock group stats |
-| `@remove` | Removes the specified character from the Advocate ranks. |
-| `@serverperformance` | Displays a summary of server performance statistics |
-| `@serverstatus` | Displays a summary of server statistics and usage |
-| `@tele` | Teleports you(or a player) to some location. |
-
-#### Sentinel
-
-| Command | Description |
-|---|---|
-| `@adminvision` | Allows the admin to see admin-only visible items. |
-| `@ban` | Bans the specified player account. |
-| `@banlist` | Lists all banned accounts on this world. |
-| `@boot` | Boots the character out of the game. |
-| `@buff` | Buffs you (or a player) with all beneficial spells. |
-| `@cloak` | Sets your cloaking state. |
-| `@fellowbuff` | Buffs your fellowship (or a player's fellowship) with all beneficial spells. |
-| `@finger` | Show the given character's account name or vice-versa. |
-| `@gag` | Prevents a character from talking. |
-| `@god` | Turns current character into a god! |
-| `@home` | Teleports you to your sanctuary position. |
-| `@mrt` | Toggles the ability to bypass housing boundaries |
-| `@neversaydie` | Turn immortality on or off. |
-| `@portal_bypass` | Toggles the ability to bypass portal restrictions. |
-| `@run` | Temporarily boosts your run skill. |
-| `@save` | Sets your sanctuary position or a named recall point. |
-| `@telereturn` | Return a player to their previous location. |
-| `@teleto` | Teleport yourself to a player |
-| `@teletome` | Teleports a player to your current location. |
-| `@unban` | Unbans the specified player account. |
-| `@ungag` | Allows a gagged character to talk again. |
-| `@ungod` | Returns character to a mortal state. |
-
-#### Envoy
-
-| Command | Description |
-|---|---|
-| `@crack` | Cracks the most recently appraised locked target. |
-| `@delete` | Deletes the selected object. |
-| `@gamecast` | Sends a world-wide broadcast. |
-| `@heal` | Heals yourself (or the selected creature) |
-| `@myiid` | Displays your Instance ID (IID) |
-| `@regen` | Sends the selected generator a regeneration message. |
-| `@rename` | Rename a character. (Do NOT include +'s for admin names) |
-| `@smite` | Kills the selected target or all monsters in radar range if \ |
-| `@time` | Displays the server's current game time. |
-| `@trophies` | Shows a list of the trophies dropped by the target creature, and the percentage chance of dropping. |
-
-#### Developer
-
-| Command | Description |
-|---|---|
-| `@addallspells` | Adds all known spells to your own spellbook. |
-| `@addalltitles` | Add all titles to yourself |
-| `@addenc` | Spawns a new wcid or classname in the current outdoor cell as an encounter |
-| `@additemspell` | Adds a spell to the last appraised item's spellbook. |
-| `@addspell` | Adds the specified spell to your own spellbook. |
-| `@addtitle` | Add title to yourself |
-| `@animation` | Plays an animation on the current player, or optionally another object |
-| `@auditobjectmaint` | Iterates over physics objects to find leaks |
-| `@backward` | Teleports you backward by the specified distance (default 10). |
-| `@barbershop` | Displays the barber ui |
-| `@barrier-test` | Shows debug information for house barriers |
-| `@bumpvelocity` | Bumps the velocity of the last appraised object. |
-| `@castspell` | Casts a spell on the last appraised object |
-| `@cbclear` | Clears only the ClothingTable entries from the portal.dat file cache (forces a fresh re-read on next use). |
-| `@cbexport` | Exports a ClothingBase entry from portal.dat to a JSON file in Data/CustomClothingBase/. |
-| `@cbreload` | Reloads all custom ClothingBase JSON files from Data/CustomClothingBase/ and clears the ClothingTable cache. |
-| `@chatdump` | Spews 1000 lines of text to you. |
-| `@check-collision` | Checks if the player is currently colliding with any other objects. |
-| `@ci` | Creates an object in your inventory. |
-| `@ciaetheria` | Spawns an Aetheria in the player's inventory |
-| `@ciloot` | Generates randomized loot in player's inventory |
-| `@cimob` | Manage creature mutators in realtime. |
-| `@cirand` | Creates random objects in your inventory. |
-| `@cisalvage` | Create a salvage bag in your inventory |
-| `@clearcache` | Clears the various database caches. This enables live editing of the database information |
-| `@clearphysicscaches` | Clears Physics Object Caches |
-| `@cm` | Create a salvage bag in your inventory |
-| `@comps` | Creates spell component items in your inventory for testing. |
-| `@contract` | Query, stamp, and erase contracts on the targeted player |
-| `@copychar` | Copies an existing character into your character list. |
-| `@create` | Creates an object or objects in the world. |
-| `@createcreature` | Debug command to spawn a creature in front of the player and save it as a static spawn if the static option is specified. |
-| `@createinst` | Spawns a new wcid or classname as a landblock instance |
-| `@createliveops` | Creates an object or objects with lifespans in the world for live events. |
-| `@createnamed` | Creates a named object in the world. |
-| `@currency` | Creates some currency items in your inventory for testing. |
-| `@databaseperftest` | Test server/database performance. |
-| `@databasequeueinfo` | Show database queue information. |
-| `@database-shard-cache-npbrt` | Shard Database, Non-Player Biota Cache - Retention Time (in minutes) |
-| `@database-shard-cache-pbrt` | Shard Database, Player Biota Cache - Retention Time (in minutes) |
-| `@de_n` | Sends text to named player, formatted exactly as entered. |
-| `@de_s` | Sends text to selected player, formatted exactly as entered, with no prefix of any kind. |
-| `@deathxp` | Displays how much experience the last appraised creature is worth when killed. |
-| `@debugboard` | Shows the current chess board state |
-| `@debugchess` | Shows the chess move history for a player |
-| `@debugdamage` | Toggles the display for player damage info |
-| `@debugemote` | Enables emote debugging for the last appraised object |
-| `@debugmove` | Toggles movement debugging for the last appraised monster |
-| `@debugspell` | Toggles spell projectile debugging info |
-| `@debugspellbook` | Shows the spellbook for the last appraised object |
-| `@delevel` | Attempts to delevel the current player. Requires enough unassigned xp and unspent skill credits. |
-| `@destructionqueue` | Shows the list of previously visible objects queued for destruction for a player |
-| `@direct_emote_name` | Sends text to named player, formatted exactly as entered. |
-| `@direct_emote_select` | Sends text to selected player, formatted exactly as entered, with no prefix of any kind. |
-| `@dispel` | Removes all enchantments from the player |
-| `@dist` | Returns the distance to the last appraised object |
-| `@down` | Teleports you downward by the specified distance (default 10). |
-| `@dungeonname` | Shows the dungeon name for the current landblock |
-| `@echo` | Send text back to yourself. |
-| `@echoflags` | Echo flags back to you |
-| `@effect` | Plays an effect. |
-| `@enable-aetheria` | Enables the aetheria slots for the player |
-| `@end` | Ends a named custom server event. |
-| `@equiptest` | Simulates equipping a new item to your character, replacing all other items. |
-| `@event` | Maniuplates the state of an event |
-| `@export-json` | Exports content from database to JSON file |
-| `@export-json-folders` | Exports content from database to JSON file in a WeenieType/ItemType folder structure |
-| `@export-sql` | Exports content from database to SQL file |
-| `@export-sql-folders` | Exports weenie content from database to an SQL file in a WeenieType/ItemType folder structure |
-| `@faction` | sets your own faction state. |
-| `@fakelogin` | Fake Login Complete response |
-| `@fellow-dist` | Shows distance to each fellowship member |
-| `@fellow-info` | Shows debug info for fellowships. |
-| `@fly` | Toggles admin flight mode (no gravity, no fall damage). |
-| `@food` | Creates some food items in your inventory for testing. |
-| `@forcegc` | Forces .NET Garbage Collection |
-| `@forcegc2` | Forces .NET Garbage Collection with LOH Compact |
-| `@forcelogoff` | Force log off of specified character or last appraised character |
-| `@forcelogout` | Force log off of specified character or last appraised character |
-| `@forward` | Teleports you forward by the specified distance (default 10). |
-| `@gamecastemote` | Sends text to all players, formatted exactly as entered. |
-| `@gamecastlocal` | Sends a server-wide broadcast. |
-| `@gamecastlocalemote` | Sends text to all players within chat range, formatted exactly as entered. |
-| `@generate-classnames` | Generates WeenieClassName.cs from current world database |
-| `@generatordump` | Lists all properties for the last generator you examined. |
-| `@getallspellformula` | Tests spell formula calculation |
-| `@getinfo` | Shows basic info for the last appraised object. |
-| `@getproperty` | Gets a property for the last appraised object |
-| `@getspellformula` | Tests spell formula calculation |
-| `@givemana` | Gives mana to the last appraised object |
-| `@gps` | Display location. |
-| `@grantitemxp` | Give item XP to the last appraised item. |
-| `@grantluminance` | Give luminance to yourself (or the specified character). |
-| `@grantxp` | Give XP to yourself (or the specified character). |
-| `@harmself` | Sets all player vitals to 1 |
-| `@idlist` | Shows the next ID that will be allocated from GuidManager. |
-| `@import-json` | Imports json data from the Content folder |
-| `@import-sql` | Imports sql data from the Content folder |
-| `@import-sql-folders` | Imports all weenie sql data from the Content folder and all sub-folders |
-| `@inv` | Creates sample items, foci and containers in your inventory. |
-| `@knownobjs` | Shows the list of objects currently known to an object |
-| `@knownplayers` | Shows the list of players known to an object |
-| `@left` | Teleports you left by the specified distance (default 10). |
-| `@listcb` | List Clothing Tables available |
-| `@listplayers` | Displays all of the active players connected too the server. |
-| `@listpositions` | Displays all available saved character positions from the database. |
-| `@loadalllandblocks` | Loads all Landblocks. This is VERY crude. Do NOT use it on a live server!!! It will likely crash the server.  Landblock resources will be loaded async and will continue to do work even after all landblocks have been loaded. |
-| `@lootconfig` | View or modify DerpACE loot item variables. |
-| `@lootgen` | Generate a piece of loot from the LootGenerationFactory. |
-| `@lostest` | Tests for direct visibilty with latest appraised object |
-| `@makeiou` | Make an IOU and put it in your inventory |
-| `@monsterspell` | The last appraised creature casts a spell. For targeted spells, defaults to the current player. |
-| `@morph` | Morphs your bodily form into that of the specified creature. Be careful with this one! |
-| `@movement` | Movement testing command, to be removed soon |
-| `@MoveTo` | Used to test the MoveToObject message.   It will spawn a training wand in front of you and then move to that object. |
-| `@myloc` | Shows the current player location, from the server perspective |
-| `@netstats` | View network statistics |
-| `@nudge` | Adjusts the spawn position of a landblock instance |
-| `@pathfinding` | Manage the DotRecast monster pathfinding navmesh system. |
-| `@pk` | sets your own PK state. |
-| `@pktimer` | Sets your PK timer to the current time |
-| `@playsound` | Plays a sound. |
-| `@portalstorm` | Tests starting a portal storm on yourself |
-| `@propertydump` | Lists all properties for the last world object you examined. |
-| `@purchase-house` | Instantly purchase the house for the last appraised covenant crystal. |
-| `@qst` | Query, stamp, and erase quests on the targeted player |
-| `@readdat` | Tests reading the client_portal.dat |
-| `@recordcast` | Records spell casting keypresses to server for debugging |
-| `@reload-landblock` | Reloads the current landblock. |
-| `@removeenc` | Removes the last appraised object from the encounters table |
-| `@removeinst` | Removes the last appraised object from the current landblock instances |
-| `@removeitemspell` | Removes a spell to the last appraised item's spellbook. |
-| `@removespell` | Removes the specified spell to your own spellbook. |
-| `@remove-vitae` | Removes vitae from last appraised player |
-| `@requirecomps` | Sets whether spell components are required to cast spells. |
-| `@resist-info` | Shows the resistance info for the last appraised creature. |
-| `@retaliatetargets` | Shows the list of retaliate targets for a monster |
-| `@right` | Teleports you right by the specified distance (default 10). |
-| `@rotate` | Adjusts the rotation of a landblock instance |
-| `@rotate-x` | Adjusts the rotation of a landblock instance along the x-axis |
-| `@rotate-y` | Adjusts the rotation of a landblock instance along the y-axis |
-| `@rotate-z` | Adjusts the rotation of a landblock instance along the z-axis |
-| `@safecomps` | Enables / disables spell component burning |
-| `@save-now` | Saves your session. |
-| `@setcoin` | Set Coin display debug only usage |
-| `@setglobalenviron` | Sets or clears server's global environment option |
-| `@sethealth` | sets your current health to a specific value. |
-| `@setlbenviron` | Sets or clears your current landblock's environment option |
-| `@setposition` | Saves the supplied character position type to the database. |
-| `@setproperty` | Sets a property for the last appraised object |
-| `@setpurchasetime` | Sets the house purchase time for this player |
-| `@setvital` | Sets the specified vital to a specified value |
-| `@showsession` | Show IP and ID for network session of last appraised character |
-| `@showstats` | Shows a list of a creature's current attribute/skill levels |
-| `@showtier` | Shows the DeathTreasure tier for the last appraised monster |
-| `@showvelocity` | Shows the velocity of the last appraised object. |
-| `@show-wielded-treasure` | Shows the WieldedTreasure table for a Creature |
-| `@spendallxp` | Spend all available XP on Attributes, Vitals and Skills. |
-| `@splits` | Creates some stackable items in your inventory for testing. |
-| `@start` | Starts a named custom server event. |
-| `@sticky` | Sets whether you lose items should you die. |
-| `@targetloc` | Shows the location of the last appraised object |
-| `@teleallto` | Teleports all players to a player. If no target is specified, all players will be teleported to you. |
-| `@teledist` | Teleports a some distance ahead of the last object spawned |
-| `@teledungeon` | Teleport to a dungeon |
-| `@teleloc` | Teleport yourself to the specified location. |
-| `@telepoi` | Teleport yourself to a named Point of Interest |
-| `@teletype` | Teleport to a saved character position. |
-| `@telexyz` | Teleport to a location. |
-| `@testaim` | Tests the aim high/low motions, and projectile spawn position |
-| `@testdeathitems` | Test death item selection |
-| `@tiermobs` | Shows a list of monsters for a particular tier # |
-| `@turnto` | Turns the last appraised object to the player |
-| `@up` | Teleports you upward by the specified distance (default 10). |
-| `@usewith` | Uses specified object on last appraised object |
-| `@vendordump` | Lists all properties for the last vendor you examined. |
-| `@visibleobjs` | Shows the list of objects currently visible to an object |
-| `@visibleplayers` | Shows the list of players visible to a player |
-| `@visibletargets` | Shows the list of targets currently visible to a monster |
-| `@vloc2loc` | Output a set of LOCs for a given landblock found in the VLOCS dataset |
-| `@we` | Sends text to all players, formatted exactly as entered. |
-| `@weapons` | Creates testing items in your inventory. |
-| `@whoami` | Shows you your GUIDs. |
-
-#### Admin
-
-| Command | Description |
-|---|---|
-| `@accountcreate` | Creates a new account. |
-| `@accountget` | Gets an account. |
-| `@adminhouse` | House management tools for admins. |
-| `@bornagain` | Restores a deleted character to an account. |
-| `@cancel-shutdown` | Stops an active server shutdown. |
-| `@cell-export` | Export contents of CELL DAT file. |
-| `@cimobspawn` | Spawns a creature near you and force-applies a mob modifier. |
-| `@deletecharacter` | Deletes a character and removes it from players restore list |
-| `@exit` | Shut down server immediately. |
-| `@fetchbool` | Fetches a server property that is a bool |
-| `@fetchdouble` | Fetches a server property that is a double |
-| `@fetchlong` | Fetches a server property that is a long |
-| `@fetchstring` | Fetches a server property that is a string |
-| `@fix-allegiances` | Fixes the monarch data for allegiances |
-| `@fix-biota-emote-delay` | Fixes biota emotes with incorrect default delays |
-| `@fix-gear-plating` | Corrects the name on Gear Plating. |
-| `@fix-shortcut-bars` | Fixes the players with duplicate items on their shortcut bars. |
-| `@fix-spell-bars` | Fixes the players spell bars. |
-| `@getenchantments` | Shows the enchantments for the last appraised item |
-| `@highres-export` | Export contents of client_highres.dat file. |
-| `@image-export` | Export Texture/Image Files |
-| `@ironmanmode` | Enable or disable Ironman opt-in server-wide. |
-| `@gquestreroll` | Reroll daily, weekly, or both persistent global quest lanes. |
-| `@lootconfig` | Runtime-tune loot/proc/vendor knobs (e.g. `@lootconfig set vendor.loot true`). |
-| `@vendortier` | Show or pin the random-loot tier for the last appraised vendor. |
-| `@language-export` | Export contents of client_local_English.dat file. |
-| `@modifyattr` | Adjusts an attribute for the last appraised mob/NPC/player |
-| `@modifybool` | Modifies a server property that is a bool |
-| `@modifydouble` | Modifies a server property that is a double |
-| `@modifylong` | Modifies a server property that is a long |
-| `@modifypropertydesc` | Modifies a server property's description |
-| `@modifyskill` | Adjusts the skill for the last appraised mob/player |
-| `@modifystring` | Modifies a server property that is a string |
-| `@modifyvital` | Adjusts the maximum vital attribute for the last appraised mob/player and restores full vitals |
-| `@movetome` | Moves the last appraised object to the current player location. |
-| `@portal-export` | Export contents of PORTAL DAT file. |
-| `@reitem` | Rename the last appraised weapon or shield. |
-| `@reload-loot-tables` | reloads the latest data from the loot tables |
-| `@resyncproperties` | Resync the properties database |
-| `@set-accountaccess` | Change the access level of an account. |
-| `@set-accountpassword` | Set the account password. |
-| `@set-characteraccess` | Sets the access level for the character |
-| `@set-shutdown-interval` | Changes the delay, in seconds, before the server will shutdown. |
-| `@show-allegiances` | Shows all of the allegiance chains on the server. |
-| `@showprops` | Displays the name of all properties configurable via the modify commands |
-| `@shutdown` | Begins the server shutdown process. Optionally displays a shutdown message, if a string is passed. |
-| `@tester` | Toggles tester mode: 290 in all attributes, every skill specialized at max ranks. |
-| `@testlootgen` | Generates Loot for testing LootFactories.  Do testlootgen -info for examples. |
-| `@testlootgencorpse` | Generates Corpses for testing LootFactories |
-| `@verify-armor-levels` | Verifies and optionally fixes any existing armor levels above AL cap |
-| `@verify-attributes` | Verifies and optionally fixes any bugs with player attribute data |
-| `@verify-beneficial-enchantments` | Verifies enchantment registry has correct StatModType for Beneficial spells and optionally fixes |
-| `@verify-clothing-wield-level` | Verifies and optionally fixes any t7/t8 clothing that is missing a wield level requirement |
-| `@verify-heritage-augs` | Verifies all players have their heritage augs. |
-| `@verify-legendary-wield-level` | Verifies and optionally fixes any items with legendary cantrips that have less than 180 wield level requirement |
-| `@verify-max-augs` | Verifies and optionally fixes any bugs with the # of augs each player has |
-| `@verify-melee-rares` | Verifies and optionally fixes any melee rares to EoR wcids |
-| `@verify-player-data` | Verifies and optionally fixes any bugs with player data. Runs all of the verify* commands. |
-| `@verify-shield-rating` | Verifies and optionally fixes any lootgen shields with incorrectly assigned CD/CDR |
-| `@verify-skill-credits` | Verifies and optionally fixes any bugs with player skill credits |
-| `@verify-skills` | Verifies and optionally fixes any bugs with player skill data |
-| `@verify-vitals` | Verifies and optionally fixes any bugs with player vitals data |
-| `@verify-xp` | Verifies and optionally fixes any bugs with player xp |
-| `@version` | Show server version information. |
-| `@watchmen` | Displays a list of accounts with the specified level of admin access. |
-| `@wave-export` | Export Wave Files |
-| `@world` | Open or Close world to player access. |
+This project follows the [Contributor Code of Conduct](CODE_OF_CONDUCT.md).

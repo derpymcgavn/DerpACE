@@ -406,7 +406,7 @@ namespace ACE.Server.Factories
                 wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} was honed in shadow - while equipped, you appear translucent and monsters are less likely to notice you. Successful attacks have a {procPct}% chance to shadowstep behind the target and become a guaranteed critical sneak attack, dealing 1.05x to 2.25x damage and opening a hidden seam in the target's guard. The seam lowers defense by {seamPenalty} for {seamDuration} seconds.";
             }
 
-            // Quickening Dagger: dagger hits can grant a short attack-animation haste window.
+            // Quickening Dagger: dagger hits can stack a short attack-animation haste window up to blender mode.
             if (ACE.Server.Managers.DerpACEConfig.QuickeningDaggerEnabled
                 && TryRollWeaponModifier(
                     profile,
@@ -441,7 +441,7 @@ namespace ACE.Server.Factories
                 wo.IconOverlayId = MutatorOverlayQuickening;
                 ApplyLootUiEffect(wo, UiEffects.Lightning | UiEffects.BoostStamina);
 
-                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} twitches ahead of the hand - each hit has a {procPct}% chance to quicken your attacks by {speedPct}% for {duration} seconds.";
+                wo.LongDesc = (wo.LongDesc ?? "") + $"\n\nThis {GetWeaponNoun(roll.WeaponType)} twitches ahead of the hand - each hit has a {procPct}% chance to add a Quickening stack for {duration} seconds. Quickening stacks up to 4x attack animation speed, costs matching extra stamina per swing, then triggers a short cooldown at max stacks.";
             }
 
             // Fencer's Blade: configurable chance on T6+ épée / rapier / schlager (see @lootconfig)

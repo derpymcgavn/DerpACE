@@ -51,13 +51,15 @@ namespace ACE.Server.WorldObjects
         private int _unarmedCriticalBoostCharges;
         private DateTime _unarmedAttackSpeedBoostUntil = DateTime.MinValue;
         private DateTime _quickeningDaggerBoostUntil = DateTime.MinValue;
-        private float _quickeningDaggerSpeedMultiplier = 1.0f;
+        private DateTime _quickeningDaggerLockoutUntil = DateTime.MinValue;
+        private int _quickeningDaggerStackCount;
         private uint _opportunistTargetGuid;
         private DateTime _opportunistReadyUntil = DateTime.MinValue;
         private readonly Dictionary<string, DateTime> _mutatorCooldowns = new Dictionary<string, DateTime>();
 
         private const double UnarmedAttackSpeedBoostSeconds = 6.0;
         private const float UnarmedAttackSpeedBoostMultiplier = 1.25f;
+        private const int QuickeningDaggerMaxStacks = 4;
         private const float UnarmedCriticalBoostDamageMultiplier = 0.35f;
         private const double UnarmedStunSeconds = 1.25;
         private const float UnarmedKnockbackDistance = 2.0f;
@@ -543,14 +545,12 @@ namespace ACE.Server.WorldObjects
             {
                 var procChance = damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerProcChance) ?? 0.0;
                 if (procChance > 0.0
-                    && ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance)
-                    && TryStartMutatorCooldown(damageEvent.Weapon, QuickeningDaggerCooldownId, QuickeningDaggerCooldownSeconds))
+                    && ThreadSafeRandom.Next(0.0f, 1.0f) < NormalizeMutatorProcChance(damageEvent.Weapon, procChance))
                 {
-                    var speedMultiplier = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerSpeedMultiplier) ?? 1.0);
                     var duration = (float)(damageEvent.Weapon.GetProperty(ACE.Entity.Enum.Properties.PropertyFloat.QuickeningDaggerDuration) ?? 0.0);
-                    if (speedMultiplier > 1.0f && duration > 0.0f)
+                    if (duration > 0.0f)
                     {
-                        GrantQuickeningDaggerAttackSpeedBoost(speedMultiplier, duration);
+                        GrantQuickeningDaggerAttackSpeedBoost(damageEvent.Weapon, duration);
                     }
                 }
             }
@@ -1287,7 +1287,7 @@ namespace ACE.Server.WorldObjects
                 // handle Dirty Fighting
                 if (GetCreatureSkill(Skill.DirtyFighting).AdvancementClass >= SkillAdvancementClass.Trained)
                     FightDirty(target, damageEvent.Weapon);
-                
+
                 target.EmoteManager.OnDamage(this);
 
                 if (damageEvent.IsCritical)
@@ -1669,12 +1669,37 @@ namespace ACE.Server.WorldObjects
             _unarmedAttackSpeedBoostUntil = DateTime.UtcNow.AddSeconds(UnarmedAttackSpeedBoostSeconds);
         }
 
-        private void GrantQuickeningDaggerAttackSpeedBoost(float speedMultiplier, float durationSeconds)
+        private void GrantQuickeningDaggerAttackSpeedBoost(WorldObject source, float durationSeconds)
         {
-            _quickeningDaggerSpeedMultiplier = Math.Clamp(speedMultiplier, 1.0f, 1.35f);
-            var clampedDuration = Math.Clamp(durationSeconds, 1.0f, 12.0f);
-            _quickeningDaggerBoostUntil = DateTime.UtcNow.AddSeconds(clampedDuration);
+            var now = DateTime.UtcNow;
+            if (now < _quickeningDaggerLockoutUntil)
+                return;
 
+            if (now > _quickeningDaggerBoostUntil)
+                _quickeningDaggerStackCount = 0;
+
+            _quickeningDaggerStackCount = Math.Clamp(_quickeningDaggerStackCount + 1, 1, QuickeningDaggerMaxStacks);
+            var clampedDuration = Math.Clamp(durationSeconds, 1.0f, 12.0f);
+            _quickeningDaggerBoostUntil = now.AddSeconds(clampedDuration);
+
+            ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillUpYellow);
+
+            if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
+                Session.Network.EnqueueSend(new GameMessageSystemChat(
+                    $"Quickening surges through your dagger hand ({_quickeningDaggerStackCount}x).",
+                    ChatMessageType.CombatSelf));
+
+
+            if (_quickeningDaggerStackCount >= QuickeningDaggerMaxStacks)
+            {
+                _quickeningDaggerLockoutUntil = now.AddSeconds(QuickeningDaggerCooldownSeconds);
+                if (source != null)
+                {
+                    source.CooldownId = QuickeningDaggerCooldownId;
+                    source.CooldownDuration = QuickeningDaggerCooldownSeconds;
+                    EnchantmentManager.StartCooldown(source);
+                }
+            }
             var expiresAt = _quickeningDaggerBoostUntil;
             var expireChain = new ActionChain();
             expireChain.AddDelaySeconds(clampedDuration);
@@ -1683,7 +1708,7 @@ namespace ACE.Server.WorldObjects
                 if (_quickeningDaggerBoostUntil != expiresAt || DateTime.UtcNow < expiresAt || IsDead)
                     return;
 
-                _quickeningDaggerSpeedMultiplier = 1.0f;
+                _quickeningDaggerStackCount = 0;
                 ApplyVisualEffects(ACE.Entity.Enum.PlayScript.SkillDownYellow);
 
                 if (!SquelchManager.Squelches.Contains(this, ChatMessageType.CombatSelf))
@@ -1856,11 +1881,29 @@ namespace ACE.Server.WorldObjects
 
         private float GetQuickeningDaggerAttackSpeedMultiplier(WorldObject weapon)
         {
+            return IsQuickeningDaggerBoostActive(weapon)
+                ? GetQuickeningDaggerStackMultiplier()
+                : 1.0f;
+        }
+
+        private int GetQuickeningDaggerStaminaMultiplier(WorldObject weapon)
+        {
+            return IsQuickeningDaggerBoostActive(weapon)
+                ? GetQuickeningDaggerStackMultiplier()
+                : 1;
+        }
+
+        private bool IsQuickeningDaggerBoostActive(WorldObject weapon)
+        {
             return DateTime.UtcNow <= _quickeningDaggerBoostUntil
+                && _quickeningDaggerStackCount > 0
                 && weapon?.GetProperty(ACE.Entity.Enum.Properties.PropertyBool.IsQuickeningDagger) == true
-                && WeaponIsType(weapon, WeaponType.Dagger)
-                    ? _quickeningDaggerSpeedMultiplier
-                    : 1.0f;
+                && WeaponIsType(weapon, WeaponType.Dagger);
+        }
+
+        private int GetQuickeningDaggerStackMultiplier()
+        {
+            return Math.Clamp(_quickeningDaggerStackCount, 1, QuickeningDaggerMaxStacks);
         }
 
         private void TryApplyUnarmedStun(Creature target)
@@ -2933,7 +2976,7 @@ namespace ACE.Server.WorldObjects
             }
 
             LastCombatMode = newCombatMode;
-            
+
             if (DateTime.UtcNow >= NextUseTime.AddSeconds(UseTimeEpsilon))
                 HandleActionChangeCombatMode_Inner(newCombatMode, forceHandCombat, callback);
             else

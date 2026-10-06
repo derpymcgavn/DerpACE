@@ -750,7 +750,13 @@ namespace ACE.Server.WorldObjects
             return true;
         }
 
+        // Compatibility overload for external mods compiled before player-aware vendor rates
+        // added the optional Player parameter. Optional parameters are not separate CLR methods.
+        public uint GetSellCost(WorldObject item) => GetSellCost(item, null);
+
         public uint GetSellCost(WorldObject item, Player player = null) => GetSellCost(item.Value, item.ItemType, player);
+
+        public uint GetSellCost(Weenie item) => GetSellCost(item, null);
 
         public uint GetSellCost(Weenie item, Player player = null) => GetSellCost(item.GetValue(), item.GetItemType(), player);
 

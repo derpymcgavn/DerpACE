@@ -66,7 +66,7 @@ Milestone trials persist through logout and restart. Current built-in trial type
 | `@vendortier clear` | Developer | Removes the override and restores automatic town resolution. |
 | `@vendordump` | Developer | Displays properties for the last examined vendor. |
 
-Automatic vendor tiers use PointsOfInterest anchors and the seven-tier DerpACE town progression documented in [README.md](README.md#town-tier-resolution-sourceaceserverfactoriestablesvendortowntiercs).
+Automatic vendor tiers use PointsOfInterest anchors and the DerpACE town progression summarized in [README.md](README.md#vendor-random-loot).
 
 Dereth Express learns eligible source vendors through normal vendor interactions. At least two proven towns must be present in the saved global quest vendor registry before a delivery race can roll.
 
@@ -135,4 +135,4 @@ The default local address is `http://127.0.0.1:9110/`. Admin accounts can use co
 
 ## General Command Discovery
 
-Use the built-in help command to inspect inherited ACE commands and their required access level. The full generated command index remains in [README.md](README.md#full-command-reference); this guide intentionally stays focused on DerpACE operator workflows.
+Use the built-in help command to inspect inherited ACE commands and their required access level. This guide intentionally stays focused on DerpACE operator workflows; the root [README.md](README.md) now provides a concise project overview instead of a generated full command dump.

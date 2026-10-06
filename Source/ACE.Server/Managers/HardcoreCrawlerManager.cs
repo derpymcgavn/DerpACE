@@ -13,6 +13,7 @@ using ACE.Database.Models.World;
 using ACE.Server.Factories;
 using ACE.Server.Factories.Enum;
 using ACE.Server.DerpAce;
+using ACE.Server.Entity;
 using ACE.Server.Entity.Actions;
 using ACE.Server.Network.GameMessages.Messages;
 using ACE.Server.WorldObjects;
@@ -29,7 +30,19 @@ namespace ACE.Server.Managers
     public static class HardcoreCrawlerManager
     {
         private const double SkillPracticeCooldownSeconds = 5.0;
+        private const double ArcaneLorePracticeCooldownSeconds = 30.0;
+        private const double RecklessnessPracticeCooldownSeconds = 10.0;
+        private const double AllegiancePracticeCooldownSeconds = 300.0;
+        private const double ArcaneLorePracticeDifficultyScalar = 0.35;
+        private const float RecklessnessPracticeXpScalar = 0.25f;
+        private const int AssessAutoTrainUseMultiplier = 4;
+        private const int ArcaneLoreAutoTrainUseMultiplier = 6;
+        private const int RecklessnessAutoTrainUseMultiplier = 4;
+        private const int AllegianceAutoTrainUseMultiplier = 8;
+        private const float CrawlerMeleeProficiencyScalar = 0.45f;
+        private const float CrawlerManaConversionProficiencyScalar = 0.35f;
         private static readonly ConcurrentDictionary<string, double> _skillPracticeCooldowns = new ConcurrentDictionary<string, double>();
+        private static readonly ConcurrentDictionary<string, double> _allegiancePracticeCooldowns = new ConcurrentDictionary<string, double>();
 
         private enum BoonRarity
         {
@@ -342,7 +355,7 @@ namespace ACE.Server.Managers
             if (!IsActive(player) || skill == null || skill.AdvancementClass != SkillAdvancementClass.Untrained)
                 return;
 
-            var threshold = Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses);
+            var threshold = GetAutoTrainUseThreshold(skill.Skill);
             var progress = ParseSkillProgress(player.GetProperty(PropertyString.HardcoreCrawlerAutoTrainProgress));
             progress.TryGetValue(skill.Skill, out var current);
             if (current >= threshold)
@@ -374,6 +387,7 @@ namespace ACE.Server.Managers
 
             var now = Time.GetUnixTime();
             var cooldownKey = $"{player.Guid.Full}:{(uint)skill.Skill}";
+            var cooldownSeconds = GetSkillPracticeCooldownSeconds(skill.Skill);
             if (_skillPracticeCooldowns.TryGetValue(cooldownKey, out var nextAllowed) && nextAllowed > now)
                 return;
 
@@ -381,19 +395,71 @@ namespace ACE.Server.Managers
             if (xpToNextRank == null || xpToNextRank.Value == 0)
                 return;
 
-            var difficultyFactor = Math.Clamp(difficulty / (double)Math.Max(1, skill.Current), 0.25, 2.0);
-            var amount = (uint)Math.Round(xpToNextRank.Value * 0.015 * difficultyFactor);
-            amount = Math.Min(Math.Max(amount, (uint)Math.Min(difficulty, 250)), 25000u);
+            var amount = GetPracticeXpAmount(skill, difficulty, xpToNextRank.Value);
             amount = Math.Min(amount, skill.ExperienceLeft);
             if (amount == 0)
                 return;
 
-            _skillPracticeCooldowns[cooldownKey] = now + SkillPracticeCooldownSeconds;
+            _skillPracticeCooldowns[cooldownKey] = now + cooldownSeconds;
             player.RefundXP(amount);
             var raiseChain = new ActionChain();
             raiseChain.AddDelayForOneTick();
             raiseChain.AddAction(player, () => player.HandleActionRaiseSkillFromUse(skill.Skill, amount));
             raiseChain.EnqueueChain();
+        }
+
+        public static float GetCrawlerProficiencyXpMultiplier(Player player, CreatureSkill skill, float defaultMultiplier)
+        {
+            if (!IsActive(player) || skill == null)
+                return defaultMultiplier;
+
+            var multiplier = Math.Max(0.0f, defaultMultiplier);
+            if (Player.MeleeSkills.Contains(skill.Skill) || skill.Skill == Skill.DualWield)
+                multiplier *= CrawlerMeleeProficiencyScalar;
+            else if (skill.Skill == Skill.ManaConversion)
+                multiplier *= CrawlerManaConversionProficiencyScalar;
+
+            return multiplier;
+        }
+
+        private static int GetAutoTrainUseThreshold(Skill skill)
+        {
+            var threshold = Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses);
+            if (skill == Skill.AssessCreature || skill == Skill.AssessPerson)
+                return threshold * AssessAutoTrainUseMultiplier;
+            if (skill == Skill.ArcaneLore)
+                return threshold * ArcaneLoreAutoTrainUseMultiplier;
+            if (skill == Skill.Recklessness)
+                return threshold * RecklessnessAutoTrainUseMultiplier;
+            if (skill == Skill.Loyalty || skill == Skill.Leadership)
+                return threshold * AllegianceAutoTrainUseMultiplier;
+            return threshold;
+        }
+
+        private static double GetSkillPracticeCooldownSeconds(Skill skill)
+        {
+            if (skill == Skill.ArcaneLore)
+                return ArcaneLorePracticeCooldownSeconds;
+            if (skill == Skill.Recklessness)
+                return RecklessnessPracticeCooldownSeconds;
+            return SkillPracticeCooldownSeconds;
+        }
+
+        private static uint GetPracticeXpAmount(CreatureSkill skill, uint difficulty, uint xpToNextRank)
+        {
+            if (skill.Skill == Skill.ArcaneLore)
+            {
+                var multiplier = Math.Max(0.0f, DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier);
+                var usableDifficulty = Math.Min(Math.Max(1, difficulty), Math.Max(1, skill.Current));
+                return (uint)Math.Round(Math.Max(1.0, usableDifficulty * multiplier * ArcaneLorePracticeDifficultyScalar));
+            }
+
+            var difficultyFactor = Math.Clamp(difficulty / (double)Math.Max(1, skill.Current), 0.25, 2.0);
+            var amount = (uint)Math.Round(xpToNextRank * 0.015 * difficultyFactor);
+            amount = Math.Min(Math.Max(amount, (uint)Math.Min(difficulty, 250)), 25000u);
+            if (skill.Skill == Skill.Recklessness)
+                amount = (uint)Math.Max(1.0, Math.Round(amount * RecklessnessPracticeXpScalar));
+            return amount;
         }
 
         public static void OnSkillRankGained(Player player, CreatureSkill skill, int ranksGained)
@@ -422,6 +488,43 @@ namespace ACE.Server.Managers
             }
             player.SetProperty(PropertyInt.HardcoreCrawlerUsageRankProgress, progress);
             player.ChangesDetected = true;
+        }
+
+
+        public static void OnAllegianceXpPassed(IPlayer vassal, IPlayer patron, ulong generatedAmount, ulong passupAmount)
+        {
+            if (generatedAmount > 0 && vassal != null)
+                PracticeCrawlerAllegianceSkill(PlayerManager.GetOnlinePlayer(vassal.Guid), Skill.Loyalty, generatedAmount);
+
+            if (passupAmount > 0 && patron != null)
+                PracticeCrawlerAllegianceSkill(PlayerManager.GetOnlinePlayer(patron.Guid), Skill.Leadership, passupAmount);
+        }
+
+        private static void PracticeCrawlerAllegianceSkill(Player player, Skill skillType, ulong xpAmount)
+        {
+            if (!IsActive(player) || xpAmount == 0)
+                return;
+
+            var now = Time.GetUnixTime();
+            var cooldownKey = $"{player.Guid.Full}:{(uint)skillType}:allegiance";
+            if (_allegiancePracticeCooldowns.TryGetValue(cooldownKey, out var nextAllowed) && nextAllowed > now)
+                return;
+
+            var skill = player.GetCreatureSkill(skillType, false);
+            if (skill == null)
+                return;
+
+            _allegiancePracticeCooldowns[cooldownKey] = now + AllegiancePracticeCooldownSeconds;
+            var difficulty = GetAllegiancePracticeDifficulty(player, xpAmount);
+            HardcoreCrawlerManager.OnSkillPracticed(player, skill, difficulty);
+        }
+
+        private static uint GetAllegiancePracticeDifficulty(Player player, ulong xpAmount)
+        {
+            var level = Math.Max(1, player?.Level ?? 1);
+            var levelFloor = Math.Max(1, level * 5);
+            var xpDifficulty = Math.Sqrt(Math.Min(xpAmount, (ulong)uint.MaxValue));
+            return (uint)Math.Clamp(Math.Round(Math.Max(levelFloor, xpDifficulty)), 1.0, 1000.0);
         }
 
         private static void GrantUsageLevel(Player player, Skill sourceSkill, int threshold)
@@ -470,7 +573,7 @@ namespace ACE.Server.Managers
 
         public static void TrainReadySkill(Player player, string skillName)
         {
-            if (!TryGetReadyCrawlerSkill(player, skillName, PropertyString.HardcoreCrawlerAutoTrainProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses), out var skill, out var progress))
+            if (!TryGetReadyCrawlerSkill(player, skillName, PropertyString.HardcoreCrawlerAutoTrainProgress, 0, out var skill, out var progress))
                 return;
 
             if (skill.AdvancementClass != SkillAdvancementClass.Untrained)
@@ -595,7 +698,8 @@ namespace ACE.Server.Managers
                 return false;
             }
 
-            if (!progress.TryGetValue(parsedSkill, out var current) || current < threshold)
+            var required = property == PropertyString.HardcoreCrawlerAutoTrainProgress ? GetAutoTrainUseThreshold(parsedSkill) : threshold;
+            if (!progress.TryGetValue(parsedSkill, out var current) || current < required)
             {
                 player.SendMessage($"[Crawler] {parsedSkill.ToSentence()} is not ready yet.", ChatMessageType.System);
                 return false;
@@ -629,8 +733,12 @@ namespace ACE.Server.Managers
         private static IEnumerable<string> GetReadySkillNames(Player player, PropertyString property, int threshold)
         {
             var progress = ParseSkillProgress(player.GetProperty(property));
-            foreach (var entry in progress.Where(entry => entry.Value >= threshold).OrderBy(entry => entry.Key))
+            foreach (var entry in progress.OrderBy(entry => entry.Key))
             {
+                var required = property == PropertyString.HardcoreCrawlerAutoTrainProgress ? GetAutoTrainUseThreshold(entry.Key) : threshold;
+                if (entry.Value < required)
+                    continue;
+
                 var skill = player.GetCreatureSkill(entry.Key, false);
                 if (skill != null)
                     yield return entry.Key.ToSentence();
@@ -955,7 +1063,7 @@ namespace ACE.Server.Managers
             var rankThreshold = Math.Max(1, DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel);
             var lastSkill = player.GetProperty(PropertyString.HardcoreCrawlerLastProgressSkill);
             sb.AppendLine("=== Hardcore Crawler ===");
-            sb.AppendLine($"  Skill training: untrained skills become ready after {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)} uses");
+            sb.AppendLine($"  Skill training: untrained skills become ready after {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)} uses; Assess skills take {GetAutoTrainUseThreshold(Skill.AssessCreature)}, Arcane Lore takes {GetAutoTrainUseThreshold(Skill.ArcaneLore)}, Recklessness takes {GetAutoTrainUseThreshold(Skill.Recklessness)}, Loyalty/Leadership take {GetAutoTrainUseThreshold(Skill.Loyalty)}");
             sb.AppendLine($"  Skill specialization: trained skills become ready at level {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecMinLevel)} after {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecRanks)} ranks");
             sb.AppendLine($"  Level progress: {rankProgress}/{rankThreshold} specialized rank gains");
             var trainedCount = GetTrainedSkillCount(player);

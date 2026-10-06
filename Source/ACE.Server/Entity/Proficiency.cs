@@ -79,7 +79,7 @@ namespace ACE.Server.Entity
                 if (player.IsMaxLevel) return;
 
                 var crawlerMultiplier = player.GetProperty(PropertyBool.IsHardcoreCrawler) == true && DerpACEConfig.HardcoreCrawlerEnabled
-                    ? Math.Max(0.0f, DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier)
+                    ? HardcoreCrawlerManager.GetCrawlerProficiencyXpMultiplier(player, skill, DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier)
                     : 1.0f;
                 var pp = (uint)Math.Round(difficulty * timeScale * crawlerMultiplier);
                 var totalXPGranted = (long)Math.Round(pp * 1.1f);   // give additional 10% of proficiency XP to unassigned XP
