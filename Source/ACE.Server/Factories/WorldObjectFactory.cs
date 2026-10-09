@@ -431,6 +431,7 @@ namespace ACE.Server.Factories
             40454,
             40455,
             40456,
+            ACE.Server.DerpAce.HardcodedWeenies.NomadPathwardenRobeWeenieClassId,
         };
 
         private static void TryApplyDerpObjectFixups(WorldObject wo)

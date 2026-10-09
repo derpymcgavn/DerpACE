@@ -23,6 +23,7 @@ namespace ACE.Server.DerpAce
         public const uint DerptideIntroBookWeenieClassId = 2000612;
         public const uint IronmanGuideBookWeenieClassId = 2000613;
         public const uint HardcoreCrawlerGuideBookWeenieClassId = 2000621;
+        public const uint NomadPathwardenRobeWeenieClassId = 2000622;
         public const uint IronmanPathwardenChestWeenieClassId = 3238931;
         public const uint NomadPathwardenChestWeenieClassId = 2000615;
         public const uint IronmanSupplyKeyWeenieClassId = 3238934;
@@ -63,6 +64,9 @@ namespace ACE.Server.DerpAce
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanPathwardenChest());
                 DatabaseManager.World.SetCachedWeenie(BuildIronmanSupplyKey());
                 DatabaseManager.World.SetCachedWeenie(BuildNomadSupplyKey());
+                var nomadRobe = BuildNomadPathwardenRobe();
+                if (nomadRobe != null)
+                    DatabaseManager.World.SetCachedWeenie(nomadRobe);
                 DatabaseManager.World.SetCachedWeenie(BuildNomadPathwardenChest());
                 DatabaseManager.World.SetCachedWeenie(BuildDrunkenEventBeer());
                 DatabaseManager.World.SetCachedWeenie(BuildHorriblyForgedDerpCoin());
@@ -94,6 +98,72 @@ namespace ACE.Server.DerpAce
 
             if (source.PropertiesDID.TryGetValue(PropertyDataId.Icon, out var icon))
                 target.PropertiesDID[PropertyDataId.Icon] = icon;
+        }
+
+        private static Weenie CloneWeenie(Weenie source, uint newWeenieClassId, string className)
+        {
+            if (source == null)
+                return null;
+
+            var clone = new Weenie
+            {
+                WeenieClassId = newWeenieClassId,
+                ClassName = className,
+                WeenieType = source.WeenieType,
+                PropertiesBool = source.PropertiesBool != null ? new Dictionary<PropertyBool, bool>(source.PropertiesBool) : null,
+                PropertiesDID = source.PropertiesDID != null ? new Dictionary<PropertyDataId, uint>(source.PropertiesDID) : null,
+                PropertiesFloat = source.PropertiesFloat != null ? new Dictionary<PropertyFloat, double>(source.PropertiesFloat) : null,
+                PropertiesIID = source.PropertiesIID != null ? new Dictionary<PropertyInstanceId, uint>(source.PropertiesIID) : null,
+                PropertiesInt = source.PropertiesInt != null ? new Dictionary<PropertyInt, int>(source.PropertiesInt) : null,
+                PropertiesInt64 = source.PropertiesInt64 != null ? new Dictionary<PropertyInt64, long>(source.PropertiesInt64) : null,
+                PropertiesString = source.PropertiesString != null ? new Dictionary<PropertyString, string>(source.PropertiesString) : null,
+                PropertiesSpellBook = source.PropertiesSpellBook != null ? new Dictionary<int, float>(source.PropertiesSpellBook) : null,
+                PropertiesEventFilter = source.PropertiesEventFilter != null ? new HashSet<int>(source.PropertiesEventFilter) : null,
+            };
+
+            if (source.PropertiesAnimPart != null)
+            {
+                clone.PropertiesAnimPart = new List<PropertiesAnimPart>(source.PropertiesAnimPart.Count);
+                foreach (var record in source.PropertiesAnimPart)
+                    clone.PropertiesAnimPart.Add(record.Clone());
+            }
+
+            if (source.PropertiesPalette != null)
+            {
+                clone.PropertiesPalette = new List<PropertiesPalette>(source.PropertiesPalette.Count);
+                foreach (var record in source.PropertiesPalette)
+                    clone.PropertiesPalette.Add(record.Clone());
+            }
+
+            if (source.PropertiesTextureMap != null)
+            {
+                clone.PropertiesTextureMap = new List<PropertiesTextureMap>(source.PropertiesTextureMap.Count);
+                foreach (var record in source.PropertiesTextureMap)
+                    clone.PropertiesTextureMap.Add(record.Clone());
+            }
+
+            if (source.PropertiesCreateList != null)
+            {
+                clone.PropertiesCreateList = new List<PropertiesCreateList>(source.PropertiesCreateList.Count);
+                foreach (var record in source.PropertiesCreateList)
+                    clone.PropertiesCreateList.Add(record.Clone());
+            }
+
+            if (source.PropertiesEmote != null)
+            {
+                clone.PropertiesEmote = new List<PropertiesEmote>(source.PropertiesEmote.Count);
+                foreach (var record in source.PropertiesEmote)
+                    clone.PropertiesEmote.Add(record.Clone());
+            }
+
+            if (source.PropertiesGenerator != null)
+            {
+                clone.PropertiesGenerator = new List<PropertiesGenerator>(source.PropertiesGenerator.Count);
+                foreach (var record in source.PropertiesGenerator)
+                    clone.PropertiesGenerator.Add(record.Clone());
+            }
+
+            return clone;
         }
 
         /// <summary>
@@ -987,7 +1057,7 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
             AddBookPage(w, "I. Spat Out\n\nHardcore Crawler starts like Ispar coughed you through the wrong door and Dereth looked up hungry. You have lives, and losing all of them still means the road writes your ending in permanent ink. The difference is that this path rewards movement, use, and adaptation.\n\nYou begin with nothing trained, but through level 3 you can choose one sponsor package with /crawler origins and /crawler origin <number>. Sponsor packages train a few normal skills, spend their normal credits, and hand you a small kit. After that, use a skill enough and it becomes ready to train if you have the credits. Keep using it and it can become ready to specialize, still respecting the normal specialized credit limit. Specialized rank growth is what pushes your Crawler level forward.\n\nSome skills are deliberately slower to wake up because the crowd knows an exploit when it sees one. Deception, Assess skills, Arcane Lore, Recklessness, Loyalty, and Leadership take more proof than swinging a sword at something rude.\n\nThis mode is not meant to be fair in the tidy way. It is meant to be tempting, dangerous, and full of decisions you can blame on yourself later.");
             AddBookPage(w, "II. Boons\n\nEach level after the first can offer a Crawler boon. Use /crawler choices to see the oldest pending pick, then /crawler pick <number> to choose one. If you miss choices for several levels, they queue up and stay with you through logout and server restart.\n\nBoons have rarities. Common choices show often, while rare, legendary, and mythical choices are meant to feel like the road blinked first. Conditioning boons do not buy skill ranks. They nudge the stats behind the playstyle you are actually using. Flaw boons offer stronger gains, but always take something back.\n\nSome flaw boons keep collecting after you choose them. Bottomless Engine gives a larger stamina pool, then expects regular food. Field Surgeon Oath makes healing kits stronger in your hands, but restoration spells landing on you restore less.\n\nThe choice is permanent for that life. If the road hands you three suspicious gifts, congratulations: that is the feature.");
             AddBookPage(w, "III. One-Off Perks\n\nSome boons are one-off gifts. Borrowed Pulse is Mythical rarity and can restore one Hardcore life, capped for Hardcore Crawler. Red Pocket, Blue Pocket, and Utility Belt are emergency kits for survival, mana, and field tools.\n\nOnce taken, one-off perks stop appearing. The road does not keep handing out the same miracle just because you made a convincing face.\n\nSpend them when they save a run, not when they merely make a quiet evening prettier.");
-            AddBookPage(w, "IV. Milestone Caches\n\nCrawler caches are milestone rewards now, not ordinary boon picks. By default, every fifth Crawler level delivers a level-appropriate cache. Every tenth level leans harder into gear, and every twenty-fifth level is a bigger cache moment.\n\nCaches look at the kind of skills you are using and try to hand you something useful for the next ugly mile: armory, missile, arcane, survival, or mixed rewards. Quest Favor can also send a modest single-roll quest cache, capped to keep big quest turn-ins from flooding your pack. Gear from these caches is Hardcore-provenance gear. Keep the economy clean.\n\nIf a Crawler flags for player combat, their radar mark turns pink. A player who defeats them claims their skull, and sometimes a red-ringed sponsor bounty weighted toward the fallen Crawler's used combat style.\n\nAdmins can tune the interval with /lootconfig set crawler.cacheinterval <levels>, or set it to 0 to disable milestone caches.");
+            AddBookPage(w, "IV. Milestone Caches\n\nCrawler caches are milestone rewards now, not ordinary boon picks. By default, every fifth Crawler level delivers a level-appropriate cache. Every tenth level leans harder into gear, and every twenty-fifth level is a bigger cache moment.\n\nCaches look at the kind of skills you are using and try to hand you something useful for the next ugly mile: armory, missile, arcane, survival, or mixed rewards. Quest Favor can also send a modest single-roll quest cache, capped to keep big quest turn-ins from flooding your pack. Gear from these caches is Crawler-provenance gear. Keep the economy clean.\n\nIf a Crawler flags for player combat, their radar mark turns pink. A player who defeats them claims their skull, and sometimes a red-ringed sponsor bounty weighted toward the fallen Crawler's used combat style.\n\nAdmins can tune the interval with /lootconfig set crawler.cacheinterval <levels>, or set it to 0 to disable milestone caches.");
             AddBookPage(w, "V. Trials and Fan Boxes\n\nBy default, every tenth Crawler level opens a milestone trial. Admins can tune or disable the cadence with /lootconfig set crawler.trialinterval <levels>. Trials persist through logout and restart. Use /crawler trial to see the oldest trouble waiting for you, then /crawler trial claim once a completed trial is ready.\n\nTrials ask for things Crawlers already do: defeat XP-worthy creatures, punch above your level, survive mutated prey, practice field medicine, eat enough food to keep going, or gain skill ranks through use. Zero-XP kills do not move hunting trials.\n\nA completed trial unlocks a themed Fan Box. These are not ordinary boon picks; they are the road throwing gear, supplies, or a small stat nudge at a survivor who did something worth watching.");
             AddBookPage(w, "VI. Proficiency\n\nHardcore Crawler uses a shorter proficiency window and a configurable proficiency multiplier. That means the skills you actively use can wake up faster than normal.\n\nThis does not let you spend your way into a build. Manual skill, attribute, and vital raising is locked, but skill credits still matter. If your spec budget is full, lower something before the road can teach you a new specialty. Your character becomes what survives repeated use: untrained skills wake up, trained skills deepen, specialized skills drive levels, and related stats rise along the way.\n\nAdmins can tune Crawler settings with /lootconfig crawler.");
             AddBookPage(w, "VII. The Living Board\n\nThe public Crawler board lives at /crawlers on the Admin Map web service. It shows living online Hardcore Crawler characters, their levels, kills, lives, and chosen boons.\n\nIt does not show exact locations, inventory, private identifiers, or admin controls. It is meant for cheering, rivalry, and watching the brave make questionable decisions in near real time.\n\nIf you see your name there, remember: the board loves survivors most because they are still available for future mistakes.");
@@ -1212,8 +1282,8 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
                 WhenCreate = RegenerationType.PickUp,
                 WhereCreate = RegenLocationType.Contain,
                 StackSize = -1,
-                PaletteId = 0,
-                Shade = 0,
+                PaletteId = (uint)paletteId,
+                Shade = (float)shade,
                 ObjCellId = 0,
                 OriginX = 0,
                 OriginY = 0,
@@ -1223,6 +1293,45 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
                 AnglesY = 0,
                 AnglesZ = 0,
             });
+        }
+
+        private static Weenie BuildNomadPathwardenRobe()
+        {
+            const uint pathwardenRobeWeenieClassId = 40439;
+            var source = DatabaseManager.World.GetCachedWeenie(pathwardenRobeWeenieClassId);
+            var w = CloneWeenie(source, NomadPathwardenRobeWeenieClassId, "ace2000622-nomadpathwardenrobe");
+            if (w == null)
+            {
+                log.Warn("DerpACE: Could not clone stock Pathwarden robe for Nomad Pathwarden robe.");
+                return null;
+            }
+
+            w.PropertiesInt ??= new Dictionary<PropertyInt, int>();
+            w.PropertiesBool ??= new Dictionary<PropertyBool, bool>();
+            w.PropertiesString ??= new Dictionary<PropertyString, string>();
+            w.PropertiesSpellBook = new Dictionary<int, float>();
+
+            w.PropertiesInt[PropertyInt.GearProvenance] = 3; // Ironman economy.
+            w.PropertiesInt[PropertyInt.UiEffects] = (int)(UiEffects.Magical | UiEffects.BoostHealth | UiEffects.BoostStamina);
+
+            w.PropertiesBool[PropertyBool.IsIronmanItem] = true;
+            w.PropertiesBool[PropertyBool.IsSellable] = false;
+            w.PropertiesBool[PropertyBool.DestroyOnSell] = true;
+            w.PropertiesBool[PropertyBool.Inscribable] = true;
+
+            w.PropertiesString[PropertyString.Name] = "Nomad Pathwarden Robe";
+            w.PropertiesString[PropertyString.ShortDesc] = "A modified Pathwarden robe for Nomad Ironmen.";
+            w.PropertiesString[PropertyString.LongDesc] = "A Pathwarden robe altered for the Nomad road. It carries a small tier 2 Item and Creature spellbook so a fresh Nomad has enough early buffing to get moving.";
+            w.PropertiesString[PropertyString.Inscription] = "The seams remember Ispar. The road does not care.";
+            w.PropertiesString[PropertyString.ScribeName] = "M. Stranger";
+
+            foreach (var spellId in WorldObjects.NomadRune.GetRitualSpells(WorldObjects.NomadRuneSchool.Creature, 2))
+                w.PropertiesSpellBook[(int)spellId] = 2.0f;
+
+            foreach (var spellId in WorldObjects.NomadRune.GetRitualSpells(WorldObjects.NomadRuneSchool.Item, 2))
+                w.PropertiesSpellBook[(int)spellId] = 2.0f;
+
+            return w;
         }
 
         private static Weenie BuildNomadPathwardenChest()
@@ -1260,8 +1369,8 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
             w.PropertiesInt[PropertyInt.UiEffects]            = (int)UiEffects.BoostStamina;
             w.PropertiesInt[PropertyInt.Value]                = 2500;
             w.PropertiesInt[PropertyInt.ResistLockpick]       = 9999;
-            w.PropertiesInt[PropertyInt.MaxGeneratedObjects]  = 3;
-            w.PropertiesInt[PropertyInt.InitGeneratedObjects] = 3;
+            w.PropertiesInt[PropertyInt.MaxGeneratedObjects]  = 4;
+            w.PropertiesInt[PropertyInt.InitGeneratedObjects] = 4;
             w.PropertiesInt[PropertyInt.PhysicsState]         = (int)(PhysicsState.Static | PhysicsState.Ethereal | PhysicsState.ReportCollisions | PhysicsState.IgnoreCollisions | PhysicsState.Gravity);
             w.PropertiesInt[PropertyInt.GeneratorType]        = (int)GeneratorType.Relative;
 
@@ -1282,9 +1391,10 @@ Old Marra writes that a Nomad who says 'Zuthra vek' has either noticed something
             w.PropertiesString[PropertyString.Use]             = "Use this item to open it and see its contents.";
             w.PropertiesString[PropertyString.LongDesc]        = "A locked Pathwarden gear chest holding the first tools of the Nomad road.";
 
-            AddChestGenerator(w, 40439, 0, paletteId: 39, shade: 0.8583308693778472);
+            AddChestGenerator(w, NomadPathwardenRobeWeenieClassId, 0, paletteId: 39, shade: 0.8583308693778472);
             AddChestGenerator(w, WorldObjects.NomadRunePouch.NomadRunePouchWeenieClassId, 1);
-            AddChestGenerator(w, WorldObjects.ScavengersHexdust.BoneGrinderWeenieClassId, 2);
+            AddChestGenerator(w, WorldObjects.NomadRuneMergeTool.NomadRuneMergeToolWeenieClassId, 2);
+            AddChestGenerator(w, WorldObjects.ScavengersHexdust.BoneGrinderWeenieClassId, 3);
 
             return w;
         }

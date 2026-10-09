@@ -421,6 +421,10 @@ namespace ACE.Server.WorldObjects
             if (provenance == GearProvenanceIronman)
                 item.SetProperty(PropertyBool.IsIronmanItem, true);
 
+            var suffix = GetGearProvenanceSuffix(provenance);
+            if (suffix != null && !item.Name.EndsWith(suffix))
+                item.Name = item.Name + suffix;
+
             if (provenance != target.CurrentGearProvenance)
             {
                 message = "That gear belongs to another challenge economy.";

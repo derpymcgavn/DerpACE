@@ -892,6 +892,10 @@ namespace ACE.Server.Command.Handlers
 
             if (provenance == Player.GearProvenanceIronman)
                 item.SetProperty(PropertyBool.IsIronmanItem, true);
+
+            var suffix = Player.GetGearProvenanceSuffix(provenance);
+            if (suffix != null && !item.Name.EndsWith(suffix))
+                item.Name = item.Name + suffix;
         }
 
         // -- biota snapshot helpers --------------------------------------------

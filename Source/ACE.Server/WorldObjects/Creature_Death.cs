@@ -787,12 +787,14 @@ namespace ACE.Server.WorldObjects
                         if (Player.IsGearProvenanceTracked(lootItem))
                             lootItem.SetProperty(PropertyInt.GearProvenance, corpseKillerPlayer.CurrentGearProvenance);
 
+                        var provenanceSuffix = Player.GetGearProvenanceSuffix(corpseKillerPlayer.CurrentGearProvenance);
                         if (corpseKillerPlayer.CurrentGearProvenance == Player.GearProvenanceIronman)
                         {
                             lootItem.SetProperty(PropertyBool.IsIronmanItem, true);
-                            if (Player.IsGearProvenanceTracked(lootItem) && !lootItem.Name.EndsWith(" [IM]"))
-                                lootItem.Name = lootItem.Name + " [IM]";
                         }
+
+                        if (Player.IsGearProvenanceTracked(lootItem) && provenanceSuffix != null && !lootItem.Name.EndsWith(provenanceSuffix))
+                            lootItem.Name = lootItem.Name + provenanceSuffix;
                     }
                 }
 

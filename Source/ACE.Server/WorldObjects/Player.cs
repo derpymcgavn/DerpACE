@@ -140,6 +140,7 @@ namespace ACE.Server.WorldObjects
         public const int GearProvenanceNormal = 1;
         public const int GearProvenanceHardcore = 2;
         public const int GearProvenanceIronman = 3;
+        public const int GearProvenanceCrawler = 4;
 
         public bool IsIronmanNomadLifebound => GetProperty(PropertyBool.IsIronmanNomadLifebound) == true;
 
@@ -149,9 +150,11 @@ namespace ACE.Server.WorldObjects
             ? GearProvenanceNormal
             : IsIronmanFamily
                 ? GearProvenanceIronman
-                : IsHardcoreChallengePlayer(this)
-                    ? GearProvenanceHardcore
-                    : GearProvenanceNormal;
+                : IsHardcoreCrawlerPlayer(this)
+                    ? GearProvenanceCrawler
+                    : IsHardcoreChallengePlayer(this)
+                        ? GearProvenanceHardcore
+                        : GearProvenanceNormal;
 
         public static bool IsIronmanFamilyPlayer(IPlayer player)
         {
@@ -167,6 +170,12 @@ namespace ACE.Server.WorldObjects
                 && player?.GetProperty(PropertyBool.IsHardcore) == true;
         }
 
+        public static bool IsHardcoreCrawlerPlayer(IPlayer player)
+        {
+            return IsHardcoreChallengePlayer(player)
+                && player?.GetProperty(PropertyBool.IsHardcoreCrawler) == true;
+        }
+
         public static int GetGearProvenanceForPlayer(IPlayer player)
         {
             if (player?.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true)
@@ -174,6 +183,9 @@ namespace ACE.Server.WorldObjects
 
             if (IsIronmanFamilyPlayer(player))
                 return GearProvenanceIronman;
+
+            if (IsHardcoreCrawlerPlayer(player))
+                return GearProvenanceCrawler;
 
             return IsHardcoreChallengePlayer(player)
                 ? GearProvenanceHardcore
@@ -195,6 +207,16 @@ namespace ACE.Server.WorldObjects
                 return GearProvenanceIronman;
 
             return null;
+        }
+
+        public static string GetGearProvenanceSuffix(int provenance)
+        {
+            return provenance switch
+            {
+                GearProvenanceIronman => " [IM]",
+                GearProvenanceCrawler => " [Crawler]",
+                _ => null
+            };
         }
 
         public bool CanReceiveChallengeMagicAidFrom(Player sourcePlayer, string aidName = "magic")

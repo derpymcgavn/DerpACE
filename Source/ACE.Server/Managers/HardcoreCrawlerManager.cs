@@ -1792,7 +1792,7 @@ namespace ACE.Server.Managers
                 return;
             }
 
-            book.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceHardcore);
+            book.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceCrawler);
             if (player.TryCreateInInventoryWithNetworking(book))
                 player.SendMessage($"[Crawler] A guide book has been placed in your pack: {book.Name}.", ChatMessageType.Advancement);
             else
@@ -2187,7 +2187,7 @@ namespace ACE.Server.Managers
                 return;
             }
 
-            item.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceHardcore);
+            item.SetProperty(PropertyInt.GearProvenance, Player.GearProvenanceCrawler);
             if (!player.TryCreateInInventoryWithNetworking(item))
             {
                 player.SendMessage($"[Crawler] {source} could not fit {item.Name} in your pack.", ChatMessageType.System);

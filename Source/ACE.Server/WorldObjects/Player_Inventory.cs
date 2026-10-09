@@ -311,6 +311,7 @@ namespace ACE.Server.WorldObjects
                 GearProvenanceNormal => "That gear belongs to the normal economy.",
                 GearProvenanceHardcore => "That gear belongs to the Hardcore economy.",
                 GearProvenanceIronman => "That gear belongs to the Ironman economy.",
+                GearProvenanceCrawler => "That gear belongs to the Crawler economy.",
                 _ => "That gear belongs to another challenge economy."
             };
         }
@@ -327,9 +328,11 @@ namespace ACE.Server.WorldObjects
             if (provenance == GearProvenanceIronman)
             {
                 item.SetProperty(PropertyBool.IsIronmanItem, true);
-                if (!item.Name.EndsWith(" [IM]"))
-                    item.Name = item.Name + " [IM]";
             }
+
+            var suffix = GetGearProvenanceSuffix(provenance);
+            if (suffix != null && !item.Name.EndsWith(suffix))
+                item.Name = item.Name + suffix;
         }
 
         /// <summary>
