@@ -57,6 +57,36 @@ Crawler tuning lives under `@lootconfig`: `crawler.enabled`, `crawler.maxlevel`,
 
 Milestone trials persist through logout and restart. Current built-in trial types are XP-worthy hunts, high-risk hunts, mutated hunts, field medicine, rations, and Road Lessons skill-growth objectives. Completed trials grant themed Fan Box reward packages instead of physical loot-box WCIDs. Normal quest XP for Crawlers is converted into persistent Crawler Favor instead of conventional XP; each full level-worth of favor grants a Crawler quest cache. Crawlers also count as having all spell foci built in, so they do not need physical foci clutter to cast learned spells.
 
+### Crawler Perks
+
+Crawler perks are called boons in-game. Starting at level 2, every level queues one boon choice. The oldest unpicked choice is shown with `/crawler choices`, and `/crawler pick <number>` locks one option for that level. Pending choices persist through logout and restart. Most conditioning boons can appear repeatedly if the character still has a usable, non-maxed skill in that category. One-off boons can only be taken once.
+
+| Perk | Rarity | Type | Full effect |
+|---|---|---|---|
+| Road Legs | Common | Conditioning | If Run or Jump is trained and not maxed, grants one crawler stat-progress pulse to Run and Jump. Movement practice feeds the attributes and vitals behind mobility. |
+| Blade Memory | Common | Conditioning | Finds your highest current trained melee style among Light Weapons, Heavy Weapons, Finesse Weapons, Two Handed Combat, and Dual Wield, then grants one related stat-progress pulse to that skill. |
+| Arcane Spark | Common | Conditioning | Finds your highest current trained magic style among War Magic, Life Magic, Void Magic, Creature Enchantment, Item Enchantment, and Mana Conversion, then grants one related stat-progress pulse to that skill. |
+| Guarded Breath | Common | Conditioning | Finds your weakest current trained defense among Melee Defense, Missile Defense, Magic Defense, and Shield, then grants one related stat-progress pulse to that skill. This helps shore up the defense lagging behind. |
+| Maker's Hands | Common | Conditioning | Finds your highest current trained craft among Alchemy, Cooking, Fletching, Armor Tinkering, Item Tinkering, Magic Item Tinkering, Weapon Tinkering, and Salvaging, then grants one related stat-progress pulse to that craft. |
+| Dirty Instinct | Common | Conditioning | If Dirty Fighting or Sneak Attack is trained and not maxed, grants one related stat-progress pulse to the weaker of the two. If only one qualifies, that skill gets the pulse. |
+| Field Medic | Common | Conditioning | If Healing is trained and not maxed, grants one Healing-related stat-progress pulse, reinforcing the survival stats tied to field medicine. |
+| Summoner's Thread | Common | Conditioning | If Summoning is trained and not maxed, grants one Summoning-related stat-progress pulse. |
+| Lockstep | Common | Conditioning | If Lockpick is trained and not maxed, grants one Lockpick-related stat-progress pulse. |
+| Wartorn Focus | Common | Conditioning | If Arcane Lore or Mana Conversion is trained and not maxed, grants one related stat-progress pulse to each qualifying skill. |
+| Red Pocket | Uncommon | One-off kit | Grants a small survival kit: two healing supplies and one field supply item, all marked as Crawler gear. The items are created at the character's current crawler loot tier. |
+| Blue Pocket | Uncommon | One-off kit | Grants an arcane kit: one healing supply and two mana supplies, all marked as Crawler gear and scaled by the character's current crawler loot tier. |
+| Utility Belt | Uncommon | One-off kit | Grants a utility kit: one lockpick item and one healing supply, both marked as Crawler gear. |
+| Brawn Debt | Rare | One-off flaw boon | Immediately grants +5 Strength ranks and +5 Coordination ranks, but removes 6 Max Mana ranks. Vitals are recalculated after the price is paid. |
+| Glass Ritual | Rare | One-off flaw boon | Immediately grants +5 Focus ranks and +5 Self ranks, but removes 6 Max Health ranks. Vitals are recalculated after the price is paid. |
+| Runner's Tax | Rare | One-off flaw boon | Immediately grants +5 Quickness ranks and gives Run and Jump one conditioning pulse each if they qualify, but removes 4 Strength ranks and 3 Max Health ranks. |
+| Field Surgeon Oath | Rare | One-off flaw boon | Immediately gives Healing one conditioning pulse if it qualifies, grants +3 Focus ranks and +3 Coordination ranks, and removes 4 Max Mana ranks. Afterward, healing kits you use restore 35% more, but restoration spells that land on you restore 35% less. |
+| Blood for Sparks | Epic | One-off flaw boon | Immediately grants +8 Max Mana ranks, but removes 5 Max Health ranks and 5 Max Stamina ranks. |
+| Iron Stomach | Epic | One-off flaw boon | Immediately grants +6 Max Health ranks and +6 Max Stamina ranks, but removes 4 Focus ranks and 4 Self ranks. |
+| Bottomless Engine | Epic | One-off flaw boon | Immediately grants +10 Max Stamina ranks. After taking it, eating food starts a 20-minute satiation timer. If you go 20 minutes without eating, the engine drains 5% of max stamina every minute until you eat again. |
+| Borrowed Pulse | Mythical | One-off fate boon | Grants +1 Hardcore life, up to a Hardcore Crawler cap of 2 lives. It is only eligible while the character is below that cap. |
+
+A related stat-progress pulse means the boon calls the same crawler stat-growth path used by skill practice. In practical terms, the affected skill grants ranks to its linked attributes and sometimes vitals, rather than giving normal XP directly.
+
 ## Vendor Tools
 
 | Command | Access | Purpose |
