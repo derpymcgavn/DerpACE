@@ -32,17 +32,24 @@ namespace ACE.Server.Managers
         private const double SkillPracticeCooldownSeconds = 5.0;
         private const double ArcaneLorePracticeCooldownSeconds = 30.0;
         private const double RecklessnessPracticeCooldownSeconds = 10.0;
+        private const double DeceptionPracticeCooldownSeconds = 20.0;
         private const double AllegiancePracticeCooldownSeconds = 300.0;
         private const double ArcaneLorePracticeDifficultyScalar = 0.35;
         private const float RecklessnessPracticeXpScalar = 0.25f;
+        private const float DeceptionPracticeXpScalar = 0.10f;
         private const int AssessAutoTrainUseMultiplier = 4;
         private const int ArcaneLoreAutoTrainUseMultiplier = 6;
         private const int RecklessnessAutoTrainUseMultiplier = 4;
+        private const int DeceptionAutoTrainUseMultiplier = 8;
         private const int AllegianceAutoTrainUseMultiplier = 8;
         private const float CrawlerMeleeProficiencyScalar = 0.45f;
         private const float CrawlerManaConversionProficiencyScalar = 0.35f;
+        private const int QuestFavorThresholdScalar = 10;
+        private const long QuestFavorMinimumThreshold = 25000;
+        private const int QuestFavorMaxCachesPerGrant = 1;
         private static readonly ConcurrentDictionary<string, double> _skillPracticeCooldowns = new ConcurrentDictionary<string, double>();
         private static readonly ConcurrentDictionary<string, double> _allegiancePracticeCooldowns = new ConcurrentDictionary<string, double>();
+        private static readonly ConcurrentDictionary<uint, double> _pvpRewardTimestamps = new ConcurrentDictionary<uint, double>();
 
         private enum BoonRarity
         {
@@ -112,6 +119,24 @@ namespace ACE.Server.Managers
             public bool OneOff { get; }
         }
 
+
+        private sealed class OriginDef
+        {
+            public OriginDef(string id, string name, string description, Skill[] trainedSkills, Action<Player> apply)
+            {
+                Id = id;
+                Name = name;
+                Description = description;
+                TrainedSkills = trainedSkills ?? Array.Empty<Skill>();
+                Apply = apply;
+            }
+
+            public string Id { get; }
+            public string Name { get; }
+            public string Description { get; }
+            public Skill[] TrainedSkills { get; }
+            public Action<Player> Apply { get; }
+        }
         private static readonly Skill[] MeleeGrowth = { Skill.LightWeapons, Skill.HeavyWeapons, Skill.FinesseWeapons, Skill.TwoHandedCombat, Skill.DualWield };
         private static readonly Skill[] MagicGrowth = { Skill.WarMagic, Skill.LifeMagic, Skill.VoidMagic, Skill.CreatureEnchantment, Skill.ItemEnchantment, Skill.ManaConversion };
         private static readonly Skill[] DefenseGrowth = { Skill.MeleeDefense, Skill.MissileDefense, Skill.MagicDefense, Skill.Shield };
@@ -128,6 +153,41 @@ namespace ACE.Server.Managers
             new TrialDef(TrialKind.SkillGrowth, "Road Lessons", "Gain skill ranks through use.", p => true),
         };
 
+        private static readonly List<OriginDef> Origins = new List<OriginDef>
+        {
+            new OriginDef("vanguard", "Vanguard Package", "Light weapon, melee defense, and field healing. The cleanest front-line sponsor package.", new[] { Skill.LightWeapons, Skill.MeleeDefense, Skill.Healing }, p =>
+            {
+                AwardRelatedStatProgress(p, Skill.LightWeapons, 2);
+                GrantRolledWeapon(p, "Crawler Origin: Vanguard Package", "melee");
+                GrantFixedItems(p, "Crawler Origin: Vanguard Package", 273, 2, 2643, 1);
+            }),
+            new OriginDef("skirmisher", "Skirmisher Package", "Missile weapon, missile defense, and fletching. Keep moving and make distance your first armor.", new[] { Skill.MissileWeapons, Skill.MissileDefense, Skill.Fletching }, p =>
+            {
+                AwardRelatedStatProgress(p, Skill.MissileWeapons, 2);
+                GrantRolledWeapon(p, "Crawler Origin: Skirmisher Package", "missile");
+                GrantFixedItems(p, "Crawler Origin: Skirmisher Package", 273, 1, 2643, 2);
+            }),
+            new OriginDef("arcanist", "Boom Apprentice Package", "War magic, mana conversion, and arcane lore. Flashy, hungry, and probably a little too confident.", new[] { Skill.WarMagic, Skill.ManaConversion, Skill.ArcaneLore }, p =>
+            {
+                AwardRelatedStatProgress(p, Skill.WarMagic, 2);
+                GrantRolledWeapon(p, "Crawler Origin: Boom Apprentice Package", "caster");
+                GrantFixedItems(p, "Crawler Origin: Boom Apprentice Package", 273, 1, 2597, 2);
+            }),
+            new OriginDef("warden", "Patch-Up Mystic Package", "Life magic, melee defense, and healing. Survive the first terrible room and improvise from there.", new[] { Skill.LifeMagic, Skill.MeleeDefense, Skill.Healing }, p =>
+            {
+                AwardRelatedStatProgress(p, Skill.LifeMagic, 1);
+                AwardRelatedStatProgress(p, Skill.Healing, 1);
+                GrantRolledArmor(p, "Crawler Origin: Patch-Up Mystic Package");
+                GrantFixedItems(p, "Crawler Origin: Patch-Up Mystic Package", 273, 2, 2643, 2);
+            }),
+            new OriginDef("scout", "Backstage Scout Package", "Finesse weapon, lockpick, and run. Sneak, sprint, steal the angle, repeat.", new[] { Skill.FinesseWeapons, Skill.Lockpick, Skill.Run }, p =>
+            {
+                AwardRelatedStatProgress(p, Skill.FinesseWeapons, 1);
+                AwardRelatedStatProgress(p, Skill.Run, 1);
+                GrantRolledWeapon(p, "Crawler Origin: Backstage Scout Package", "melee");
+                GrantFixedItems(p, "Crawler Origin: Backstage Scout Package", 8328, 1, 273, 1);
+            }),
+        };
         private static readonly List<BoonDef> Boons = new List<BoonDef>
         {
             new BoonDef("road_legs", "Road Legs", "Conditioning perk: Run and Jump use hardens the stats behind movement.", p => IsUsable(p, Skill.Run) || IsUsable(p, Skill.Jump), p => AwardSkills(p, Skill.Run, Skill.Jump)),
@@ -162,6 +222,67 @@ namespace ACE.Server.Managers
                 && player.GetProperty(PropertyBool.IsHardcoreCrawler) == true;
         }
 
+        public static void UpdatePvpRadar(Player player)
+        {
+            if (!IsActive(player))
+                return;
+
+            if (player.IsPKType)
+            {
+                player.RadarColor = RadarColor.Pink;
+                player.EnqueueBroadcast(true,
+                    new GameMessagePublicUpdatePropertyInt(player, PropertyInt.RadarBlipColor, (int)RadarColor.Pink));
+                return;
+            }
+
+            if (player.RadarColor != RadarColor.Pink)
+                return;
+
+            player.RadarColor = null;
+            player.EnqueueBroadcast(true,
+                new GameMessagePublicUpdatePropertyInt(player, PropertyInt.RadarBlipColor, 0));
+        }
+
+        public static void TryAwardPvpKill(Player victim, DamageHistoryInfo topDamager)
+        {
+            if (!IsActive(victim) || topDamager == null || !victim.IsPKType)
+                return;
+
+            var killer = topDamager.TryGetAttacker() as Player ?? topDamager.TryGetPetOwner();
+            if (killer == null || killer.Guid.Full == victim.Guid.Full)
+                return;
+
+            var now = ACE.Common.Time.GetUnixTime();
+            if (_pvpRewardTimestamps.TryGetValue(victim.Guid.Full, out var lastReward) && now - lastReward < 10)
+                return;
+
+            _pvpRewardTimestamps[victim.Guid.Full] = now;
+
+            var skull = WorldObjectFactory.CreateNewWorldObject((uint)ACE.Entity.Enum.WeenieClassName.W_SKULL_CLASS);
+            if (skull != null)
+            {
+                skull.Name = $"Skull of {victim.Name}";
+                skull.LongDesc = $"A red-path Crawler trophy claimed by {killer.Name}.";
+                MarkRedSponsorItem(skull);
+                GrantItem(killer, skull, "Red Crawler Trophy");
+            }
+
+            var prizeChance = victim.PlayerKillerStatus == PlayerKillerStatus.PK ? 50 : 25;
+            if (ThreadSafeRandom.Next(0, 99) >= prizeChance)
+                return;
+
+            var family = GetPreferredWeaponFamily(victim) ?? GetPreferredWeaponFamily(killer);
+            var prize = CreateRolledWeapon(victim, family);
+            if (prize == null)
+                return;
+
+            var baseName = string.IsNullOrWhiteSpace(prize.Name) ? "Prize" : prize.Name;
+            prize.Name = $"Red-Ringed {baseName}";
+            prize.LongDesc = AppendLongDesc(prize.LongDesc, $"A sponsor-marked bounty paid for defeating {victim.Name} while they were flagged for player combat.");
+            MarkRedSponsorItem(prize);
+            GrantItem(killer, prize, "Red Sponsor Bounty");
+        }
+
         public static void Enable(Player player)
         {
             if (player == null)
@@ -170,7 +291,7 @@ namespace ACE.Server.Managers
             player.SetProperty(PropertyBool.IsHardcoreCrawler, true);
             player.SetModeTitle("CRAWLER HC");
             InitializeCrawlerBaseline(player);
-            player.SendMessage("Hardcore Crawler mode is active. You start with nothing trained; skills, stats, levels, and boons now come from use.", ChatMessageType.Advancement);
+            player.SendMessage("Hardcore Crawler mode is active. Ispar spat you into Dereth with no build plan and no mercy. Choose an early sponsor package with /crawler origins before level 4, then skills, stats, levels, and boons come from use.", ChatMessageType.Advancement);
             GrantGuideBook(player);
             OnLevelUp(player, player.Level ?? 1);
         }
@@ -186,6 +307,7 @@ namespace ACE.Server.Managers
             if (!player.GetProperty(PropertyInt.HardcoreLives).HasValue)
                 player.SetProperty(PropertyInt.HardcoreLives, 1);
 
+            UpdatePvpRadar(player);
             var creditsAdjusted = NormalizeCrawlerSkillCredits(player);
             QueueMissingBoonChoices(player, player.Level ?? 1, notify: false);
             QueueMissingTrials(player, player.Level ?? 1, notify: false);
@@ -230,11 +352,14 @@ namespace ACE.Server.Managers
             var favor = Math.Max(0, player.GetProperty(PropertyInt64.HardcoreCrawlerQuestFavor) ?? 0) + amount;
             var caches = 0;
 
-            while (favor >= threshold && caches < 10)
+            while (favor >= threshold && caches < QuestFavorMaxCachesPerGrant)
             {
                 favor -= threshold;
                 caches++;
             }
+
+            if (favor >= threshold)
+                favor = threshold - 1;
 
             player.SetProperty(PropertyInt64.HardcoreCrawlerQuestFavor, favor);
             player.ChangesDetected = true;
@@ -245,8 +370,7 @@ namespace ACE.Server.Managers
                 return;
             }
 
-            var plural = caches == 1 ? "cache" : "caches";
-            player.SendMessage($"[Crawler] Quest XP converted into Crawler Favor. The crowd sends {caches:N0} quest {plural}; banked favor: {favor:N0}/{threshold:N0}.", ChatMessageType.Advancement);
+            player.SendMessage($"[Crawler] Quest XP converted into Crawler Favor. The crowd sends a quest cache; banked favor: {favor:N0}/{threshold:N0}.", ChatMessageType.Advancement);
             for (var i = 0; i < caches; i++)
                 GrantQuestFavorCache(player);
         }
@@ -255,12 +379,26 @@ namespace ACE.Server.Managers
         {
             var level = Math.Clamp(player?.Level ?? 1, 1, (int)Player.GetMaxLevel());
             var xpToNext = player?.GetXPToNextLevel(level) ?? 0;
-            return Math.Max(1L, (long)Math.Min((ulong)long.MaxValue, xpToNext));
+            var scaled = (long)Math.Min((ulong)long.MaxValue, xpToNext) * QuestFavorThresholdScalar;
+            return Math.Max(QuestFavorMinimumThreshold, scaled);
         }
 
         private static void GrantQuestFavorCache(Player player)
         {
-            GrantMilestoneCache(player, Math.Max(1, player.Level ?? 1));
+            var family = GetPreferredWeaponFamily(player);
+            if (!string.IsNullOrWhiteSpace(family) && ThreadSafeRandom.Next(0, 99) < 30)
+            {
+                GrantRolledWeapon(player, "Crawler Quest Cache", family);
+                return;
+            }
+
+            var roll = ThreadSafeRandom.Next(0, 99);
+            if (roll < 45)
+                GrantFixedItems(player, "Crawler Quest Cache", 273, 1);
+            else if (roll < 75)
+                GrantFixedItems(player, "Crawler Quest Cache", 2643, 1);
+            else
+                GrantFixedItems(player, "Crawler Quest Cache", 2597, 1);
         }
 
         private static void QueueMissingBoonChoices(Player player, int currentLevel, bool notify)
@@ -431,6 +569,8 @@ namespace ACE.Server.Managers
                 return threshold * ArcaneLoreAutoTrainUseMultiplier;
             if (skill == Skill.Recklessness)
                 return threshold * RecklessnessAutoTrainUseMultiplier;
+            if (skill == Skill.Deception)
+                return threshold * DeceptionAutoTrainUseMultiplier;
             if (skill == Skill.Loyalty || skill == Skill.Leadership)
                 return threshold * AllegianceAutoTrainUseMultiplier;
             return threshold;
@@ -442,6 +582,8 @@ namespace ACE.Server.Managers
                 return ArcaneLorePracticeCooldownSeconds;
             if (skill == Skill.Recklessness)
                 return RecklessnessPracticeCooldownSeconds;
+            if (skill == Skill.Deception)
+                return DeceptionPracticeCooldownSeconds;
             return SkillPracticeCooldownSeconds;
         }
 
@@ -459,6 +601,8 @@ namespace ACE.Server.Managers
             amount = Math.Min(Math.Max(amount, (uint)Math.Min(difficulty, 250)), 25000u);
             if (skill.Skill == Skill.Recklessness)
                 amount = (uint)Math.Max(1.0, Math.Round(amount * RecklessnessPracticeXpScalar));
+            else if (skill.Skill == Skill.Deception)
+                amount = (uint)Math.Max(1.0, Math.Round(amount * DeceptionPracticeXpScalar));
             return amount;
         }
 
@@ -1063,7 +1207,13 @@ namespace ACE.Server.Managers
             var rankThreshold = Math.Max(1, DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel);
             var lastSkill = player.GetProperty(PropertyString.HardcoreCrawlerLastProgressSkill);
             sb.AppendLine("=== Hardcore Crawler ===");
-            sb.AppendLine($"  Skill training: untrained skills become ready after {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)} uses; Assess skills take {GetAutoTrainUseThreshold(Skill.AssessCreature)}, Arcane Lore takes {GetAutoTrainUseThreshold(Skill.ArcaneLore)}, Recklessness takes {GetAutoTrainUseThreshold(Skill.Recklessness)}, Loyalty/Leadership take {GetAutoTrainUseThreshold(Skill.Loyalty)}");
+            var origin = FindOrigin(player.GetProperty(PropertyString.HardcoreCrawlerOrigin));
+            if (origin != null)
+                sb.AppendLine($"  Sponsor package: {origin.Name}");
+            else if ((player.Level ?? 1) <= 3)
+                sb.AppendLine("  Sponsor package: unchosen - use /crawler origins");
+            sb.AppendLine($"  Skill training: normal skills become ready after {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)} uses.");
+            sb.AppendLine($"  Slower skills: Assess {GetAutoTrainUseThreshold(Skill.AssessCreature)}, Arcane Lore {GetAutoTrainUseThreshold(Skill.ArcaneLore)}, Recklessness {GetAutoTrainUseThreshold(Skill.Recklessness)}, Deception {GetAutoTrainUseThreshold(Skill.Deception)}, Loyalty/Leadership {GetAutoTrainUseThreshold(Skill.Loyalty)}.");
             sb.AppendLine($"  Skill specialization: trained skills become ready at level {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecMinLevel)} after {Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecRanks)} ranks");
             sb.AppendLine($"  Level progress: {rankProgress}/{rankThreshold} specialized rank gains");
             var trainedCount = GetTrainedSkillCount(player);
@@ -1107,6 +1257,160 @@ namespace ACE.Server.Managers
             player.SendMessage(sb.ToString(), ChatMessageType.System);
         }
 
+        public static void ShowOrigins(Player player)
+        {
+            if (!IsActive(player))
+            {
+                player.SendMessage("Hardcore Crawler is not active on this character.", ChatMessageType.System);
+                return;
+            }
+
+            var chosen = FindOrigin(player.GetProperty(PropertyString.HardcoreCrawlerOrigin));
+            if (chosen != null)
+            {
+                player.SendMessage($"[Crawler] Your sponsor package is {chosen.Name}.", ChatMessageType.System);
+                return;
+            }
+
+            if ((player.Level ?? 1) > 3)
+            {
+                player.SendMessage("[Crawler] Sponsor packages can only be chosen through level 3.", ChatMessageType.System);
+                return;
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine("=== Crawler Sponsor Packages ===");
+            sb.AppendLine("You got spat out of Ispar into Dereth with a crowd watching and no time to be precious.");
+            sb.AppendLine("Choose one early package. It trains the listed skills, spends their normal skill credits, and grants a small kit. It does not lock future growth.");
+            for (var i = 0; i < Origins.Count; i++)
+            {
+                var origin = Origins[i];
+                sb.AppendLine($"  {i + 1}. {origin.Name} ({origin.Id}) - {origin.Description}");
+                sb.AppendLine($"     Trains: {string.Join(", ", origin.TrainedSkills.Select(skill => skill.ToSentence()))}");
+            }
+            sb.AppendLine("Use /crawler origin <number or name> to choose. This cannot be undone for this life.");
+            player.SendMessage(sb.ToString(), ChatMessageType.System);
+        }
+
+        public static void PickOrigin(Player player, string token)
+        {
+            if (!IsActive(player))
+            {
+                player.SendMessage("Hardcore Crawler is not active on this character.", ChatMessageType.System);
+                return;
+            }
+
+            if (FindOrigin(player.GetProperty(PropertyString.HardcoreCrawlerOrigin)) != null)
+            {
+                player.SendMessage("[Crawler] You already chose a sponsor package for this life.", ChatMessageType.System);
+                return;
+            }
+
+            if ((player.Level ?? 1) > 3)
+            {
+                player.SendMessage("[Crawler] Sponsor packages can only be chosen through level 3.", ChatMessageType.System);
+                return;
+            }
+
+            var origin = FindOriginByToken(token);
+            if (origin == null)
+            {
+                player.SendMessage("Usage: /crawler origin <number or name>. Use /crawler origins to list choices.", ChatMessageType.System);
+                return;
+            }
+
+            if (!CanApplyOrigin(player, origin, out var reason))
+            {
+                player.SendMessage(reason, ChatMessageType.System);
+                return;
+            }
+
+            foreach (var skillType in origin.TrainedSkills)
+                TrainOriginSkill(player, skillType);
+
+            origin.Apply(player);
+            player.SetProperty(PropertyString.HardcoreCrawlerOrigin, origin.Id);
+            player.Session.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, player.AvailableSkillCredits ?? 0));
+            player.SendMessage($"[Crawler] Sponsor package chosen: {origin.Name}. You have a shape now, barely. Dereth still gets a vote.", ChatMessageType.Advancement);
+            player.PlayParticleEffect(PlayScript.SkillUpPurple, player.Guid);
+            player.ChangesDetected = true;
+        }
+
+        private static bool CanApplyOrigin(Player player, OriginDef origin, out string reason)
+        {
+            reason = null;
+            var newlyTrained = origin.TrainedSkills
+                .Select(skill => player.GetCreatureSkill(skill, false))
+                .Where(skill => skill != null && skill.AdvancementClass < SkillAdvancementClass.Trained)
+                .ToList();
+
+            var trainedCap = Math.Max(0, DerpACEConfig.HardcoreCrawlerMaxTrainedSkills);
+            if (trainedCap > 0 && GetTrainedSkillCount(player) + newlyTrained.Count > trainedCap)
+            {
+                reason = $"[Crawler] {origin.Name} would exceed your trained skill limit ({trainedCap}).";
+                return false;
+            }
+
+            var cost = 0;
+            foreach (var skill in newlyTrained)
+            {
+                if (!DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)skill.Skill, out var skillBase))
+                {
+                    reason = $"[Crawler] {skill.Skill.ToSentence()} cannot be trained on this character.";
+                    return false;
+                }
+                cost += skillBase.TrainedCost;
+            }
+
+            if ((player.AvailableSkillCredits ?? 0) < cost)
+            {
+                reason = $"[Crawler] {origin.Name} needs {cost} available skill credits. You have {player.AvailableSkillCredits ?? 0}.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void TrainOriginSkill(Player player, Skill skillType)
+        {
+            var skill = player.GetCreatureSkill(skillType, false);
+            if (skill == null || skill.AdvancementClass >= SkillAdvancementClass.Trained)
+                return;
+
+            if (!DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)skillType, out var skillBase))
+                return;
+
+            if (!player.TrainSkill(skillType, skillBase.TrainedCost))
+                return;
+
+            var trainProgress = ParseSkillProgress(player.GetProperty(PropertyString.HardcoreCrawlerAutoTrainProgress));
+            if (trainProgress.Remove(skillType))
+                SaveSkillProgress(player, PropertyString.HardcoreCrawlerAutoTrainProgress, trainProgress);
+
+            player.Session.Network.EnqueueSend(new GameMessagePrivateUpdateSkill(player, skill));
+        }
+
+        private static OriginDef FindOriginByToken(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return null;
+
+            token = token.Trim();
+            if (int.TryParse(token, out var index) && index >= 1 && index <= Origins.Count)
+                return Origins[index - 1];
+
+            return Origins.FirstOrDefault(origin =>
+                string.Equals(origin.Id, token, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(origin.Name, token, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static OriginDef FindOrigin(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return null;
+
+            return Origins.FirstOrDefault(origin => string.Equals(origin.Id, id, StringComparison.OrdinalIgnoreCase));
+        }
         public static void ShowChoices(Player player)
         {
             if (!IsActive(player))
@@ -1836,17 +2140,21 @@ namespace ACE.Server.Managers
             };
         }
 
-        private static void GrantRolledWeapon(Player player, string source, string family)
+        private static WorldObject CreateRolledWeapon(Player player, string family)
         {
             var profile = BuildProfile(player);
-            WorldObject item = family switch
+            return family switch
             {
                 "melee" => LootGenerationFactory.CreateMeleeWeapon(profile, true, requestedTier: profile.Tier),
                 "missile" => LootGenerationFactory.CreateMissileWeapon(profile, true, requestedTier: profile.Tier),
                 "caster" => LootGenerationFactory.CreateCaster(profile, true, requestedTier: profile.Tier),
                 _ => LootGenerationFactory.CreateWeapon(profile, true, requestedTier: profile.Tier),
             };
-            GrantItem(player, item, source);
+        }
+
+        private static void GrantRolledWeapon(Player player, string source, string family)
+        {
+            GrantItem(player, CreateRolledWeapon(player, family), source);
         }
 
         private static void GrantRolledArmor(Player player, string source)
@@ -1889,6 +2197,23 @@ namespace ACE.Server.Managers
 
             player.SendMessage($"[Crawler] {source} grants {item.Name}.", ChatMessageType.Advancement);
         }
+
+        private static void MarkRedSponsorItem(WorldObject item)
+        {
+            if (item == null)
+                return;
+
+            item.UiEffects = (item.UiEffects ?? UiEffects.Undef) | UiEffects.Fire | UiEffects.Magical;
+        }
+
+        private static string AppendLongDesc(string existing, string addition)
+        {
+            if (string.IsNullOrWhiteSpace(existing))
+                return addition;
+
+            return existing.TrimEnd() + "\n\n" + addition;
+        }
+
         private static bool IsUsable(Player player, Skill skill)
         {
             var creatureSkill = player.GetCreatureSkill(skill, false);

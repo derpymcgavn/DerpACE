@@ -108,7 +108,7 @@ namespace ACE.Server.Managers
 
         public static void OnCreatureKilled(Player player, Creature creature, long xpEarned)
         {
-            if (player == null || creature == null || xpEarned <= 0)
+            if (player == null || creature == null)
                 return;
 
             OnPersistentCreatureKilled(player, creature);

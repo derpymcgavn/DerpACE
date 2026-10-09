@@ -151,7 +151,7 @@ namespace ACE.Server.WorldObjects
                 return;
 
             // Reject hardcore and ironman characters
-            if (player.GetProperty(PropertyBool.IsHardcore) ?? false)
+            if (Player.IsHardcoreChallengePlayer(player))
             {
                 player.Session.Network.EnqueueSend(new GameMessageSystemChat(
                     $"{npc.Name} flips dramatically. \"w00t!!! ur h4rdcore br0? i c4nnot h3lp d00dz l1k3 j00!!!!\"",

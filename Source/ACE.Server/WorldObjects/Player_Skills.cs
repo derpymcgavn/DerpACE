@@ -17,7 +17,7 @@ namespace ACE.Server.WorldObjects
     {
         public const int IronmanSkillRespecUnlockLevel = 275;
 
-        public bool IsIronmanSkillRespecLocked => IsIronmanFamily && (Level ?? 1) < IronmanSkillRespecUnlockLevel;
+        public bool IsIronmanSkillRespecLocked => IsIronmanFamily && GetProperty(PropertyBool.IsIronmanNomadLifebound) != true && (Level ?? 1) < IronmanSkillRespecUnlockLevel;
 
         public bool VerifyIronmanSkillRespecUnlocked()
         {
@@ -152,10 +152,10 @@ namespace ACE.Server.WorldObjects
                 return false;
             }
 
-            // DerpACE Ironman: skills are locked to the reroll — no manual training allowed.
-            if (IsIronmanFamily)
+            // DerpACE Ironman: rolled builds are locked. Lifebound Nomads keep normal training, but specialization is limited below.
+            if (IsIronmanFamily && GetProperty(PropertyBool.IsIronmanNomadLifebound) != true)
             {
-                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen cannot train skills — your abilities were decided at the moment of commitment.", ChatMessageType.Broadcast));
+                Session.Network.EnqueueSend(new GameMessageSystemChat("Ironmen cannot train skills - your abilities were decided at the moment of commitment.", ChatMessageType.Broadcast));
                 return false;
             }
 
@@ -250,6 +250,9 @@ namespace ACE.Server.WorldObjects
                 return false;
             }
 
+            if (!CanLifeboundNomadSpecializeSkill(skill))
+                return false;
+
             // get the amount of skill credits required to upgrade this skill
             // from trained -> specialized
             if (!DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)skill, out var skillBase))
@@ -268,6 +271,9 @@ namespace ACE.Server.WorldObjects
         /// <param name="resetSkill">only set to TRUE during character creation. set to FALSE during temple / asheron's castle</param>
         public bool SpecializeSkill(Skill skill, int creditsSpent, bool resetSkill = true)
         {
+            if (!CanLifeboundNomadSpecializeSkill(skill))
+                return false;
+
             var creatureSkill = GetCreatureSkill(skill);
 
             if (creatureSkill.AdvancementClass != SkillAdvancementClass.Trained || creditsSpent > AvailableSkillCredits)
@@ -291,6 +297,15 @@ namespace ACE.Server.WorldObjects
             AvailableSkillCredits -= creditsSpent;
 
             return true;
+        }
+
+        private bool CanLifeboundNomadSpecializeSkill(Skill skill)
+        {
+            if (GetProperty(PropertyBool.IsIronmanNomadLifebound) != true || skill == Skill.LightWeapons)
+                return true;
+
+            Session?.Network.EnqueueSend(new GameMessageSystemChat("Lifebound Nomads can only newly specialize Light Weapons.", ChatMessageType.Broadcast));
+            return false;
         }
 
         /// <summary>

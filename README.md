@@ -46,14 +46,16 @@ Important config areas:
 DerpACE currently supports:
 
 - **Ironman**: self-found challenge mode with isolated economy rules and optional blind progression.
-- **Nomad Ironman**: weaponless/casterless Ironman variant using unarmed gauntlet and shoe damage, Nomad tools/runes, and optional Lifebound infinite-life play with no public scoreboard placement.
+- **Nomad Ironman**: weaponless/casterless Ironman variant using unarmed gauntlet and shoe damage, Nomad tools/runes, and optional Lifebound infinite-life play that preserves chosen character stats/trained skills, preserves Light Weapons and existing Melee Defense specializations, uses normal gear provenance, and has no public scoreboard placement.
 - **Hardcore**: death-limited challenge mode with challenge gear provenance and economy isolation.
 - **Hardcore Crawler**: Hardcore submode where skills, stats, levels, boons, and rewards are driven primarily by use-based progression.
 
 Crawler highlights:
 
 - Skills become ready to train or specialize through use, then the player chooses with `/crawler train <skill>` or `/crawler spec <skill>`.
-- XP display is masked for Crawlers; normal quest XP converts into Crawler Favor and cache rewards.
+- XP display is masked for Crawlers; normal quest XP converts into Crawler Favor, which can grant modest single-roll quest caches.
+- Early sponsor packages can be chosen through level 3 with `/crawler origins` and `/crawler origin <number|name>`; they train a few normal skills, spend normal skill credits, and grant a starter kit.
+- Crawlers who flag for player combat broadcast as pink radar blips; defeating one awards their skull and can roll a red-ringed sponsor bounty biased toward the Crawler's used combat skills.
 - Specialized rank gains drive Crawler levels.
 - Milestone caches, milestone trials, Fan Box rewards, queued boon choices, and flaw boons persist through logout/restart.
 - Crawler magic has built-in spell foci.
@@ -140,7 +142,7 @@ Player commands:
 |---|---|
 | `/ironman on`, `/ironman nomad`, `/ironman confirm`, `/ironman char`, `/ironman top` | Ironman and Nomad challenge flow. |
 | `/hardcore on`, `/hardcore confirm`, `/hardcoretop` | Hardcore challenge flow. |
-| `/crawler on`, `/crawler confirm`, `/crawler status`, `/crawler choices`, `/crawler pick`, `/crawler train`, `/crawler spec`, `/crawler trial` | Hardcore Crawler flow. |
+| `/crawler on`, `/crawler confirm`, `/crawler status`, `/crawler origins`, `/crawler origin`, `/crawler choices`, `/crawler pick`, `/crawler train`, `/crawler spec`, `/crawler trial` | Hardcore Crawler flow. |
 | `/gquest` | Global quest status and rewards. |
 | `/mail help` | Player mail commands. |
 | `/bank`, `/cash`, `/ddt` | Banking, currency, and direct deposit controls. |

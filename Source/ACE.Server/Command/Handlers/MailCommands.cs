@@ -568,7 +568,7 @@ namespace ACE.Server.Command.Handlers
             }
 
             var targetProvenance = Player.GetGearProvenanceForPlayer(target);
-            var targetRestricted = Player.IsIronmanFamilyPlayer(target) || target.GetProperty(PropertyBool.IsHardcore) == true;
+            var targetRestricted = Player.IsIronmanFamilyPlayer(target) || Player.IsHardcoreChallengePlayer(target);
             if (targetRestricted && attachments != null && attachments.Any(att => AttachmentGearProvenance(att) is int provenance && provenance != targetProvenance))
             {
                 sender.SendMessage("[MAIL] That gear belongs to another challenge economy.");
@@ -641,12 +641,12 @@ namespace ACE.Server.Command.Handlers
         {
             if (first == null || second == null)
                 return Player.IsIronmanFamilyPlayer(first) || Player.IsIronmanFamilyPlayer(second)
-                    || first?.GetProperty(PropertyBool.IsHardcore) == true || second?.GetProperty(PropertyBool.IsHardcore) == true;
+                    || Player.IsHardcoreChallengePlayer(first) || Player.IsHardcoreChallengePlayer(second);
 
-                        var firstProvenance = Player.GetGearProvenanceForPlayer(first);
+            var firstProvenance = Player.GetGearProvenanceForPlayer(first);
             var secondProvenance = Player.GetGearProvenanceForPlayer(second);
             var eitherRestricted = Player.IsIronmanFamilyPlayer(first) || Player.IsIronmanFamilyPlayer(second)
-                || first.GetProperty(PropertyBool.IsHardcore) == true || second.GetProperty(PropertyBool.IsHardcore) == true;
+                || Player.IsHardcoreChallengePlayer(first) || Player.IsHardcoreChallengePlayer(second);
             return eitherRestricted && firstProvenance != secondProvenance;
         }
 

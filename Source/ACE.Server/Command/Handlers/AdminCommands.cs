@@ -506,6 +506,7 @@ namespace ACE.Server.Command.Handlers
                         break;
                 }
                 session.Player.EnqueueBroadcast(new GameMessagePublicUpdatePropertyInt(session.Player, PropertyInt.PlayerKillerStatus, (int)session.Player.PlayerKillerStatus));
+                ACE.Server.Managers.HardcoreCrawlerManager.UpdatePvpRadar(session.Player);
                 CommandHandlerHelper.WriteOutputInfo(session, $"Your current PK state is now set to: {session.Player.PlayerKillerStatus.ToString()}", ChatMessageType.Broadcast);
 
                 PlayerManager.BroadcastToAuditChannel(session.Player, $"{session.Player.Name} changed their PK state to {session.Player.PlayerKillerStatus.ToString()}.");

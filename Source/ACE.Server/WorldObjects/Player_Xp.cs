@@ -48,6 +48,9 @@ namespace ACE.Server.WorldObjects
 
         private float GetChallengeXpScalar()
         {
+            if (IsIronmanNomadLifebound)
+                return 1.0f;
+
             if (IsIronmanNomad)
                 return Math.Max(0.0f, DerpACEConfig.NomadXpScalar);
 
@@ -337,17 +340,17 @@ namespace ACE.Server.WorldObjects
 
             if (Level > startingLevel)
             {
-                // DerpACE Ironman: suppress skill credits from level-up message and always show 0
-                bool isIronman = IsIronmanFamily;
+                // DerpACE Ironman: suppress skill credits from level-up messages except for Lifebound Nomads.
+                bool hideSkillCredits = IsIronmanFamily && GetProperty(PropertyBool.IsIronmanNomadLifebound) != true;
 
                 var message = (Level == maxLevel) ? $"You have reached the maximum level of {Level}!" : $"You are now level {Level}!";
 
-                message += (!isIronman && AvailableSkillCredits > 0) ? $"\nYou have {AvailableExperience:#,###0} experience points and {AvailableSkillCredits} skill credits available to raise skills and attributes." : $"\nYou have {AvailableExperience:#,###0} experience points available to raise skills and attributes.";
+                message += (!hideSkillCredits && AvailableSkillCredits > 0) ? $"\nYou have {AvailableExperience:#,###0} experience points and {AvailableSkillCredits} skill credits available to raise skills and attributes." : $"\nYou have {AvailableExperience:#,###0} experience points available to raise skills and attributes.";
 
                 var levelUp = new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.Level, Level ?? 1);
-                var currentCredits = new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.AvailableSkillCredits, isIronman ? 0 : (AvailableSkillCredits ?? 0));
+                var currentCredits = new GameMessagePrivateUpdatePropertyInt(this, PropertyInt.AvailableSkillCredits, hideSkillCredits ? 0 : (AvailableSkillCredits ?? 0));
 
-                if (Level != maxLevel && !creditEarned && !isIronman)
+                if (Level != maxLevel && !creditEarned && !hideSkillCredits)
                 {
                     var nextLevelWithCredits = 0;
 
@@ -369,7 +372,7 @@ namespace ACE.Server.WorldObjects
                     AllegianceNode.OnLevelUp();
 
                 // DerpACE: apply level-gated Ironman skill grants
-                if (IsIronmanFamily)
+                if (IsIronmanFamily || IsIronmanNomad)
                     ACE.Server.Factories.IronmanFactory.CheckIronmanLevelGrants(this);
 
                 // DerpACE: Hardcore Crawler offers one persistent boon choice per level.

@@ -203,8 +203,8 @@ namespace ACE.Server.Entity
             if (first.IsIronmanFamily || second.IsIronmanFamily)
                 return first.IsIronmanFamily && second.IsIronmanFamily;
 
-            var firstHardcore = first.GetProperty(PropertyBool.IsHardcore) == true;
-            var secondHardcore = second.GetProperty(PropertyBool.IsHardcore) == true;
+            var firstHardcore = Player.IsHardcoreChallengePlayer(first);
+            var secondHardcore = Player.IsHardcoreChallengePlayer(second);
             return firstHardcore == secondHardcore;
         }
 

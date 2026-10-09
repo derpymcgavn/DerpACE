@@ -125,6 +125,13 @@ namespace ACE.Server.WorldObjects
                         return false;
                     }
 
+                    if (player.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true && skill.Skill != Skill.LightWeapons)
+                    {
+                        player.Session.Network.EnqueueSend(new GameEventWeenieError(player.Session, WeenieError.YouFailToAlterSkill));
+                        player.SendMessage("Lifebound Nomads can only newly specialize Light Weapons.");
+                        return false;
+                    }
+
                     // ensure skill is trained
                     if (skill.AdvancementClass != SkillAdvancementClass.Trained)
                     {

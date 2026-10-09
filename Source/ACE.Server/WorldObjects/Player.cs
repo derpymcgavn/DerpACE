@@ -132,35 +132,50 @@ namespace ACE.Server.WorldObjects
             UpdateCoinValue(false);
         }
 
-        public bool IsIronmanFamily => GetProperty(PropertyBool.IsIronman) == true
-            || GetProperty(PropertyBool.IsIronmanNomad) == true
-            || GetProperty(PropertyBool.IsIronmanBlind) == true;
+        public bool IsIronmanFamily => GetProperty(PropertyBool.IsIronmanNomadLifebound) != true
+            && (GetProperty(PropertyBool.IsIronman) == true
+                || GetProperty(PropertyBool.IsIronmanNomad) == true
+                || GetProperty(PropertyBool.IsIronmanBlind) == true);
 
         public const int GearProvenanceNormal = 1;
         public const int GearProvenanceHardcore = 2;
         public const int GearProvenanceIronman = 3;
 
-        public bool IsRestrictedGearMode => IsIronmanFamily || GetProperty(PropertyBool.IsHardcore) == true;
+        public bool IsIronmanNomadLifebound => GetProperty(PropertyBool.IsIronmanNomadLifebound) == true;
 
-        public int CurrentGearProvenance => IsIronmanFamily
-            ? GearProvenanceIronman
-            : GetProperty(PropertyBool.IsHardcore) == true
-                ? GearProvenanceHardcore
-                : GearProvenanceNormal;
+        public bool IsRestrictedGearMode => !IsIronmanNomadLifebound && (IsIronmanFamily || IsHardcoreChallengePlayer(this));
+
+        public int CurrentGearProvenance => IsIronmanNomadLifebound
+            ? GearProvenanceNormal
+            : IsIronmanFamily
+                ? GearProvenanceIronman
+                : IsHardcoreChallengePlayer(this)
+                    ? GearProvenanceHardcore
+                    : GearProvenanceNormal;
 
         public static bool IsIronmanFamilyPlayer(IPlayer player)
         {
-            return player?.GetProperty(PropertyBool.IsIronman) == true
-                || player?.GetProperty(PropertyBool.IsIronmanNomad) == true
-                || player?.GetProperty(PropertyBool.IsIronmanBlind) == true;
+            return player?.GetProperty(PropertyBool.IsIronmanNomadLifebound) != true
+                && (player?.GetProperty(PropertyBool.IsIronman) == true
+                    || player?.GetProperty(PropertyBool.IsIronmanNomad) == true
+                    || player?.GetProperty(PropertyBool.IsIronmanBlind) == true);
+        }
+
+        public static bool IsHardcoreChallengePlayer(IPlayer player)
+        {
+            return player?.GetProperty(PropertyBool.IsIronmanNomadLifebound) != true
+                && player?.GetProperty(PropertyBool.IsHardcore) == true;
         }
 
         public static int GetGearProvenanceForPlayer(IPlayer player)
         {
+            if (player?.GetProperty(PropertyBool.IsIronmanNomadLifebound) == true)
+                return GearProvenanceNormal;
+
             if (IsIronmanFamilyPlayer(player))
                 return GearProvenanceIronman;
 
-            return player?.GetProperty(PropertyBool.IsHardcore) == true
+            return IsHardcoreChallengePlayer(player)
                 ? GearProvenanceHardcore
                 : GearProvenanceNormal;
         }
@@ -203,6 +218,12 @@ namespace ACE.Server.WorldObjects
 
         private void NormalizeIronmanFamilyFlags()
         {
+            if (GetProperty(PropertyBool.IsIronmanNomadLifebound) == true)
+            {
+                RemoveProperty(PropertyBool.IsHardcore);
+                return;
+            }
+
             if (GetProperty(PropertyBool.IsIronman) == true)
                 return;
 
@@ -1291,6 +1312,7 @@ namespace ACE.Server.WorldObjects
                         }
                     }
                     UpdateProperty(this, PropertyInt.PlayerKillerStatus, (int)PlayerKillerStatus.PKLite, true);
+                    HardcoreCrawlerManager.UpdatePvpRadar(this);
 
                     Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YouAreNowPKLite));
                 });

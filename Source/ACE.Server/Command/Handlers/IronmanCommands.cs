@@ -192,12 +192,18 @@ namespace ACE.Server.Command.Handlers
                     PendingBlind[player.Guid.Full] = blind;
                     PendingLifeboundNomad[player.Guid.Full] = lifeboundNomad;
                     player.SendMessage(
-                        $"WARNING: Ironman NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
-                        $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
-                        $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
-                        $"AL of 450 (average); worn armor is only half effective.{(lifeboundNomad ? " Lifebound Nomad has infinite lives and is excluded from public challenge scoreboards." : "")}{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
-                        $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP into skills, vitals, and attributes." : "")} " +
-                        $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
+                        lifeboundNomad
+                            ? $"WARNING: Lifebound NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
+                              $"Your chosen heritage, attributes, and trained skills will be preserved, Light Weapons and existing Melee Defense may remain specialized, and your damage will come from elemental gauntlets and shoes. " +
+                              $"Without armor you have a natural AL of 450 (average); worn armor is only half effective. Lifebound Nomad has infinite lives and is excluded from public challenge scoreboards." +
+                              $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP into skills, vitals, and attributes." : "")} " +
+                              $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed."
+                            : $"WARNING: Ironman NOMAD mode is permanent. You will not be able to wield weapons or casters. " +
+                              $"You will train Light Weapons and Arcane Lore (specialized), your attributes will roll at random, " +
+                              $"and your damage will come from elemental gauntlets and shoes. Without armor you have a natural " +
+                              $"AL of 450 (average); worn armor is only half effective.{(noNonHuman ? " Heritage will exclude non-humans." : "")}" +
+                              $"{(blind ? " Blind progression will hide future skill milestones and auto-spend XP into skills, vitals, and attributes." : "")} " +
+                              $"Type /ironman confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     break;
 
@@ -500,6 +506,8 @@ namespace ACE.Server.Command.Handlers
             "on      - begin Hardcore Crawler commitment (confirm within 30 seconds)\n" +
             "confirm - finalize Hardcore Crawler conversion\n" +
             "status  - show current Crawler state and chosen boons\n" +
+            "origins - show early sponsor packages available through level 3\n" +
+            "origin <number|name> - choose one early sponsor package\n" +
             "choices - show your pending level-up boon choices\n" +
             "pick #  - choose one pending boon\n" +
             "train <skill> - train a skill that is ready from use\n" +
@@ -532,6 +540,18 @@ namespace ACE.Server.Command.Handlers
                     HardcoreCrawlerManager.ShowStatus(player);
                     return;
 
+                case "origins":
+                case "originlist":
+                    HardcoreCrawlerManager.ShowOrigins(player);
+                    return;
+
+                case "origin":
+                case "package":
+                    if (parameters.Length < 2)
+                        HardcoreCrawlerManager.ShowOrigins(player);
+                    else
+                        HardcoreCrawlerManager.PickOrigin(player, string.Join(" ", parameters.Skip(1)));
+                    return;
                 case "choices":
                     HardcoreCrawlerManager.ShowChoices(player);
                     return;
@@ -592,7 +612,7 @@ namespace ACE.Server.Command.Handlers
                     PendingHardcoreCrawlerConfirms[player.Guid.Full] = DateTime.UtcNow.AddSeconds(ConfirmWindowSeconds);
                     player.SendMessage(
                         "WARNING: Hardcore Crawler is permanent for this life. You will have one Hardcore life, " +
-                        "skills will grow faster through successful use, and every level will offer one boon choice. " +
+                        "you may choose one early sponsor package through level 3, skills will grow faster through successful use, and every level will offer one boon choice. " +
                         $"Type /crawler confirm within {ConfirmWindowSeconds} seconds to proceed.",
                         ChatMessageType.System);
                     return;
@@ -621,7 +641,7 @@ namespace ACE.Server.Command.Handlers
                     return;
 
                 default:
-                    player.SendMessage("Usage: /crawler on | confirm | status | choices | pick <number> | train <skill> | spec <skill> | trial | trial claim | convert", ChatMessageType.System);
+                    player.SendMessage("Usage: /crawler on | confirm | status | origins | origin <number|name> | choices | pick <number> | train <skill> | spec <skill> | trial | trial claim | convert", ChatMessageType.System);
                     return;
             }
         }

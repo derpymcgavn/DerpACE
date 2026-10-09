@@ -336,7 +336,7 @@ namespace ACE.Server.WorldObjects
             const uint DwennonWeenieClassId = 33970;
             if (WeenieClassId == DwennonWeenieClassId
                 && activator is Player player
-                && (player.IsIronmanFamily || player.GetProperty(PropertyBool.IsHardcore) == true))
+                && (player.IsIronmanFamily || Player.IsHardcoreChallengePlayer(player)))
             {
                 player.SendMessage("Dwennon tells you: I still don't trust the cows, but I trust your kind even less. Find your own work.", ChatMessageType.Tell);
                 return new ActivationResult(false);

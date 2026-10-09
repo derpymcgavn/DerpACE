@@ -348,21 +348,23 @@ namespace ACE.Server.WorldObjects
 
                 var damagePercent = totalDamage / totalHealth;
 
-                var baseXP = XpOverride.GetValueOrDefault();
-                if (baseXP <= 0)
+                var baseXP = XpOverride;
+                if (!baseXP.HasValue)
                 {
                     var level = Math.Max(1, playerDamager.Level ?? 1);
                     baseXP = Math.Max(100, level * level * 50);
                 }
 
-                var totalXP = baseXP * damagePercent;
+                var totalXP = Math.Max(0, baseXP.Value) * damagePercent;
                 var xpForKill = (long)Math.Round(totalXP);
 
-                // Simulacrum XP scales with the underlying mob's loot tier, not the cloned player's stats
-                if (IsSimulacrum)
+                // Simulacrum XP scales with the underlying mob's loot tier, not the cloned player's stats.
+                // Explicit zero-XP creatures must stay zero-XP instead of falling back to synthetic level XP.
+                if (IsSimulacrum && xpForKill > 0)
                     xpForKill = GetSimulacrumXp(xpForKill);
 
-                playerDamager.EarnXP(xpForKill, XpType.Kill);
+                if (xpForKill > 0)
+                    playerDamager.EarnXP(xpForKill, XpType.Kill);
 
                 MorphicCommands.HandleCreatureKilled(playerDamager, this);
 

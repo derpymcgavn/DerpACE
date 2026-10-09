@@ -340,10 +340,19 @@ namespace ACE.Server.Factories
             chain.AddDelaySeconds(1.0);
             chain.AddAction(player, () =>
             {
-                player.SendMessage("Nomad step 1/6: rerolling heritage, appearance, random attributes, and skills...");
-                RollHeritageAndAppearance(player, noNonHuman);
-                RollAttributesRandom(player);
-                RollSkills(player, forcedWeaponSkill: Skill.LightWeapons, forcedWeaponIsMagic: false, specializeArcaneLore: true, blind: blind);
+                if (lifebound)
+                {
+                    player.SendMessage("Lifebound Nomad step 1/6: preserving your chosen heritage, appearance, attributes, and trained skills...");
+                    player.RemoveProperty(PropertyString.IronmanPlan);
+                    NormalizeLifeboundNomadSpecializations(player);
+                }
+                else
+                {
+                    player.SendMessage("Nomad step 1/6: rerolling heritage, appearance, random attributes, and skills...");
+                    RollHeritageAndAppearance(player, noNonHuman);
+                    RollAttributesRandom(player);
+                    RollSkills(player, forcedWeaponSkill: Skill.LightWeapons, forcedWeaponIsMagic: false, specializeArcaneLore: true, blind: blind);
+                }
             });
 
             chain.AddDelaySeconds(1.0);
@@ -363,8 +372,13 @@ namespace ACE.Server.Factories
             chain.AddDelaySeconds(1.0);
             chain.AddAction(player, () =>
             {
-                player.SendMessage("Nomad step 4/6: applying ironman skill milestones...");
-                ApplyIronmanPlanForLevel(player, player.Level ?? 1, announceGrants: false);
+                if (lifebound)
+                    player.SendMessage("Lifebound Nomad step 4/6: no forced Ironman skill milestones are applied.");
+                else
+                {
+                    player.SendMessage("Nomad step 4/6: applying ironman skill milestones...");
+                    ApplyIronmanPlanForLevel(player, player.Level ?? 1, announceGrants: false);
+                }
             });
 
             chain.AddDelaySeconds(1.0);
@@ -391,7 +405,9 @@ namespace ACE.Server.Factories
                 TagAllPossessions(player);
                 AutoSpendBlindIronmanXp(player);
 
-                player.SendMessage("As a Nomad, you cannot wield weapons or casters. Your damage will come from elemental gauntlets and shoes.");
+                player.SendMessage(lifebound
+                    ? "As a Lifebound Nomad, you keep your chosen build, but Light Weapons and existing Melee Defense may remain specialized. You cannot wield weapons or casters, and fight through elemental gauntlets and shoes."
+                    : "As a Nomad, you cannot wield weapons or casters. Your damage will come from elemental gauntlets and shoes.");
                 player.SendMessage(DerpACEConfig.IronmanWelcomeMessage);
                 for (var i = 0; i < 6; i++)
                     player.PlayParticleEffect(PlayScript.SkillUpPurple, player.Guid);
@@ -1247,6 +1263,42 @@ namespace ACE.Server.Factories
             }
         }
 
+        private static bool IsAllowedLifeboundNomadSpecialization(Skill skill)
+        {
+            return skill == Skill.LightWeapons || skill == Skill.MeleeDefense;
+        }
+
+        private static void NormalizeLifeboundNomadSpecializations(Player player)
+        {
+            var adjustedSkills = new List<Skill>();
+            var refundedCredits = 0;
+
+            foreach (var skillEntry in player.Skills.OrderBy(entry => entry.Key.ToString()).ToList())
+            {
+                var skill = skillEntry.Key;
+                var creatureSkill = skillEntry.Value;
+
+                if (IsAllowedLifeboundNomadSpecialization(skill) || creatureSkill.AdvancementClass != SkillAdvancementClass.Specialized)
+                    continue;
+
+                if (!DatManager.PortalDat.SkillTable.SkillBaseHash.TryGetValue((uint)skill, out var skillBase))
+                    continue;
+
+                var refund = skillBase.UpgradeCostFromTrainedToSpecialized;
+                if (!player.UnspecializeSkill(skill, refund))
+                    continue;
+
+                adjustedSkills.Add(skill);
+                refundedCredits += refund;
+                SendIronmanSkillUpdate(player, skill);
+            }
+
+            if (adjustedSkills.Count == 0)
+                return;
+
+            player.Session?.Network.EnqueueSend(new GameMessagePrivateUpdatePropertyInt(player, PropertyInt.AvailableSkillCredits, player.AvailableSkillCredits ?? 0));
+            player.SendMessage($"Lifebound Nomads can only keep Light Weapons and existing Melee Defense specialized. Returned {adjustedSkills.Count} non-Light specialization{(adjustedSkills.Count == 1 ? "" : "s")} to trained and refunded {refundedCredits} skill credit{(refundedCredits == 1 ? "" : "s")} plus invested skill XP.", ChatMessageType.System);
+        }
         private static void SendIronmanSkillUpdate(Player player, Skill skill)
         {
             if (player.Session != null)
@@ -1568,11 +1620,17 @@ namespace ACE.Server.Factories
         private static void ApplyHardcore(Player player, bool infiniteLives = false)
         {
             player.SetProperty(PropertyInt.HardcoreLives, infiniteLives ? int.MaxValue : DerpACEConfig.IronmanHardcoreStartingLives);
+
+            if (infiniteLives)
+            {
+                player.RemoveProperty(PropertyBool.IsHardcore);
+                player.SendMessage("You walk the Lifebound Nomad path. Death will not delete this character, and this path does not appear on public challenge scoreboards.");
+                return;
+            }
+
             player.SetProperty(PropertyBool.IsHardcore, true);
             player.SetModeTitle("HARDCORE");
-            player.SendMessage(infiniteLives
-                ? "You walk the Lifebound Nomad path. Death will not delete this character, and this path does not appear on public challenge scoreboards."
-                : $"You begin with {DerpACEConfig.IronmanHardcoreStartingLives} hardcore life/lives. Final death is permanent.");
+            player.SendMessage($"You begin with {DerpACEConfig.IronmanHardcoreStartingLives} hardcore life/lives. Final death is permanent.");
         }
 
         private static void ApplyIronmanFlag(Player player)

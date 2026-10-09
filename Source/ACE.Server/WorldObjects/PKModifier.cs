@@ -171,6 +171,7 @@ namespace ACE.Server.WorldObjects
                         player.PlayerKillerStatus = PlayerKillerStatus.NPK;
 
                     player.EnqueueBroadcast(new GameMessagePublicUpdatePropertyInt(player, PropertyInt.PlayerKillerStatus, (int)player.PlayerKillerStatus));
+                    HardcoreCrawlerManager.UpdatePvpRadar(player);
                     //player.ApplySoundEffects(Sound.Open); // in pcaps, but makes no sound/has no effect. ?
                     player.IsBusy = false;
                     Reset();

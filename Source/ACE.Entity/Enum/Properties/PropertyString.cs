@@ -115,5 +115,6 @@ namespace ACE.Entity.Enum.Properties
         HardcoreCrawlerMilestoneCaches     = 9017,
         HardcoreCrawlerTrials              = 9018,
         HardcoreCrawlerCompletedTrials     = 9019,
+        HardcoreCrawlerOrigin              = 9020,
     }
 }

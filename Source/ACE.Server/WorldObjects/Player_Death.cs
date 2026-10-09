@@ -45,6 +45,8 @@ namespace ACE.Server.WorldObjects
 
             var deathMessage = base.OnDeath(lastDamager, damageType, criticalHit);
 
+            HardcoreCrawlerManager.TryAwardPvpKill(this, topDamager);
+
             // DerpACE Ironman: hardcore-life accounting. Decrement lives and, on final
             // death, mark the character as deleted + force logoff. The debounce prevents
             // duplicate death events from chain-burning lives, but should never shield
@@ -1131,6 +1133,8 @@ namespace ACE.Server.WorldObjects
                 EnqueueBroadcast(new GameMessagePublicUpdatePropertyInt(this, PropertyInt.PlayerKillerStatus, (int)PlayerKillerStatus));
                 Session.Network.EnqueueSend(new GameEventWeenieError(Session, WeenieError.YouAreNonPKAgain));
             }
+
+            HardcoreCrawlerManager.UpdatePvpRadar(this);
         }
 
         public void PK_DeathTick()

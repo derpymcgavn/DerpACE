@@ -784,6 +784,10 @@ namespace ACE.Server.WorldObjects
             return Math.Max(1, (int)Math.Floor(((float)buyRate * (value ?? 0)) + 0.1));
         }
 
+        // Compatibility overload for external mods compiled before player-aware vendor rates
+        // added the optional Player parameter. Optional parameters are not separate CLR methods.
+        public int CalculatePayoutCoinAmount(Dictionary<uint, WorldObject> items) => CalculatePayoutCoinAmount(items, null);
+
         public int CalculatePayoutCoinAmount(Dictionary<uint, WorldObject> items, Player player = null)
         {
             var payout = 0;
