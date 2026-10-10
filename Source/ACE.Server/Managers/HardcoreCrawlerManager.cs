@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Text;
 
 using ACE.Common;
@@ -1199,6 +1200,7 @@ namespace ACE.Server.Managers
             if (!IsActive(player))
             {
                 player.SendMessage("Hardcore Crawler is not active on this character.", ChatMessageType.System);
+                ExportDerethFxHud(player, active: false);
                 return;
             }
 
@@ -1253,10 +1255,88 @@ namespace ACE.Server.Managers
                 var ready = activeTrial.Progress >= activeTrial.Required ? " READY" : string.Empty;
                 sb.AppendLine($"  Active trial: Level {activeTrial.Level} {trialDef?.Name ?? activeTrial.Kind.ToString()} - {Math.Min(activeTrial.Progress, activeTrial.Required)}/{activeTrial.Required}{ready}");
             }
-
+            ExportDerethFxHud(player, active: true, chosen: chosen, pendingQueue: pendingQueue, activeTrial: activeTrial);
             player.SendMessage(sb.ToString(), ChatMessageType.System);
         }
 
+        private static void ExportDerethFxHud(Player player, bool active, List<(int Level, string Id)> chosen = null, List<(int Level, List<string> Ids)> pendingQueue = null, TrialState activeTrial = null)
+        {
+            try
+            {
+                var path = Environment.GetEnvironmentVariable("DERETHFX_HUD_PATH");
+                if (string.IsNullOrWhiteSpace(path))
+                    path = @"C:\Turbine\Asheron's Call\derethfx_hud.ini";
+
+                var directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(directory))
+                    Directory.CreateDirectory(directory);
+
+                if (!active || player == null)
+                {
+                    File.WriteAllText(path, "[CrawlerHUD]" + Environment.NewLine + "perks=" + Environment.NewLine + "bonuses=" + Environment.NewLine + "progress=" + Environment.NewLine + "pending=" + Environment.NewLine);
+                    return;
+                }
+
+                chosen ??= ParseChosen(player).ToList();
+                pendingQueue ??= ParsePendingQueue(player);
+                QueueMissingTrials(player, player.Level ?? 1, notify: false);
+                activeTrial ??= ParseTrials(player).OrderBy(trial => trial.Level).FirstOrDefault();
+
+                var chosenBoons = chosen
+                    .OrderByDescending(entry => entry.Level)
+                    .Select(entry => FindBoon(entry.Id)?.Name ?? entry.Id)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Take(4)
+                    .ToList();
+                var perks = chosenBoons.Count > 0
+                    ? $"{chosen.Count} boons: {string.Join(", ", chosenBoons)}{(chosen.Count > chosenBoons.Count ? " ..." : string.Empty)}"
+                    : "No boons chosen yet";
+
+                var trainedCount = GetTrainedSkillCount(player);
+                var trainedCap = Math.Max(0, DerpACEConfig.HardcoreCrawlerMaxTrainedSkills);
+                var specCredits = GetTotalSpecializedCredits(player);
+                var specBudget = Math.Max(0, DerpACEConfig.HardcoreCrawlerSpecializedCreditBudget);
+                var bonuses = $"Credits {player.AvailableSkillCredits ?? 0}/{player.TotalSkillCredits ?? 0}, trained {trainedCount}{(trainedCap > 0 ? $"/{trainedCap}" : string.Empty)}, spec {specCredits}{(specBudget > 0 ? $"/{specBudget}" : string.Empty)}, prof {DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier:0.##}x";
+
+                var rankProgress = Math.Max(0, player.GetProperty(PropertyInt.HardcoreCrawlerUsageRankProgress) ?? 0);
+                var rankThreshold = Math.Max(1, DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel);
+                var favor = Math.Max(0, player.GetProperty(PropertyInt64.HardcoreCrawlerQuestFavor) ?? 0);
+                var progress = $"Ranks {rankProgress}/{rankThreshold}, favor {favor:N0}/{GetQuestFavorThreshold(player):N0}";
+                if (activeTrial != null)
+                {
+                    var trialDef = FindTrial(activeTrial.Kind);
+                    progress += $", trial {trialDef?.Name ?? activeTrial.Kind.ToString()} {Math.Min(activeTrial.Progress, activeTrial.Required)}/{activeTrial.Required}";
+                }
+
+                var readyTrain = GetReadySkillNames(player, PropertyString.HardcoreCrawlerAutoTrainProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)).Take(3).ToList();
+                var readySpec = GetReadySkillNames(player, PropertyString.HardcoreCrawlerAutoSpecProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecRanks)).Take(3).ToList();
+                var pendingBits = new List<string>();
+                if (readyTrain.Count > 0)
+                    pendingBits.Add("Train " + string.Join(", ", readyTrain));
+                if (readySpec.Count > 0)
+                    pendingBits.Add("Spec " + string.Join(", ", readySpec));
+                if (pendingQueue.Count > 0)
+                    pendingBits.Add($"Boon L{pendingQueue.OrderBy(entry => entry.Level).First().Level}");
+                var pending = pendingBits.Count > 0 ? string.Join(" | ", pendingBits) : "No pending choices";
+
+                var sb = new StringBuilder();
+                sb.AppendLine("[CrawlerHUD]");
+                sb.AppendLine($"perks={SanitizeHudValue(perks)}");
+                sb.AppendLine($"bonuses={SanitizeHudValue(bonuses)}");
+                sb.AppendLine($"progress={SanitizeHudValue(progress)}");
+                sb.AppendLine($"pending={SanitizeHudValue(pending)}");
+                File.WriteAllText(path, sb.ToString());
+            }
+            catch
+            {
+                // HUD export is best-effort and must never break gameplay commands.
+            }
+        }
+
+        private static string SanitizeHudValue(string value)
+        {
+            return (value ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Replace("=", ":").Trim();
+        }
         public static void ShowOrigins(Player player)
         {
             if (!IsActive(player))
