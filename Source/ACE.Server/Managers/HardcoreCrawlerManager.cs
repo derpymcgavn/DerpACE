@@ -1282,42 +1282,58 @@ namespace ACE.Server.Managers
                 QueueMissingTrials(player, player.Level ?? 1, notify: false);
                 activeTrial ??= ParseTrials(player).OrderBy(trial => trial.Level).FirstOrDefault();
 
-                var chosenBoons = chosen
-                    .OrderByDescending(entry => entry.Level)
+                var chosenNames = chosen
+                    .OrderBy(entry => entry.Level)
                     .Select(entry => FindBoon(entry.Id)?.Name ?? entry.Id)
                     .Where(name => !string.IsNullOrWhiteSpace(name))
-                    .Take(4)
                     .ToList();
-                var perks = chosenBoons.Count > 0
-                    ? $"{chosen.Count} boons: {string.Join(", ", chosenBoons)}{(chosen.Count > chosenBoons.Count ? " ..." : string.Empty)}"
-                    : "No boons chosen yet";
+                var boonSummary = chosenNames
+                    .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(group => group.Count())
+                    .ThenBy(group => group.Key)
+                    .Take(6)
+                    .Select(group => group.Count() > 1 ? $"{group.Key} x{group.Count()}" : group.Key)
+                    .ToList();
+                var latestBoon = chosen
+                    .OrderByDescending(entry => entry.Level)
+                    .Select(entry => FindBoon(entry.Id)?.Name ?? entry.Id)
+                    .FirstOrDefault();
+                var perks = boonSummary.Count > 0
+                    ? $"{chosen.Count} chosen. Core: {string.Join(", ", boonSummary)}. Latest: {latestBoon}."
+                    : "No boons chosen yet. Level up to start shaping this run.";
 
                 var trainedCount = GetTrainedSkillCount(player);
                 var trainedCap = Math.Max(0, DerpACEConfig.HardcoreCrawlerMaxTrainedSkills);
+                var specCount = GetSpecializedSkillCount(player);
                 var specCredits = GetTotalSpecializedCredits(player);
                 var specBudget = Math.Max(0, DerpACEConfig.HardcoreCrawlerSpecializedCreditBudget);
-                var bonuses = $"Credits {player.AvailableSkillCredits ?? 0}/{player.TotalSkillCredits ?? 0}, trained {trainedCount}{(trainedCap > 0 ? $"/{trainedCap}" : string.Empty)}, spec {specCredits}{(specBudget > 0 ? $"/{specBudget}" : string.Empty)}, prof {DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier:0.##}x";
+                var bonuses = $"Build budget: credits {player.AvailableSkillCredits ?? 0}/{player.TotalSkillCredits ?? 0}, trained {trainedCount}{(trainedCap > 0 ? $"/{trainedCap}" : string.Empty)}, specialized {specCount} skills using {specCredits}{(specBudget > 0 ? $"/{specBudget}" : string.Empty)} credits. Proficiency window {DerpACEConfig.HardcoreCrawlerProficiencyMinutes:0.##}m at {DerpACEConfig.HardcoreCrawlerProficiencyXpMultiplier:0.##}x.";
 
                 var rankProgress = Math.Max(0, player.GetProperty(PropertyInt.HardcoreCrawlerUsageRankProgress) ?? 0);
                 var rankThreshold = Math.Max(1, DerpACEConfig.HardcoreCrawlerSkillRanksPerLevel);
                 var favor = Math.Max(0, player.GetProperty(PropertyInt64.HardcoreCrawlerQuestFavor) ?? 0);
-                var progress = $"Ranks {rankProgress}/{rankThreshold}, favor {favor:N0}/{GetQuestFavorThreshold(player):N0}";
+                var rankNeeded = Math.Max(0, rankThreshold - rankProgress);
+                var favorNeeded = Math.Max(0, GetQuestFavorThreshold(player) - favor);
+                var progress = $"Next Crawler level needs {rankNeeded} more specialized rank gain{(rankNeeded == 1 ? string.Empty : "s")} ({rankProgress}/{rankThreshold}). Quest favor {favor:N0}/{GetQuestFavorThreshold(player):N0}; {favorNeeded:N0} to next cache.";
                 if (activeTrial != null)
                 {
                     var trialDef = FindTrial(activeTrial.Kind);
-                    progress += $", trial {trialDef?.Name ?? activeTrial.Kind.ToString()} {Math.Min(activeTrial.Progress, activeTrial.Required)}/{activeTrial.Required}";
+                    var trialLeft = Math.Max(0, activeTrial.Required - activeTrial.Progress);
+                    progress += $" Trial: {trialDef?.Name ?? activeTrial.Kind.ToString()} {Math.Min(activeTrial.Progress, activeTrial.Required)}/{activeTrial.Required}; {trialLeft} left.";
                 }
 
-                var readyTrain = GetReadySkillNames(player, PropertyString.HardcoreCrawlerAutoTrainProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)).Take(3).ToList();
-                var readySpec = GetReadySkillNames(player, PropertyString.HardcoreCrawlerAutoSpecProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecRanks)).Take(3).ToList();
+                var readyTrain = GetReadySkillNames(player, PropertyString.HardcoreCrawlerAutoTrainProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoTrainUses)).Take(5).ToList();
+                var readySpec = GetReadySkillNames(player, PropertyString.HardcoreCrawlerAutoSpecProgress, Math.Max(1, DerpACEConfig.HardcoreCrawlerAutoSpecRanks)).Take(5).ToList();
                 var pendingBits = new List<string>();
                 if (readyTrain.Count > 0)
-                    pendingBits.Add("Train " + string.Join(", ", readyTrain));
+                    pendingBits.Add("Train ready: " + string.Join(", ", readyTrain));
                 if (readySpec.Count > 0)
-                    pendingBits.Add("Spec " + string.Join(", ", readySpec));
+                    pendingBits.Add("Spec ready: " + string.Join(", ", readySpec));
                 if (pendingQueue.Count > 0)
-                    pendingBits.Add($"Boon L{pendingQueue.OrderBy(entry => entry.Level).First().Level}");
-                var pending = pendingBits.Count > 0 ? string.Join(" | ", pendingBits) : "No pending choices";
+                    pendingBits.Add($"Boon choice waiting at level {pendingQueue.OrderBy(entry => entry.Level).First().Level}; use /crawler choices then /crawler pick.");
+                if (pendingBits.Count == 0)
+                    pendingBits.Add("Keep using the skills you want this character to become; the next unlock will appear here.");
+                var pending = string.Join(" ", pendingBits);
 
                 var sb = new StringBuilder();
                 sb.AppendLine("[CrawlerHUD]");
